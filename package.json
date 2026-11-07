@@ -46,8 +46,7 @@
     "@fuzdev/fuz_util": ">=0.79.0",
     "@sveltejs/kit": "^3",
     "esm-env": "^1",
-    "svelte": "^5",
-    "zod": "^4.6"
+    "svelte": "^5"
   },
   "peerDependenciesMeta": {
     "esm-env": {
@@ -84,8 +83,7 @@
     "typescript-eslint": "^8.71.1",
     "vite": "^8.3.4",
     "vitest": "^5.0.5",
-    "ws": "^8.22.0",
-    "zod": "^4.6.7"
+    "ws": "^8.22.0"
   },
   "dependencies": {
     "@fuzdev/blake3-wasm": "^0.2.0",

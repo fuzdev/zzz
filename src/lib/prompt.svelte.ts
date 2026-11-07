@@ -1,11 +1,18 @@
-import { z } from 'zod';
+import {
+	array,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { to_preview, estimate_token_count } from './helpers.ts';
 import { Part, PartJson, type PartUnion } from './part.svelte.ts';
 import { reorder_list } from './list_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { format_prompt_content } from './prompt_helpers.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 
@@ -16,12 +23,15 @@ export interface PromptMessage {
 
 export type PromptActionContent = string; // TODO ?
 
-export const PromptJson = CellJson.extend({
-	name: z.string().default(''),
-	parts: z.array(PartJson).default(() => [])
-}).meta({ cell_class_name: 'Prompt' });
-export type PromptJson = z.infer<typeof PromptJson>;
-export type PromptJsonInput = z.input<typeof PromptJson>;
+export const PromptJson = cell_json_schema(
+	{
+		name: with_default(string, ''),
+		parts: with_default_fn(array(PartJson), () => [])
+	},
+	'Prompt'
+);
+export type PromptJson = Infer<typeof PromptJson>;
+export type PromptJsonInput = InferInput<typeof PromptJson>;
 
 export interface PromptOptions extends CellOptions<typeof PromptJson> {
 	name?: string;

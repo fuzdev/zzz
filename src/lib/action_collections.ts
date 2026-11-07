@@ -2,7 +2,6 @@
 
 import type { ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 import * as specs from './action_specs.ts';
-import { z } from 'zod';
 import type { Infer } from '@fuzdev/fuz_schema/schema.ts';
 import type {
 	ActionEventLocalCallData,
@@ -122,33 +121,33 @@ export interface ActionInputs {
 	heartbeat: Infer<typeof specs.heartbeat_action_spec.input>;
 	cancel: Infer<typeof specs.cancel_action_spec.input>;
 	'peer/ping': Infer<typeof specs.peer_ping_action_spec.input>;
-	ping: z.infer<typeof specs.ping_action_spec.input>;
-	session_load: z.infer<typeof specs.session_load_action_spec.input>;
-	filer_change: z.infer<typeof specs.filer_change_action_spec.input>;
-	diskfile_update: z.infer<typeof specs.diskfile_update_action_spec.input>;
-	diskfile_create: z.infer<typeof specs.diskfile_create_action_spec.input>;
-	diskfile_delete: z.infer<typeof specs.diskfile_delete_action_spec.input>;
-	directory_create: z.infer<typeof specs.directory_create_action_spec.input>;
-	media_finalize: z.infer<typeof specs.media_finalize_action_spec.input>;
-	transcription_create: z.infer<typeof specs.transcription_create_action_spec.input>;
-	transcription_progress: z.infer<typeof specs.transcription_progress_action_spec.input>;
-	job_cancel: z.infer<typeof specs.job_cancel_action_spec.input>;
-	job_changed: z.infer<typeof specs.job_changed_action_spec.input>;
-	completion_create: z.infer<typeof specs.completion_create_action_spec.input>;
-	completion_progress: z.infer<typeof specs.completion_progress_action_spec.input>;
-	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.input>;
-	provider_load_status: z.infer<typeof specs.provider_load_status_action_spec.input>;
-	terminal_create: z.infer<typeof specs.terminal_create_action_spec.input>;
-	terminal_data_send: z.infer<typeof specs.terminal_data_send_action_spec.input>;
-	terminal_data: z.infer<typeof specs.terminal_data_action_spec.input>;
-	terminal_ack: z.infer<typeof specs.terminal_ack_action_spec.input>;
-	terminal_resize: z.infer<typeof specs.terminal_resize_action_spec.input>;
-	terminal_close: z.infer<typeof specs.terminal_close_action_spec.input>;
-	terminal_exited: z.infer<typeof specs.terminal_exited_action_spec.input>;
-	workspace_open: z.infer<typeof specs.workspace_open_action_spec.input>;
-	workspace_close: z.infer<typeof specs.workspace_close_action_spec.input>;
-	workspace_list: z.infer<typeof specs.workspace_list_action_spec.input>;
-	workspace_changed: z.infer<typeof specs.workspace_changed_action_spec.input>;
+	ping: Infer<typeof specs.ping_action_spec.input>;
+	session_load: Infer<typeof specs.session_load_action_spec.input>;
+	filer_change: Infer<typeof specs.filer_change_action_spec.input>;
+	diskfile_update: Infer<typeof specs.diskfile_update_action_spec.input>;
+	diskfile_create: Infer<typeof specs.diskfile_create_action_spec.input>;
+	diskfile_delete: Infer<typeof specs.diskfile_delete_action_spec.input>;
+	directory_create: Infer<typeof specs.directory_create_action_spec.input>;
+	media_finalize: Infer<typeof specs.media_finalize_action_spec.input>;
+	transcription_create: Infer<typeof specs.transcription_create_action_spec.input>;
+	transcription_progress: Infer<typeof specs.transcription_progress_action_spec.input>;
+	job_cancel: Infer<typeof specs.job_cancel_action_spec.input>;
+	job_changed: Infer<typeof specs.job_changed_action_spec.input>;
+	completion_create: Infer<typeof specs.completion_create_action_spec.input>;
+	completion_progress: Infer<typeof specs.completion_progress_action_spec.input>;
+	toggle_main_menu: Infer<typeof specs.toggle_main_menu_action_spec.input>;
+	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.input>;
+	terminal_create: Infer<typeof specs.terminal_create_action_spec.input>;
+	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.input>;
+	terminal_data: Infer<typeof specs.terminal_data_action_spec.input>;
+	terminal_ack: Infer<typeof specs.terminal_ack_action_spec.input>;
+	terminal_resize: Infer<typeof specs.terminal_resize_action_spec.input>;
+	terminal_close: Infer<typeof specs.terminal_close_action_spec.input>;
+	terminal_exited: Infer<typeof specs.terminal_exited_action_spec.input>;
+	workspace_open: Infer<typeof specs.workspace_open_action_spec.input>;
+	workspace_close: Infer<typeof specs.workspace_close_action_spec.input>;
+	workspace_list: Infer<typeof specs.workspace_list_action_spec.input>;
+	workspace_changed: Infer<typeof specs.workspace_changed_action_spec.input>;
 }
 
 /**
@@ -193,32 +192,32 @@ export interface ActionOutputs {
 	cancel: Infer<typeof specs.cancel_action_spec.output>;
 	'peer/ping': Infer<typeof specs.peer_ping_action_spec.output>;
 	ping: Infer<typeof specs.ping_action_spec.output>;
-	session_load: z.infer<typeof specs.session_load_action_spec.output>;
-	filer_change: z.infer<typeof specs.filer_change_action_spec.output>;
-	diskfile_update: z.infer<typeof specs.diskfile_update_action_spec.output>;
-	diskfile_create: z.infer<typeof specs.diskfile_create_action_spec.output>;
-	diskfile_delete: z.infer<typeof specs.diskfile_delete_action_spec.output>;
-	directory_create: z.infer<typeof specs.directory_create_action_spec.output>;
-	media_finalize: z.infer<typeof specs.media_finalize_action_spec.output>;
-	transcription_create: z.infer<typeof specs.transcription_create_action_spec.output>;
-	transcription_progress: z.infer<typeof specs.transcription_progress_action_spec.output>;
-	job_cancel: z.infer<typeof specs.job_cancel_action_spec.output>;
-	job_changed: z.infer<typeof specs.job_changed_action_spec.output>;
-	completion_create: z.infer<typeof specs.completion_create_action_spec.output>;
-	completion_progress: z.infer<typeof specs.completion_progress_action_spec.output>;
-	toggle_main_menu: z.infer<typeof specs.toggle_main_menu_action_spec.output>;
-	provider_load_status: z.infer<typeof specs.provider_load_status_action_spec.output>;
-	terminal_create: z.infer<typeof specs.terminal_create_action_spec.output>;
-	terminal_data_send: z.infer<typeof specs.terminal_data_send_action_spec.output>;
-	terminal_data: z.infer<typeof specs.terminal_data_action_spec.output>;
-	terminal_ack: z.infer<typeof specs.terminal_ack_action_spec.output>;
-	terminal_resize: z.infer<typeof specs.terminal_resize_action_spec.output>;
-	terminal_close: z.infer<typeof specs.terminal_close_action_spec.output>;
-	terminal_exited: z.infer<typeof specs.terminal_exited_action_spec.output>;
-	workspace_open: z.infer<typeof specs.workspace_open_action_spec.output>;
-	workspace_close: z.infer<typeof specs.workspace_close_action_spec.output>;
-	workspace_list: z.infer<typeof specs.workspace_list_action_spec.output>;
-	workspace_changed: z.infer<typeof specs.workspace_changed_action_spec.output>;
+	session_load: Infer<typeof specs.session_load_action_spec.output>;
+	filer_change: Infer<typeof specs.filer_change_action_spec.output>;
+	diskfile_update: Infer<typeof specs.diskfile_update_action_spec.output>;
+	diskfile_create: Infer<typeof specs.diskfile_create_action_spec.output>;
+	diskfile_delete: Infer<typeof specs.diskfile_delete_action_spec.output>;
+	directory_create: Infer<typeof specs.directory_create_action_spec.output>;
+	media_finalize: Infer<typeof specs.media_finalize_action_spec.output>;
+	transcription_create: Infer<typeof specs.transcription_create_action_spec.output>;
+	transcription_progress: Infer<typeof specs.transcription_progress_action_spec.output>;
+	job_cancel: Infer<typeof specs.job_cancel_action_spec.output>;
+	job_changed: Infer<typeof specs.job_changed_action_spec.output>;
+	completion_create: Infer<typeof specs.completion_create_action_spec.output>;
+	completion_progress: Infer<typeof specs.completion_progress_action_spec.output>;
+	toggle_main_menu: Infer<typeof specs.toggle_main_menu_action_spec.output>;
+	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.output>;
+	terminal_create: Infer<typeof specs.terminal_create_action_spec.output>;
+	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.output>;
+	terminal_data: Infer<typeof specs.terminal_data_action_spec.output>;
+	terminal_ack: Infer<typeof specs.terminal_ack_action_spec.output>;
+	terminal_resize: Infer<typeof specs.terminal_resize_action_spec.output>;
+	terminal_close: Infer<typeof specs.terminal_close_action_spec.output>;
+	terminal_exited: Infer<typeof specs.terminal_exited_action_spec.output>;
+	workspace_open: Infer<typeof specs.workspace_open_action_spec.output>;
+	workspace_close: Infer<typeof specs.workspace_close_action_spec.output>;
+	workspace_list: Infer<typeof specs.workspace_list_action_spec.output>;
+	workspace_changed: Infer<typeof specs.workspace_changed_action_spec.output>;
 }
 
 /**

@@ -276,10 +276,13 @@ Components use `PascalCase` with domain prefixes:
 1. Define schema (in the `*.svelte.ts` file or a separate `*_types.ts`):
 
 ```typescript
-export const MyThingJson = CellJson.extend({
-	name: z.string().default(''),
-	value: z.number().default(0)
-}).meta({ cell_class_name: 'MyThing' });
+export const MyThingJson = cell_json_schema(
+	{
+		name: with_default(string, ''),
+		value: with_default(number, 0)
+	},
+	'MyThing'
+);
 ```
 
 2. Create the class (`src/lib/my_thing.svelte.ts`):
@@ -320,11 +323,11 @@ export const my_action_action_spec = {
 	initiator: 'frontend',
 	auth: { account: 'required', actor: 'none' }, // or {account: 'none', actor: 'none'} for public
 	side_effects: true, // false for read-only
-	input: z.strictObject({
-		message: z.string()
+	input: object({
+		message: string
 	}),
-	output: z.strictObject({
-		result: z.string()
+	output: object({
+		result: string
 	}),
 	async: true,
 	description: 'What this action does.'
@@ -370,8 +373,8 @@ export const my_long_job_action_spec = {
   auth: {account: 'required', actor: 'none'},
   side_effects: true,
   streams: 'my_long_job_progress', // name of the companion notification
-  input: z.strictObject({...}),
-  output: z.null(),
+  input: object({...}),
+  output: literal(null),
   async: true,
   description: 'Run a long job, streaming progress.',
 } satisfies RequestResponseActionSpec;
@@ -382,8 +385,8 @@ export const my_long_job_progress_action_spec = {
   initiator: 'backend',
   auth: null,
   side_effects: true,
-  input: z.strictObject({...}),
-  output: z.void(),
+  input: object({...}),
+  output: fuz_void, // `void as fuz_void` from `@fuzdev/fuz_schema/schema.ts`
   async: true,
   description: 'Streams a progress chunk for `my_long_job`.',
 } satisfies RemoteNotificationActionSpec;
@@ -553,7 +556,7 @@ test('all model provider_names exist in providers_default', () => {
 - Variables/functions — `snake_case`. Example: `send_message`, `user_input`
 - Classes — `PascalCase`. Example: `ChatView`, `ActionDispatcher`
 - Types/interfaces — `PascalCase`. Example: `ChatOptions`, `ActionSpec`
-- Zod schemas — `PascalCase`. Example: `ChatJson`, `CompletionRequest`
+- Schemas — `PascalCase`. Example: `ChatJson`, `CompletionRequest`
 - Private fields — `#field`. Example: `#internal_state`
 
 ### Code Markers
@@ -566,12 +569,12 @@ test('all model provider_names exist in providers_default', () => {
 
 ### Import Order
 
-1. External packages (`svelte`, `zod`, etc.)
+1. External packages (`svelte`, `@fuzdev/fuz_schema`, etc.)
 2. Subpath imports and SvelteKit modules (`#lib/...`, `$app/...`)
 3. Relative imports (`./...`)
 
 ```typescript
-import { z } from 'zod';
+import { object, string } from '@fuzdev/fuz_schema/schema.ts';
 import { SvelteMap } from 'svelte/reactivity';
 
 import { Cell } from '#lib/cell.svelte.ts';

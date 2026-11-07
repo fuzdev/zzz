@@ -1,11 +1,17 @@
-import { z } from 'zod';
-import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
+import {
+	array,
+	nullable,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index } from './indexed_collection_helpers.svelte.ts';
@@ -21,12 +27,15 @@ import type { DiskfileDirectoryPath } from './diskfile_types.ts';
 // TODO: pull-based lazy activation — only start Filers when a client connects or requests data
 // TODO: hooks/automation — respond to fs events within workspaces
 
-export const WorkspacesJson = CellJson.extend({
-	items: z.array(WorkspaceJson).default(() => []),
-	active_id: ZodUuid.nullable().default(null)
-}).meta({ cell_class_name: 'Workspaces' });
-export type WorkspacesJson = z.infer<typeof WorkspacesJson>;
-export type WorkspacesJsonInput = z.input<typeof WorkspacesJson>;
+export const WorkspacesJson = cell_json_schema(
+	{
+		items: with_default_fn(array(WorkspaceJson), () => []),
+		active_id: with_default(nullable(Uuid), null)
+	},
+	'Workspaces'
+);
+export type WorkspacesJson = Infer<typeof WorkspacesJson>;
+export type WorkspacesJsonInput = InferInput<typeof WorkspacesJson>;
 
 export interface WorkspacesOptions extends CellOptions<typeof WorkspacesJson> {}
 

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -62,8 +63,8 @@ describe('other mutable-key indexes', () => {
 	});
 
 	test("a diskfile part is found by its new path after it's repointed", () => {
-		const path_a = DiskfilePath.parse('/ws/a.txt');
-		const path_b = DiskfilePath.parse('/ws/b.txt');
+		const path_a = parse_or_throw(DiskfilePath, '/ws/a.txt');
+		const path_b = parse_or_throw(DiskfilePath, '/ws/b.txt');
 		const part = app.parts.add({ type: 'diskfile', path: path_a }) as DiskfilePart;
 		assert.strictEqual(app.parts.find_part_by_diskfile_path(path_a), part);
 

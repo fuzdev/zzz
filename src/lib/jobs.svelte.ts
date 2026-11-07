@@ -1,10 +1,10 @@
-import { z } from 'zod';
+import type { Infer, InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import { Job } from './job.svelte.ts';
@@ -12,9 +12,9 @@ import type { JobSnapshot } from './job_types.ts';
 import type { DiskfilePath } from './diskfile_types.ts';
 import type { TranscriptSegment } from './transcript_types.ts';
 
-export const JobsJson = CellJson.extend({}).meta({ cell_class_name: 'Jobs' });
-export type JobsJson = z.infer<typeof JobsJson>;
-export type JobsJsonInput = z.input<typeof JobsJson>;
+export const JobsJson = cell_json_schema({}, 'Jobs');
+export type JobsJson = Infer<typeof JobsJson>;
+export type JobsJsonInput = InferInput<typeof JobsJson>;
 
 export interface JobsOptions extends CellOptions<typeof JobsJson> {}
 

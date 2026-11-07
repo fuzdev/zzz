@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert, vi } from 'vitest';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
+
+import { get_datetime_now } from '#lib/datetime.ts';
 import { JSONRPC_ERROR_CODES } from '#lib/zzz_jsonrpc_errors.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -281,8 +283,8 @@ describe('completion_progress', () => {
 });
 
 describe('completion output with file parts', () => {
-	const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/test/');
-	const FILE_PATH = DiskfilePath.parse('/test/notes.txt');
+	const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/test/');
+	const FILE_PATH = parse_or_throw(DiskfilePath, '/test/notes.txt');
 	const FILE_CONTENT = 'file content';
 
 	let update_calls: Array<string>;

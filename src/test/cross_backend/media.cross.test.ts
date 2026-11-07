@@ -13,6 +13,7 @@
  * @module
  */
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -133,7 +134,7 @@ describe('media cross-backend', () => {
 
 			const res = await finalize(fixture, path);
 			assert.ok(res.ok, JSON.stringify(res));
-			const output = MediaFinalizeOutput.parse(res.result);
+			const output = parse_or_throw(MediaFinalizeOutput, res.result);
 			const after = await stat(path);
 			assert.equal(output.size, after.size);
 			// replaced like a save: same name, same mode, new content
@@ -281,7 +282,7 @@ const wait_for_job = async (
 			candidate?.method === job_changed_action_spec.method && job?.job_id === job_id && where(job)
 		);
 	}, timeout_ms);
-	return job_changed_action_spec.input.parse(message.params).job;
+	return parse_or_throw(job_changed_action_spec.input, message.params).job;
 };
 
 const expect_error = async (
@@ -334,7 +335,10 @@ describe('transcription cross-backend', () => {
 				headers: fixture.create_session_headers()
 			});
 			assert.ok(session.ok);
-			assert.deepEqual(session_load_action_spec.output.parse(session.result).data.jobs, []);
+			assert.deepEqual(
+				parse_or_throw(session_load_action_spec.output, session.result).data.jobs,
+				[]
+			);
 		} finally {
 			await rm(notes, { force: true });
 		}
@@ -363,7 +367,7 @@ describe('transcription cross-backend', () => {
 			await ws.request('_warmup', 'ping', undefined);
 			const created = await transcribe(fixture, { path });
 			assert.ok(created.ok, JSON.stringify(created));
-			const { job_id } = transcription_create_action_spec.output.parse(created.result);
+			const { job_id } = parse_or_throw(transcription_create_action_spec.output, created.result);
 
 			const done = await wait_for_job(ws, job_id, (job) => is_job_finished(job.status));
 			assert.equal(done.status, 'succeeded', `${done.error} ${done.stderr}`);
@@ -383,7 +387,10 @@ describe('transcription cross-backend', () => {
 				assert.ok(!command.includes(path), command);
 			}
 
-			const transcript = Transcript.parse(JSON.parse(await readFile(sidecar_path, 'utf-8')));
+			const transcript = parse_or_throw(
+				Transcript,
+				JSON.parse(await readFile(sidecar_path, 'utf-8'))
+			);
 			assert.equal(transcript.version, 1);
 			assert.equal(transcript.source.name, path.slice(path.lastIndexOf('/') + 1));
 			assert.equal(transcript.source.size, audio.length);
@@ -399,7 +406,7 @@ describe('transcription cross-backend', () => {
 			// any segments a preview announced match the notification's schema
 			for (const message of ws.messages as Array<{ method?: string; params?: unknown }>) {
 				if (message.method === transcription_progress_action_spec.method) {
-					transcription_progress_action_spec.input.parse(message.params);
+					parse_or_throw(transcription_progress_action_spec.input, message.params);
 				}
 			}
 
@@ -414,7 +421,7 @@ describe('transcription cross-backend', () => {
 				headers: fixture.create_session_headers()
 			});
 			assert.ok(session.ok);
-			const { jobs } = session_load_action_spec.output.parse(session.result).data;
+			const { jobs } = parse_or_throw(session_load_action_spec.output, session.result).data;
 			assert.deepEqual(
 				jobs.map((job) => [job.job_id, job.status]),
 				[[job_id, 'succeeded']]
@@ -443,7 +450,7 @@ describe('transcription cross-backend', () => {
 			await ws.request('_warmup', 'ping', undefined);
 			const created = await transcribe(fixture, { path });
 			assert.ok(created.ok, JSON.stringify(created));
-			const { job_id } = transcription_create_action_spec.output.parse(created.result);
+			const { job_id } = parse_or_throw(transcription_create_action_spec.output, created.result);
 			const done = await wait_for_job(ws, job_id, (job) => is_job_finished(job.status));
 			assert.equal(done.status, 'failed');
 			assert.include(done.error, 'failed to decode the audio');
@@ -472,15 +479,18 @@ describe('transcription cross-backend', () => {
 			const first = await transcribe(fixture, { path: first_path });
 			const second = await transcribe(fixture, { path: second_path });
 			assert.ok(first.ok && second.ok, JSON.stringify([first, second]));
-			const first_id = transcription_create_action_spec.output.parse(first.result).job_id;
-			const second_id = transcription_create_action_spec.output.parse(second.result).job_id;
+			const first_id = parse_or_throw(transcription_create_action_spec.output, first.result).job_id;
+			const second_id = parse_or_throw(
+				transcription_create_action_spec.output,
+				second.result
+			).job_id;
 
 			await wait_for_job(ws, first_id, (job) => job.status === 'running');
 
 			// the queued one never starts
 			const cancelled_queued = await cancel_job(fixture, second_id);
 			assert.ok(cancelled_queued.ok, JSON.stringify(cancelled_queued));
-			job_cancel_action_spec.output.parse(cancelled_queued.result);
+			parse_or_throw(job_cancel_action_spec.output, cancelled_queued.result);
 			const second_done = await wait_for_job(ws, second_id, (job) => job.status === 'cancelled');
 			assert.equal(second_done.started_at, null);
 
@@ -518,7 +528,7 @@ describe('transcription cross-backend', () => {
 			});
 			assert.ok(stranger_session.ok);
 			assert.deepEqual(
-				session_load_action_spec.output.parse(stranger_session.result).data.jobs,
+				parse_or_throw(session_load_action_spec.output, stranger_session.result).data.jobs,
 				[]
 			);
 		} finally {

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { get_meta } from '@fuzdev/fuz_schema/meta.ts';
 import { test, describe, assert, beforeEach, afterEach, vi } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -43,7 +44,7 @@ describe('registered cell classes', () => {
 				MINIMAL_JSON[class_name] as any
 			);
 			assert.instanceOf(cell, cell_classes[class_name] as new (...args: Array<any>) => Cell<any>);
-			assert.strictEqual(cell.schema.meta()?.cell_class_name, class_name);
+			assert.strictEqual(get_meta(cell.schema)?.cell_class_name, class_name);
 			// `init()` ran: the schema applied and the cell registered itself
 			assert.ok(cell.id);
 			assert.ok(cell.created);
@@ -94,7 +95,7 @@ describe('registry names survive minification', () => {
 		app.dispose();
 		app = new Frontend({ cell_classes: { ...cell_classes, Chat: MangledChat } });
 
-		// `ChatsJson.items` is `z.array(ChatJson)`, whose meta names `Chat`
+		// `ChatsJson.items` is an array of `ChatJson`, whose meta names `Chat`
 		const decoded = app.chats.decode_property([{ name: 'decoded' }], 'items');
 		assert.lengthOf(decoded, 1);
 		assert.instanceOf(decoded[0], MangledChat);

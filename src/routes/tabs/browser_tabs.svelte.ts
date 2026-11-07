@@ -1,26 +1,34 @@
 // @slop Claude Opus 4
 
-import { z } from 'zod';
+import {
+	array,
+	parse_or_throw,
+	with_default_fn,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { IndexedCollection } from '#lib/indexed_collection.svelte.ts';
 import {
 	create_single_index,
 	create_derived_index
 } from '#lib/indexed_collection_helpers.svelte.ts';
-import { CellJson } from '#lib/cell_types.ts';
+import { cell_json_schema } from '#lib/cell_types.ts';
 import { BrowserTab, BrowserTabJson } from './browser_tab.svelte.ts';
 import { create_collection_decoder, HANDLED } from '#lib/cell_helpers.ts';
 import { to_reordered_list } from '#lib/list_helpers.ts';
 import { fake_sites } from './sample_tabs.ts';
 
-export const BrowserTabsJson = CellJson.extend({
-	tabs: z.array(BrowserTabJson).default(() => []),
-	recently_closed_tabs: z.array(BrowserTabJson).default(() => [])
-}).meta({ cell_class_name: 'BrowserTabs' });
-export type BrowserTabsJsonInput = z.input<typeof BrowserTabsJson>;
+export const BrowserTabsJson = cell_json_schema(
+	{
+		tabs: with_default_fn(array(BrowserTabJson), () => []),
+		recently_closed_tabs: with_default_fn(array(BrowserTabJson), () => [])
+	},
+	'BrowserTabs'
+);
+export type BrowserTabsJsonInput = InferInput<typeof BrowserTabsJson>;
 
 export type BrowserTabsOptions = CellOptions<typeof BrowserTabsJson>;
 
@@ -69,7 +77,7 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 			recently_closed_tabs: (tabs) => {
 				if (Array.isArray(tabs)) {
 					this.recently_closed_tabs = tabs
-						.map((tab_json) => BrowserTabJson.parse(tab_json))
+						.map((tab_json) => parse_or_throw(BrowserTabJson, tab_json))
 						.slice(-BROWSER_TABS_CLOSED_MAX);
 				}
 				return HANDLED;

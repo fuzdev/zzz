@@ -1,5 +1,11 @@
+import {
+	parse,
+	parse_or_throw,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { create_context } from '@fuzdev/fuz_ui/context_helpers.ts';
-import { z } from 'zod';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
@@ -39,7 +45,7 @@ import type { ZzzOptions } from './config_helpers.ts';
 import { BOTS_DEFAULT } from './config_defaults.ts';
 import { DiskfileDirectoryPath } from './diskfile_types.ts';
 import { cell_classes } from './cell_classes.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { Ui, UiJson } from './ui.svelte.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Socket } from './socket.svelte.ts';
@@ -60,6 +66,7 @@ import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import './zzz_jsonrpc_errors.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
+
 import type { FrontendActionsApi } from './action_metatypes.ts';
 import type { FrontendActionHandlers } from './frontend_action_types.ts';
 import { ActionOutputs } from './action_collections.ts';
@@ -106,12 +113,15 @@ export const SESSION_LOAD_RETRY_DELAY = 1_000;
 /** Cap on the `session_load` retry delay. */
 export const SESSION_LOAD_RETRY_DELAY_MAX = 30_000;
 
-export const FrontendJson = CellJson.extend({
-	ui: UiJson.default(() => UiJson.parse({}))
-	// TODO other state?
-}).meta({ cell_class_name: 'Frontend' });
-export type FrontendJson = z.infer<typeof FrontendJson>;
-export type FrontendJsonInput = z.input<typeof FrontendJson>;
+export const FrontendJson = cell_json_schema(
+	{
+		ui: with_default_fn(UiJson, () => parse_or_throw(UiJson, {}))
+		// TODO other state?
+	},
+	'Frontend'
+);
+export type FrontendJson = Infer<typeof FrontendJson>;
+export type FrontendJsonInput = InferInput<typeof FrontendJson>;
 
 export interface FrontendOptions extends OmitStrict<CellOptions<typeof FrontendJson>, 'app'> {
 	/** Do not use - optional to avoid circular reference problem. */
@@ -205,8 +215,8 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		return this.#zzz_dir;
 	}
 	set zzz_dir(value: string | null | undefined) {
-		const parsed = value == null ? value : DiskfileDirectoryPath.safeParse(value);
-		this.#zzz_dir = parsed == null ? parsed : parsed.data;
+		const parsed = value == null ? value : parse(DiskfileDirectoryPath, value);
+		this.#zzz_dir = parsed == null ? parsed : parsed.ok ? parsed.value : undefined;
 	}
 
 	#scoped_dirs: ReadonlyArray<DiskfileDirectoryPath> = $state.raw([]);
@@ -218,7 +228,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		return this.#scoped_dirs;
 	}
 	set scoped_dirs(value: ReadonlyArray<string>) {
-		this.#scoped_dirs = value.map((p) => DiskfileDirectoryPath.parse(p));
+		this.#scoped_dirs = value.map((p) => parse_or_throw(DiskfileDirectoryPath, p));
 	}
 
 	/**

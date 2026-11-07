@@ -1,25 +1,37 @@
-import { z } from 'zod';
-import { ZodUuidWithDefault } from '@fuzdev/fuz_app/zod_schemas.ts';
+import {
+	min_length,
+	object,
+	pipe,
+	string,
+	transform,
+	with_default,
+	type Infer
+} from '@fuzdev/fuz_schema/schema.ts';
+import { UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
-export const XmlAttributeKey = z.string().trim().min(1);
-export type XmlAttributeKey = z.infer<typeof XmlAttributeKey>;
+export const XmlAttributeKey = pipe(
+	string,
+	transform((v: string) => v.trim()),
+	min_length(1)
+);
+export type XmlAttributeKey = Infer<typeof XmlAttributeKey>;
 
-export const XmlAttributeKeyWithDefault = XmlAttributeKey.default('attr');
-export type XmlAttributeKeyWithDefault = z.infer<typeof XmlAttributeKeyWithDefault>;
+export const XmlAttributeKeyWithDefault = with_default(XmlAttributeKey, 'attr');
+export type XmlAttributeKeyWithDefault = Infer<typeof XmlAttributeKeyWithDefault>;
 
-export const XmlAttributeValue = z.string();
-export type XmlAttributeValue = z.infer<typeof XmlAttributeValue>;
+export const XmlAttributeValue = string;
+export type XmlAttributeValue = Infer<typeof XmlAttributeValue>;
 
-export const XmlAttributeValueWithDefault = XmlAttributeValue.default('');
-export type XmlAttributeValueWithDefault = z.infer<typeof XmlAttributeValueWithDefault>;
+export const XmlAttributeValueWithDefault = with_default(XmlAttributeValue, '');
+export type XmlAttributeValueWithDefault = Infer<typeof XmlAttributeValueWithDefault>;
 
 // TODO is strict desired?
 // Default attribute applies defaults and includes id with default
-export const XmlAttributeWithDefaults = z.strictObject({
-	id: ZodUuidWithDefault,
+export const XmlAttributeWithDefaults = object({
+	id: UuidWithDefault,
 	key: XmlAttributeKeyWithDefault,
 	value: XmlAttributeValueWithDefault
 });
-export type XmlAttributeWithDefaults = z.infer<typeof XmlAttributeWithDefaults>;
+export type XmlAttributeWithDefaults = Infer<typeof XmlAttributeWithDefaults>;
 
 // TODO Consider adding support for XML namespaces and special XML character handling if needed// TODO?: Add element, document, and CDATA section schemas to create a complete XML model

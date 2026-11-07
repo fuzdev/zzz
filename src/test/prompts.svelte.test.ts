@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -48,14 +49,14 @@ describe('removing the last selected prompt off its route', () => {
 
 describe('Prompts.filter_by_diskfile_path', () => {
 	test('matches prompts by the path of their own diskfile parts', () => {
-		const path = DiskfilePath.parse('/test/notes.txt');
+		const path = parse_or_throw(DiskfilePath, '/test/notes.txt');
 		const with_file = app.prompts.add();
 		with_file.add_part(Part.create(app, { type: 'diskfile', path }));
 		const with_text = app.prompts.add();
 		with_text.add_part(Part.create(app, { type: 'text', content: '/test/notes.txt' }));
 		const with_other_file = app.prompts.add();
 		with_other_file.add_part(
-			Part.create(app, { type: 'diskfile', path: DiskfilePath.parse('/test/other.txt') })
+			Part.create(app, { type: 'diskfile', path: parse_or_throw(DiskfilePath, '/test/other.txt') })
 		);
 
 		assert.deepEqual(app.prompts.filter_by_diskfile_path(path), [with_file]);

@@ -1,4 +1,20 @@
-import { z } from 'zod';
+import {
+	array,
+	boolean,
+	literal,
+	nullable,
+	number,
+	object,
+	parse_or_throw,
+	string,
+	variant,
+	with_default,
+	with_default_fn,
+	type AnySchema,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
+import { meta } from '@fuzdev/fuz_schema/meta.ts';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 import { UnreachableError } from '@fuzdev/fuz_util/error.ts';
 import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
@@ -14,49 +30,65 @@ import { DiskfilePath } from './diskfile_types.ts';
 import { CONTENT_PREVIEW_LENGTH } from './constants.ts';
 
 /** Common properties for all part types. */
-export const PartJsonBase = CellJson.extend({
-	type: z.string(),
-	name: z.string().default(''),
-	start: z.number().nullable().default(null),
-	end: z.number().nullable().default(null),
-	has_xml_tag: z.boolean().default(false),
-	xml_tag_name: z.string().default(''), // TODO @many move to the prompt somewhere
-	attributes: z.array(XmlAttributeWithDefaults).default(() => []), // TODO @many move to the prompt somewhere
+export const PartJsonBase = object({
+	...CellJson.def,
+	type: string,
+	name: with_default(string, ''),
+	start: with_default(nullable(number), null),
+	end: with_default(nullable(number), null),
+	has_xml_tag: with_default(boolean, false),
+	xml_tag_name: with_default(string, ''), // TODO @many move to the prompt somewhere
+	attributes: with_default_fn(array(XmlAttributeWithDefaults), () => []), // TODO @many move to the prompt somewhere
 	// TODO should maybe be swapped to `disabled`
-	enabled: z.boolean().default(true),
-	title: z.string().nullable().default(null),
-	summary: z.string().nullable().default(null)
+	enabled: with_default(boolean, true),
+	title: with_default(nullable(string), null),
+	summary: with_default(nullable(string), null)
 });
-export type PartJsonBase = z.infer<typeof PartJsonBase>;
+export type PartJsonBase = Infer<typeof PartJsonBase>;
 
 /** Text part schema - direct content storage. */
-export const TextPartJson = PartJsonBase.extend({
-	type: z.literal('text').default('text'),
-	content: z.string().default('')
-}).meta({ cell_class_name: 'TextPart' });
-export type TextPartJson = z.infer<typeof TextPartJson>;
-export type TextPartJsonInput = z.input<typeof TextPartJson>;
+export const TextPartJson = meta(
+	object({
+		...PartJsonBase.def,
+		type: with_default(literal('text'), 'text'),
+		content: with_default(string, '')
+	}),
+	{ cell_class_name: 'TextPart' }
+);
+export type TextPartJson = Infer<typeof TextPartJson>;
+export type TextPartJsonInput = InferInput<typeof TextPartJson>;
 
 /** Diskfile part schema - references a diskfile. */
-export const DiskfilePartJson = PartJsonBase.extend({
-	type: z.literal('diskfile').default('diskfile'),
-	path: DiskfilePath.nullable().default(null),
-	has_xml_tag: PartJsonBase.shape.has_xml_tag.default(true) // Override to make true only for diskfiles
-	// `content` is on disk at `path`, not in the serialized representation
-}).meta({ cell_class_name: 'DiskfilePart' });
-export type DiskfilePartJson = z.infer<typeof DiskfilePartJson>;
-export type DiskfilePartJsonInput = z.input<typeof DiskfilePartJson>;
+export const DiskfilePartJson = meta(
+	object({
+		...PartJsonBase.def,
+		type: with_default(literal('diskfile'), 'diskfile'),
+		path: with_default(nullable(DiskfilePath), null),
+		has_xml_tag: with_default(boolean, true) // Override to make true only for diskfiles
+		// `content` is on disk at `path`, not in the serialized representation
+	}),
+	{ cell_class_name: 'DiskfilePart' }
+);
+export type DiskfilePartJson = Infer<typeof DiskfilePartJson>;
+export type DiskfilePartJsonInput = InferInput<typeof DiskfilePartJson>;
 
-/** Union of all part types for deserialization. */
-export const PartJson = z.discriminatedUnion('type', [TextPartJson, DiskfilePartJson]);
-export type PartJson = z.infer<typeof PartJson>;
-export type PartJsonInput = z.input<typeof PartJson>;
+/**
+ * Union of all part types for deserialization, dispatched by `type`, which
+ * must be present: each option's `type` is the bare literal, without the
+ * default its part schema fills in.
+ */
+export const PartJson = variant('type', [
+	object({ ...TextPartJson.def, type: literal('text') }),
+	object({ ...DiskfilePartJson.def, type: literal('diskfile') })
+]);
+export type PartJson = Infer<typeof PartJson>;
+export type PartJsonInput = InferInput<typeof PartJson>;
 
 export type PartUnion = TextPart | DiskfilePart;
 export type PartJsonType = TextPartJson | DiskfilePartJson;
 
-export interface PartOptions<T extends z.ZodType = typeof PartJsonBase> extends CellOptions<T> {
-	json?: z.input<T>;
+export interface PartOptions<T extends AnySchema = typeof PartJsonBase> extends CellOptions<T> {
+	json?: InferInput<T>;
 }
 
 export type TextPartOptions = PartOptions<typeof TextPartJson>;
@@ -66,7 +98,7 @@ export type PartOptionsUnion = TextPartOptions | DiskfilePartOptions;
 /**
  * Abstract base class for all part types.
  */
-export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Cell<T> {
+export abstract class Part<T extends AnySchema = typeof PartJsonBase> extends Cell<T> {
 	// The type discriminator - to be set by subclasses
 	abstract readonly type: string;
 
@@ -99,9 +131,9 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 		this.type === 'diskfile' ? 'File' : 'Fragment'
 	);
 
-	add_attribute(partial: z.input<typeof XmlAttributeWithDefaults> = EMPTY_OBJECT): void {
+	add_attribute(partial: InferInput<typeof XmlAttributeWithDefaults> = EMPTY_OBJECT): void {
 		// TODO add with a default name
-		this.attributes.push(XmlAttributeWithDefaults.parse(partial));
+		this.attributes.push(parse_or_throw(XmlAttributeWithDefaults, partial));
 	}
 
 	/**
@@ -147,7 +179,11 @@ export abstract class Part<T extends z.ZodType = typeof PartJsonBase> extends Ce
 		options?: DiskfilePartOptions
 	): DiskfilePart;
 	static create(app: Frontend, json: PartJsonInput, options?: PartOptionsUnion): PartUnion;
-	static create(app: Frontend, json: PartJsonInput, options?: PartOptionsUnion): PartUnion {
+	static create(
+		app: Frontend,
+		json: TextPartJsonInput | DiskfilePartJsonInput,
+		options?: PartOptionsUnion
+	): PartUnion {
 		if (!json.type) {
 			throw new Error('Missing required "type" field in part JSON');
 		}

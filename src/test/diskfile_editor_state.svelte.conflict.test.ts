@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 
@@ -16,8 +17,8 @@ import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
  * save's broadcast never counts as such a change.
  */
 
-const PATH = DiskfilePath.parse('/w/a.txt');
-const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/w/');
+const PATH = parse_or_throw(DiskfilePath, '/w/a.txt');
+const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
 let app: Frontend;
 let diskfile: Diskfile;

@@ -1,3 +1,4 @@
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, assert, vi, afterEach } from 'vitest';
 
 import {
@@ -211,7 +212,7 @@ describe('delete_diskfile', () => {
 		vi.restoreAllMocks();
 	});
 
-	const path = DiskfilePath.parse('/ws/a.txt');
+	const path = parse_or_throw(DiskfilePath, '/ws/a.txt');
 	const diskfile = { path, path_relative: 'ws/a.txt' } as unknown as Diskfile;
 
 	test('deletes the file', async () => {

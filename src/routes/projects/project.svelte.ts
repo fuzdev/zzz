@@ -2,8 +2,8 @@
 
 import type { ArrayElement } from '@fuzdev/fuz_util/types.ts';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { ProjectJson } from './projects_schema.ts';
 import { Domain } from './domain.svelte.ts';

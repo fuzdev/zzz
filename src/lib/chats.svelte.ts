@@ -1,8 +1,17 @@
-import { z } from 'zod';
+import {
+	array,
+	boolean,
+	nullable,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { page } from '$app/state';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from './datetime.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Chat, ChatJson, type ChatJsonInput } from './chat.svelte.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
@@ -13,16 +22,19 @@ import { get_unique_name } from './helpers.ts';
 import { goto_unless_current, to_chats_url } from './nav.ts';
 import { chat_template_defaults } from './config_defaults.ts';
 import type { ChatTemplate } from './chat_template.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
-export const ChatsJson = CellJson.extend({
-	items: z.array(ChatJson).default(() => []),
-	selected_id: z.string().nullable().default(null),
-	selected_id_last_non_null: z.string().nullable().default(null),
-	show_sort_controls: z.boolean().default(false)
-}).meta({ cell_class_name: 'Chats' });
-export type ChatsJson = z.infer<typeof ChatsJson>;
-export type ChatsJsonInput = z.input<typeof ChatsJson>;
+export const ChatsJson = cell_json_schema(
+	{
+		items: with_default_fn(array(ChatJson), () => []),
+		selected_id: with_default(nullable(string), null),
+		selected_id_last_non_null: with_default(nullable(string), null),
+		show_sort_controls: with_default(boolean, false)
+	},
+	'Chats'
+);
+export type ChatsJson = Infer<typeof ChatsJson>;
+export type ChatsJsonInput = InferInput<typeof ChatsJson>;
 
 export interface ChatsOptions extends CellOptions<typeof ChatsJson> {}
 

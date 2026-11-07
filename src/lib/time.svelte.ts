@@ -1,9 +1,9 @@
-import { z } from 'zod';
+import type { Infer, InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import { SvelteDate } from 'svelte/reactivity';
 import { BROWSER } from 'esm-env';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import {
 	format_datetime,
 	format_short_date,
@@ -21,9 +21,9 @@ const TICK_SLACK_MS = 10;
  */
 export const TIME_INTERVAL_MAX = 2_147_483_647;
 
-export const TimeJson = CellJson.extend({}).meta({ cell_class_name: 'Time' });
-export type TimeJson = z.infer<typeof TimeJson>;
-export type TimeJsonInput = z.input<typeof TimeJson>;
+export const TimeJson = cell_json_schema({}, 'Time');
+export type TimeJson = Infer<typeof TimeJson>;
+export type TimeJsonInput = InferInput<typeof TimeJson>;
 
 /**
  * Options for configuring a Time instance.

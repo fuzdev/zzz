@@ -2,8 +2,8 @@
 
 import { test, describe, beforeEach, assert } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { estimate_token_count } from '#lib/helpers.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 

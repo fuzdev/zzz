@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
 
 import type { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
@@ -10,8 +11,8 @@ import { Diskfile } from '#lib/diskfile.svelte.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
-const TEST_PATH = DiskfilePath.parse('/path/to/test.txt');
-const TEST_DIR = SerializableDisknode.shape.source_dir.parse('/path/');
+const TEST_PATH = parse_or_throw(DiskfilePath, '/path/to/test.txt');
+const TEST_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/path/');
 const TEST_CONTENT = 'This is test content';
 
 // Test suite variables

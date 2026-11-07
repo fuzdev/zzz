@@ -1,56 +1,83 @@
-import { z } from 'zod';
-import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
+import {
+	array,
+	boolean,
+	nullable,
+	object,
+	one_of,
+	record,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
-import { CellJson } from '#lib/cell_types.ts';
+import { cell_json_schema } from '#lib/cell_types.ts';
 
-export const DomainJson = CellJson.extend({
-	name: z.string().default(''),
-	status: z.enum(['active', 'pending', 'inactive']).default('pending'),
-	ssl: z.boolean().default(false)
-}).meta({ cell_class_name: 'Domain' });
-export type DomainJson = z.infer<typeof DomainJson>;
-export type DomainJsonInput = z.input<typeof DomainJson>;
+export const DomainJson = cell_json_schema(
+	{
+		name: with_default(string, ''),
+		status: with_default(one_of(['active', 'pending', 'inactive']), 'pending'),
+		ssl: with_default(boolean, false)
+	},
+	'Domain'
+);
+export type DomainJson = Infer<typeof DomainJson>;
+export type DomainJsonInput = InferInput<typeof DomainJson>;
 
-export const PageJson = CellJson.extend({
-	path: z.string().default('/'),
-	title: z.string().default('New page'),
-	content: z.string().default('# New page\n\nAdd your **content** here.')
-}).meta({ cell_class_name: 'Page' });
-export type PageJson = z.infer<typeof PageJson>;
-export type PageJsonInput = z.input<typeof PageJson>;
+export const PageJson = cell_json_schema(
+	{
+		path: with_default(string, '/'),
+		title: with_default(string, 'New page'),
+		content: with_default(string, '# New page\n\nAdd your **content** here.')
+	},
+	'Page'
+);
+export type PageJson = Infer<typeof PageJson>;
+export type PageJsonInput = InferInput<typeof PageJson>;
 
-export const RepoCheckout = z.strictObject({
-	id: ZodUuid,
-	path: z.string(),
-	label: z.string(),
-	tags: z.array(z.string())
+export const RepoCheckout = object({
+	id: Uuid,
+	path: string,
+	label: string,
+	tags: array(string)
 });
-export type RepoCheckout = z.infer<typeof RepoCheckout>;
+export type RepoCheckout = Infer<typeof RepoCheckout>;
 
-export const RepoJson = CellJson.extend({
-	git_url: z.string(),
-	checkouts: z.array(RepoCheckout).default([])
-}).meta({ cell_class_name: 'Repo' });
-export type RepoJson = z.infer<typeof RepoJson>;
-export type RepoJsonInput = z.input<typeof RepoJson>;
+export const RepoJson = cell_json_schema(
+	{
+		git_url: string,
+		checkouts: with_default_fn(array(RepoCheckout), () => [])
+	},
+	'Repo'
+);
+export type RepoJson = Infer<typeof RepoJson>;
+export type RepoJsonInput = InferInput<typeof RepoJson>;
 
-export const ProjectJson = CellJson.extend({
-	name: z.string().default('new project'),
-	description: z.string().default(''),
-	pages: z.array(PageJson).default(() => []),
-	domains: z.array(DomainJson).default(() => []),
-	repos: z.array(RepoJson).default([])
-}).meta({ cell_class_name: 'Project' });
-export type ProjectJson = z.infer<typeof ProjectJson>;
-export type ProjectJsonInput = z.input<typeof ProjectJson>;
+export const ProjectJson = cell_json_schema(
+	{
+		name: with_default(string, 'new project'),
+		description: with_default(string, ''),
+		pages: with_default_fn(array(PageJson), () => []),
+		domains: with_default_fn(array(DomainJson), () => []),
+		repos: with_default_fn(array(RepoJson), () => [])
+	},
+	'Project'
+);
+export type ProjectJson = Infer<typeof ProjectJson>;
+export type ProjectJsonInput = InferInput<typeof ProjectJson>;
 
-export const ProjectsJson = CellJson.extend({
-	projects: z.array(ProjectJson).default(() => []),
-	current_project_id: ZodUuid.nullable().default(null),
-	current_page_id: ZodUuid.nullable().default(null),
-	current_domain_id: ZodUuid.nullable().default(null),
-	expanded_projects: z.record(z.string(), z.boolean()).default({}),
-	previewing: z.boolean().default(false)
-}).meta({ cell_class_name: 'Projects' });
-export type ProjectsJson = z.infer<typeof ProjectsJson>;
-export type ProjectsJsonInput = z.input<typeof ProjectsJson>;
+export const ProjectsJson = cell_json_schema(
+	{
+		projects: with_default_fn(array(ProjectJson), () => []),
+		current_project_id: with_default(nullable(Uuid), null),
+		current_page_id: with_default(nullable(Uuid), null),
+		current_domain_id: with_default(nullable(Uuid), null),
+		expanded_projects: with_default_fn(record(boolean), () => ({})),
+		previewing: with_default(boolean, false)
+	},
+	'Projects'
+);
+export type ProjectsJson = Infer<typeof ProjectsJson>;
+export type ProjectsJsonInput = InferInput<typeof ProjectsJson>;

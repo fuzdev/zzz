@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
@@ -15,10 +16,10 @@ import { confirm_unload_with_unsaved_changes, to_file_directories } from '#lib/d
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
-const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/ws/');
-const PATH_A = DiskfilePath.parse('/ws/a.txt');
-const PATH_B = DiskfilePath.parse('/ws/b.txt');
-const PATH_C = DiskfilePath.parse('/ws/c.txt');
+const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/ws/');
+const PATH_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
+const PATH_B = parse_or_throw(DiskfilePath, '/ws/b.txt');
+const PATH_C = parse_or_throw(DiskfilePath, '/ws/c.txt');
 
 const create_disknode = (
 	path: DiskfilePath,
@@ -113,7 +114,7 @@ describe('upsert by path', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
 		const diskfile = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(diskfile);
-		const other_dir = SerializableDisknode.shape.source_dir.parse('/');
+		const other_dir = parse_or_throw(SerializableDisknode.def.source_dir, '/');
 		app.diskfiles.add_initial([{ ...create_disknode(PATH_A, 'same'), source_dir: other_dir }]);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile, 'same diskfile');
 		assert.strictEqual(diskfile.source_dir, other_dir);
@@ -762,11 +763,11 @@ describe('delete with unsaved edits keeps the tab', () => {
 });
 
 describe('path_relative', () => {
-	const ZZZ_DIR = SerializableDisknode.shape.source_dir.parse('/zzz/');
+	const ZZZ_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/zzz/');
 
 	test('is relative inside the zzz dir and absolute outside it', () => {
 		app.zzz_dir = ZZZ_DIR;
-		const inside = DiskfilePath.parse('/zzz/notes/a.md');
+		const inside = parse_or_throw(DiskfilePath, '/zzz/notes/a.md');
 		app.diskfiles.add_initial([create_disknode(inside), create_disknode(PATH_A)]);
 
 		assert.strictEqual(app.diskfiles.get_by_path(inside)?.path_relative, 'notes/a.md');
@@ -796,7 +797,7 @@ describe('create_file', () => {
 				return Promise.resolve({ ok: true, value: null });
 			}
 		};
-		app.zzz_dir = SerializableDisknode.shape.source_dir.parse('/zzz/');
+		app.zzz_dir = parse_or_throw(SerializableDisknode.def.source_dir, '/zzz/');
 		app.workspaces.add({ path: SOURCE_DIR });
 
 		await app.diskfiles.create_file('/new.txt');
@@ -812,7 +813,7 @@ describe('create_file', () => {
 				return Promise.resolve({ ok: true, value: null });
 			}
 		};
-		app.zzz_dir = SerializableDisknode.shape.source_dir.parse('/zzz/');
+		app.zzz_dir = parse_or_throw(SerializableDisknode.def.source_dir, '/zzz/');
 		assert.isNull(app.diskfiles.new_files_dir);
 
 		const error = await app.diskfiles.create_file('new.txt').then(
@@ -1270,8 +1271,8 @@ describe('create_directory', () => {
 
 describe('directory_paths', () => {
 	const node_at = (path: string, source_dir: string = SOURCE_DIR): SerializableDisknode => ({
-		...create_disknode(DiskfilePath.parse(path)),
-		source_dir: SerializableDisknode.shape.source_dir.parse(source_dir)
+		...create_disknode(parse_or_throw(DiskfilePath, path)),
+		source_dir: parse_or_throw(SerializableDisknode.def.source_dir, source_dir)
 	});
 
 	const dirs = (): Array<string> => [...app.diskfiles.directory_paths].sort();
@@ -1291,17 +1292,17 @@ describe('directory_paths', () => {
 		assert.isTrue(app.diskfiles.link_index.has_directory('/ws/a/'));
 
 		app.diskfiles.upsert(node_at('/ws/a/d.md'));
-		filer_change('delete', DiskfilePath.parse('/ws/a/b/c.md'));
+		filer_change('delete', parse_or_throw(DiskfilePath, '/ws/a/b/c.md'));
 		assert.deepEqual(dirs(), ['/ws/', '/ws/a/'], 'only the emptied folder goes');
 
-		filer_change('delete', DiskfilePath.parse('/ws/a/d.md'));
+		filer_change('delete', parse_or_throw(DiskfilePath, '/ws/a/d.md'));
 		assert.deepEqual(dirs(), [], 'its ancestors up to the root go once they empty');
 		assert.isFalse(app.diskfiles.link_index.has_directory('/ws/'));
 	});
 
 	test('a rename, as a delete plus an add, moves the folders', () => {
 		app.diskfiles.upsert(node_at('/ws/old/x.md'));
-		filer_change('delete', DiskfilePath.parse('/ws/old/x.md'));
+		filer_change('delete', parse_or_throw(DiskfilePath, '/ws/old/x.md'));
 		app.diskfiles.upsert(node_at('/ws/new/x.md'));
 		assert.deepEqual(dirs(), ['/ws/', '/ws/new/']);
 	});
@@ -1319,7 +1320,7 @@ describe('directory_paths', () => {
 	test('a re-sent file counts once', () => {
 		app.diskfiles.upsert(node_at('/ws/a/x.md'));
 		app.diskfiles.add_initial([node_at('/ws/a/x.md'), node_at('/ws/a/x.md')]);
-		filer_change('delete', DiskfilePath.parse('/ws/a/x.md'));
+		filer_change('delete', parse_or_throw(DiskfilePath, '/ws/a/x.md'));
 		assert.deepEqual(dirs(), []);
 	});
 
@@ -1327,7 +1328,7 @@ describe('directory_paths', () => {
 		const diskfile = app.diskfiles.upsert(node_at('/ws/a/x.md'));
 		app.diskfiles.select(diskfile.id, true);
 		app.diskfiles.get_editor_state(diskfile).current_content = 'edited';
-		filer_change('delete', DiskfilePath.parse('/ws/a/x.md'));
+		filer_change('delete', parse_or_throw(DiskfilePath, '/ws/a/x.md'));
 		assert.isTrue(diskfile.deleted_on_disk);
 		assert.deepEqual(dirs(), []);
 
@@ -1365,7 +1366,7 @@ describe('directory_paths', () => {
 	test('a long mixed sequence agrees with a from-scratch walk', () => {
 		const paths = ['/ws/a.md', '/ws/a/b.md', '/ws/a/b/c.md', '/ws/a/b/d.md', '/ws/e/f.md'];
 		for (let step = 0; step < 60; step++) {
-			const path = DiskfilePath.parse(paths[(step * 7) % paths.length]!);
+			const path = parse_or_throw(DiskfilePath, paths[(step * 7) % paths.length]!);
 			if (step % 3 === 2) {
 				filer_change('delete', path);
 			} else {
@@ -1387,8 +1388,8 @@ describe('directory_paths', () => {
 		flushSync();
 		app.diskfiles.upsert(node_at('/ws/a/y.md'));
 		flushSync();
-		filer_change('delete', DiskfilePath.parse('/ws/a/x.md'));
-		filer_change('delete', DiskfilePath.parse('/ws/a/y.md'));
+		filer_change('delete', parse_or_throw(DiskfilePath, '/ws/a/x.md'));
+		filer_change('delete', parse_or_throw(DiskfilePath, '/ws/a/y.md'));
 		flushSync();
 		cleanup();
 		assert.deepEqual(seen, [false, true, false], 'only presence changes rerun it');

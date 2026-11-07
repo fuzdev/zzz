@@ -3,8 +3,8 @@
 import { create_context } from '@fuzdev/fuz_ui/context_helpers.ts';
 import { page } from '$app/state';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { ProjectsJson } from './projects_schema.ts';
 import { Project } from './project.svelte.ts';

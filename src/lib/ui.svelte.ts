@@ -1,20 +1,23 @@
-import { z } from 'zod';
+import { boolean, with_default, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
-export const UiJson = CellJson.extend({
-	show_main_dialog: z.boolean().default(false),
-	show_sidebar: z.boolean().default(true),
-	tutorial_for_database: z.boolean().default(true),
-	tutorial_for_chats: z.boolean().default(true),
-	tutorial_for_prompts: z.boolean().default(true),
-	tutorial_for_diskfiles: z.boolean().default(true),
-	show_desk_menu: z.boolean().default(false),
-	desk_pinned: z.boolean().default(false)
-}).meta({ cell_class_name: 'Ui' });
-export type UiJson = z.infer<typeof UiJson>;
-export type UiJsonInput = z.input<typeof UiJson>;
+export const UiJson = cell_json_schema(
+	{
+		show_main_dialog: with_default(boolean, false),
+		show_sidebar: with_default(boolean, true),
+		tutorial_for_database: with_default(boolean, true),
+		tutorial_for_chats: with_default(boolean, true),
+		tutorial_for_prompts: with_default(boolean, true),
+		tutorial_for_diskfiles: with_default(boolean, true),
+		show_desk_menu: with_default(boolean, false),
+		desk_pinned: with_default(boolean, false)
+	},
+	'Ui'
+);
+export type UiJson = Infer<typeof UiJson>;
+export type UiJsonInput = InferInput<typeof UiJson>;
 
 export interface UiOptions extends CellOptions<typeof UiJson> {}
 export class Ui extends Cell<typeof UiJson> {

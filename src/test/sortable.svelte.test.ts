@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
+import { number, string, strip_object } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
-import { z } from 'zod';
-import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuidWithDefault, DatetimeNow } from '@fuzdev/fuz_app/zod_schemas.ts';
+import { create_uuid, type Uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
+import { DatetimeNow } from '#lib/datetime.ts';
 import { Sortable, type Sorter, sort_by_text, sort_by_numeric } from '#lib/sortable.svelte.ts';
 import { Cell } from '#lib/cell.svelte.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -12,12 +12,12 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Create a schema for our test cell
-const TestCellSchema = z.object({
-	id: ZodUuidWithDefault,
+const TestCellSchema = strip_object({
+	id: UuidWithDefault,
 	created: DatetimeNow,
 	updated: DatetimeNow,
-	name: z.string(),
-	value: z.number()
+	name: string,
+	value: number
 });
 
 // Real cell class for testing - extends the Cell base class

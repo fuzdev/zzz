@@ -1,15 +1,18 @@
-import { z } from 'zod';
+import { array, with_default_fn, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Provider, ProviderJson } from './provider.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import type { ProviderName } from './provider_types.ts';
 
-export const ProvidersJson = CellJson.extend({
-	items: z.array(ProviderJson).default(() => [])
-}).meta({ cell_class_name: 'Providers' });
-export type ProvidersJson = z.infer<typeof ProvidersJson>;
-export type ProvidersJsonInput = z.input<typeof ProvidersJson>;
+export const ProvidersJson = cell_json_schema(
+	{
+		items: with_default_fn(array(ProviderJson), () => [])
+	},
+	'Providers'
+);
+export type ProvidersJson = Infer<typeof ProvidersJson>;
+export type ProvidersJsonInput = InferInput<typeof ProvidersJson>;
 
 export interface ProvidersOptions extends CellOptions<typeof ProvidersJson> {}
 export class Providers extends Cell<typeof ProvidersJson> {

@@ -1,6 +1,6 @@
 import { test, describe, assert } from 'vitest';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { render_completion_messages } from '#lib/thread_helpers.ts';
 import type { CompletionResponse, CompletionRole } from '#lib/completion_types.ts';
 

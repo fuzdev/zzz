@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
@@ -11,7 +12,7 @@ import FrontendContextHarness from './FrontendContextHarness.svelte';
 import DiskfileContextmenuHarness from './DiskfileContextmenuHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
-const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/w/');
+const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
 let app: Frontend;
 const cleanups: Array<() => void> = [];
@@ -36,7 +37,7 @@ afterEach(() => {
 
 const add_diskfile = (path: string, contents: string | null): Diskfile =>
 	app.diskfiles.upsert({
-		id: DiskfilePath.parse(path),
+		id: parse_or_throw(DiskfilePath, path),
 		source_dir: SOURCE_DIR,
 		contents,
 		ctime: 1,

@@ -1,10 +1,21 @@
 // @vitest-environment jsdom
 
+import {
+	array,
+	boolean,
+	literal,
+	number,
+	object,
+	string,
+	strip_object,
+	with_default,
+	with_default_fn,
+	type SchemaResult
+} from '@fuzdev/fuz_schema/schema.ts';
 import { test, vi, beforeEach, describe, assert } from 'vitest';
-import { z } from 'zod';
-import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuidWithDefault, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
+import { create_uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { CellJson } from '#lib/cell_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -16,11 +27,12 @@ const TEST_ID = create_uuid();
 const TEST_DATETIME = get_datetime_now();
 
 // Basic schema for testing that extends CellJson
-const TestSchema = CellJson.extend({
-	text: z.string().default(''),
-	number: z.number().default(0),
-	items: z.array(z.string()).default(() => []),
-	flag: z.boolean().default(true)
+const TestSchema = object({
+	...CellJson.def,
+	text: with_default(string, ''),
+	number: with_default(number, 0),
+	items: with_default_fn(array(string), () => []),
+	flag: with_default(boolean, true)
 });
 
 // Basic test cell implementation
@@ -108,12 +120,12 @@ describe('Cell initialization', () => {
 		// Test schema info for an array type
 		const items_info = test_cell.field_schema_info.get('items');
 		assert.ok(items_info?.is_array);
-		assert.strictEqual(items_info.type, 'ZodArray');
+		assert.strictEqual(items_info.kind, 'array');
 
 		// Test schema info for a scalar type
 		const text_info = test_cell.field_schema_info.get('text');
 		assert.ok(!text_info?.is_array);
-		assert.strictEqual(text_info?.type, 'ZodString');
+		assert.strictEqual(text_info?.kind, 'string');
 	});
 });
 
@@ -176,11 +188,11 @@ describe('Cell registry lifecycle', () => {
 
 describe('Cell id handling', () => {
 	// Define a test schema with required type field for these tests
-	const IdTestSchema = z.object({
-		id: ZodUuidWithDefault,
-		type: z.literal('test').default('test'),
-		content: z.string().default(''),
-		version: z.number().default(0)
+	const IdTestSchema = strip_object({
+		id: UuidWithDefault,
+		type: with_default(literal('test'), 'test'),
+		content: with_default(string, ''),
+		version: with_default(number, 0)
 	});
 
 	// Test implementation of the Cell class with id-specific tests
@@ -564,7 +576,7 @@ describe('Schema validation', () => {
 		});
 
 		// Initial state should be valid
-		assert.ok(test_cell.json_parsed.success);
+		assert.ok(test_cell.json_parsed.ok);
 
 		// Invalid initialization should throw
 		assert.throws(
@@ -577,5 +589,26 @@ describe('Schema validation', () => {
 					}
 				})
 		);
+	});
+
+	test('json_parsed reports a state the schema refuses', () => {
+		const test_cell = new BasicTestCell({ app, json: { id: TEST_ID, text: 'Valid' } });
+		assert.ok(test_cell.json_parsed.ok);
+
+		test_cell.text = 123 as any;
+		// widened: the `ok` assertion above narrowed the property
+		const result = test_cell.json_parsed as SchemaResult<unknown>;
+		assert(!result.ok);
+		assert.deepEqual(result.issues[0]?.path, ['text']);
+	});
+
+	test('set_json_partial with `created` alone sets `updated` to it', () => {
+		const test_cell = new BasicTestCell({ app, json: { id: TEST_ID } });
+		const created = '2020-01-01T00:00:00.000Z';
+
+		test_cell.set_json_partial({ created });
+
+		assert.strictEqual(test_cell.created, created);
+		assert.strictEqual(test_cell.updated, created);
 	});
 });

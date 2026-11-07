@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert, vi } from 'vitest';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -27,8 +28,8 @@ interface StubbedCall {
 let app: Frontend;
 let calls: Array<StubbedCall>;
 
-const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/test/');
-const FILE_PATH = DiskfilePath.parse('/test/notes.txt');
+const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/test/');
+const FILE_PATH = parse_or_throw(DiskfilePath, '/test/notes.txt');
 
 /**
  * Replaces `app.api` with a stub whose `completion_create` stays in flight until

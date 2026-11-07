@@ -1,5 +1,28 @@
-import { z } from 'zod';
-import { object, type Infer } from '@fuzdev/fuz_schema/schema.ts';
+import {
+	array,
+	boolean,
+	check,
+	integer,
+	literal,
+	loose_object,
+	max_value,
+	message,
+	min_value,
+	nullable,
+	number,
+	object,
+	one_of,
+	optional,
+	pipe,
+	safe_integer,
+	string,
+	union,
+	void as fuz_void,
+	with_default,
+	with_default_fn,
+	type Infer
+} from '@fuzdev/fuz_schema/schema.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import type {
 	LocalCallActionSpec,
@@ -11,7 +34,6 @@ import { heartbeat_action_spec } from '@fuzdev/fuz_app/actions/heartbeat.ts';
 import { cancel_action_spec } from '@fuzdev/fuz_app/actions/cancel.ts';
 import { peer_ping_action_spec } from '@fuzdev/fuz_app/actions/peer_ping.ts';
 import { protocol_action_specs } from '@fuzdev/fuz_app/actions/protocol.ts';
-import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 // Re-export so codegen (which builds `import * as specs from './action_specs'`)
 // resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` /
@@ -25,7 +47,6 @@ export { heartbeat_action_spec, cancel_action_spec, peer_ping_action_spec };
 
 import {
 	DiskfileChange,
-	DiskfileChangeType,
 	DiskfileDirectoryPath,
 	DiskfilePath,
 	DisknodeMetadata,
@@ -44,11 +65,11 @@ import { WorkspaceInfoJson, WorkspaceWatchStatus } from './workspace.svelte.ts';
 /**
  * Progress-token envelope shared by streaming actions. Carries the caller's
  * `progressToken` so streamed `*_progress` notifications can be correlated
- * with the originating request. `looseObject` lets transports tack on
+ * with the originating request. `loose_object` lets transports tack on
  * additional MCP-style metadata without a schema bump.
  */
-export const ProgressMeta = z.looseObject({ progressToken: ZodUuid.optional() });
-export type ProgressMeta = z.infer<typeof ProgressMeta>;
+export const ProgressMeta = loose_object({ progressToken: optional(Uuid) });
+export type ProgressMeta = Infer<typeof ProgressMeta>;
 
 // -- Input/output schemas ---------------------------------------------------
 
@@ -73,29 +94,29 @@ export type PingOutput = Infer<typeof PingOutput>;
  * the Rust backend grows its own typed session response and we can move
  * this schema to the shared boundary.
  */
-export const SessionLoadData = z.strictObject({
+export const SessionLoadData = object({
 	zzz_dir: DiskfileDirectoryPath,
-	scoped_dirs: z.readonly(z.array(DiskfileDirectoryPath)),
-	files: z.array(SerializableDisknode),
+	scoped_dirs: array(DiskfileDirectoryPath),
+	files: array(SerializableDisknode),
 	/**
 	 * The directories whose complete file trees `files` holds (the backend's
 	 * watched roots) — a known file under one of them that's missing from
 	 * `files` is gone from disk.
 	 */
-	file_roots: z.array(DiskfileDirectoryPath),
-	provider_status: z.array(ProviderStatus),
-	workspaces: z.array(WorkspaceInfoJson),
+	file_roots: array(DiskfileDirectoryPath),
+	provider_status: array(ProviderStatus),
+	workspaces: array(WorkspaceInfoJson),
 	/** Backend ids of the caller's live terminals. */
-	terminal_ids: z.array(ZodUuid),
+	terminal_ids: array(Uuid),
 	/** The caller's jobs, oldest first — running, queued, and recent finished ones. */
-	jobs: z.array(JobSnapshot),
+	jobs: array(JobSnapshot),
 	/**
 	 * Minted each time the backend starts — a different id than the last
 	 * snapshot's means it restarted, losing its terminals and runtime workspaces.
 	 */
-	server_instance_id: ZodUuid
+	server_instance_id: Uuid
 });
-export type SessionLoadData = z.infer<typeof SessionLoadData>;
+export type SessionLoadData = Infer<typeof SessionLoadData>;
 
 /**
  * Output for `session_load`. The `data` wrapper is historical; the Rust
@@ -103,112 +124,112 @@ export type SessionLoadData = z.infer<typeof SessionLoadData>;
  * `crates/zzz_server`), so flattening it is a coordinated wire change on
  * both sides.
  */
-export const SessionLoadOutput = z.strictObject({
+export const SessionLoadOutput = object({
 	data: SessionLoadData
 });
-export type SessionLoadOutput = z.infer<typeof SessionLoadOutput>;
+export type SessionLoadOutput = Infer<typeof SessionLoadOutput>;
 
 /**
  * Input for `filer_change`: the file's whole disknode — or, for a `touch`,
  * its metadata without the contents (`DisknodeMetadata`).
  */
-export const FilerChangeInput = z.union([
-	z.strictObject({
-		change: DiskfileChange.extend({ type: DiskfileChangeType.exclude(['touch']) }),
+export const FilerChangeInput = union([
+	object({
+		change: object({ ...DiskfileChange.def, type: one_of(['add', 'change', 'delete']) }),
 		disknode: SerializableDisknode
 	}),
-	z.strictObject({
-		change: DiskfileChange.extend({ type: z.literal('touch') }),
+	object({
+		change: object({ ...DiskfileChange.def, type: literal('touch') }),
 		disknode: DisknodeMetadata
 	})
 ]);
-export type FilerChangeInput = z.infer<typeof FilerChangeInput>;
+export type FilerChangeInput = Infer<typeof FilerChangeInput>;
 
 /** Input for `diskfile_update`. */
-export const DiskfileUpdateInput = z.strictObject({
+export const DiskfileUpdateInput = object({
 	path: DiskfilePath,
-	content: z.string()
+	content: string
 });
-export type DiskfileUpdateInput = z.infer<typeof DiskfileUpdateInput>;
+export type DiskfileUpdateInput = Infer<typeof DiskfileUpdateInput>;
 
 /** Input for `diskfile_create`. */
-export const DiskfileCreateInput = z.strictObject({
+export const DiskfileCreateInput = object({
 	path: DiskfilePath,
-	content: z.string()
+	content: string
 });
-export type DiskfileCreateInput = z.infer<typeof DiskfileCreateInput>;
+export type DiskfileCreateInput = Infer<typeof DiskfileCreateInput>;
 
 /** Input for `media_finalize`. */
-export const MediaFinalizeInput = z.strictObject({
+export const MediaFinalizeInput = object({
 	path: DiskfilePath
 });
-export type MediaFinalizeInput = z.infer<typeof MediaFinalizeInput>;
+export type MediaFinalizeInput = Infer<typeof MediaFinalizeInput>;
 
 /** Output for `media_finalize`: the rewritten file's size in bytes. */
-export const MediaFinalizeOutput = z.strictObject({
-	size: z.number()
+export const MediaFinalizeOutput = object({
+	size: number
 });
-export type MediaFinalizeOutput = z.infer<typeof MediaFinalizeOutput>;
+export type MediaFinalizeOutput = Infer<typeof MediaFinalizeOutput>;
 
 /** Input for `transcription_create`. */
-export const TranscriptionCreateInput = z.strictObject({
+export const TranscriptionCreateInput = object({
 	path: DiskfilePath,
 	/** A language code like `en`, or `auto` (the default) to detect it. */
-	language: z.string().optional()
+	language: optional(string)
 });
-export type TranscriptionCreateInput = z.infer<typeof TranscriptionCreateInput>;
+export type TranscriptionCreateInput = Infer<typeof TranscriptionCreateInput>;
 
 /** Output for `transcription_create`: the job that will do it. */
-export const TranscriptionCreateOutput = z.strictObject({
-	job_id: ZodUuid
+export const TranscriptionCreateOutput = object({
+	job_id: Uuid
 });
-export type TranscriptionCreateOutput = z.infer<typeof TranscriptionCreateOutput>;
+export type TranscriptionCreateOutput = Infer<typeof TranscriptionCreateOutput>;
 
 /** Input for the `transcription_progress` notification. */
-export const TranscriptionProgressInput = z.strictObject({
-	job_id: ZodUuid,
+export const TranscriptionProgressInput = object({
+	job_id: Uuid,
 	/** The segments decoded since the last notification. */
-	segments: z.array(TranscriptSegment)
+	segments: array(TranscriptSegment)
 });
-export type TranscriptionProgressInput = z.infer<typeof TranscriptionProgressInput>;
+export type TranscriptionProgressInput = Infer<typeof TranscriptionProgressInput>;
 
 /** Input for `job_cancel`. */
-export const JobCancelInput = z.strictObject({
-	job_id: ZodUuid
+export const JobCancelInput = object({
+	job_id: Uuid
 });
-export type JobCancelInput = z.infer<typeof JobCancelInput>;
+export type JobCancelInput = Infer<typeof JobCancelInput>;
 
 /** Input for the `job_changed` notification. */
-export const JobChangedInput = z.strictObject({
+export const JobChangedInput = object({
 	job: JobSnapshot
 });
-export type JobChangedInput = z.infer<typeof JobChangedInput>;
+export type JobChangedInput = Infer<typeof JobChangedInput>;
 
 /** Input for `diskfile_delete`. */
-export const DiskfileDeleteInput = z.strictObject({
+export const DiskfileDeleteInput = object({
 	path: DiskfilePath
 });
-export type DiskfileDeleteInput = z.infer<typeof DiskfileDeleteInput>;
+export type DiskfileDeleteInput = Infer<typeof DiskfileDeleteInput>;
 
 /** Input for `directory_create`. */
-export const DirectoryCreateInput = z.strictObject({
+export const DirectoryCreateInput = object({
 	path: DiskfilePath
 });
-export type DirectoryCreateInput = z.infer<typeof DirectoryCreateInput>;
+export type DirectoryCreateInput = Infer<typeof DirectoryCreateInput>;
 
 /** Input for `completion_create`. */
-export const CompletionCreateInput = z.strictObject({
+export const CompletionCreateInput = object({
 	completion_request: CompletionRequest,
-	_meta: ProgressMeta.optional()
+	_meta: optional(ProgressMeta)
 });
-export type CompletionCreateInput = z.infer<typeof CompletionCreateInput>;
+export type CompletionCreateInput = Infer<typeof CompletionCreateInput>;
 
 /** Output for `completion_create`. */
-export const CompletionCreateOutput = z.strictObject({
+export const CompletionCreateOutput = object({
 	completion_response: CompletionResponse,
-	_meta: ProgressMeta.optional()
+	_meta: optional(ProgressMeta)
 });
-export type CompletionCreateOutput = z.infer<typeof CompletionCreateOutput>;
+export type CompletionCreateOutput = Infer<typeof CompletionCreateOutput>;
 
 /**
  * Input for `completion_progress`.
@@ -218,158 +239,158 @@ export type CompletionCreateOutput = z.infer<typeof CompletionCreateOutput>;
  * timing fields (`total_duration`, `load_duration`, `prompt_eval_*`,
  * `eval_*`), `thinking`, `images`, `tool_calls` as more provider streams land.
  */
-export const CompletionProgressInput = z.strictObject({
-	chunk: z
-		.looseObject({
-			model: z.string().optional(),
-			created_at: z.string().optional(),
-			done: z.boolean().optional(),
-			message: CompletionMessage.optional()
+export const CompletionProgressInput = object({
+	chunk: optional(
+		loose_object({
+			model: optional(string),
+			created_at: optional(string),
+			done: optional(boolean),
+			message: optional(CompletionMessage)
 		})
-		.optional(),
-	_meta: ProgressMeta.optional()
+	),
+	_meta: optional(ProgressMeta)
 });
-export type CompletionProgressInput = z.infer<typeof CompletionProgressInput>;
+export type CompletionProgressInput = Infer<typeof CompletionProgressInput>;
 
 // TODO this is just a placeholder for a local call
 /** Input for `toggle_main_menu`. Optional — omit to toggle, pass `{show}` to set explicitly. */
-export const ToggleMainMenuInput = z.strictObject({ show: z.boolean().optional() }).optional();
-export type ToggleMainMenuInput = z.infer<typeof ToggleMainMenuInput>;
+export const ToggleMainMenuInput = optional(object({ show: optional(boolean) }));
+export type ToggleMainMenuInput = Infer<typeof ToggleMainMenuInput>;
 
 /** Output for `toggle_main_menu`. */
-export const ToggleMainMenuOutput = z.strictObject({ show: z.boolean() });
-export type ToggleMainMenuOutput = z.infer<typeof ToggleMainMenuOutput>;
+export const ToggleMainMenuOutput = object({ show: boolean });
+export type ToggleMainMenuOutput = Infer<typeof ToggleMainMenuOutput>;
 
 /** Input for `provider_load_status`. */
-export const ProviderLoadStatusInput = z.strictObject({
+export const ProviderLoadStatusInput = object({
 	provider_name: ProviderName,
-	reload: z.boolean().default(true).optional()
+	reload: with_default(boolean, true)
 });
-export type ProviderLoadStatusInput = z.infer<typeof ProviderLoadStatusInput>;
+export type ProviderLoadStatusInput = Infer<typeof ProviderLoadStatusInput>;
 
 /** Output for `provider_load_status`. */
-export const ProviderLoadStatusOutput = z.strictObject({
+export const ProviderLoadStatusOutput = object({
 	status: ProviderStatus
 });
-export type ProviderLoadStatusOutput = z.infer<typeof ProviderLoadStatusOutput>;
+export type ProviderLoadStatusOutput = Infer<typeof ProviderLoadStatusOutput>;
 
 /** Input for `terminal_create`. */
-export const TerminalCreateInput = z.strictObject({
-	command: z.string(),
-	args: z.array(z.string()).default(() => []),
+export const TerminalCreateInput = object({
+	command: string,
+	args: with_default_fn(array(string), () => []),
 	/** The working directory — absolute, never resolved against the daemon's own. */
-	cwd: z.string().refine(is_path_absolute, { message: 'cwd must be an absolute path' }).optional(),
-	preset_id: ZodUuid.optional()
+	cwd: optional(pipe(string, message(check(is_path_absolute), 'cwd must be an absolute path'))),
+	preset_id: optional(Uuid)
 });
-export type TerminalCreateInput = z.infer<typeof TerminalCreateInput>;
+export type TerminalCreateInput = Infer<typeof TerminalCreateInput>;
 
 /** Output for `terminal_create`. */
-export const TerminalCreateOutput = z.strictObject({
-	terminal_id: ZodUuid
+export const TerminalCreateOutput = object({
+	terminal_id: Uuid
 });
-export type TerminalCreateOutput = z.infer<typeof TerminalCreateOutput>;
+export type TerminalCreateOutput = Infer<typeof TerminalCreateOutput>;
 
 /** Input for `terminal_data_send`. */
-export const TerminalDataSendInput = z.strictObject({
-	terminal_id: ZodUuid,
-	data: z.string()
+export const TerminalDataSendInput = object({
+	terminal_id: Uuid,
+	data: string
 });
-export type TerminalDataSendInput = z.infer<typeof TerminalDataSendInput>;
+export type TerminalDataSendInput = Infer<typeof TerminalDataSendInput>;
 
 /** Input for `terminal_data` (backend → frontend stdout/stderr stream). */
-export const TerminalDataInput = z.strictObject({
-	terminal_id: ZodUuid,
-	data: z.string(),
+export const TerminalDataInput = object({
+	terminal_id: Uuid,
+	data: string,
 	/**
 	 * Bytes of output (`data` as UTF-8) the terminal has sent in total, this
 	 * chunk included — the backend's count, echoed back by `terminal_ack`.
 	 */
-	sent_bytes: z.number().int().nonnegative()
+	sent_bytes: pipe(number, safe_integer, min_value(0))
 });
-export type TerminalDataInput = z.infer<typeof TerminalDataInput>;
+export type TerminalDataInput = Infer<typeof TerminalDataInput>;
 
 /** Input for `terminal_ack`. */
-export const TerminalAckInput = z.strictObject({
-	terminal_id: ZodUuid,
+export const TerminalAckInput = object({
+	terminal_id: Uuid,
 	/**
 	 * The `sent_bytes` of the last `terminal_data` the client finished with.
 	 * Cumulative: the backend keeps the highest it has seen from a connection.
 	 */
-	bytes: z.number().int().nonnegative()
+	bytes: pipe(number, safe_integer, min_value(0))
 });
-export type TerminalAckInput = z.infer<typeof TerminalAckInput>;
+export type TerminalAckInput = Infer<typeof TerminalAckInput>;
 
 /**
  * A terminal dimension (`cols` / `rows`) — the `u16` range of a PTY
  * `winsize`, minus zero.
  */
-export const TerminalDimension = z.number().int().min(1).max(65_535);
-export type TerminalDimension = z.infer<typeof TerminalDimension>;
+export const TerminalDimension = pipe(number, integer, min_value(1), max_value(65_535));
+export type TerminalDimension = Infer<typeof TerminalDimension>;
 
 /** Input for `terminal_resize`. */
-export const TerminalResizeInput = z.strictObject({
-	terminal_id: ZodUuid,
+export const TerminalResizeInput = object({
+	terminal_id: Uuid,
 	cols: TerminalDimension,
 	rows: TerminalDimension
 });
-export type TerminalResizeInput = z.infer<typeof TerminalResizeInput>;
+export type TerminalResizeInput = Infer<typeof TerminalResizeInput>;
 
 /** A signal `terminal_close` can send. */
-export const TerminalCloseSignal = z.enum(['SIGTERM', 'SIGKILL']);
-export type TerminalCloseSignal = z.infer<typeof TerminalCloseSignal>;
+export const TerminalCloseSignal = one_of(['SIGTERM', 'SIGKILL']);
+export type TerminalCloseSignal = Infer<typeof TerminalCloseSignal>;
 
 /** Input for `terminal_close`. */
-export const TerminalCloseInput = z.strictObject({
-	terminal_id: ZodUuid,
-	signal: TerminalCloseSignal.default('SIGTERM').optional()
+export const TerminalCloseInput = object({
+	terminal_id: Uuid,
+	signal: with_default(TerminalCloseSignal, 'SIGTERM')
 });
-export type TerminalCloseInput = z.infer<typeof TerminalCloseInput>;
+export type TerminalCloseInput = Infer<typeof TerminalCloseInput>;
 
 /** Output for `terminal_close`. */
-export const TerminalCloseOutput = z.strictObject({
-	exit_code: z.number().nullable()
+export const TerminalCloseOutput = object({
+	exit_code: nullable(number)
 });
-export type TerminalCloseOutput = z.infer<typeof TerminalCloseOutput>;
+export type TerminalCloseOutput = Infer<typeof TerminalCloseOutput>;
 
 /** Input for `terminal_exited`. */
-export const TerminalExitedInput = z.strictObject({
-	terminal_id: ZodUuid,
-	exit_code: z.number().nullable()
+export const TerminalExitedInput = object({
+	terminal_id: Uuid,
+	exit_code: nullable(number)
 });
-export type TerminalExitedInput = z.infer<typeof TerminalExitedInput>;
+export type TerminalExitedInput = Infer<typeof TerminalExitedInput>;
 
 /** Input for `workspace_open`. */
-export const WorkspaceOpenInput = z.strictObject({
+export const WorkspaceOpenInput = object({
 	path: DiskfileDirectoryPath
 });
-export type WorkspaceOpenInput = z.infer<typeof WorkspaceOpenInput>;
+export type WorkspaceOpenInput = Infer<typeof WorkspaceOpenInput>;
 
 /** Output for `workspace_open`. */
-export const WorkspaceOpenOutput = z.strictObject({
+export const WorkspaceOpenOutput = object({
 	workspace: WorkspaceInfoJson,
-	files: z.array(SerializableDisknode),
+	files: array(SerializableDisknode),
 	watch_status: WorkspaceWatchStatus
 });
-export type WorkspaceOpenOutput = z.infer<typeof WorkspaceOpenOutput>;
+export type WorkspaceOpenOutput = Infer<typeof WorkspaceOpenOutput>;
 
 /** Input for `workspace_close`. */
-export const WorkspaceCloseInput = z.strictObject({
+export const WorkspaceCloseInput = object({
 	path: DiskfileDirectoryPath
 });
-export type WorkspaceCloseInput = z.infer<typeof WorkspaceCloseInput>;
+export type WorkspaceCloseInput = Infer<typeof WorkspaceCloseInput>;
 
 /** Output for `workspace_list`. */
-export const WorkspaceListOutput = z.strictObject({
-	workspaces: z.array(WorkspaceInfoJson)
+export const WorkspaceListOutput = object({
+	workspaces: array(WorkspaceInfoJson)
 });
-export type WorkspaceListOutput = z.infer<typeof WorkspaceListOutput>;
+export type WorkspaceListOutput = Infer<typeof WorkspaceListOutput>;
 
 /** Input for `workspace_changed`. */
-export const WorkspaceChangedInput = z.strictObject({
-	type: z.enum(['open', 'close']),
+export const WorkspaceChangedInput = object({
+	type: one_of(['open', 'close']),
 	workspace: WorkspaceInfoJson
 });
-export type WorkspaceChangedInput = z.infer<typeof WorkspaceChangedInput>;
+export type WorkspaceChangedInput = Infer<typeof WorkspaceChangedInput>;
 
 // -- Action specs -----------------------------------------------------------
 
@@ -379,7 +400,7 @@ export const ping_action_spec = {
 	initiator: 'both',
 	auth: { account: 'none', actor: 'none' },
 	side_effects: false,
-	input: z.void(),
+	input: fuz_void,
 	output: PingOutput,
 	async: true,
 	description: 'Health check — echoes the request ID back to the caller.'
@@ -393,7 +414,7 @@ export const session_load_action_spec = {
 	initiator: 'frontend',
 	auth: { account: 'required', actor: 'none' },
 	side_effects: false,
-	input: z.void(),
+	input: fuz_void,
 	output: SessionLoadOutput,
 	async: true,
 	description:
@@ -407,7 +428,7 @@ export const filer_change_action_spec = {
 	auth: null,
 	side_effects: true,
 	input: FilerChangeInput,
-	output: z.void(),
+	output: fuz_void,
 	async: true,
 	description:
 		"Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless the ones the backend holds for it are unchanged (a `touch`)."
@@ -420,7 +441,7 @@ export const diskfile_update_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: DiskfileUpdateInput,
-	output: z.null(),
+	output: literal(null),
 	async: true,
 	description: 'Write new content to a file on disk.'
 } satisfies RequestResponseActionSpec;
@@ -432,7 +453,7 @@ export const diskfile_create_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: DiskfileCreateInput,
-	output: z.null(),
+	output: literal(null),
 	async: true,
 	description:
 		'Create a new file on disk, failing with `conflict` (`already_exists`) if the path is taken — never overwrites.'
@@ -445,7 +466,7 @@ export const diskfile_delete_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: DiskfileDeleteInput,
-	output: z.null(),
+	output: literal(null),
 	async: true,
 	description: 'Delete a file from disk.'
 } satisfies RequestResponseActionSpec;
@@ -457,7 +478,7 @@ export const directory_create_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: DirectoryCreateInput,
-	output: z.null(),
+	output: literal(null),
 	async: true,
 	description:
 		'Create a new directory on disk, and any missing parents, failing with `conflict` (`already_exists`) if the path is taken — never reuses an existing one.'
@@ -496,7 +517,7 @@ export const transcription_progress_action_spec = {
 	auth: null,
 	side_effects: true,
 	input: TranscriptionProgressInput,
-	output: z.void(),
+	output: fuz_void,
 	async: true,
 	description:
 		'Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds.'
@@ -509,7 +530,7 @@ export const job_cancel_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: JobCancelInput,
-	output: z.null(),
+	output: literal(null),
 	async: true,
 	description:
 		'Cancel a job: a queued one never starts, the running one is stopped. A job that is already over is left as it is.'
@@ -522,7 +543,7 @@ export const job_changed_action_spec = {
 	auth: null,
 	side_effects: true,
 	input: JobChangedInput,
-	output: z.void(),
+	output: fuz_void,
 	async: true,
 	description: 'A job was queued, started, progressed, or finished — its full current state.'
 } satisfies RemoteNotificationActionSpec;
@@ -547,7 +568,7 @@ export const completion_progress_action_spec = {
 	auth: null,
 	side_effects: true,
 	input: CompletionProgressInput,
-	output: z.void(),
+	output: fuz_void,
 	async: true,
 	description: 'Streams a completion chunk to the frontend during a streaming AI response.'
 } satisfies RemoteNotificationActionSpec;
@@ -597,7 +618,7 @@ export const terminal_data_send_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: TerminalDataSendInput,
-	output: z.null(),
+	output: literal(null),
 	async: true,
 	description:
 		'Send stdin bytes to a terminal. Fails with `not_found` when the caller has no live terminal with the id.'
@@ -610,7 +631,7 @@ export const terminal_data_action_spec = {
 	auth: null,
 	side_effects: true,
 	input: TerminalDataInput,
-	output: z.void(),
+	output: fuz_void,
 	async: true,
 	description: 'Stream stdout/stderr bytes from a terminal to the frontend.'
 } satisfies RemoteNotificationActionSpec;
@@ -622,7 +643,7 @@ export const terminal_ack_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: TerminalAckInput,
-	output: z.null(),
+	output: literal(null),
 	async: true,
 	description:
 		"Acknowledge a terminal's output up to a `terminal_data`'s `sent_bytes`. The backend stops reading a terminal whose output runs too far ahead of what an acknowledging WebSocket connection has taken, and resumes as acks arrive; connections that never acknowledge aren't waited for, and over HTTP the call does nothing. Fails with `not_found` when the caller has no live terminal with the id."
@@ -635,7 +656,7 @@ export const terminal_resize_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: TerminalResizeInput,
-	output: z.null(),
+	output: literal(null),
 	async: true,
 	description:
 		'Update PTY dimensions for a terminal. Fails with `not_found` when the caller has no live terminal with the id.'
@@ -661,7 +682,7 @@ export const terminal_exited_action_spec = {
 	auth: null,
 	side_effects: true,
 	input: TerminalExitedInput,
-	output: z.void(),
+	output: fuz_void,
 	async: true,
 	description: 'Notify the frontend that a terminal process exited naturally.'
 } satisfies RemoteNotificationActionSpec;
@@ -685,7 +706,7 @@ export const workspace_close_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: WorkspaceCloseInput,
-	output: z.null(),
+	output: literal(null),
 	async: true,
 	description: 'Close a workspace directory — stops file watching and removes from ScopedFs.'
 } satisfies RequestResponseActionSpec;
@@ -696,7 +717,7 @@ export const workspace_list_action_spec = {
 	initiator: 'frontend',
 	auth: { account: 'required', actor: 'none' },
 	side_effects: false,
-	input: z.void(),
+	input: fuz_void,
 	output: WorkspaceListOutput,
 	async: true,
 	description: 'List all open workspaces.'
@@ -709,7 +730,7 @@ export const workspace_changed_action_spec = {
 	auth: null,
 	side_effects: true,
 	input: WorkspaceChangedInput,
-	output: z.void(),
+	output: fuz_void,
 	async: true,
 	description: 'Notifies frontends when a workspace is opened or closed.'
 } satisfies RemoteNotificationActionSpec;

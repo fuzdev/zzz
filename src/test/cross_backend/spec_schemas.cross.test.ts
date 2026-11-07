@@ -11,7 +11,7 @@
  * and aren't exercised. fuz_app's standard specs are covered by its own
  * conformance suite.
  *
- * Every `z.void()` method is also sent over a real WebSocket with `params`
+ * Every void-input method (fuz_schema's `void`) is also sent over a real WebSocket with `params`
  * both omitted and `{}` — the shape fuz_app's socket client sends for a
  * parameterless request — since HTTP callers omit `params` and so can't
  * catch a backend that refuses `{}`.
@@ -19,13 +19,13 @@
  * @module
  */
 
+import type { Infer } from '@fuzdev/fuz_schema/schema.ts';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { describe, test, assert, afterEach, afterAll, beforeAll, vi } from 'vitest';
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
-import type { z } from 'zod';
 import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
@@ -122,7 +122,7 @@ const wait_for_checked_notification = async (
 };
 
 /**
- * Every `z.void()` request the frontend can send: zzz's own, plus the
+ * Every void-input request the frontend can send: zzz's own, plus the
  * read-only account specs the spine serves on the same endpoints.
  */
 const void_specs: Array<RequestResponseActionSpec> = [
@@ -278,13 +278,13 @@ describe('zzz spec schemas cross-backend', () => {
 				ws,
 				terminal_data_action_spec,
 				(p) => p.terminal_id === cat.terminal_id
-			)) as z.infer<typeof terminal_data_action_spec.input>;
+			)) as Infer<typeof terminal_data_action_spec.input>;
 			await ws_call_and_check(ws, terminal_ack_action_spec, {
 				terminal_id: cat.terminal_id,
 				bytes: echoed.sent_bytes
 			});
 			// the session snapshot lists the live terminal
-			const session = (await call_and_check(fixture, session_load_action_spec)) as z.infer<
+			const session = (await call_and_check(fixture, session_load_action_spec)) as Infer<
 				typeof session_load_action_spec.output
 			>;
 			assert.include(session.data.terminal_ids, cat.terminal_id);

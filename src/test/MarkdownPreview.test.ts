@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
@@ -8,6 +9,7 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import { mdz_parse } from '@fuzdev/mdz/mdz.ts';
+
 import { query_markdown_link_anchors, to_markdown_links } from '#lib/markdown_links.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
@@ -173,8 +175,8 @@ describe('MarkdownPreview focus', () => {
 });
 
 describe('MarkdownPreview in-zzz links', () => {
-	const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/w/');
-	const GUIDE = DiskfilePath.parse('/w/docs/guide.md');
+	const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
+	const GUIDE = parse_or_throw(DiskfilePath, '/w/docs/guide.md');
 
 	let app: Frontend;
 
@@ -186,7 +188,7 @@ describe('MarkdownPreview in-zzz links', () => {
 
 	const add_file = (path: string, contents: string | null = ''): Diskfile =>
 		app.diskfiles.upsert({
-			id: DiskfilePath.parse(path),
+			id: parse_or_throw(DiskfilePath, path),
 			source_dir: SOURCE_DIR,
 			contents,
 			ctime: 1,

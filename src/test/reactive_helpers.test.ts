@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
@@ -52,8 +53,8 @@ describe('create_detached', () => {
 						new Diskfile({
 							app,
 							json: {
-								path: DiskfilePath.parse('/w/a.txt'),
-								source_dir: SerializableDisknode.shape.source_dir.parse('/w/'),
+								path: parse_or_throw(DiskfilePath, '/w/a.txt'),
+								source_dir: parse_or_throw(SerializableDisknode.def.source_dir, '/w/'),
 								content: 'abc'
 							}
 						})

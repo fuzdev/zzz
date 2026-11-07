@@ -1,9 +1,10 @@
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { ensure_end } from '@fuzdev/fuz_util/string.ts';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { Datetime, DatetimeNow } from '@fuzdev/fuz_app/zod_schemas.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 
+import { Datetime, DatetimeNow } from './datetime.ts';
 import { SerializableDisknode, type DiskfileJson } from './diskfile_types.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 import type { Diskfiles } from './diskfiles.svelte.ts';
@@ -105,7 +106,8 @@ export const disknode_to_diskfile_json = (
 	disknode: SerializableDisknode,
 	existing_id: Uuid = create_uuid()
 ): DiskfileJson => {
-	const created = DatetimeNow.parse(
+	const created = parse_or_throw(
+		DatetimeNow,
 		disknode.ctime == null ? undefined : new Date(disknode.ctime).toISOString()
 	);
 	return {
@@ -116,7 +118,9 @@ export const disknode_to_diskfile_json = (
 		mtime: disknode.mtime,
 		created,
 		updated:
-			disknode.mtime == null ? created : Datetime.parse(new Date(disknode.mtime).toISOString()),
+			disknode.mtime == null
+				? created
+				: parse_or_throw(Datetime, new Date(disknode.mtime).toISOString()),
 		dependents: disknode.dependents,
 		dependencies: disknode.dependencies
 	};

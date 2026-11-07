@@ -50,7 +50,7 @@
 	const reload_status = async () => {
 		checking = true;
 		reload_failure = null;
-		const result = await app.api.provider_load_status({ provider_name });
+		const result = await app.api.provider_load_status({ provider_name, reload: true });
 		checking = false;
 		if (!result.ok) reload_failure = { message: result.error.message, updated: capability.updated };
 	};

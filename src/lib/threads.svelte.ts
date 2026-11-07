@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { array, with_default_fn, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -6,13 +6,16 @@ import { Thread } from './thread.svelte.ts';
 import { ThreadJson } from './thread_types.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
-export const ThreadsJson = CellJson.extend({
-	items: z.array(ThreadJson).default(() => [])
-}).meta({ cell_class_name: 'Threads' });
-export type ThreadsJson = z.infer<typeof ThreadsJson>;
-export type ThreadsJsonInput = z.input<typeof ThreadsJson>;
+export const ThreadsJson = cell_json_schema(
+	{
+		items: with_default_fn(array(ThreadJson), () => [])
+	},
+	'Threads'
+);
+export type ThreadsJson = Infer<typeof ThreadsJson>;
+export type ThreadsJsonInput = InferInput<typeof ThreadsJson>;
 
 export interface ThreadsOptions extends CellOptions<typeof ThreadsJson> {}
 

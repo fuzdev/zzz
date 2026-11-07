@@ -1,15 +1,25 @@
-import { z } from 'zod';
+import {
+	array,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { DiskfileDirectoryPath } from './diskfile_types.ts';
 
-export const SpaceJson = CellJson.extend({
-	name: z.string().default(''),
-	directory_paths: z.array(DiskfileDirectoryPath).default(() => [])
-}).meta({ cell_class_name: 'Space' });
-export type SpaceJson = z.infer<typeof SpaceJson>;
-export type SpaceJsonInput = z.input<typeof SpaceJson>;
+export const SpaceJson = cell_json_schema(
+	{
+		name: with_default(string, ''),
+		directory_paths: with_default_fn(array(DiskfileDirectoryPath), () => [])
+	},
+	'Space'
+);
+export type SpaceJson = Infer<typeof SpaceJson>;
+export type SpaceJsonInput = InferInput<typeof SpaceJson>;
 
 export interface SpaceOptions extends CellOptions<typeof SpaceJson> {}
 

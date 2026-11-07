@@ -1,4 +1,13 @@
-import { z } from 'zod';
+import {
+	array,
+	boolean,
+	nullable,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { page } from '$app/state';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -11,15 +20,18 @@ import { to_reordered_list } from './list_helpers.ts';
 import type { DiskfilePath } from './diskfile_types.ts';
 import { get_unique_name } from './helpers.ts';
 import { goto_unless_current, to_prompts_url } from './nav.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
-export const PromptsJson = CellJson.extend({
-	items: z.array(PromptJson).default(() => []),
-	selected_id: z.string().nullable().default(null),
-	show_sort_controls: z.boolean().default(false)
-}).meta({ cell_class_name: 'Prompts' });
-export type PromptsJson = z.infer<typeof PromptsJson>;
-export type PromptsJsonInput = z.input<typeof PromptsJson>;
+export const PromptsJson = cell_json_schema(
+	{
+		items: with_default_fn(array(PromptJson), () => []),
+		selected_id: with_default(nullable(string), null),
+		show_sort_controls: with_default(boolean, false)
+	},
+	'Prompts'
+);
+export type PromptsJson = Infer<typeof PromptsJson>;
+export type PromptsJsonInput = InferInput<typeof PromptsJson>;
 
 export interface PromptsOptions extends CellOptions<typeof PromptsJson> {}
 

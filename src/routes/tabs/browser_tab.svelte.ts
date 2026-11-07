@@ -1,20 +1,32 @@
-import { z } from 'zod';
+import {
+	boolean,
+	number,
+	one_of,
+	optional,
+	string,
+	with_default,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
-import { CellJson } from '#lib/cell_types.ts';
+import { cell_json_schema } from '#lib/cell_types.ts';
 
 // Browser tab schema with discriminated union for tab types
-export const BrowserTabJson = CellJson.extend({
-	title: z.string(),
-	url: z.string(),
-	selected: z.boolean().default(false),
-	refresh_counter: z.number().default(0),
-	type: z.enum(['raw', 'embedded_html', 'external_url']),
-	// Optional content field for embedded HTML tabs
-	content: z.string().optional()
-}).meta({ cell_class_name: 'BrowserTab' });
-export type BrowserTabJson = z.infer<typeof BrowserTabJson>;
-export type BrowserTabJsonInput = z.input<typeof BrowserTabJson>;
+export const BrowserTabJson = cell_json_schema(
+	{
+		title: string,
+		url: string,
+		selected: with_default(boolean, false),
+		refresh_counter: with_default(number, 0),
+		type: one_of(['raw', 'embedded_html', 'external_url']),
+		// Optional content field for embedded HTML tabs
+		content: optional(string)
+	},
+	'BrowserTab'
+);
+export type BrowserTabJson = Infer<typeof BrowserTabJson>;
+export type BrowserTabJsonInput = InferInput<typeof BrowserTabJson>;
 
 export type BrowserTabOptions = CellOptions<typeof BrowserTabJson>;
 

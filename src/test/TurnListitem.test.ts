@@ -2,8 +2,8 @@
 
 import { describe, test, assert, afterEach } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import TurnListitem from '#lib/TurnListitem.svelte';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { Thread } from '#lib/thread.svelte.ts';

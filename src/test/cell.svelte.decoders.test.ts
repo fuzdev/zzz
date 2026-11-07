@@ -1,10 +1,18 @@
 // @vitest-environment jsdom
 
+import {
+	boolean,
+	nullable,
+	number,
+	object,
+	string,
+	strip_object,
+	with_default
+} from '@fuzdev/fuz_schema/schema.ts';
 import { test, vi, beforeEach, assert } from 'vitest';
-import { z } from 'zod';
-import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuidWithDefault, DatetimeNow, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
+import { create_uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
+import { DatetimeNow, get_datetime_now } from '#lib/datetime.ts';
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { CellJson } from '#lib/cell_types.ts';
 import { HANDLED } from '#lib/cell_helpers.ts';
@@ -26,9 +34,10 @@ beforeEach(() => {
 });
 
 test('Cell allows schema keys with no properties if a decoder is provided', () => {
-	const VirtualPropertySchema = CellJson.extend({
-		real_prop: z.string().default(''),
-		virtual_prop: z.number().default(42) // Won't exist on class
+	const VirtualPropertySchema = object({
+		...CellJson.def,
+		real_prop: with_default(string, ''),
+		virtual_prop: with_default(number, 42) // Won't exist on class
 	});
 
 	class VirtualPropertyCell extends Cell<typeof VirtualPropertySchema> {
@@ -64,12 +73,12 @@ test('Cell allows schema keys with no properties if a decoder is provided', () =
 });
 
 test('Cell supports virtual properties with custom handling', () => {
-	const VirtualHandlerSchema = z.object({
-		id: ZodUuidWithDefault,
+	const VirtualHandlerSchema = strip_object({
+		id: UuidWithDefault,
 		created: DatetimeNow,
-		updated: z.string().nullable().default(null),
-		visible_prop: z.string(),
-		hidden_prop: z.number().default(0)
+		updated: with_default(nullable(string), null),
+		visible_prop: string,
+		hidden_prop: with_default(number, 0)
 	});
 
 	class VirtualHandlerCell extends Cell<typeof VirtualHandlerSchema> {
@@ -110,10 +119,11 @@ test('Cell supports virtual properties with custom handling', () => {
 });
 
 test('Cell handles sentinel values with proper precedence', () => {
-	const SentinelSchema = CellJson.extend({
-		handled_field: z.string().default(''),
-		default_field: z.number().default(0),
-		normal_field: z.boolean().default(false)
+	const SentinelSchema = object({
+		...CellJson.def,
+		handled_field: with_default(string, ''),
+		default_field: with_default(number, 0),
+		normal_field: with_default(boolean, false)
 	});
 
 	class SentinelTestCell extends Cell<typeof SentinelSchema> {
@@ -169,11 +179,11 @@ test('Cell handles sentinel values with proper precedence', () => {
 });
 
 test('Cell parser defaults take precedence over schema defaults', () => {
-	const DefaultPrecedenceSchema = z.object({
-		id: z.string().default('schema_default_id'),
+	const DefaultPrecedenceSchema = strip_object({
+		id: with_default(string, 'schema_default_id'),
 		created: DatetimeNow,
-		updated: z.string().nullable().default(null),
-		text: z.string().default('schema_default_text')
+		updated: with_default(nullable(string), null),
+		text: with_default(string, 'schema_default_text')
 	});
 
 	class DefaultPrecedenceCell extends Cell<typeof DefaultPrecedenceSchema> {

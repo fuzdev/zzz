@@ -1,28 +1,38 @@
 // @slop Claude Sonnet 3.7
 
-import { z } from 'zod';
+import {
+	array,
+	nullable,
+	number,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { SvelteMap } from 'svelte/reactivity';
-import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
+import { create_uuid, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { to_reordered_list } from './list_helpers.ts';
 import { DiskfileTab } from './diskfile_tab.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { create_map_by_property } from './iterable_helpers.ts';
 
-export const DiskfileTabsJson = CellJson.extend({
-	selected_tab_id: ZodUuid.nullable().default(null),
-	preview_tab_id: ZodUuid.nullable().default(null),
-	tab_order: z.array(ZodUuid).default(() => []),
-	/** Tracks recently accessed tabs for better tab selection when closing tabs. */
-	recent_tab_ids: z.array(ZodUuid).default(() => []),
-	/** Maximum number of tabs to track in access history. */
-	max_tab_history: z.number().default(20)
-}).meta({ cell_class_name: 'DiskfileTabs' });
-export type DiskfileTabsJson = z.infer<typeof DiskfileTabsJson>;
-export type DiskfileTabsJsonInput = z.input<typeof DiskfileTabsJson>;
+export const DiskfileTabsJson = cell_json_schema(
+	{
+		selected_tab_id: with_default(nullable(Uuid), null),
+		preview_tab_id: with_default(nullable(Uuid), null),
+		tab_order: with_default_fn(array(Uuid), () => []),
+		/** Tracks recently accessed tabs for better tab selection when closing tabs. */
+		recent_tab_ids: with_default_fn(array(Uuid), () => []),
+		/** Maximum number of tabs to track in access history. */
+		max_tab_history: with_default(number, 20)
+	},
+	'DiskfileTabs'
+);
+export type DiskfileTabsJson = Infer<typeof DiskfileTabsJson>;
+export type DiskfileTabsJsonInput = InferInput<typeof DiskfileTabsJson>;
 
 export type DiskfileTabsOptions = CellOptions<typeof DiskfileTabsJson>;
 

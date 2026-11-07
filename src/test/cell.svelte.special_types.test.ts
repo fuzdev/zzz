@@ -1,12 +1,25 @@
 // @vitest-environment jsdom
 
+import {
+	array,
+	number,
+	object,
+	one_of,
+	optional,
+	string,
+	strip_object,
+	unknown,
+	with_default,
+	with_default_fn
+} from '@fuzdev/fuz_schema/schema.ts';
+import { meta } from '@fuzdev/fuz_schema/meta.ts';
 import { test, vi, beforeEach, assert } from 'vitest';
-import { z } from 'zod';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuidWithDefault, DatetimeNow, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
-import { CellJson, type SchemaKeys } from '#lib/cell_types.ts';
+import { CellJson } from '#lib/cell_types.ts';
+import { HANDLED } from '#lib/cell_helpers.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
@@ -26,9 +39,7 @@ beforeEach(() => {
 });
 
 test('Cell uses registry for instantiating class relationships', () => {
-	const RegistrySchema = CellJson.extend({
-		text: z.string().default('')
-	});
+	const RegistrySchema = object({ ...CellJson.def, text: with_default(string, '') });
 
 	class RegistryTestCell extends Cell<typeof RegistrySchema> {
 		text: string = $state()!;
@@ -73,9 +84,7 @@ test('Cell uses registry for instantiating class relationships', () => {
 });
 
 test('Cell.encode_property uses $state.snapshot for values', () => {
-	const TestSchema = CellJson.extend({
-		text: z.string().default('')
-	});
+	const TestSchema = object({ ...CellJson.def, text: with_default(string, '') });
 
 	class EncodingTestCell extends Cell<typeof TestSchema> {
 		text: string = $state()!;
@@ -110,21 +119,13 @@ test('Cell.encode_property uses $state.snapshot for values', () => {
 	assert.deepEqual(encoded_object, test_object);
 });
 
-test('Cell handles special types like Map and Set', () => {
-	const CollectionsSchema = z.object({
-		id: ZodUuidWithDefault,
-		created: DatetimeNow,
-		updated: z.string().nullable().default(null),
-		// Test map collection
-		map_field: z.preprocess(
-			(val) => (Array.isArray(val) ? new Map(val as Array<[string, number]>) : val),
-			z.map(z.string(), z.number())
-		),
-		// Test set collection
-		set_field: z.preprocess(
-			(val) => (Array.isArray(val) ? new Set(val as Array<string>) : val),
-			z.set(z.string())
-		)
+test('Cell decodes JSON arrays into a Map and a Set with decoders', () => {
+	const CollectionsSchema = object({
+		...CellJson.def,
+		// a Map's entries as JSON
+		map_field: with_default_fn(array(array(unknown)), () => []),
+		// a Set's items as JSON
+		set_field: with_default_fn(array(string), () => [])
 	});
 
 	class CollectionsTestCell extends Cell<typeof CollectionsSchema> {
@@ -133,17 +134,17 @@ test('Cell handles special types like Map and Set', () => {
 
 		constructor(options: CellOptions<typeof CollectionsSchema>) {
 			super(CollectionsSchema, options);
+			this.decoders = {
+				map_field: (value) => {
+					this.map_field = new Map(value as Array<[string, number]>);
+					return HANDLED;
+				},
+				set_field: (value) => {
+					this.set_field = new Set(value as Array<string>);
+					return HANDLED;
+				}
+			};
 			this.init();
-		}
-
-		test_decode<K extends SchemaKeys<typeof CollectionsSchema>>(value: unknown, key: K): this[K] {
-			// For Map/Set fields, we need to parse through the schema to trigger preprocess
-			const field_schema = this.field_schemas.get(key);
-			if (field_schema) {
-				const parsed = field_schema.parse(value);
-				return parsed as this[K];
-			}
-			return this.decode_property(value, key);
 		}
 	}
 
@@ -160,40 +161,34 @@ test('Cell handles special types like Map and Set', () => {
 		}
 	});
 
-	// Verify Map handling
 	assert.instanceOf(cell.map_field, Map);
 	assert.strictEqual(cell.map_field.get('key1'), 1);
 	assert.strictEqual(cell.map_field.get('key2'), 2);
 
-	// Verify Set handling
 	assert.instanceOf(cell.set_field, Set);
 	assert.ok(cell.set_field.has('item1'));
 	assert.ok(cell.set_field.has('item2'));
 	assert.ok(cell.set_field.has('item3'));
 
-	// Test manual decoding
-	const map_result = cell.test_decode([['key3', 3]], 'map_field');
-	assert.instanceOf(map_result, Map);
-	assert.strictEqual(map_result.get('key3'), 3);
-
-	const set_result = cell.test_decode(['item4', 'item5'], 'set_field');
-	assert.instanceOf(set_result, Set);
-	assert.ok(set_result.has('item4'));
-	assert.ok(set_result.has('item5'));
+	// a partial update decodes through the same decoders
+	cell.set_json_partial({ map_field: [['key3', 3]], set_field: ['item4', 'item5'] });
+	assert.deepEqual([...cell.map_field], [['key3', 3]]);
+	assert.deepEqual([...cell.set_field], ['item4', 'item5']);
 });
 
 test('Cell - JSON serialization excludes undefined values correctly', () => {
-	const SerializationSchema = CellJson.extend({
-		type: z.enum(['type1', 'type2']),
-		name: z.string().optional(),
-		data: z
-			.object({
-				code: z.string().optional(),
-				value: z.number().optional()
+	const SerializationSchema = object({
+		...CellJson.def,
+		type: one_of(['type1', 'type2']),
+		name: optional(string),
+		data: optional(
+			strip_object({
+				code: optional(string),
+				value: optional(number)
 			})
-			.optional(),
-		items: z.array(z.string()).optional(),
-		state: z.enum(['on', 'off']).optional()
+		),
+		items: optional(array(string)),
+		state: optional(one_of(['on', 'off']))
 	});
 
 	class SerializationTestCell extends Cell<typeof SerializationSchema> {
@@ -262,4 +257,33 @@ test('Cell - JSON serialization excludes undefined values correctly', () => {
 	const parsed_complete = JSON.parse(complete_string);
 	assert.strictEqual(parsed_complete.data.code, 'test_code');
 	assert.ok(!('value' in parsed_complete.data));
+});
+
+test('Cell instantiates a field whose schema names a class', () => {
+	const ChildSchema = meta(strip_object({ text: string }), { cell_class_name: 'ChildCell' });
+	const ParentSchema = object({ ...CellJson.def, child: optional(ChildSchema) });
+
+	class ParentCell extends Cell<typeof ParentSchema> {
+		child: unknown = $state.raw();
+
+		constructor(options: CellOptions<typeof ParentSchema>) {
+			super(ParentSchema, options);
+			this.init();
+		}
+	}
+
+	const instance = { instantiated: true };
+	const maybe_instantiate = vi
+		.spyOn(app.cell_registry, 'maybe_instantiate')
+		.mockImplementation(() => instance as any);
+
+	const cell = new ParentCell({ app, json: { child: { text: 'a' } } });
+
+	assert.deepEqual<unknown>(maybe_instantiate.mock.calls[0]?.slice(0, 2), [
+		'ChildCell',
+		{ text: 'a' }
+	]);
+	assert.strictEqual(cell.child, instance);
+
+	maybe_instantiate.mockRestore();
 });

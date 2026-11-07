@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -10,10 +11,10 @@ import { estimate_token_count } from '#lib/helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
-const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/w/');
-const LOADED_PATH = DiskfilePath.parse('/w/loaded.ts');
-const UNLOADED_PATH = DiskfilePath.parse('/w/big.bin');
-const MISSING_PATH = DiskfilePath.parse('/w/missing.ts');
+const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
+const LOADED_PATH = parse_or_throw(DiskfilePath, '/w/loaded.ts');
+const UNLOADED_PATH = parse_or_throw(DiskfilePath, '/w/big.bin');
+const MISSING_PATH = parse_or_throw(DiskfilePath, '/w/missing.ts');
 
 let app: Frontend;
 let thread: Thread;

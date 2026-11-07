@@ -6,6 +6,7 @@
  * @module
  */
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -653,7 +654,7 @@ describe('filesystem cross-backend', () => {
 							Record<string, unknown> | undefined;
 						return change?.path === path;
 					}, 10_000);
-					return FilerChangeInput.parse(msg.params);
+					return parse_or_throw(FilerChangeInput, msg.params);
 				};
 
 				// an mtime-only change: the timestamps, and no contents key at all

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount, type Component } from 'svelte';
 
@@ -23,9 +24,9 @@ import { create_deferred } from '@fuzdev/fuz_util/async.ts';
  * switch shows the draft or the current disk content — never stale text.
  */
 
-const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/w/');
-const PATH_A = DiskfilePath.parse('/w/a.txt');
-const PATH_B = DiskfilePath.parse('/w/b.txt');
+const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
+const PATH_A = parse_or_throw(DiskfilePath, '/w/a.txt');
+const PATH_B = parse_or_throw(DiskfilePath, '/w/b.txt');
 
 const create_disknode = (path: DiskfilePath, contents: string): SerializableDisknode => ({
 	id: path,

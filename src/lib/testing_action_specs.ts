@@ -15,31 +15,41 @@
  * @module
  */
 
-import { z } from 'zod';
 import type {
 	RemoteNotificationActionSpec,
 	RequestResponseActionSpec
 } from '@fuzdev/fuz_app/actions/action_spec.ts';
+import {
+	integer,
+	max_value,
+	min_value,
+	number,
+	object,
+	pipe,
+	safe_integer,
+	void as fuz_void,
+	type Infer
+} from '@fuzdev/fuz_schema/schema.ts';
 
 // -- Schemas ----------------------------------------------------------------
 
 /** Input for `_testing_emit_notifications`. */
-export const TestingEmitNotificationsInput = z.strictObject({
-	count: z.number().int().min(0).max(100)
+export const TestingEmitNotificationsInput = object({
+	count: pipe(number, integer, min_value(0), max_value(100))
 });
-export type TestingEmitNotificationsInput = z.infer<typeof TestingEmitNotificationsInput>;
+export type TestingEmitNotificationsInput = Infer<typeof TestingEmitNotificationsInput>;
 
 /** Output for `_testing_emit_notifications`. */
-export const TestingEmitNotificationsOutput = z.strictObject({
-	count: z.number().int()
+export const TestingEmitNotificationsOutput = object({
+	count: pipe(number, safe_integer)
 });
-export type TestingEmitNotificationsOutput = z.infer<typeof TestingEmitNotificationsOutput>;
+export type TestingEmitNotificationsOutput = Infer<typeof TestingEmitNotificationsOutput>;
 
 /** Input for `_testing_notification`. */
-export const TestingNotificationInput = z.strictObject({
-	index: z.number().int().min(0)
+export const TestingNotificationInput = object({
+	index: pipe(number, safe_integer, min_value(0))
 });
-export type TestingNotificationInput = z.infer<typeof TestingNotificationInput>;
+export type TestingNotificationInput = Infer<typeof TestingNotificationInput>;
 
 // -- Specs ------------------------------------------------------------------
 
@@ -66,7 +76,7 @@ export const _testing_notification_action_spec = {
 	auth: null,
 	side_effects: true,
 	input: TestingNotificationInput,
-	output: z.void(),
+	output: fuz_void,
 	async: true,
 	description:
 		'Test-only. Progress notification emitted by _testing_emit_notifications; carries the sequence index.'

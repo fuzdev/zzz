@@ -1,5 +1,5 @@
 import type { ClassConstructor } from '@fuzdev/fuz_util/types.ts';
-import type { z } from 'zod';
+import type { InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import { DEV } from 'esm-env';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -74,7 +74,7 @@ export class CellRegistry {
 	 */
 	maybe_instantiate<K extends keyof CellRegistryMap>(
 		class_name: K,
-		json?: CellRegistryMap[K] extends Cell<infer TSchema> ? z.input<TSchema> : never,
+		json?: CellRegistryMap[K] extends Cell<infer TSchema> ? InferInput<TSchema> : never,
 		options?: object
 	): CellRegistryMap[K] | null {
 		const constructor = this.#constructors.get(class_name);
@@ -99,7 +99,7 @@ export class CellRegistry {
 	 */
 	instantiate<K extends keyof CellRegistryMap>(
 		class_name: K,
-		json?: CellRegistryMap[K] extends Cell<infer TSchema> ? z.input<TSchema> : never,
+		json?: CellRegistryMap[K] extends Cell<infer TSchema> ? InferInput<TSchema> : never,
 		options?: object
 	): CellRegistryMap[K] {
 		const constructor = this.#constructors.get(class_name);

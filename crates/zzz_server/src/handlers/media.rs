@@ -1,7 +1,7 @@
 //! Media handlers.
 //!
 //! Spine signature `(Value, ActionContext<'_>, Arc<App>)`. Inputs decode
-//! strictly, matching the `z.strictObject` schemas in
+//! strictly, matching the strict object schemas in
 //! `src/lib/action_specs.ts`. The `ffmpeg` runs are [`crate::media`]'s, which
 //! confines them to file handles opened here.
 

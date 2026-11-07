@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, afterEach, describe, assert } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -14,10 +15,10 @@ import type { SessionLoadData, WorkspaceOpenOutput } from '#lib/action_specs.ts'
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
-const WS_DIR = DiskfileDirectoryPath.parse('/ws/');
-const PATH_A = DiskfilePath.parse('/ws/a.txt');
-const PATH_B = DiskfilePath.parse('/ws/b.txt');
-const PATH_C = DiskfilePath.parse('/ws/c.txt');
+const WS_DIR = parse_or_throw(DiskfileDirectoryPath, '/ws/');
+const PATH_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
+const PATH_B = parse_or_throw(DiskfilePath, '/ws/b.txt');
+const PATH_C = parse_or_throw(DiskfilePath, '/ws/c.txt');
 
 const create_disknode = (path: DiskfilePath, contents: string | null): SerializableDisknode => ({
 	id: path,
@@ -49,10 +50,10 @@ beforeEach(() => {
 	calls = [];
 	session_loads = 0;
 	session = {
-		zzz_dir: DiskfileDirectoryPath.parse('/zzz/'),
+		zzz_dir: parse_or_throw(DiskfileDirectoryPath, '/zzz/'),
 		scoped_dirs: [],
 		files: [],
-		file_roots: [DiskfileDirectoryPath.parse('/zzz/')],
+		file_roots: [parse_or_throw(DiskfileDirectoryPath, '/zzz/')],
 		provider_status: [],
 		workspaces: [],
 		terminal_ids: [],
@@ -102,7 +103,7 @@ const filer_change = (
 
 describe('Workspaces.open', () => {
 	test('adds the workspace the daemon returns, with its watch status and files', async () => {
-		const opened = app.workspaces.open(DiskfileDirectoryPath.parse('/ws/./'));
+		const opened = app.workspaces.open(parse_or_throw(DiskfileDirectoryPath, '/ws/./'));
 		assert.strictEqual(calls[0]!.path, '/ws/./');
 		calls[0]!.resolve({
 			ok: true,
@@ -181,7 +182,7 @@ describe('Workspaces.receive_remote_open', () => {
 	});
 
 	test("this client's own open, notified before its reply, is not resynced", async () => {
-		const opened = app.workspaces.open(DiskfileDirectoryPath.parse('/ws/./'));
+		const opened = app.workspaces.open(parse_or_throw(DiskfileDirectoryPath, '/ws/./'));
 		receive_open(WS_INFO); // the broadcast lands first, under the canonical path
 		assert.strictEqual(session_loads, 0);
 		calls[0]!.resolve({
@@ -196,7 +197,11 @@ describe('Workspaces.receive_remote_open', () => {
 	});
 
 	test('a remote open during an own open is resynced once the open settles', async () => {
-		const other = { ...WS_INFO, path: DiskfileDirectoryPath.parse('/other/'), name: 'other' };
+		const other = {
+			...WS_INFO,
+			path: parse_or_throw(DiskfileDirectoryPath, '/other/'),
+			name: 'other'
+		};
 		session.workspaces = [other];
 		const opened = app.workspaces.open(WS_DIR);
 		receive_open(other);
@@ -209,7 +214,11 @@ describe('Workspaces.receive_remote_open', () => {
 	});
 
 	test('a remote open during an own open that throws is still resynced', async () => {
-		const other = { ...WS_INFO, path: DiskfileDirectoryPath.parse('/other/'), name: 'other' };
+		const other = {
+			...WS_INFO,
+			path: parse_or_throw(DiskfileDirectoryPath, '/other/'),
+			name: 'other'
+		};
 		session.workspaces = [other];
 		const opened = app.workspaces.open(WS_DIR);
 		receive_open(other);

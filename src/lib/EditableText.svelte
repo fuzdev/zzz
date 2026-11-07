@@ -27,7 +27,7 @@
 	let span_el: HTMLSpanElement | undefined = $state.raw();
 
 	export const save = async (): Promise<void> => {
-		const trimmed = edited_value.trim(); // TODO parse with an optional zod schema
+		const trimmed = edited_value.trim(); // TODO parse with an optional schema
 		if (!trimmed) {
 			is_editing = false;
 			return;

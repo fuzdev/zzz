@@ -4,7 +4,7 @@
 //! closure-captured `Arc<App>` provides the `ScopedFs` reach-through.
 //!
 //! Inputs decode strictly (`fuz_http::parse_strict_params` + serde
-//! `deny_unknown_fields`), matching the `z.strictObject` input schemas in
+//! `deny_unknown_fields`), matching the strict object input schemas in
 //! `src/lib/action_specs.ts`. Failures map to distinct JSON-RPC codes by
 //! cause — see [`scoped_fs_error`].
 

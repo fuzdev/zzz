@@ -152,7 +152,7 @@ fn display_dir(path: &str) -> String {
 
 /// `workspace_list` — read-only snapshot of open workspaces.
 ///
-/// Takes no input (`z.void()`): the spec declares `InputShape::Void`, so the
+/// Takes no input (a void schema): the spec declares `InputShape::Void`, so the
 /// dispatcher refuses any declared key before this runs. `async` is required
 /// by the `ActionHandler` future-returning shape even though the body has no
 /// `.await` points.

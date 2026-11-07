@@ -1,4 +1,4 @@
-import type { z } from 'zod';
+import type { InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { ProviderJsonInput } from './provider.svelte.ts';
@@ -43,7 +43,7 @@ export const providers_default: Array<ProviderJsonInput> = [
 
 // TODO any data here beyond name/provider_name/tags (and probably some future ones) should be fetched from the provider API
 // TODO @db refactor with db
-export const models_default: Array<z.input<typeof ModelJson>> = [
+export const models_default: Array<InferInput<typeof ModelJson>> = [
 	// https://platform.claude.com/docs/en/about-claude/models/overview
 	{ name: 'claude-fable-5-1', provider_name: 'claude', tags: ['smart', 'smartest'] },
 	{ name: 'claude-opus-5', provider_name: 'claude', tags: ['smart'] },

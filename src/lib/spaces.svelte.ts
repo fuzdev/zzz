@@ -1,6 +1,13 @@
-import { z } from 'zod';
-import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
+import {
+	array,
+	nullable,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
+import { meta } from '@fuzdev/fuz_schema/meta.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Space, SpaceJson, type SpaceJsonInput } from './space.svelte.ts';
@@ -8,20 +15,23 @@ import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import { get_unique_name } from './helpers.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
 export const SCRATCHPAD_NAME = 'scratchpad';
 
-export const SpacesJson = CellJson.extend({
-	items: z.array(SpaceJson).default(() => []),
-	active_id: ZodUuid.nullable().default(null),
-	scratchpad_id: ZodUuid.nullable().default(null).meta({
-		description:
-			"The scratchpad, the default space, which can't be removed. Renaming it keeps it the scratchpad."
-	})
-}).meta({ cell_class_name: 'Spaces' });
-export type SpacesJson = z.infer<typeof SpacesJson>;
-export type SpacesJsonInput = z.input<typeof SpacesJson>;
+export const SpacesJson = cell_json_schema(
+	{
+		items: with_default_fn(array(SpaceJson), () => []),
+		active_id: with_default(nullable(Uuid), null),
+		scratchpad_id: meta(with_default(nullable(Uuid), null), {
+			description:
+				"The scratchpad, the default space, which can't be removed. Renaming it keeps it the scratchpad."
+		})
+	},
+	'Spaces'
+);
+export type SpacesJson = Infer<typeof SpacesJson>;
+export type SpacesJsonInput = InferInput<typeof SpacesJson>;
 
 export interface SpacesOptions extends CellOptions<typeof SpacesJson> {}
 

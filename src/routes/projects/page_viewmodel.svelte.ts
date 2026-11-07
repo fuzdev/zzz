@@ -2,8 +2,8 @@
 
 import { goto } from '$app/navigation';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Page } from './page.svelte.ts';
 import type { Projects } from './projects.svelte.ts';
 import { resolve } from '$app/paths';

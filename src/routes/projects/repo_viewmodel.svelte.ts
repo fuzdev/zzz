@@ -3,8 +3,8 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Repo } from './repo.svelte.ts';
 import type { RepoCheckout } from './projects_schema.ts';
 import type { Projects } from './projects.svelte.ts';

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 
@@ -15,9 +16,9 @@ import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
  * switches, remounts, and a long run of disk changes.
  */
 
-const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/w/');
-const PATH_A = DiskfilePath.parse('/w/a.txt');
-const PATH_B = DiskfilePath.parse('/w/b.txt');
+const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
+const PATH_A = parse_or_throw(DiskfilePath, '/w/a.txt');
+const PATH_B = parse_or_throw(DiskfilePath, '/w/b.txt');
 
 let app: Frontend;
 

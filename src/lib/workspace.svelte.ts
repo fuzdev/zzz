@@ -1,8 +1,15 @@
-import { z } from 'zod';
-import type { Datetime } from '@fuzdev/fuz_app/zod_schemas.ts';
+import {
+	object,
+	one_of,
+	string,
+	with_default,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 
+import { type Datetime } from './datetime.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { DiskfileDirectoryPath } from './diskfile_types.ts';
 
 // TODO: per-workspace state — open tabs, active chats, terminal presets (needs DB)
@@ -13,15 +20,15 @@ import { DiskfileDirectoryPath } from './diskfile_types.ts';
  * Used in action spec inputs/outputs and for JSON persistence.
  */
 // TODO: include id in WorkspaceInfoJson so frontend and backend share the same workspace identity instead of regenerating UUIDs on each sync
-export const WorkspaceInfoJson = z.strictObject({
+export const WorkspaceInfoJson = object({
 	/** Absolute directory path for this workspace. */
 	path: DiskfileDirectoryPath,
 	/** Display name, auto-derived from directory basename. */
-	name: z.string(),
+	name: string,
 	/** ISO timestamp of when this workspace was opened. */
-	opened_at: z.string()
+	opened_at: string
 });
-export type WorkspaceInfoJson = z.infer<typeof WorkspaceInfoJson>;
+export type WorkspaceInfoJson = Infer<typeof WorkspaceInfoJson>;
 
 /**
  * Whether every directory of an open workspace has a file watch. `degraded`
@@ -29,16 +36,19 @@ export type WorkspaceInfoJson = z.infer<typeof WorkspaceInfoJson>;
  * could be created, or the directory went missing: the directories without a
  * watch are rescanned every few seconds, so their changes show up late.
  */
-export const WorkspaceWatchStatus = z.enum(['full', 'degraded']);
-export type WorkspaceWatchStatus = z.infer<typeof WorkspaceWatchStatus>;
+export const WorkspaceWatchStatus = one_of(['full', 'degraded']);
+export type WorkspaceWatchStatus = Infer<typeof WorkspaceWatchStatus>;
 
-export const WorkspaceJson = CellJson.extend({
-	path: DiskfileDirectoryPath,
-	name: z.string().default(''),
-	opened_at: z.string().default('')
-}).meta({ cell_class_name: 'Workspace' });
-export type WorkspaceJson = z.infer<typeof WorkspaceJson>;
-export type WorkspaceJsonInput = z.input<typeof WorkspaceJson>;
+export const WorkspaceJson = cell_json_schema(
+	{
+		path: DiskfileDirectoryPath,
+		name: with_default(string, ''),
+		opened_at: with_default(string, '')
+	},
+	'Workspace'
+);
+export type WorkspaceJson = Infer<typeof WorkspaceJson>;
+export type WorkspaceJsonInput = InferInput<typeof WorkspaceJson>;
 
 export interface WorkspaceOptions extends CellOptions<typeof WorkspaceJson> {}
 

@@ -8,7 +8,7 @@ Symmetric peer-to-peer JSON-RPC 2.0 — by design either end can initiate. The f
 
 ### Action Spec
 
-Every action is a plain object with Zod schemas. Defined in `src/lib/action_specs.ts`:
+Every action is a plain object with fuz_schema schemas. Defined in `src/lib/action_specs.ts`:
 
 ```typescript
 export const completion_create_action_spec = {
@@ -54,8 +54,8 @@ export const completion_create_action_spec = {
 - `initiator` (`ActionInitiator`) — `'frontend'` | `'backend'` | `'both'`
 - `auth` (`RouteAuth | null`) — `{account, actor, roles?, credential_types?, required_scope?}`; required on `request_response` specs, `null` on `remote_notification` / `local_call`
 - `side_effects` (`boolean`) — Whether action mutates state (also keeps it off the side-effect-free `GET /api/rpc` path)
-- `input` (`z.ZodType`) — Zod schema for request params
-- `output` (`z.ZodType`) — Zod schema for response
+- `input` (`ValidationSchema`) — schema for request params (zzz's are fuz_schema)
+- `output` (`ValidationSchema`) — schema for response
 - `async` (`boolean`) — Whether handler is async
 - `description` (`string`) — What the action does (rendered into ./reference.md)
 - `streams` (`string` (optional)) — Name of the companion request-scoped `remote_notification` method this action emits (e.g. `'completion_progress'`)
@@ -192,7 +192,7 @@ Schema-driven reactive data models using Svelte 5 runes.
 From `cell.svelte.ts`:
 
 ```typescript
-export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements CellJson {
+export abstract class Cell<TSchema extends AnySchema = AnySchema> implements CellJson {
   readonly cid = ++global_cell_count; // monotonic client-side ordering
 
   // Base properties from CellJson — $state.raw() by default
@@ -201,8 +201,8 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
   updated: Datetime = $state.raw()!;
 
   readonly schema!: TSchema;
-  readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(...);
-  readonly json: z.output<TSchema> = $derived(this.to_json());
+  readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(...); // via `get_schema_entries`
+  readonly json: Infer<TSchema> = $derived(this.to_json());
   readonly json_serialized: string = $derived(JSON.stringify(this.json));
 
   readonly app: Frontend;
@@ -211,7 +211,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
   constructor(schema: TSchema, options: CellOptions<TSchema>) { ... }
   protected init(): void { ... }  // Must call at end of subclass constructor
   dispose(): void { ... }
-  set_json(json: z.input<TSchema>): void { ... }
+  set_json(json: InferInput<TSchema>): void { ... } // `parse_or_throw`, filling defaults
   set_json_partial(partial: Partial<...>): void { ... }
   protected register(): void { ... }  // Called by init()
   protected unregister(): void { ... }
@@ -221,9 +221,9 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 ### CellOptions
 
 ```typescript
-interface CellOptions<TSchema extends z.ZodType> {
+interface CellOptions<TSchema extends AnySchema> {
 	app: Frontend; // Root app state reference
-	json?: z.input<TSchema>; // Initial JSON data (parsed by schema)
+	json?: InferInput<TSchema>; // Initial JSON data (parsed by schema)
 }
 ```
 
@@ -232,14 +232,17 @@ interface CellOptions<TSchema extends z.ZodType> {
 Real example from `chat.svelte.ts`:
 
 ```typescript
-// 1. Schema with CellJson base — every field has .default()
-export const ChatJson = CellJson.extend({
-	name: z.string().default(''),
-	thread_ids: z.array(Uuid).default(() => []),
-	main_input: z.string().default(''),
-	view_mode: z.enum(['simple', 'multi']).default('simple'),
-	selected_thread_id: Uuid.nullable().default(null)
-}).meta({ cell_class_name: 'Chat' });
+// 1. Schema with CellJson's entries — every field has a default
+export const ChatJson = cell_json_schema(
+	{
+		name: with_default(string, ''),
+		thread_ids: with_default_fn(array(Uuid), () => []),
+		main_input: with_default(string, ''),
+		view_mode: with_default(one_of(['simple', 'multi']), 'simple'),
+		selected_thread_id: with_default(nullable(Uuid), null)
+	},
+	'Chat'
+);
 
 // 2. Class: $state.raw by default, $state only for in-place-mutated arrays
 export class Chat extends Cell<typeof ChatJson> {
@@ -295,7 +298,7 @@ constructor(options: ThreadOptions) {
 
 All cell classes are registered in `cell_classes.ts`, keyed by the name
 schemas refer to them by — each class's schema carries it as
-`.meta({cell_class_name})`, and decoding a cell-typed field instantiates the
+`cell_class_name` metadata, and decoding a cell-typed field instantiates the
 class registered under that name. The key is explicit, never
 `constructor.name`, which a minified production build mangles. Frontend
 iterates and registers them:

@@ -1,11 +1,11 @@
 // @slop Claude Sonnet 3.7
 
-import { z } from 'zod';
+import type { Infer, InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import type { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import type { DiskfileDirectoryPath } from './diskfile_types.ts';
 import { ProviderCapability } from './provider_capability.svelte.ts';
 import type { ProviderName } from './provider_types.ts';
@@ -17,9 +17,9 @@ import type { ProviderName } from './provider_types.ts';
 /** Maximum number of ping records to keep. */
 export const PING_HISTORY_MAX = 6;
 
-export const CapabilitiesJson = CellJson.extend({}).meta({ cell_class_name: 'Capabilities' });
-export type CapabilitiesJson = z.infer<typeof CapabilitiesJson>;
-export type CapabilitiesJsonInput = z.input<typeof CapabilitiesJson>;
+export const CapabilitiesJson = cell_json_schema({}, 'Capabilities');
+export type CapabilitiesJson = Infer<typeof CapabilitiesJson>;
+export type CapabilitiesJsonInput = InferInput<typeof CapabilitiesJson>;
 
 /**
  * Generic interface for a capability with standardized status tracking.

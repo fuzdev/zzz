@@ -1,3 +1,4 @@
+import { parse } from '@fuzdev/fuz_schema/schema.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 
 import { DiskfileDirectoryPath } from './diskfile_types.ts';
@@ -40,12 +41,12 @@ export const parse_workspace_path = (
 			message: `path must be absolute — "~" is not expanded, use the full path: ${trimmed}`
 		};
 	}
-	const parsed = DiskfileDirectoryPath.safeParse(trimmed);
-	if (!parsed.success) {
+	const parsed = parse(DiskfileDirectoryPath, trimmed);
+	if (!parsed.ok) {
 		return {
 			ok: false,
-			message: `${parsed.error.issues[0]?.message ?? 'invalid path'}: ${trimmed}`
+			message: `${parsed.issues[0]?.message ?? 'invalid path'}: ${trimmed}`
 		};
 	}
-	return { ok: true, path: parsed.data };
+	return { ok: true, path: parsed.value };
 };

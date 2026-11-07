@@ -3,7 +3,7 @@
 > nice web things for the tired
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
-SvelteKit frontend (static SPA), Rust (Axum) backend, Svelte 5 runes, Zod schemas.
+SvelteKit frontend (static SPA), Rust (Axum) backend, Svelte 5 runes, fuz_schema schemas.
 v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL DB. Cell + Action patterns (generated roster in ./docs/reference.md), 3 AI providers.
 
 zzz has a single **Rust** backend: `crates/zzz_server` (Axum). The frontend
@@ -38,7 +38,7 @@ are the user's.
 ## Key Principles
 
 - **Local-first**: your data stays on your machine, no third-party lock-in; providers are opt-in BYOK
-- **Schema-driven**: Every Cell and Action defined by Zod schemas, validated at boundaries
+- **Schema-driven**: Every Cell and Action defined by `@fuzdev/fuz_schema` schemas, validated at boundaries
 - **Symmetric actions**: Frontend and backend are peers — same ActionPeer code, same spec format
 - **Cell pattern**: All state is Cell subclasses with `$state`/`$derived` runes, JSON-serializable
 
@@ -255,7 +255,7 @@ src/
 
 ## Architecture
 
-The two core abstractions are **Cells** (reactive state) and **Actions** (RPC). Cells hold all application state as Svelte 5 rune classes with Zod schemas. Actions provide symmetric JSON-RPC 2.0 communication where frontend and backend are equal peers.
+The two core abstractions are **Cells** (reactive state) and **Actions** (RPC). Cells hold all application state as Svelte 5 rune classes with fuz_schema schemas. Actions provide symmetric JSON-RPC 2.0 communication where frontend and backend are equal peers.
 
 Content model: `Chat → Thread[] → Turn[] → Part[]` (TextPart or DiskfilePart). Prompts also hold Parts.
 
@@ -445,16 +445,19 @@ prerequisites, and what the integration tests check.
 
 ### Cell Pattern
 
-Every piece of state is a Cell subclass: Zod schema defines shape, `$state` runes hold values, `$derived` computes reactively.
+Every piece of state is a Cell subclass: a fuz_schema schema defines shape, `$state` runes hold values, `$derived` computes reactively.
 
 ```typescript
-// 1. Schema with CellJson base
-export const ChatJson = CellJson.extend({
-	name: z.string().default(''),
-	thread_ids: z.array(Uuid).default(() => []),
-	view_mode: z.enum(['simple', 'multi']).default('simple'),
-	selected_thread_id: Uuid.nullable().default(null)
-}).meta({ cell_class_name: 'Chat' });
+// 1. Schema with CellJson's entries, naming its registered class
+export const ChatJson = cell_json_schema(
+	{
+		name: with_default(string, ''),
+		thread_ids: with_default_fn(array(Uuid), () => []),
+		view_mode: with_default(one_of(['simple', 'multi']), 'simple'),
+		selected_thread_id: with_default(nullable(Uuid), null)
+	},
+	'Chat'
+);
 
 // 2. Class with $state.raw for most fields, $state for in-place-mutated arrays
 export class Chat extends Cell<typeof ChatJson> {
@@ -481,7 +484,7 @@ export class Chat extends Cell<typeof ChatJson> {
 
 ### Action Spec Pattern
 
-Each action is a plain object with Zod schemas for input/output:
+Each action is a plain object with fuz_schema schemas for input/output:
 
 ```typescript
 export const diskfile_update_action_spec = {
@@ -491,11 +494,11 @@ export const diskfile_update_action_spec = {
 	initiator: 'frontend',
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
-	input: z.strictObject({
+	input: object({
 		path: DiskfilePath,
-		content: z.string()
+		content: string
 	}),
-	output: z.null(),
+	output: literal(null),
 	async: true
 } satisfies RequestResponseActionSpec;
 ```
@@ -519,8 +522,8 @@ export const my_action_spec = {
 	initiator: 'frontend', // or 'backend', 'both'
 	auth: { account: 'required', actor: 'none' }, // or {account: 'none', actor: 'none'} for public
 	side_effects: true, // or false for read-only
-	input: z.strictObject({ foo: z.string() }),
-	output: z.strictObject({ bar: z.number() }),
+	input: object({ foo: string }),
+	output: object({ bar: number }),
 	async: true,
 	description: 'What this action does.'
 } satisfies RequestResponseActionSpec; // RemoteNotificationActionSpec / LocalCallActionSpec for the other kinds
@@ -569,13 +572,16 @@ For `remote_notification` actions, the backend broadcasts via its realtime
 connection registry — see the `broadcast` / notification builders in
 ./crates/CLAUDE.md.
 
-### Zod Schema Conventions
+### Schema Conventions
 
-- Always use `z.strictObject()` (not `z.object()`) for action specs — unknown keys are rejected
-- Cell schemas use `CellJson.extend({...})` with `.meta({cell_class_name: 'ClassName'})`
-- Every schema field must have a `.default()` for Cell instantiation without full JSON — except identity fields a cell can't exist without (e.g. `Diskfile.path`/`source_dir`, `DiskfileTab.diskfile_id`, `Workspace.path`, `Model.name`, `Action.method`, `Turn.role`), which stay required rather than defaulting to a value the class type doesn't allow
+Schemas are `@fuzdev/fuz_schema` (named imports from `@fuzdev/fuz_schema/schema.ts`).
+
+- Use `object()` (strict: unknown keys are rejected) for action specs, not `strip_object()` / `loose_object()`
+- Cell schemas use `cell_json_schema({...}, 'ClassName')` (`cell_types.ts`): `CellJson`'s entries then the cell's, with `cell_class_name` metadata (declared on fuz_schema's `SchemaMeta` in `cell_types.ts`)
+- An array or object default is `with_default_fn(schema, () => [])` — `with_default` shares its one value across every parse
+- Every schema field must have a default (`with_default` / `with_default_fn`) for Cell instantiation without full JSON — except identity fields a cell can't exist without (e.g. `Diskfile.path`/`source_dir`, `DiskfileTab.diskfile_id`, `Workspace.path`, `Model.name`, `Action.method`, `Turn.role`), which stay required rather than defaulting to a value the class type doesn't allow
 - Schema and class types agree: a field typed non-null in the class never defaults to `null` in the schema
-- A registered class's schema names it: `.meta({cell_class_name})` equals its key in `cell_classes.ts` (the registry's key — never `constructor.name`, which minification mangles)
+- A registered class's schema names it: its `cell_class_name` equals its key in `cell_classes.ts` (the registry's key — never `constructor.name`, which minification mangles)
 
 ### State Class Rules
 
@@ -836,7 +842,7 @@ reads it from the process env as the backend port its dev proxy targets
 ## Avoid
 
 - **Never edit generated outputs** (`action_collections.ts`, `action_metatypes.ts`, `frontend_action_types.ts`, `docs/reference.md`) — edit the `*.gen.ts` generators and run `gro gen`
-- **Use `z.strictObject()`** in action specs, not `z.object()` — unknown keys must be rejected
+- **Use `object()`** in action specs, not `strip_object()` / `loose_object()` — unknown keys must be rejected
 - **No `$effect` in Cell classes** — effects belong in Svelte components only
 - **Run `gro gen` after changing action specs** — handler types are generated from specs
 - **Register new Cell classes in `cell_classes.ts`** — the registry must be complete
@@ -954,10 +960,11 @@ ActionDispatcher, transports, and `create_rpc_client` from
 `@fuzdev/fuz_app/actions/*.ts`. Cell patterns (Cell base class, cell classes,
 IndexedCollection) remain in zzz. The generated `TypedActionEvent` alias
 intersects fuz_app's generic `ActionEvent` with zzz's `ActionEventDatas` map
-for typed input/output in handlers. `Uuid`, `create_uuid`, `Datetime`, and
-`get_datetime_now` come from `@fuzdev/fuz_app/primitive_schemas.ts`, and the
-Zod walkers (`cell.svelte.ts`, `cell_helpers.ts`) from
-`@fuzdev/fuz_app/zod.ts`, imported directly.
+for typed input/output in handlers. `Uuid` and `create_uuid` come from
+`@fuzdev/fuz_app/primitive_schemas.ts`; `Datetime`, `DatetimeNow`, and
+`get_datetime_now` are zzz's own (`datetime.ts`). The Cell framework
+(`cell.svelte.ts`, `cell_helpers.ts`) reads schemas through
+`@fuzdev/fuz_schema/introspect.ts`.
 
 Daemon lifecycle is owned by the Rust CLI (`crates/zzz/src/daemon_lifecycle.rs`)
 — it atomically writes `~/.zzz/run/daemon.json` (`{version, pid, boot_id,

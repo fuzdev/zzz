@@ -1,18 +1,21 @@
-import { z } from 'zod';
+import { array, with_default_fn, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Action, ActionJson, type ActionJsonInput } from './action.svelte.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
 export const HISTORY_LIMIT_DEFAULT = 512;
 
-export const ActionsJson = CellJson.extend({
-	items: z.array(ActionJson).default(() => [])
-}).meta({ cell_class_name: 'Actions' });
-export type ActionsJson = z.infer<typeof ActionsJson>;
-export type ActionsJsonInput = z.input<typeof ActionsJson>;
+export const ActionsJson = cell_json_schema(
+	{
+		items: with_default_fn(array(ActionJson), () => [])
+	},
+	'Actions'
+);
+export type ActionsJson = Infer<typeof ActionsJson>;
+export type ActionsJsonInput = InferInput<typeof ActionsJson>;
 
 export interface ActionsOptions extends CellOptions<typeof ActionsJson> {
 	history_limit?: number;

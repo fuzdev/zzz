@@ -1,5 +1,4 @@
 import { test, describe, assert } from 'vitest';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import {
 	is_completion_truncated,
@@ -7,6 +6,7 @@ import {
 	to_completion_response_text,
 	to_completion_stop_reason
 } from '#lib/response_helpers.ts';
+import { get_datetime_now } from '#lib/datetime.ts';
 import type { CompletionResponse } from '#lib/completion_types.ts';
 
 const create_response = (data: CompletionResponse['data']): CompletionResponse => ({

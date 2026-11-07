@@ -1,3 +1,4 @@
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import {
 	PUBLIC_ZZZ_SERVER_HOST,
 	PUBLIC_ZZZ_SERVER_PORT,
@@ -6,7 +7,7 @@ import {
 	PUBLIC_ZZZ_WEBSOCKET_URL
 } from '$app/env/public';
 
-import { PathWithLeadingSlash, PathWithoutTrailingSlash } from './zod_helpers.ts';
+import { PathWithLeadingSlash, PathWithoutTrailingSlash } from './path_schemas.ts';
 
 // This module re-exports public environment variables with parsed values.
 // It should generally be preferred to using the variables directly.
@@ -54,7 +55,10 @@ export const CONTENT_PREVIEW_LENGTH = 100;
  */
 export const API_PATH: string =
 	(PUBLIC_ZZZ_SERVER_API_PATH &&
-		PathWithoutTrailingSlash.parse(PathWithLeadingSlash.parse(PUBLIC_ZZZ_SERVER_API_PATH))) ||
+		parse_or_throw(
+			PathWithoutTrailingSlash,
+			parse_or_throw(PathWithLeadingSlash, PUBLIC_ZZZ_SERVER_API_PATH)
+		)) ||
 	'/api';
 
 /**
@@ -84,7 +88,7 @@ export const API_URL_FOR_HTTP_RPC: string = SERVER_URL + API_PATH_FOR_HTTP_RPC;
  * @no_trailing_slash
  * */
 export const WEBSOCKET_URL: string = PUBLIC_ZZZ_WEBSOCKET_URL
-	? PathWithoutTrailingSlash.parse(PUBLIC_ZZZ_WEBSOCKET_URL)
+	? parse_or_throw(PathWithoutTrailingSlash, PUBLIC_ZZZ_WEBSOCKET_URL)
 	: PAGE_ORIGIN
 		? PAGE_ORIGIN.replace(/^http/, 'ws') + API_PATH + '/ws'
 		: '';

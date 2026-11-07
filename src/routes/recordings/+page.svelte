@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
@@ -22,7 +23,7 @@
 
 	// `recordings/` in the app directory: no workspace needed, and out of any repo
 	const recordings_dir = $derived(
-		app.zzz_dir ? DiskfileDirectoryPath.parse(to_recordings_dir(app.zzz_dir)) : null
+		app.zzz_dir ? parse_or_throw(DiskfileDirectoryPath, to_recordings_dir(app.zzz_dir)) : null
 	);
 
 	// newest first — a recording's name is when it started

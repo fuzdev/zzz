@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
+import { array, parse, record, type Infer, type Schema } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert } from 'vitest';
-import { z } from 'zod';
 
 import {
 	XmlAttributeKey,
@@ -15,19 +15,19 @@ import {
 const uuid_regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const test_uuid_a = '123e4567-e89b-12d3-a456-426614174000';
 
-const assert_parse_success = <T>(schema: z.ZodType<T>, input: unknown, expected?: T) => {
-	const result = schema.safeParse(input);
-	assert.ok(result.success);
+const assert_parse_success = <T extends Schema>(schema: T, input: unknown, expected?: Infer<T>) => {
+	const result = parse(schema, input);
+	assert.ok(result.ok);
 	if (expected !== undefined) {
-		assert.deepEqual(result.data, expected);
+		assert.deepEqual(result.value, expected);
 	}
-	return result.data;
+	return result.value;
 };
 
-const assert_parse_failure = (schema: z.ZodType, input: unknown) => {
-	const result = schema.safeParse(input);
-	assert.ok(!result.success);
-	return result.error;
+const assert_parse_failure = (schema: Schema, input: unknown) => {
+	const result = parse(schema, input);
+	assert.ok(!result.ok);
+	return result.issues;
 };
 
 describe('XmlAttributeKey', () => {
@@ -199,7 +199,7 @@ describe('XML use cases', () => {
 	});
 
 	test('integration with array of attributes', () => {
-		const AttributeArray = z.array(XmlAttributeWithDefaults);
+		const AttributeArray = array(XmlAttributeWithDefaults);
 		const attrs = [
 			{ key: 'class', value: 'container' },
 			{ key: 'id', value: 'main' }
@@ -215,7 +215,7 @@ describe('XML use cases', () => {
 	});
 
 	test('integration with record of attributes', () => {
-		const AttributeRecord = z.record(z.string(), XmlAttributeWithDefaults);
+		const AttributeRecord = record(XmlAttributeWithDefaults);
 		const attrs = {
 			class_attr: { key: 'class', value: 'container' },
 			id_attr: { key: 'id', value: 'main' }
@@ -227,9 +227,9 @@ describe('XML use cases', () => {
 describe('error handling', () => {
 	test('provides meaningful error messages', () => {
 		const invalid_attr = { id: 'not-uuid', key: '', value: 123 };
-		const error = assert_parse_failure(XmlAttributeWithDefaults, invalid_attr);
+		const issues = assert_parse_failure(XmlAttributeWithDefaults, invalid_attr);
 
-		const issue_paths = error.issues.map((i) => i.path.join('.'));
+		const issue_paths = issues.map((i) => i.path.join('.'));
 		assert.include(issue_paths, 'id');
 		assert.include(issue_paths, 'key');
 		assert.include(issue_paths, 'value');

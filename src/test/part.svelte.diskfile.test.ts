@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
@@ -13,19 +14,19 @@ import { DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER } from '#lib/diskfile_helpers.t
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
-const TEST_DIR = SerializableDisknode.shape.source_dir.parse('/test/');
+const TEST_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/test/');
 
 // Test data constants for reuse
 const TEST_PATHS = {
-	BASIC: DiskfilePath.parse(TEST_DIR + 'file.txt'),
-	CONFIG: DiskfilePath.parse(TEST_DIR + 'config.json'),
-	EMPTY: DiskfilePath.parse(TEST_DIR + 'empty.txt'),
-	DOCUMENT: DiskfilePath.parse(TEST_DIR + 'document.txt'),
-	EDITABLE: DiskfilePath.parse(TEST_DIR + 'editable.txt'),
-	NONEXISTENT: DiskfilePath.parse('/nonexistent/file.txt'),
-	SPECIAL_CHARS: DiskfilePath.parse(TEST_DIR + 'path with spaces & special chars!.txt'),
-	BINARY: DiskfilePath.parse(TEST_DIR + 'binary.bin'),
-	REACTIVE: DiskfilePath.parse(TEST_DIR + 'reactive.txt')
+	BASIC: parse_or_throw(DiskfilePath, TEST_DIR + 'file.txt'),
+	CONFIG: parse_or_throw(DiskfilePath, TEST_DIR + 'config.json'),
+	EMPTY: parse_or_throw(DiskfilePath, TEST_DIR + 'empty.txt'),
+	DOCUMENT: parse_or_throw(DiskfilePath, TEST_DIR + 'document.txt'),
+	EDITABLE: parse_or_throw(DiskfilePath, TEST_DIR + 'editable.txt'),
+	NONEXISTENT: parse_or_throw(DiskfilePath, '/nonexistent/file.txt'),
+	SPECIAL_CHARS: parse_or_throw(DiskfilePath, TEST_DIR + 'path with spaces & special chars!.txt'),
+	BINARY: parse_or_throw(DiskfilePath, TEST_DIR + 'binary.bin'),
+	REACTIVE: parse_or_throw(DiskfilePath, TEST_DIR + 'reactive.txt')
 };
 
 const TEST_CONTENT = {

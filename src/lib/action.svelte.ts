@@ -1,13 +1,12 @@
 // @slop Claude Opus 4
 
-import { z } from 'zod';
-import { is } from '@fuzdev/fuz_schema/schema.ts';
+import { optional, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import { ActionKind, type ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { ActionMethod } from './action_metatypes.ts';
 import { ActionSpecs } from './action_collections.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { ActionEventData } from '@fuzdev/fuz_app/actions/action_event_data.ts';
 import type { ActionEvent } from '@fuzdev/fuz_app/actions/action_event.ts';
 import { is_action_complete } from '@fuzdev/fuz_app/actions/action_event_helpers.ts';
@@ -15,13 +14,15 @@ import { is_action_complete } from '@fuzdev/fuz_app/actions/action_event_helpers
 import { bound_action_event_data } from './action_helpers.ts';
 
 // TODO this isnt in action_types.ts because of circular dependencies, idk what pattern is best yet
-export const ActionJson = CellJson.extend({
-	method: z.enum(ActionMethod.def),
-	// `ActionEventData` is a fuz_schema schema, which zod can't embed, so it's bridged
-	action_event_data: z.custom<ActionEventData>((v) => is(ActionEventData, v)).optional()
-}).meta({ cell_class_name: 'Action' });
-export type ActionJson = z.infer<typeof ActionJson>;
-export type ActionJsonInput = z.input<typeof ActionJson>;
+export const ActionJson = cell_json_schema(
+	{
+		method: ActionMethod,
+		action_event_data: optional(ActionEventData)
+	},
+	'Action'
+);
+export type ActionJson = Infer<typeof ActionJson>;
+export type ActionJsonInput = InferInput<typeof ActionJson>;
 
 export interface ActionOptions extends CellOptions<typeof ActionJson> {}
 

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { array, with_default_fn, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Model, ModelJson, type ModelJsonInput } from './model.svelte.ts';
@@ -9,13 +9,16 @@ import {
 	create_multi_index,
 	create_derived_index
 } from './indexed_collection_helpers.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
-export const ModelsJson = CellJson.extend({
-	items: z.array(ModelJson).default(() => [])
-}).meta({ cell_class_name: 'Models' });
-export type ModelsJson = z.infer<typeof ModelsJson>;
-export type ModelsJsonInput = z.input<typeof ModelsJson>;
+export const ModelsJson = cell_json_schema(
+	{
+		items: with_default_fn(array(ModelJson), () => [])
+	},
+	'Models'
+);
+export type ModelsJson = Infer<typeof ModelsJson>;
+export type ModelsJsonInput = InferInput<typeof ModelsJson>;
 
 export interface ModelsOptions extends CellOptions<typeof ModelsJson> {}
 

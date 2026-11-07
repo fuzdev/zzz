@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
 
 import type { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
@@ -10,8 +11,8 @@ import { Diskfile } from '#lib/diskfile.svelte.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
-const TEST_PATH = DiskfilePath.parse('/path/to/test.txt');
-const TEST_DIR = SerializableDisknode.shape.source_dir.parse('/path/');
+const TEST_PATH = parse_or_throw(DiskfilePath, '/path/to/test.txt');
+const TEST_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/path/');
 const TEST_CONTENT = 'This is test content';
 
 // Test suite variables
@@ -105,8 +106,8 @@ describe('disk change detection', () => {
 	test('handles first-time initialization correctly', () => {
 		// Create a new diskfile with uninitialized last_seen_disk_content
 		const new_diskfile = app.diskfiles.add({
-			path: DiskfilePath.parse('/new/file.txt'),
-			source_dir: SerializableDisknode.shape.source_dir.parse('/new/'),
+			path: parse_or_throw(DiskfilePath, '/new/file.txt'),
+			source_dir: parse_or_throw(SerializableDisknode.def.source_dir, '/new/'),
 			content: 'Initial content'
 		});
 
@@ -318,10 +319,10 @@ describe('edge cases', () => {
 
 	test('handles disk changes when history is empty', () => {
 		// Create a new diskfile with a custom path
-		const empty_history_path = DiskfilePath.parse('/empty/history.txt');
+		const empty_history_path = parse_or_throw(DiskfilePath, '/empty/history.txt');
 		const empty_history_diskfile = app.diskfiles.add({
 			path: empty_history_path,
-			source_dir: SerializableDisknode.shape.source_dir.parse('/empty/'),
+			source_dir: parse_or_throw(SerializableDisknode.def.source_dir, '/empty/'),
 			content: 'Initial'
 		});
 

@@ -67,7 +67,7 @@ struct SessionLoadResult {
 }
 
 /// `ping` — public health check. Echoes the request id back as `ping_id`.
-/// Takes no input (`z.void()`): the spec declares `InputShape::Void`, so the
+/// Takes no input (a void schema): the spec declares `InputShape::Void`, so the
 /// dispatcher refuses any declared key before this runs.
 ///
 /// `ActionContext.request_id` carries the parsed envelope's id.
@@ -91,7 +91,7 @@ pub async fn ping(
 }
 
 /// `session_load` — authenticated initial-state load. Takes no input
-/// (`z.void()`): the spec declares `InputShape::Void`, so the dispatcher
+/// (a void schema): the spec declares `InputShape::Void`, so the dispatcher
 /// refuses any declared key before this runs.
 ///
 /// Returns the cross-domain snapshot the frontend loads at boot and reloads

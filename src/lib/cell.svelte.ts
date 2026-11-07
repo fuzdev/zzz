@@ -1,8 +1,16 @@
-import { z } from 'zod';
-import { zod_get_field_schema, zod_get_schema_keys } from '@fuzdev/fuz_app/zod.ts';
+import {
+	parse,
+	parse_or_throw,
+	type AnySchema,
+	type Infer,
+	type InferInput,
+	type SchemaNode,
+	type SchemaResult
+} from '@fuzdev/fuz_schema/schema.ts';
+import { get_schema_entries } from '@fuzdev/fuz_schema/introspect.ts';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { type Datetime, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now, type Datetime } from './datetime.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import {
 	get_schema_class_info,
@@ -19,9 +27,9 @@ import { format_datetime, format_short_date, format_time } from './time_helpers.
  * Any options besides these declared ones are ignored,
  * so they're safe to forward when subclassing without needing to extract the rest options.
  */
-export interface CellOptions<TSchema extends z.ZodType> {
+export interface CellOptions<TSchema extends AnySchema> {
 	app: Frontend; // TODO needs to be generic
-	json?: z.input<TSchema>;
+	json?: InferInput<TSchema>;
 }
 
 /**
@@ -46,7 +54,7 @@ let global_cell_count = 0;
  * - Integration with Svelte's reactivity, encouraging single-depth inheritance
  * 		with Svelte class patterns for both persistent and ephemeral state
  * - Schema-driven parsing/validation and JSON serialization/deserialization
- * 		(supporting snapshot and restore/replay patterns) via Zod
+ * 		(supporting snapshot and restore/replay patterns) via fuz_schema
  * - Custom property encoding/decoding for complex types,
  * 		and no boilerplate for schema-inferrable properties
  * - Lifecycle management with generic instantiation/registration and disposal
@@ -57,13 +65,16 @@ let global_cell_count = 0;
  * making them discoverable and referenceable throughout the system.
  * Each cell has common properties including `id` and `created`/`updated` timestamps.
  *
+ * A cell reads the json it was given without copying it, so don't mutate that object
+ * after handing it to a cell.
+ *
  * There are currently a lot of rough edges and missing features!
  * My hope is that this could be generic enough to extract to a library, but it's not there yet.
  * I assume there's a really nice design in this space that takes full advantage of Svelte runes.
  *
  * Many things will be possible with this pattern, but it's still a work in progress.
  */
-export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements CellJson {
+export abstract class Cell<TSchema extends AnySchema = AnySchema> implements CellJson {
 	readonly cid = ++global_cell_count;
 
 	// Base properties from CellJson
@@ -74,9 +85,15 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	// the `!` is needed for `$derived(` to work over `$derived.by(`
 	readonly schema!: TSchema;
 
-	readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(zod_get_schema_keys(this.schema));
-	readonly field_schemas: Map<SchemaKeys<TSchema>, z.ZodType> = $derived(
-		new Map(this.schema_keys.map((key) => [key, zod_get_field_schema(this.schema, key)]))
+	readonly field_schemas: Map<SchemaKeys<TSchema>, SchemaNode> = $derived(
+		new Map(
+			Object.entries(get_schema_entries(this.schema) ?? {}) as Array<
+				[SchemaKeys<TSchema>, SchemaNode]
+			>
+		)
+	);
+	readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(
+		Array.from(this.field_schemas.keys())
 	);
 	readonly field_schema_info: Map<SchemaKeys<TSchema>, SchemaClassInfo | null> = $derived(
 		new Map(
@@ -90,11 +107,11 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 		)
 	);
 
-	readonly json: z.output<TSchema> = $derived(this.to_json());
+	readonly json: Infer<TSchema> = $derived(this.to_json());
 	readonly json_serialized: string = $derived(JSON.stringify(this.json));
 	// TODO maybe add a variant `json_serialized_pretty` or `_formatted`
-	readonly json_parsed: z.ZodSafeParseResult<z.output<TSchema>> = $derived.by(() =>
-		this.schema.safeParse(this.json)
+	readonly json_parsed: SchemaResult<Infer<TSchema>> = $derived.by(() =>
+		parse(this.schema, this.json)
 	);
 
 	// TODO needs to be generic so users can extend it
@@ -123,7 +140,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	readonly updated_formatted_time: string = $derived(format_time(this.updated_date));
 
 	/** Stored only between construction and initialization. */
-	#initial_json: z.input<TSchema> | undefined;
+	#initial_json: InferInput<TSchema> | undefined;
 
 	constructor(schema: TSchema, options: CellOptions<TSchema>) {
 		this.schema = schema;
@@ -210,7 +227,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	/**
 	 * For Svelte's $snapshot.
 	 */
-	toJSON(): z.output<TSchema> {
+	toJSON(): Infer<TSchema> {
 		return this.json;
 	}
 
@@ -218,7 +235,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	 * Encodes the cell's serializable state as JSON.
 	 * Use the derived `cell.json` if you don't need a fresh copy.
 	 */
-	to_json(): z.output<TSchema> {
+	to_json(): Infer<TSchema> {
 		const result = {} as Record<string, any>;
 
 		for (const key of this.schema_keys) {
@@ -231,7 +248,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 			}
 		}
 
-		return result as z.output<TSchema>;
+		return result as Infer<TSchema>;
 	}
 
 	/**
@@ -239,7 +256,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	 * Overwrites all properties including 'id'.
 	 * Special-cases `created` and `updated` for synchronization.
 	 */
-	set_json(value: z.input<TSchema> | undefined): void {
+	set_json(value: InferInput<TSchema> | undefined): void {
 		try {
 			// Prepare the input by ensuring `created`/`updated` are in sync when using defaults
 			let v = value as any;
@@ -255,7 +272,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 			}
 
 			// Parse with schema to apply defaults and validation
-			const parsed = this.schema.parse(v);
+			const parsed = parse_or_throw(this.schema, v);
 
 			// Process each schema key
 			for (const key of this.schema_keys) {
@@ -275,7 +292,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	 * Update only the specified properties on this instance.
 	 * Preserves current values for any properties not included in the input.
 	 */
-	set_json_partial(partial_value: Partial<z.input<TSchema>>): void {
+	set_json_partial(partial_value: Partial<InferInput<TSchema>>): void {
 		if (!partial_value || typeof partial_value !== 'object') return;
 
 		try {
@@ -301,7 +318,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 
 				// Parse the individual value through its field schema
 				try {
-					const parsed_value = field_schema.parse(v[key]);
+					const parsed_value = parse_or_throw(field_schema, v[key]);
 
 					// Assign the parsed property
 					this.assign_property(key, parsed_value);
@@ -331,7 +348,7 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 
 	/**
 	 * Decode a value based on its schema type information.
-	 * This handles instantiating classes, transforming arrays, and special types.
+	 * This handles instantiating classes and transforming arrays.
 	 *
 	 * Complex property types might require custom handling in parser functions
 	 * rather than using this general decoding mechanism.
@@ -350,14 +367,6 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 				});
 			}
 			return value;
-		}
-
-		// Handle special types first (Map and Set)
-		if (schema_info.type === 'ZodMap' && Array.isArray(value)) {
-			return new Map(value);
-		}
-		if (schema_info.type === 'ZodSet' && Array.isArray(value)) {
-			return new Set(value);
 		}
 
 		// Handle individual cell
@@ -436,10 +445,10 @@ export abstract class Cell<TSchema extends z.ZodType = z.ZodType> implements Cel
 	}
 
 	/** Generic clone method that works for any subclass. */
-	clone(json?: z.input<TSchema>, options?: CellOptions<TSchema>): this {
+	clone(json?: InferInput<TSchema>, options?: CellOptions<TSchema>): this {
 		const constructor = this.constructor as new (options: CellOptions<TSchema>) => this;
 
-		const { id: _, ...current_json } = this.json as any;
+		const { id: _, ...current_json } = this.json;
 
 		try {
 			return new constructor({

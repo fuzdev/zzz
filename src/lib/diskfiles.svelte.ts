@@ -1,12 +1,20 @@
-import { z } from 'zod';
+import {
+	array,
+	nullable,
+	parse_or_throw,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { untrack } from 'svelte';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuid, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import { jsonrpc_error_messages } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
+import { get_datetime_now } from './datetime.ts';
 import { Diskfile } from './diskfile.svelte.ts';
 import {
 	DiskfileJson,
@@ -34,15 +42,18 @@ import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import type { ActionInputs, ActionOutputs } from './action_collections.ts';
 
-export const DiskfilesJson = CellJson.extend({
-	diskfiles: z.array(DiskfileJson).default(() => []),
-	selected_file_id: ZodUuid.nullable().default(null)
-}).meta({ cell_class_name: 'Diskfiles' });
-export type DiskfilesJson = z.infer<typeof DiskfilesJson>;
-export type DiskfilesJsonInput = z.input<typeof DiskfilesJson>;
+export const DiskfilesJson = cell_json_schema(
+	{
+		diskfiles: with_default_fn(array(DiskfileJson), () => []),
+		selected_file_id: with_default(nullable(Uuid), null)
+	},
+	'Diskfiles'
+);
+export type DiskfilesJson = Infer<typeof DiskfilesJson>;
+export type DiskfilesJsonInput = InferInput<typeof DiskfilesJson>;
 
 export interface DiskfilesOptions extends CellOptions<typeof DiskfilesJson> {}
 
@@ -661,7 +672,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		if (!parsed.ok) throw new Error(parsed.message);
 
 		// `dir` has a trailing slash (`DiskfileDirectoryPath`), and the parsed name has no leading one
-		await this.create_file_at(DiskfilePath.parse(`${dir}${parsed.value}`), content);
+		await this.create_file_at(parse_or_throw(DiskfilePath, `${dir}${parsed.value}`), content);
 	}
 
 	/**
@@ -683,7 +694,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		}
 
 		// the backend normalizes the path, and the filer reports it that way
-		const created_path = DiskfilePath.parse(normalize_path(path));
+		const created_path = parse_or_throw(DiskfilePath, normalize_path(path));
 		const created = this.get_by_path(created_path);
 		if (created) {
 			this.select(created.id, true);
@@ -729,7 +740,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const parsed = parse_new_diskfile_name(dirname, 'folder');
 		if (!parsed.ok) throw new Error(parsed.message);
 
-		const path = DiskfilePath.parse(`${dir}${parsed.value}`);
+		const path = parse_or_throw(DiskfilePath, `${dir}${parsed.value}`);
 
 		const result = await this.app.api.directory_create({ path });
 		if (!result.ok) {

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
@@ -22,14 +23,14 @@ import {
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
-const ZZZ_DIR = DiskfileDirectoryPath.parse('/zzz/');
-const WS_DIR = DiskfileDirectoryPath.parse('/ws/');
-const OTHER_DIR = DiskfileDirectoryPath.parse('/other/');
+const ZZZ_DIR = parse_or_throw(DiskfileDirectoryPath, '/zzz/');
+const WS_DIR = parse_or_throw(DiskfileDirectoryPath, '/ws/');
+const OTHER_DIR = parse_or_throw(DiskfileDirectoryPath, '/other/');
 
-const ZZZ_A = DiskfilePath.parse('/zzz/a.txt');
-const ZZZ_B = DiskfilePath.parse('/zzz/b.txt');
-const WS_A = DiskfilePath.parse('/ws/a.txt');
-const OTHER_A = DiskfilePath.parse('/other/a.txt');
+const ZZZ_A = parse_or_throw(DiskfilePath, '/zzz/a.txt');
+const ZZZ_B = parse_or_throw(DiskfilePath, '/zzz/b.txt');
+const WS_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
+const OTHER_A = parse_or_throw(DiskfilePath, '/other/a.txt');
 
 const create_disknode = (path: DiskfilePath, contents = 'contents'): SerializableDisknode => ({
 	id: path,
@@ -426,9 +427,9 @@ describe('workspace reconcile', () => {
 	});
 
 	test("a removed workspace's files another root covers follow that root", async () => {
-		const nested_dir = DiskfileDirectoryPath.parse('/zzz/nested/');
-		const nested_a = DiskfilePath.parse('/zzz/nested/a.txt');
-		const nested_b = DiskfilePath.parse('/zzz/nested/b.txt');
+		const nested_dir = parse_or_throw(DiskfileDirectoryPath, '/zzz/nested/');
+		const nested_a = parse_or_throw(DiskfilePath, '/zzz/nested/a.txt');
+		const nested_b = parse_or_throw(DiskfilePath, '/zzz/nested/b.txt');
 		await load({
 			workspaces: [create_workspace_info(nested_dir)],
 			files: [create_disknode(nested_a), create_disknode(nested_b)],
@@ -465,7 +466,7 @@ describe('workspace reconcile', () => {
 });
 
 describe('workspaces after a restart', () => {
-	const WS_B = DiskfilePath.parse('/ws/b.txt');
+	const WS_B = parse_or_throw(DiskfilePath, '/ws/b.txt');
 
 	/** Opens `WS_DIR` with `WS_A` and `WS_B`, `WS_B` in a tab with unsaved edits. */
 	const setup = async (): Promise<void> => {
@@ -563,8 +564,8 @@ describe('workspaces after a restart', () => {
 
 	test('a refused reopen spares files under a nested file root', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
-		const nested_dir = DiskfileDirectoryPath.parse('/ws/nested/');
-		const nested_a = DiskfilePath.parse('/ws/nested/a.txt');
+		const nested_dir = parse_or_throw(DiskfileDirectoryPath, '/ws/nested/');
+		const nested_a = parse_or_throw(DiskfilePath, '/ws/nested/a.txt');
 		await setup();
 		// the restarted daemon still watches a scoped dir inside the workspace
 		await load_restarted({ files: [create_disknode(nested_a)], file_roots: [ZZZ_DIR, nested_dir] });

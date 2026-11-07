@@ -1,21 +1,32 @@
 // @slop Claude Opus 4
 
-import { z } from 'zod';
+import {
+	array,
+	boolean,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
-import { CellJson } from '#lib/cell_types.ts';
+import { cell_json_schema } from '#lib/cell_types.ts';
 import { BrowserTabs } from './browser_tabs.svelte.ts';
 import { BrowserTabJson } from './browser_tab.svelte.ts';
 import { HANDLED } from '#lib/cell_helpers.ts';
 import { to_browser_tab_url } from './browser_helpers.ts';
 
-export const BrowserJson = CellJson.extend({
-	tabs: z.array(BrowserTabJson).default(() => []),
-	edited_url: z.string().default(''),
-	browserified: z.boolean().default(false)
-}).meta({ cell_class_name: 'Browser' });
-export type BrowserJson = z.infer<typeof BrowserJson>;
-export type BrowserJsonInput = z.input<typeof BrowserJson>;
+export const BrowserJson = cell_json_schema(
+	{
+		tabs: with_default_fn(array(BrowserTabJson), () => []),
+		edited_url: with_default(string, ''),
+		browserified: with_default(boolean, false)
+	},
+	'Browser'
+);
+export type BrowserJson = Infer<typeof BrowserJson>;
+export type BrowserJsonInput = InferInput<typeof BrowserJson>;
 
 export type BrowserOptions = CellOptions<typeof BrowserJson>;
 

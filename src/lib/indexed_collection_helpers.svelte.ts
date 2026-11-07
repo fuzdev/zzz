@@ -1,8 +1,8 @@
 // @slop Claude Sonnet 3.7
 
+import { object, type Infer } from '@fuzdev/fuz_schema/schema.ts';
+import { UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { SvelteMap } from 'svelte/reactivity';
-import { z } from 'zod';
-import { ZodUuidWithDefault } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import type { IndexDefinition, IndexedCollection } from './indexed_collection.svelte.ts';
 
@@ -13,10 +13,10 @@ import type { IndexDefinition, IndexedCollection } from './indexed_collection.sv
 /**
  * Interface for objects that can be stored in an `IndexedCollection`.
  */
-export const IndexedItem = z.strictObject({
-	id: ZodUuidWithDefault
+export const IndexedItem = object({
+	id: UuidWithDefault
 });
-export type IndexedItem = z.infer<typeof IndexedItem>;
+export type IndexedItem = Infer<typeof IndexedItem>;
 
 // TODO I think these helpers should be on the base cell for type inference, `this.create_single_index`,
 // but the extracted logic could still be here if it made the base class cleaner, or if these are usefully reusable

@@ -1,10 +1,20 @@
-import { z } from 'zod';
-import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
+import {
+	array,
+	nullable,
+	number,
+	one_of,
+	optional,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import {
 	format_terminal_command,
 	TERMINAL_INPUT_PENDING_MAX_LENGTH,
@@ -27,24 +37,27 @@ import {
  * - `lost` — the backend no longer has the process: zzzd restarted, or it ended
  *   or was closed elsewhere while this client wasn't listening; see `error_message`
  */
-export const TerminalStatus = z.enum(['starting', 'running', 'exited', 'closed', 'failed', 'lost']);
-export type TerminalStatus = z.infer<typeof TerminalStatus>;
+export const TerminalStatus = one_of(['starting', 'running', 'exited', 'closed', 'failed', 'lost']);
+export type TerminalStatus = Infer<typeof TerminalStatus>;
 
-export const TerminalJson = CellJson.extend({
-	name: z.string().default(''),
-	command: z.string().default(''),
-	args: z.array(z.string()).default(() => []),
-	cwd: z.string().optional(),
-	/** The backend PTY's id — changes on restart, `null` until `terminal_create` resolves. */
-	terminal_id: ZodUuid.nullable().default(null),
-	status: TerminalStatus.default('starting'),
-	exit_code: z.number().nullable().default(null),
-	/** The last failure to spawn, close, or send to the terminal. */
-	error_message: z.string().nullable().default(null),
-	preset_id: ZodUuid.nullable().default(null)
-}).meta({ cell_class_name: 'Terminal' });
-export type TerminalJson = z.infer<typeof TerminalJson>;
-export type TerminalJsonInput = z.input<typeof TerminalJson>;
+export const TerminalJson = cell_json_schema(
+	{
+		name: with_default(string, ''),
+		command: with_default(string, ''),
+		args: with_default_fn(array(string), () => []),
+		cwd: optional(string),
+		/** The backend PTY's id — changes on restart, `null` until `terminal_create` resolves. */
+		terminal_id: with_default(nullable(Uuid), null),
+		status: with_default(TerminalStatus, 'starting'),
+		exit_code: with_default(nullable(number), null),
+		/** The last failure to spawn, close, or send to the terminal. */
+		error_message: with_default(nullable(string), null),
+		preset_id: with_default(nullable(Uuid), null)
+	},
+	'Terminal'
+);
+export type TerminalJson = Infer<typeof TerminalJson>;
+export type TerminalJsonInput = InferInput<typeof TerminalJson>;
 
 export interface TerminalOptions extends CellOptions<typeof TerminalJson> {}
 
@@ -319,7 +332,7 @@ export class Terminal extends Cell<typeof TerminalJson> {
 		const { terminal_id } = this;
 		if (this.status !== 'running' || this.closing || !terminal_id) return;
 		this.closing = true;
-		const result = await this.app.api.terminal_close({ terminal_id });
+		const result = await this.app.api.terminal_close({ terminal_id, signal: 'SIGTERM' });
 		if (terminal_id !== this.terminal_id) return; // restarted meanwhile
 		this.closing = false;
 		if (!result.ok && result.error.code !== JSONRPC_ERROR_CODES.not_found) {

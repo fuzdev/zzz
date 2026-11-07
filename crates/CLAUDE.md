@@ -141,7 +141,7 @@ An unset or blank (empty or whitespace) `DATABASE_URL` or
 - `ZZZ_WHISPER_CPP_BIN` — whisper.cpp's `whisper-cli` to run instead of the one on `PATH`, under the same rule
 - `ZZZ_WHISPER_CPP_MODEL` — the Whisper model file whisper.cpp loads; must be an absolute path to a file, or boot fails. No default, no search: unset, `transcription_create` is `tool_unavailable`
 - `SECRET_ANTHROPIC_API_KEY` / `SECRET_OPENAI_API_KEY` / `SECRET_GOOGLE_API_KEY` — provider keys, read once at boot
-- `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (mirrors Zod `z.stringbool()`: `true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; blank reads as unset; anything else errors at startup. Integration tests only — production must leave unset, and the `zzz` CLI strips it from a daemon it starts)
+- `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (`true`/`1`/`yes`/`on`/`y`/`enabled` opt in; `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive; blank reads as unset; anything else errors at startup. Integration tests only — production must leave unset, and the `zzz` CLI strips it from a daemon it starts)
 - `ZZZ_TRUSTED_PROXIES` — Comma-separated trusted-proxy entries (IPs and CIDR ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust → `client_ip` falls back to the TCP peer IP on every request (direct-bind behavior). Set when deploying behind nginx / a cloud LB so the trusted-proxy middleware walks `X-Forwarded-For` right-to-left and resolves the real client IP for rate limiting + `audit_log.ip`. Parsed eagerly at startup — invalid entries (malformed IPs, non-aligned CIDRs, out-of-range prefixes) fail server boot. Mirrors fuz_app's `http/proxy.ts`.
 
 A blank (empty or whitespace) path var reads as unset — `PUBLIC_ZZZ_DIR` falls back to `.zzz`, never `/` (`resolve_dir` errors on an empty or unresolvable path rather than collapsing to `/`). A non-UTF-8 value of any of the server's string vars fails boot naming the variable (it would otherwise read as unset — e.g. silently dropping every `PUBLIC_ZZZ_SCOPED_DIRS` entry), as does a dir that resolves to a non-UTF-8 path.
@@ -665,8 +665,8 @@ joined after the drain, before PTY teardown.
   connections (`close_connections` on a `ConnectionCloseTarget`), and the
   auth cleanup closes an expired session's within one interval. A message on
   an open socket never re-checks its session.
-- **error.data omits Zod validation details** — for -32602 (invalid params)
-  errors, `error.data` omits the Zod issues for security (no schema leak to
+- **error.data omits validation details** — for -32602 (invalid params)
+  errors, `error.data` omits the schema issues for security (no schema leak to
   unauthenticated callers). The integration test `normalize_error_data`
   function tolerates either shape. Future: env-conditional — include the
   issues in dev, strip in prod.
@@ -765,8 +765,8 @@ joined after the drain, before PTY teardown.
   the transcription `blake3`).
 - **Strict inputs**: every zzz handler decodes `params` through
   `fuz_http::parse_strict_params` into a `#[serde(deny_unknown_fields)]`
-  struct mirroring its `z.strictObject` TS input (unknown keys and explicit
-  `null`s are `invalid_params`; nested `.optional()` fields refuse `null`
+  struct mirroring its strict `object` TS input (unknown keys and explicit
+  `null`s are `invalid_params`; nested `optional` fields refuse `null`
   through a `present` deserializer; UUID fields use
   `fuz_http::deserialize_wire_uuid`), and the `z.void()` methods (`ping`,
   `session_load`, `workspace_list`) declare `InputShape::Void`, so the
@@ -1205,7 +1205,7 @@ over `App.realtime`.
 
 **Other remaining work**:
 
-1. Codegen from Zod specs (action input/output types)
+1. Codegen from the TS specs (action input/output types)
 
 - [x] Trusted-proxy client-IP resolution (XFF + CIDR + strict-IP
       validation), Origin allowlist (Origin-only, no Referer fallback), and

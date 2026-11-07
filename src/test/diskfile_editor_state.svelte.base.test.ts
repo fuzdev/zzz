@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert, vi } from 'vitest';
 
 import type { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
@@ -12,8 +13,8 @@ import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Constants for testing
-const TEST_PATH = DiskfilePath.parse('/path/to/test.txt');
-const TEST_DIR = SerializableDisknode.shape.source_dir.parse('/path/');
+const TEST_PATH = parse_or_throw(DiskfilePath, '/path/to/test.txt');
+const TEST_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/path/');
 const TEST_CONTENT = 'This is test content';
 
 // Test suite variables
@@ -68,8 +69,8 @@ describe('initialization', () => {
 	test('editor_state handles initialization with null content', () => {
 		// Create a diskfile with null content
 		const null_diskfile = app.diskfiles.add({
-			path: DiskfilePath.parse('/null/content.txt'),
-			source_dir: SerializableDisknode.shape.source_dir.parse('/null/'),
+			path: parse_or_throw(DiskfilePath, '/null/content.txt'),
+			source_dir: parse_or_throw(SerializableDisknode.def.source_dir, '/null/'),
 			content: null
 		});
 
@@ -226,8 +227,8 @@ describe('content metrics', () => {
 	test('length_diff_percent handles zero original length correctly', () => {
 		// Create a diskfile with empty content
 		const empty_diskfile = app.diskfiles.add({
-			path: DiskfilePath.parse('/empty/file.txt'),
-			source_dir: SerializableDisknode.shape.source_dir.parse('/empty/'),
+			path: parse_or_throw(DiskfilePath, '/empty/file.txt'),
+			source_dir: parse_or_throw(SerializableDisknode.def.source_dir, '/empty/'),
 			content: ''
 		});
 
@@ -248,8 +249,8 @@ describe('content metrics', () => {
 
 	test('diff percents are 0 when an empty original is unchanged', () => {
 		const empty_diskfile = app.diskfiles.add({
-			path: DiskfilePath.parse('/empty/unchanged.txt'),
-			source_dir: SerializableDisknode.shape.source_dir.parse('/empty/'),
+			path: parse_or_throw(DiskfilePath, '/empty/unchanged.txt'),
+			source_dir: parse_or_throw(SerializableDisknode.def.source_dir, '/empty/'),
 			content: ''
 		});
 		const empty_editor_state = app.diskfiles.get_editor_state(empty_diskfile);
@@ -269,11 +270,11 @@ describe('content metrics', () => {
 
 describe('file management', () => {
 	test('each file has its own editing state, kept while another is shown', () => {
-		const another_path = DiskfilePath.parse('/different/file.txt');
+		const another_path = parse_or_throw(DiskfilePath, '/different/file.txt');
 		const another_content = 'Different file content';
 		const another_diskfile = app.diskfiles.add({
 			path: another_path,
-			source_dir: SerializableDisknode.shape.source_dir.parse('/different/'),
+			source_dir: parse_or_throw(SerializableDisknode.def.source_dir, '/different/'),
 			content: another_content
 		});
 
@@ -816,7 +817,7 @@ describe('saving failures and concurrent edits', () => {
 	});
 
 	describe('another file while a save is in flight', () => {
-		const OTHER_PATH = DiskfilePath.parse('/path/to/other.txt');
+		const OTHER_PATH = parse_or_throw(DiskfilePath, '/path/to/other.txt');
 
 		const setup_other = () => {
 			const other = app.diskfiles.add({

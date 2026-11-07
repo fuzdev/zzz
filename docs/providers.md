@@ -186,18 +186,18 @@ provider picks its own:
 From `completion_types.ts`:
 
 ```typescript
-const CompletionRequest = z.strictObject({
+const CompletionRequest = object({
 	created: DatetimeNow,
 	provider_name: ProviderName,
-	model: z.string(),
-	prompt: z.string(),
-	completion_messages: z.array(CompletionMessage).optional()
+	model: string,
+	prompt: string,
+	completion_messages: optional(array(CompletionMessage))
 });
 
-const CompletionResponse = z.strictObject({
+const CompletionResponse = object({
 	created: DatetimeNow,
 	provider_name: ProviderName,
-	model: z.string(),
+	model: string,
 	data: ProviderDataSchema
 });
 ```

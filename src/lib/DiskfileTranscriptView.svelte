@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 	import { icon_delete, icon_file } from '@fuzdev/fuz_ui/icons.ts';
 	import { to_error_message } from '@fuzdev/fuz_util/error.ts';
@@ -41,7 +42,9 @@
 
 	const transcript = $derived(parse_transcript(diskfile.content));
 	const source_path = $derived(
-		transcript ? DiskfilePath.parse(to_transcript_source_path(diskfile.path, transcript)) : null
+		transcript
+			? parse_or_throw(DiskfilePath, to_transcript_source_path(diskfile.path, transcript))
+			: null
 	);
 	const source = $derived(source_path ? diskfiles.get_by_path(source_path) : undefined);
 	const source_url = $derived(
@@ -66,10 +69,13 @@
 		copy_error = null;
 		const path = to_transcript_copy_path(
 			source_path,
-			(p) => diskfiles.get_by_path(DiskfilePath.parse(p)) !== undefined
+			(p) => diskfiles.get_by_path(parse_or_throw(DiskfilePath, p)) !== undefined
 		);
 		try {
-			await diskfiles.create_file_at(DiskfilePath.parse(path), transcript_to_text(transcript));
+			await diskfiles.create_file_at(
+				parse_or_throw(DiskfilePath, path),
+				transcript_to_text(transcript)
+			);
 		} catch (error) {
 			copy_error = to_error_message(error);
 		}

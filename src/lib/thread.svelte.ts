@@ -1,3 +1,4 @@
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { Model } from './model.svelte.ts';
@@ -187,7 +188,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 
 		const user_turn = this.add_user_turn(content);
 
-		const completion_request = CompletionRequest.parse({
+		const completion_request = parse_or_throw(CompletionRequest, {
 			created: user_turn.created,
 			provider_name: model.provider_name,
 			model: model.name,

@@ -1,5 +1,6 @@
+import { FactHashSchema } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, assert } from 'vitest';
-import { ZodFactHashSchema } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import {
 	find_transcripts,
@@ -21,7 +22,7 @@ const create_transcript = (
 	version: 1,
 	source: {
 		name: source_name,
-		blake3: ZodFactHashSchema.parse(`blake3:${'ab'.repeat(32)}`),
+		blake3: parse_or_throw(FactHashSchema, `blake3:${'ab'.repeat(32)}`),
 		size: 10,
 		duration_ms: 1000
 	},
@@ -29,7 +30,7 @@ const create_transcript = (
 		backend: 'whisper_cpp',
 		version: '1.9.4',
 		model,
-		model_blake3: ZodFactHashSchema.parse(`blake3:${'cd'.repeat(32)}`),
+		model_blake3: parse_or_throw(FactHashSchema, `blake3:${'cd'.repeat(32)}`),
 		params: { language: 'auto' }
 	},
 	language: 'en',

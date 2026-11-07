@@ -1,29 +1,38 @@
 // @slop Claude Sonnet 3.7
 
-import { z } from 'zod';
+import {
+	array,
+	boolean,
+	number,
+	object,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
-import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuidWithDefault } from '@fuzdev/fuz_app/zod_schemas.ts';
+import { create_uuid, type Uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { DiskfilePath } from './diskfile_types.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
 /**
  * Schema for history entries.
  */
-export const HistoryEntry = z.strictObject({
-	id: ZodUuidWithDefault,
-	created: z.number(),
-	content: z.string(),
-	label: z.string(),
-	is_disk_change: z.boolean().default(false),
-	is_unsaved_edit: z.boolean().default(false), // Indicates entries containing unsaved user edits
-	is_original_state: z.boolean().default(false), // Indicates if this entry represents the original disk state
+export const HistoryEntry = object({
+	id: UuidWithDefault,
+	created: number,
+	content: string,
+	label: string,
+	is_disk_change: with_default(boolean, false),
+	is_unsaved_edit: with_default(boolean, false), // Indicates entries containing unsaved user edits
+	is_original_state: with_default(boolean, false), // Indicates if this entry represents the original disk state
 	/** An unsaved edit that was set aside unsaved — kept so its text can still be restored. */
-	is_discarded_edit: z.boolean().default(false)
+	is_discarded_edit: with_default(boolean, false)
 });
-export type HistoryEntry = z.infer<typeof HistoryEntry>;
+export type HistoryEntry = Infer<typeof HistoryEntry>;
 
 /** Default cap on the number of entries a `DiskfileHistory` keeps. */
 export const DISKFILE_HISTORY_MAX_ENTRIES = 100;
@@ -37,14 +46,17 @@ export const DISKFILE_HISTORY_MAX_CONTENT_LENGTH = 16 * 1024 * 1024;
 /**
  * Schema for the DiskfileHistory cell.
  */
-export const DiskfileHistoryJson = CellJson.extend({
-	path: DiskfilePath,
-	entries: z.array(HistoryEntry).default(() => []),
-	max_entries: z.number().default(DISKFILE_HISTORY_MAX_ENTRIES), // TODO rename? `history_size`? `max_size`? `capacity`?
-	max_content_length: z.number().default(DISKFILE_HISTORY_MAX_CONTENT_LENGTH)
-}).meta({ cell_class_name: 'DiskfileHistory' });
-export type DiskfileHistoryJson = z.infer<typeof DiskfileHistoryJson>;
-export type DiskfileHistoryJsonInput = z.input<typeof DiskfileHistoryJson>;
+export const DiskfileHistoryJson = cell_json_schema(
+	{
+		path: DiskfilePath,
+		entries: with_default_fn(array(HistoryEntry), () => []),
+		max_entries: with_default(number, DISKFILE_HISTORY_MAX_ENTRIES), // TODO rename? `history_size`? `max_size`? `capacity`?
+		max_content_length: with_default(number, DISKFILE_HISTORY_MAX_CONTENT_LENGTH)
+	},
+	'DiskfileHistory'
+);
+export type DiskfileHistoryJson = Infer<typeof DiskfileHistoryJson>;
+export type DiskfileHistoryJsonInput = InferInput<typeof DiskfileHistoryJson>;
 
 export type DiskfileHistoryOptions = CellOptions<typeof DiskfileHistoryJson>;
 

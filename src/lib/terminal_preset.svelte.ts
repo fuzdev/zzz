@@ -1,16 +1,27 @@
-import { z } from 'zod';
+import {
+	array,
+	optional,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
-export const TerminalPresetJson = CellJson.extend({
-	name: z.string().default(''),
-	command: z.string().default(''),
-	args: z.array(z.string()).default(() => []),
-	cwd: z.string().optional()
-}).meta({ cell_class_name: 'TerminalPreset' });
-export type TerminalPresetJson = z.infer<typeof TerminalPresetJson>;
-export type TerminalPresetJsonInput = z.input<typeof TerminalPresetJson>;
+export const TerminalPresetJson = cell_json_schema(
+	{
+		name: with_default(string, ''),
+		command: with_default(string, ''),
+		args: with_default_fn(array(string), () => []),
+		cwd: optional(string)
+	},
+	'TerminalPreset'
+);
+export type TerminalPresetJson = Infer<typeof TerminalPresetJson>;
+export type TerminalPresetJsonInput = InferInput<typeof TerminalPresetJson>;
 
 export interface TerminalPresetOptions extends CellOptions<typeof TerminalPresetJson> {}
 

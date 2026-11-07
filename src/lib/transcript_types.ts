@@ -1,27 +1,40 @@
-import { z } from 'zod';
-import { ZodFactHashSchema } from '@fuzdev/fuz_app/zod_schemas.ts';
+import {
+	array,
+	check,
+	loose_object,
+	message,
+	nullable,
+	number,
+	object,
+	optional,
+	pipe,
+	string,
+	type Infer
+} from '@fuzdev/fuz_schema/schema.ts';
+
+import { FactHashSchema } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 /** One word of a transcript segment, with the recognizer's confidence in it. */
-export const TranscriptWord = z.strictObject({
-	start_ms: z.number(),
-	end_ms: z.number(),
-	text: z.string(),
+export const TranscriptWord = object({
+	start_ms: number,
+	end_ms: number,
+	text: string,
 	/** 0 to 1. */
-	p: z.number()
+	p: number
 });
-export type TranscriptWord = z.infer<typeof TranscriptWord>;
+export type TranscriptWord = Infer<typeof TranscriptWord>;
 
 /**
  * A stretch of speech. The times are `null` from a recognizer that doesn't
  * time its text — then the segment can't be sought to.
  */
-export const TranscriptSegment = z.strictObject({
-	start_ms: z.number().nullable(),
-	end_ms: z.number().nullable(),
-	text: z.string(),
-	words: z.array(TranscriptWord).optional()
+export const TranscriptSegment = object({
+	start_ms: nullable(number),
+	end_ms: nullable(number),
+	text: string,
+	words: optional(array(TranscriptWord))
 });
-export type TranscriptSegment = z.infer<typeof TranscriptSegment>;
+export type TranscriptSegment = Infer<typeof TranscriptSegment>;
 
 /**
  * Whether `name` is one path component: not empty, not `.` or `..`, and with
@@ -41,30 +54,30 @@ export const TRANSCRIPT_SIDECAR_SUFFIX = '.transcript.json';
  * Loose, because it's a file on disk: one written by a newer zzz may carry
  * fields this one doesn't know.
  */
-export const Transcript = z.looseObject({
-	version: z.number(),
-	source: z.looseObject({
+export const Transcript = loose_object({
+	version: number,
+	source: loose_object({
 		/**
 		 * The source's file name — it sits beside the sidecar. A sidecar is a
 		 * file anyone can write, and this name becomes a path the app reads and
 		 * creates files at, so anything but a single path component is refused:
 		 * a transcript can't point outside its own directory.
 		 */
-		name: z.string().refine(is_plain_file_name, { message: 'must be a file name, not a path' }),
+		name: pipe(string, message(check(is_plain_file_name), 'must be a file name, not a path')),
 		/** `blake3:<hex>` of the source's bytes when it was transcribed. */
-		blake3: ZodFactHashSchema,
-		size: z.number(),
-		duration_ms: z.number()
+		blake3: FactHashSchema,
+		size: number,
+		duration_ms: number
 	}),
-	tool: z.looseObject({
-		backend: z.string(),
-		version: z.string().nullable(),
-		model: z.string(),
+	tool: loose_object({
+		backend: string,
+		version: nullable(string),
+		model: string,
 		/** `blake3:<hex>` of the model file. */
-		model_blake3: ZodFactHashSchema,
-		params: z.looseObject({ language: z.string() })
+		model_blake3: FactHashSchema,
+		params: loose_object({ language: string })
 	}),
-	language: z.string().nullable(),
-	segments: z.array(TranscriptSegment)
+	language: nullable(string),
+	segments: array(TranscriptSegment)
 });
-export type Transcript = z.infer<typeof Transcript>;
+export type Transcript = Infer<typeof Transcript>;

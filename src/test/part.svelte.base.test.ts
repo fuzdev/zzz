@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, assert, describe, beforeEach } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Part, TextPart, DiskfilePart } from '#lib/part.svelte.ts';
 import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -21,8 +22,8 @@ const TEST_CONTENT = {
 	EMPTY: ''
 };
 
-const TEST_PATH = DiskfilePath.parse('/path/to/test/file.txt');
-const TEST_DIR = DiskfileDirectoryPath.parse('/path/');
+const TEST_PATH = parse_or_throw(DiskfilePath, '/path/to/test/file.txt');
+const TEST_DIR = parse_or_throw(DiskfileDirectoryPath, '/path/');
 
 beforeEach(() => {
 	// Create a real Zzz instance for each test
@@ -275,18 +276,18 @@ describe('DiskfilePart specific behavior', () => {
 
 	test('DiskfilePart handles changing path', () => {
 		// Create two diskfiles
-		const path1 = DiskfilePath.parse('/path/to/file1.txt');
-		const path2 = DiskfilePath.parse('/path/to/file2.txt');
+		const path1 = parse_or_throw(DiskfilePath, '/path/to/file1.txt');
+		const path2 = parse_or_throw(DiskfilePath, '/path/to/file2.txt');
 
 		app.diskfiles.add({
 			path: path1,
-			source_dir: DiskfileDirectoryPath.parse('/path/'),
+			source_dir: parse_or_throw(DiskfileDirectoryPath, '/path/'),
 			content: 'File 1 content'
 		});
 
 		app.diskfiles.add({
 			path: path2,
-			source_dir: DiskfileDirectoryPath.parse('/path/'),
+			source_dir: parse_or_throw(DiskfileDirectoryPath, '/path/'),
 			content: 'File 2 content'
 		});
 

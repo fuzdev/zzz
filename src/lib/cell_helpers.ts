@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { zod_get_innermost_type } from '@fuzdev/fuz_app/zod.ts';
+import type { AnySchema, Infer, SchemaKind } from '@fuzdev/fuz_schema/schema.ts';
+import { get_schema_meta, unwrap_schema } from '@fuzdev/fuz_schema/introspect.ts';
 
 /** Sentinel value to indicate a parser has completely handled a property. */
 export const HANDLED = Symbol('HANDLED_BY_PARSER');
@@ -10,10 +10,11 @@ export const FILE_DATETIME_FORMAT = 'MMM d, yyyy h:mm:ss a';
 export const FILE_TIME_FORMAT = 'HH:mm:ss';
 
 /**
- * Schema class information extracted from a Zod schema.
+ * Schema class information extracted from a schema.
  */
 export interface SchemaClassInfo {
-	type: string;
+	/** The `kind` of the schema under its wrappers. */
+	kind: SchemaKind;
 	is_array: boolean;
 	class_name?: string;
 	element_class?: string;
@@ -21,10 +22,10 @@ export interface SchemaClassInfo {
 
 // A type helper that makes it easier to define value parsers with correct input types
 export type ValueParser<
-	TSchema extends z.ZodType,
-	TKey extends keyof z.infer<TSchema> = keyof z.infer<TSchema>
+	TSchema extends AnySchema,
+	TKey extends keyof Infer<TSchema> = keyof Infer<TSchema>
 > = {
-	[K in TKey]?: (value: unknown) => z.infer<TSchema>[K] | undefined;
+	[K in TKey]?: (value: unknown) => Infer<TSchema>[K] | undefined;
 };
 
 /**
@@ -33,10 +34,10 @@ export type ValueParser<
  * to properly type the base properties.
  */
 export type CellValueDecoder<
-	TSchema extends z.ZodType,
-	TKey extends keyof z.infer<TSchema> = keyof z.infer<TSchema>
+	TSchema extends AnySchema,
+	TKey extends keyof Infer<TSchema> = keyof Infer<TSchema>
 > = {
-	[K in TKey]?: (value: unknown) => z.infer<TSchema>[K] | undefined | typeof HANDLED;
+	[K in TKey]?: (value: unknown) => Infer<TSchema>[K] | undefined | typeof HANDLED;
 };
 
 /**
@@ -64,51 +65,34 @@ export const create_collection_decoder =
 		};
 
 /**
- * Get schema class information from a Zod schema.
+ * Get schema class information from a schema.
  * This helps determine how to decode values based on their schema definition.
+ *
+ * An array under the field's wrappers (`optional`, `nullable`, the defaults,
+ * a `pipe`'s first schema, `lazy`) reports the `cell_class_name` of its
+ * element. Otherwise `class_name` is the `cell_class_name` on the outermost
+ * layer of the field that has one.
  */
 export const get_schema_class_info = (
-	schema: z.ZodType | null | undefined
+	schema: AnySchema | null | undefined
 ): SchemaClassInfo | null => {
 	if (!schema) return null;
 
 	// Unwrap to get the core schema
-	const unwrapped = zod_get_innermost_type(schema);
+	const unwrapped = unwrap_schema(schema);
 
-	// Handle ZodArray
-	if (unwrapped instanceof z.ZodArray) {
-		// Get class name from element schema's metadata
-		// TODO temporary bug: https://github.com/typescript-eslint/typescript-eslint/issues/11666
-
-		const element_meta = (unwrapped.element as z.ZodType).meta?.();
-		const element_class = element_meta?.cell_class_name as string | undefined;
+	if (unwrapped.kind === 'array') {
 		return {
-			type: 'ZodArray',
+			kind: 'array',
 			is_array: true,
-			element_class
+			element_class: get_schema_meta(unwrapped.def, 'cell_class_name')
 		};
 	}
 
-	// Get class name from schema metadata if present for any schema type
-	// TODO temporary bug: https://github.com/typescript-eslint/typescript-eslint/issues/11666
-
-	const meta = schema.meta?.();
-	if (meta?.cell_class_name) {
-		return {
-			type: unwrapped.constructor.name,
-			class_name: meta.cell_class_name as string,
-			is_array: false
-		};
+	const class_name = get_schema_meta(schema, 'cell_class_name');
+	if (class_name) {
+		return { kind: unwrapped.kind, class_name, is_array: false };
 	}
 
-	// Handle other specific types
-	if (unwrapped instanceof z.ZodMap) {
-		return { type: 'ZodMap', is_array: false };
-	}
-	if (unwrapped instanceof z.ZodSet) {
-		return { type: 'ZodSet', is_array: false };
-	}
-
-	// Default case for any other schema type
-	return { type: unwrapped.constructor.name, is_array: false };
+	return { kind: unwrapped.kind, is_array: false };
 };

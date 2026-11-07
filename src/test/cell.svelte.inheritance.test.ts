@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
 
+import {
+	array,
+	boolean,
+	number,
+	object,
+	optional,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer
+} from '@fuzdev/fuz_schema/schema.ts';
 import { test, vi, beforeEach, assert } from 'vitest';
-import { z } from 'zod';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
+import { get_datetime_now } from '#lib/datetime.ts';
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { CellJson, type SchemaKeys } from '#lib/cell_types.ts';
 import { HANDLED } from '#lib/cell_helpers.ts';
@@ -26,14 +36,12 @@ beforeEach(() => {
 });
 
 // Base test schema that extends CellJson
-const TestSchema = CellJson.extend({
-	text: z.string().default(''),
-	number: z.number().optional(),
-	list: z
-		.array(z.string())
-		.optional()
-		.default(() => []),
-	flag: z.boolean().default(true)
+const TestSchema = object({
+	...CellJson.def,
+	text: with_default(string, ''),
+	number: optional(number),
+	list: with_default_fn(array(string), () => []),
+	flag: with_default(boolean, true)
 });
 
 test('Cell supports overriding assign_property', () => {
@@ -194,9 +202,10 @@ test('Cell handles inherited properties correctly', () => {
 });
 
 test('Cell properly handles collections with HANDLED sentinel', () => {
-	const VirtualCollectionSchema = CellJson.extend({
-		collection: z.array(z.string()).default(() => []),
-		text: z.string().default('')
+	const VirtualCollectionSchema = object({
+		...CellJson.def,
+		collection: with_default_fn(array(string), () => []),
+		text: with_default(string, '')
 	});
 
 	class VirtualCollectionCell extends Cell<typeof VirtualCollectionSchema> {
@@ -223,7 +232,7 @@ test('Cell properly handles collections with HANDLED sentinel', () => {
 			this.init();
 		}
 
-		override to_json(): z.output<typeof VirtualCollectionSchema> {
+		override to_json(): Infer<typeof VirtualCollectionSchema> {
 			const base = super.to_json();
 			return {
 				...base,

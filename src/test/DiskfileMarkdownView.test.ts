@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount, type Component } from 'svelte';
 
@@ -18,8 +19,8 @@ import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
  * mode remembered per file.
  */
 
-const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/w/');
-const PATH_A = DiskfilePath.parse('/w/a.md');
+const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
+const PATH_A = parse_or_throw(DiskfilePath, '/w/a.md');
 
 const create_disknode = (path: DiskfilePath, contents: string | null): SerializableDisknode => ({
 	id: path,
@@ -480,14 +481,14 @@ describe('DiskfileMarkdownView outline and links', () => {
 		assert.notInclude(view.target.textContent, 'broken links', 'no section without any');
 		type_into(view.textarea()!, '[x](./x.md)');
 		assert.include(view.target.textContent, 'broken links');
-		write_externally(DiskfilePath.parse('/w/x.md'), '');
+		write_externally(parse_or_throw(DiskfilePath, '/w/x.md'), '');
 		flushSync();
 		assert.notInclude(view.target.textContent, 'broken links');
 	});
 
 	test('a link from another file reveals its heading once this file shows', () => {
 		const a = write_externally(PATH_A, DOC);
-		const b = write_externally(DiskfilePath.parse('/w/b.md'), '[to a](./a.md#part-two)');
+		const b = write_externally(parse_or_throw(DiskfilePath, '/w/b.md'), '[to a](./a.md#part-two)');
 		app.diskfiles.get_editor_state(b).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileView, {
 			get diskfile() {

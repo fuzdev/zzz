@@ -1,5 +1,19 @@
+import {
+	array,
+	boolean,
+	check,
+	nullable,
+	number,
+	optional,
+	pipe,
+	string,
+	strip_object,
+	transform,
+	with_default,
+	with_default_fn
+} from '@fuzdev/fuz_schema/schema.ts';
+import { get_meta, meta } from '@fuzdev/fuz_schema/meta.ts';
 import { describe, test, assert } from 'vitest';
-import { z } from 'zod';
 
 import { create_collection_decoder, get_schema_class_info, HANDLED } from '#lib/cell_helpers.ts';
 
@@ -9,219 +23,194 @@ describe('get_schema_class_info', () => {
 		assert.isNull(get_schema_class_info(undefined));
 	});
 
-	test('identifies basic schema types correctly', () => {
-		const string_schema = z.string();
-		const number_schema = z.number();
-		const boolean_schema = z.boolean();
+	test('identifies basic schema kinds correctly', () => {
+		const string_info = get_schema_class_info(string);
+		const number_info = get_schema_class_info(number);
+		const boolean_info = get_schema_class_info(boolean);
 
-		const string_info = get_schema_class_info(string_schema);
-		const number_info = get_schema_class_info(number_schema);
-		const boolean_info = get_schema_class_info(boolean_schema);
-
-		assert.strictEqual(string_info?.type, 'ZodString');
+		assert.strictEqual(string_info?.kind, 'string');
 		assert.ok(!string_info?.is_array);
 
-		assert.strictEqual(number_info?.type, 'ZodNumber');
+		assert.strictEqual(number_info?.kind, 'number');
 		assert.ok(!number_info?.is_array);
 
-		assert.strictEqual(boolean_info?.type, 'ZodBoolean');
+		assert.strictEqual(boolean_info?.kind, 'boolean');
 		assert.ok(!boolean_info?.is_array);
 	});
 
 	test('identifies array schemas correctly', () => {
-		const string_array = z.array(z.string());
-		const number_array = z.array(z.number());
-		const object_array = z.array(z.object({ name: z.string() }));
+		const string_array_info = get_schema_class_info(array(string));
+		const number_array_info = get_schema_class_info(array(number));
+		const object_array_info = get_schema_class_info(array(strip_object({ name: string })));
 
-		const string_array_info = get_schema_class_info(string_array);
-		const number_array_info = get_schema_class_info(number_array);
-		const object_array_info = get_schema_class_info(object_array);
-
-		// Test array identification
-		assert.strictEqual(string_array_info?.type, 'ZodArray');
+		assert.strictEqual(string_array_info?.kind, 'array');
 		assert.ok(string_array_info?.is_array);
 
-		assert.strictEqual(number_array_info?.type, 'ZodArray');
+		assert.strictEqual(number_array_info?.kind, 'array');
 		assert.ok(number_array_info?.is_array);
 
-		assert.strictEqual(object_array_info?.type, 'ZodArray');
+		assert.strictEqual(object_array_info?.kind, 'array');
 		assert.ok(object_array_info?.is_array);
 	});
 
 	test('handles default wrapped schemas', () => {
-		const string_with_default = z.string().default('default');
-		const array_with_default = z.array(z.string()).default([]);
+		const string_default_info = get_schema_class_info(with_default(string, 'default'));
+		const array_default_info = get_schema_class_info(with_default_fn(array(string), () => []));
 
-		const string_default_info = get_schema_class_info(string_with_default);
-		const array_default_info = get_schema_class_info(array_with_default);
-
-		// Default shouldn't change the core type
-		assert.strictEqual(string_default_info?.type, 'ZodString');
+		// a default doesn't change the core kind
+		assert.strictEqual(string_default_info?.kind, 'string');
 		assert.ok(!string_default_info?.is_array);
 
-		// This is what's failing in the test - default-wrapped arrays should still be identified as arrays
-		assert.strictEqual(array_default_info?.type, 'ZodArray');
+		// default-wrapped arrays are still arrays
+		assert.strictEqual(array_default_info?.kind, 'array');
 		assert.ok(array_default_info?.is_array);
 	});
 
 	test('handles object schemas', () => {
-		const object_schema = z.object({
-			name: z.string(),
-			count: z.number()
-		});
-
-		const object_info = get_schema_class_info(object_schema);
-		assert.strictEqual(object_info?.type, 'ZodObject');
+		const object_info = get_schema_class_info(strip_object({ name: string, count: number }));
+		assert.strictEqual(object_info?.kind, 'strip_object');
 		assert.ok(!object_info?.is_array);
 	});
 
-	test('detects class names set with cell_class', () => {
-		const schema = z.object({ id: z.string() });
-		const schema_with_class = schema.meta({ cell_class_name: 'TestClass' });
+	test('detects class names set with cell_class_name', () => {
+		const schema_with_class = meta(strip_object({ id: string }), { cell_class_name: 'TestClass' });
 
 		const info = get_schema_class_info(schema_with_class);
 		assert.strictEqual(info?.class_name, 'TestClass');
+		assert.strictEqual(info?.kind, 'strip_object');
+		assert.ok(!info?.is_array);
+	});
+
+	test('detects class names under wrappers, the outermost first', () => {
+		const inner = meta(strip_object({ id: string }), { cell_class_name: 'Inner' });
+
+		assert.strictEqual(
+			get_schema_class_info(with_default_fn(nullable(inner), () => null))?.class_name,
+			'Inner'
+		);
+		assert.strictEqual(
+			get_schema_class_info(meta(optional(inner), { cell_class_name: 'Outer' }))?.class_name,
+			'Outer'
+		);
 	});
 
 	test('detects element classes from element metadata', () => {
-		const element_schema = z.string().meta({ cell_class_name: 'ElementClass' });
-		const array_schema = z.array(element_schema);
+		const element_schema = meta(string, { cell_class_name: 'ElementClass' });
 
-		const info = get_schema_class_info(array_schema);
+		const info = get_schema_class_info(array(element_schema));
 		assert.ok(info?.is_array);
 		assert.strictEqual(info.element_class, 'ElementClass');
+		assert.isUndefined(info.class_name);
 	});
 
 	test('handles default-wrapped array with element metadata', () => {
-		const element_schema = z.string().meta({ cell_class_name: 'ElementClass' });
-		const array_schema = z.array(element_schema).default([]);
+		const element_schema = meta(string, { cell_class_name: 'ElementClass' });
 
-		const info = get_schema_class_info(array_schema);
+		const info = get_schema_class_info(with_default_fn(array(element_schema), () => []));
 		assert.ok(info?.is_array);
 		assert.strictEqual(info.element_class, 'ElementClass');
 	});
 
 	test('reads element class from nested element schema', () => {
-		// Test that metadata on element schema is properly read
-		const element_schema = z
-			.object({ name: z.string() })
-			.meta({ cell_class_name: 'DirectElementClass' });
-		const array_schema = z.array(element_schema);
+		const element_schema = meta(strip_object({ name: string }), {
+			cell_class_name: 'DirectElementClass'
+		});
 
-		// Verify that get_schema_class_info can read element metadata
-		const info = get_schema_class_info(array_schema);
+		const info = get_schema_class_info(array(element_schema));
 		assert.ok(info?.is_array);
 		assert.strictEqual(info.element_class, 'DirectElementClass');
 	});
 
-	test('handles ZodDefault containing a ZodArray', () => {
-		// Create array schema and wrap in ZodDefault
-		const array_schema = z.array(z.string());
-		const array_schema_default = array_schema.default([]);
+	test('reads element class under the element wrappers', () => {
+		const element_schema = meta(strip_object({ name: string }), { cell_class_name: 'Wrapped' });
 
-		// We can see what the internal structure of ZodDefault looks like
-		assert.isDefined(array_schema_default._zod.def);
-		assert.strictEqual(array_schema_default._zod.def.type, 'default');
-		assert.isDefined(array_schema_default._zod.def.innerType);
-		assert.strictEqual(array_schema_default._zod.def.innerType.def.type, 'array');
-
-		// Now test the function with our default-wrapped array
-		const info = get_schema_class_info(array_schema_default);
-
-		// The function should see through the ZodDefault to the ZodArray inside
-		assert.strictEqual(info?.type, 'ZodArray');
+		const info = get_schema_class_info(array(optional(element_schema)));
 		assert.ok(info?.is_array);
+		assert.strictEqual(info.element_class, 'Wrapped');
 	});
 
 	test('handles complex nested schema wrapping', () => {
-		// Create nested wrapping: ZodDefault -> ZodOptional -> ZodArray
-		const nested_array_schema = z.array(z.string()).optional().default([]);
-
-		const nested_info = get_schema_class_info(nested_array_schema);
-		assert.strictEqual(nested_info?.type, 'ZodArray');
+		const nested_info = get_schema_class_info(with_default_fn(optional(array(string)), () => []));
+		assert.strictEqual(nested_info?.kind, 'array');
 		assert.ok(nested_info?.is_array);
 
-		// More extreme nesting: ZodDefault -> ZodOptional -> ZodDefault -> ZodArray
-		const extreme_nesting = z.array(z.number()).default([]).optional().default([]);
+		const extreme_nesting = with_default_fn(
+			optional(with_default_fn(array(number), () => [])),
+			() => []
+		);
 
 		const extreme_info = get_schema_class_info(extreme_nesting);
-		assert.strictEqual(extreme_info?.type, 'ZodArray');
+		assert.strictEqual(extreme_info?.kind, 'array');
 		assert.ok(extreme_info?.is_array);
 	});
 
-	test('handles ZodEffects wrapping arrays', () => {
-		// ZodEffects (refinement) wrapping an array
-		const refined_array = z
-			.array(z.string())
-			.refine((arr) => arr.length > 0, { message: 'Array must not be empty' });
+	test('handles pipes starting with arrays', () => {
+		const refined_array = pipe(
+			array(string),
+			check((arr: Array<string>) => arr.length > 0, 'a non-empty array')
+		);
 
 		const refined_info = get_schema_class_info(refined_array);
-		assert.strictEqual(refined_info?.type, 'ZodArray');
+		assert.strictEqual(refined_info?.kind, 'array');
 		assert.ok(refined_info?.is_array);
 
-		// ZodEffects (transform) wrapping an array with default
-		const transformed_array = z
-			.array(z.number())
-			.default([])
-			.transform((arr) => arr.map((n) => n * 2));
+		const transformed_array = pipe(
+			with_default_fn(array(number), () => []),
+			transform((arr: Array<number>) => arr.map((n) => n * 2))
+		);
 
 		const transformed_info = get_schema_class_info(transformed_array);
-		assert.strictEqual(transformed_info?.type, 'ZodArray');
+		assert.strictEqual(transformed_info?.kind, 'array');
 		assert.ok(transformed_info?.is_array);
 	});
 
 	test('handles combinations of optional, default, and refinement', () => {
-		// Complex chain: optional -> default -> refine -> transform -> array
-		const complex_chain = z
-			.array(z.string())
-			.refine((arr) => arr.every((s) => s.length > 0), { message: 'No empty strings' })
-			.transform((arr) => arr.map((s) => s.trim()))
-			.default([])
-			.optional();
+		const complex_chain = with_default_fn(
+			optional(
+				pipe(
+					array(string),
+					check((arr: Array<string>) => arr.every((s) => s.length > 0), 'no empty strings'),
+					transform((arr: Array<string>) => arr.map((s) => s.trim()))
+				)
+			),
+			() => []
+		);
 
 		const chain_info = get_schema_class_info(complex_chain);
-		assert.strictEqual(chain_info?.type, 'ZodArray');
+		assert.strictEqual(chain_info?.kind, 'array');
 		assert.ok(chain_info?.is_array);
 	});
 
 	test('recursive unwrapping preserves metadata through wrappers', () => {
-		// Create an array with element that has metadata
-		const element = z.string().meta({ cell_class_name: 'TestElement' });
-		const array_with_class = z.array(element);
+		const element = meta(string, { cell_class_name: 'TestElement' });
+		const wrapped_array = with_default_fn(optional(array(element)), () => []);
 
-		// Wrap it multiple times
-		const wrapped_array = array_with_class.optional().default([]);
-
-		// Check that metadata is preserved
 		const info = get_schema_class_info(wrapped_array);
 		assert.strictEqual(info?.element_class, 'TestElement');
 		assert.ok(info?.is_array);
 	});
 
 	test('handles deeply nested schemas with element metadata', () => {
-		// Create a deeply nested schema with element metadata
-		const element = z.string().meta({ cell_class_name: 'NestedElement' });
-		const nested_schema = z.array(element).optional().default([]);
+		const element = meta(string, { cell_class_name: 'NestedElement' });
+		const nested_schema = with_default_fn(array(element), () => []);
 
-		// Verify metadata is found correctly through the wrappers
 		const info = get_schema_class_info(nested_schema);
 		assert.ok(info?.is_array);
 		assert.strictEqual(info.element_class, 'NestedElement');
 	});
 });
 
-describe('cell_class', () => {
+describe('cell_class_name', () => {
 	test('adds class name metadata to schemas', () => {
-		const schema = z.object({ name: z.string() });
-		const result = schema.meta({ cell_class_name: 'TestCellClass' });
+		const schema = strip_object({ name: string });
+		const result = meta(schema, { cell_class_name: 'TestCellClass' });
 
-		// Should add the metadata via .meta()
-		assert.strictEqual(result.meta()?.cell_class_name, 'TestCellClass');
+		assert.strictEqual(get_meta(result)?.cell_class_name, 'TestCellClass');
 
-		// Should return a new schema instance (due to .meta() creating a new instance)
+		// `meta` returns a copy and leaves the schema given alone
 		assert.notStrictEqual(result, schema);
+		assert.isUndefined(get_meta(schema));
 
-		// Get schema info should report it correctly
 		const info = get_schema_class_info(result);
 		assert.strictEqual(info?.class_name, 'TestCellClass');
 	});

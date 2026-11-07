@@ -1,22 +1,26 @@
-import { z } from 'zod';
+import { nullable, string, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
+
 import { Cell, type CellOptions } from './cell.svelte.ts';
 
 import type { Model } from './model.svelte.ts';
 import { ProviderName, type ProviderStatus } from './provider_types.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
 // TODO optional/defaults?
-export const ProviderJson = CellJson.extend({
-	name: ProviderName,
-	title: z.string(),
-	// TODO maybe change this to `docs_url` and add `url` for the homepage? and/or some other homepage url property?
-	url: z.string(),
-	homepage: z.string(), // TODO name? see `url` too
-	company: z.string(),
-	api_key_url: z.string().nullable()
-}).meta({ cell_class_name: 'Provider' });
-export type ProviderJson = z.infer<typeof ProviderJson>;
-export type ProviderJsonInput = z.input<typeof ProviderJson>;
+export const ProviderJson = cell_json_schema(
+	{
+		name: ProviderName,
+		title: string,
+		// TODO maybe change this to `docs_url` and add `url` for the homepage? and/or some other homepage url property?
+		url: string,
+		homepage: string, // TODO name? see `url` too
+		company: string,
+		api_key_url: nullable(string)
+	},
+	'Provider'
+);
+export type ProviderJson = Infer<typeof ProviderJson>;
+export type ProviderJsonInput = InferInput<typeof ProviderJson>;
 
 export interface ProviderOptions extends CellOptions<typeof ProviderJson> {}
 

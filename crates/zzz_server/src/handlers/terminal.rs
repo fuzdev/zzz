@@ -65,7 +65,7 @@ struct TerminalDataSendInput {
 struct TerminalResizeInput {
     #[serde(deserialize_with = "deserialize_wire_uuid")]
     terminal_id: Uuid,
-    /// `z.number().int()` on the twin, so any integral spelling; the range is
+    /// An integer on the TS twin, so any integral spelling; the range is
     /// [`terminal_dimension`]'s.
     #[serde(deserialize_with = "deserialize_wire_int")]
     cols: u64,
@@ -88,7 +88,7 @@ struct TerminalAckInput {
     #[serde(deserialize_with = "deserialize_wire_uuid")]
     terminal_id: Uuid,
     /// The `sent_bytes` of the last `terminal_data` the client finished with.
-    /// `z.number().int().nonnegative()` on the twin: the adapter reads any
+    /// A non-negative safe integer on the TS twin: the adapter reads any
     /// integral spelling and refuses past `Number.MAX_SAFE_INTEGER`, `u64`
     /// refuses a negative.
     #[serde(deserialize_with = "deserialize_wire_int")]

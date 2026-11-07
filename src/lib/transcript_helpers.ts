@@ -5,6 +5,8 @@
  * @module
  */
 
+import { parse } from '@fuzdev/fuz_schema/schema.ts';
+
 import {
 	Transcript,
 	TRANSCRIPT_SIDECAR_SUFFIX,
@@ -29,8 +31,8 @@ export const parse_transcript = (content: string | null): Transcript | null => {
 	} catch {
 		return null;
 	}
-	const parsed = Transcript.safeParse(json);
-	return parsed.success ? parsed.data : null;
+	const parsed = parse(Transcript, json);
+	return parsed.ok ? parsed.value : null;
 };
 
 /** The directory part of a path, with its trailing slash. */

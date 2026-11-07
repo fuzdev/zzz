@@ -1,18 +1,21 @@
-import { z } from 'zod';
+import { array, with_default_fn, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Terminal, TerminalJson, type TerminalJsonInput } from './terminal.svelte.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { TerminalOutputBuffer } from './terminal_helpers.ts';
 
-export const TerminalsJson = CellJson.extend({
-	items: z.array(TerminalJson).default(() => [])
-}).meta({ cell_class_name: 'Terminals' });
-export type TerminalsJson = z.infer<typeof TerminalsJson>;
-export type TerminalsJsonInput = z.input<typeof TerminalsJson>;
+export const TerminalsJson = cell_json_schema(
+	{
+		items: with_default_fn(array(TerminalJson), () => [])
+	},
+	'Terminals'
+);
+export type TerminalsJson = Infer<typeof TerminalsJson>;
+export type TerminalsJsonInput = InferInput<typeof TerminalsJson>;
 
 export interface TerminalsOptions extends CellOptions<typeof TerminalsJson> {}
 
@@ -257,7 +260,8 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 
 			// removed while starting — don't leave the process running unreachable
 			if (!this.items.has(terminal.id)) {
-				if (!unclaimed?.exited) void this.app.api.terminal_close({ terminal_id });
+				if (!unclaimed?.exited)
+					void this.app.api.terminal_close({ terminal_id, signal: 'SIGTERM' });
 				return;
 			}
 

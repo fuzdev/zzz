@@ -1,4 +1,14 @@
-import { z } from 'zod';
+import {
+	boolean,
+	min_value,
+	number,
+	parse_or_throw,
+	pipe,
+	safe_integer,
+	with_default,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 
 import {
@@ -8,23 +18,26 @@ import {
 	type AudioCaptureStatus
 } from './audio_capture.svelte.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { ChunkUpload } from './chunk_upload.ts';
 import { DiskfilePath, type DiskfileDirectoryPath } from './diskfile_types.ts';
 import type { FileBytesFetch } from './file_bytes.ts';
 import { to_recording_name } from './recording_helpers.ts';
 
-export const RecorderJson = CellJson.extend({
-	/**
-	 * How often the browser hands over a chunk to upload, in milliseconds —
-	 * the most audio a crashed tab can lose.
-	 */
-	chunk_duration: z.number().int().positive().default(3000),
-	/** Whether a recording is transcribed, by the local model, once it's saved. */
-	transcribe_on_stop: z.boolean().default(true)
-}).meta({ cell_class_name: 'Recorder' });
-export type RecorderJson = z.infer<typeof RecorderJson>;
-export type RecorderJsonInput = z.input<typeof RecorderJson>;
+export const RecorderJson = cell_json_schema(
+	{
+		/**
+		 * How often the browser hands over a chunk to upload, in milliseconds —
+		 * the most audio a crashed tab can lose.
+		 */
+		chunk_duration: with_default(pipe(number, safe_integer, min_value(1)), 3000),
+		/** Whether a recording is transcribed, by the local model, once it's saved. */
+		transcribe_on_stop: with_default(boolean, true)
+	},
+	'Recorder'
+);
+export type RecorderJson = Infer<typeof RecorderJson>;
+export type RecorderJsonInput = InferInput<typeof RecorderJson>;
 
 /**
  * The browser the recorder runs in — the microphone, and `fetch` for the
@@ -139,7 +152,8 @@ export class Recorder extends Cell<typeof RecorderJson> {
 			const sink = await this.capture.start({
 				chunk_duration: this.chunk_duration,
 				open_sink: async (format, fail) => {
-					const path = DiskfilePath.parse(
+					const path = parse_or_throw(
+						DiskfilePath,
 						`${dir}${to_recording_name(new Date(this.#deps.now()))}.${format.extension}`
 					);
 					const upload: ChunkUpload = new ChunkUpload({

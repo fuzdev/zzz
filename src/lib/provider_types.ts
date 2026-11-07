@@ -1,40 +1,53 @@
-import { z } from 'zod';
+import {
+	array,
+	literal,
+	nullable,
+	number,
+	object,
+	one_of,
+	optional,
+	string,
+	unknown,
+	variant,
+	with_default_fn,
+	type Infer
+} from '@fuzdev/fuz_schema/schema.ts';
 
 /** See `app.providers.names` for the available names at runtime. */
-export const ProviderName = z.enum(['claude', 'chatgpt', 'gemini']);
-export type ProviderName = z.infer<typeof ProviderName>;
+export const ProviderName = one_of(['claude', 'chatgpt', 'gemini']);
+export type ProviderName = Infer<typeof ProviderName>;
 
 // Provider-specific data schemas
-export const ProviderDataClaude = z.strictObject({
-	type: z.literal('claude'),
-	value: z.any().optional().default({})
+export const ProviderDataClaude = object({
+	type: literal('claude'),
+	value: with_default_fn(unknown, () => ({}))
 });
-export type ProviderDataClaude = z.infer<typeof ProviderDataClaude>;
+export type ProviderDataClaude = Infer<typeof ProviderDataClaude>;
 
-export const ProviderDataChatgpt = z.strictObject({
-	type: z.literal('chatgpt'),
-	value: z.any().optional().default({})
+export const ProviderDataChatgpt = object({
+	type: literal('chatgpt'),
+	value: with_default_fn(unknown, () => ({}))
 });
-export type ProviderDataChatgpt = z.infer<typeof ProviderDataChatgpt>;
+export type ProviderDataChatgpt = Infer<typeof ProviderDataChatgpt>;
 
-export const ProviderDataGemini = z.strictObject({
-	type: z.literal('gemini'),
-	value: z.strictObject({
-		text: z.string(),
-		candidates: z.array(z.any()).nullable().optional(),
-		function_calls: z.array(z.any()).nullable().optional(),
-		prompt_feedback: z.any().nullable().optional(),
-		usage_metadata: z.any().nullable().optional()
+export const ProviderDataGemini = object({
+	type: literal('gemini'),
+	value: object({
+		text: string,
+		candidates: optional(nullable(array(unknown))),
+		function_calls: optional(nullable(array(unknown))),
+		prompt_feedback: optional(nullable(unknown)),
+		usage_metadata: optional(nullable(unknown))
 	})
 });
-export type ProviderDataGemini = z.infer<typeof ProviderDataGemini>;
+export type ProviderDataGemini = Infer<typeof ProviderDataGemini>;
 
-export const ProviderDataSchema = z.discriminatedUnion('type', [
+export const ProviderDataSchema = variant('type', [
 	ProviderDataClaude,
 	ProviderDataChatgpt,
 	ProviderDataGemini
 ]);
-export type ProviderData = z.infer<typeof ProviderDataSchema>;
+export type ProviderData = Infer<typeof ProviderDataSchema>;
 
 export const PROVIDER_ERROR_NEEDS_API_KEY = 'needs API key';
 
@@ -56,17 +69,17 @@ export const to_provider_http_status = (data: unknown): number | null => {
 	return reason === PROVIDER_ERROR_REASON_HTTP && typeof status === 'number' ? status : null;
 };
 
-export const ProviderStatus = z.discriminatedUnion('available', [
-	z.strictObject({
-		name: z.string(),
-		available: z.literal(true),
-		checked_at: z.number()
+export const ProviderStatus = variant('available', [
+	object({
+		name: string,
+		available: literal(true),
+		checked_at: number
 	}),
-	z.strictObject({
-		name: z.string(),
-		available: z.literal(false),
-		error: z.string(),
-		checked_at: z.number()
+	object({
+		name: string,
+		available: literal(false),
+		error: string,
+		checked_at: number
 	})
 ]);
-export type ProviderStatus = z.infer<typeof ProviderStatus>;
+export type ProviderStatus = Infer<typeof ProviderStatus>;

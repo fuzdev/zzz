@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert, vi } from 'vitest';
 
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
@@ -15,8 +16,8 @@ import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
  * editor for it isn't the file's content.
  */
 
-const PATH = DiskfilePath.parse('/w/big.bin');
-const SOURCE_DIR = SerializableDisknode.shape.source_dir.parse('/w/');
+const PATH = parse_or_throw(DiskfilePath, '/w/big.bin');
+const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
 let app: Frontend;
 let update: ReturnType<typeof vi.fn>;
@@ -82,7 +83,7 @@ describe('a file whose content was not loaded', () => {
 	test('`Diskfiles.update` still writes loaded and unknown files', async () => {
 		add_diskfile('');
 		assert.isTrue((await app.diskfiles.update(PATH, 'x')).ok);
-		assert.isTrue((await app.diskfiles.update(DiskfilePath.parse('/w/new.txt'), 'y')).ok);
+		assert.isTrue((await app.diskfiles.update(parse_or_throw(DiskfilePath, '/w/new.txt'), 'y')).ok);
 		assert.strictEqual(update.mock.calls.length, 2);
 	});
 

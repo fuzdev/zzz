@@ -1,12 +1,12 @@
 // @slop Claude Sonnet 3.7
 
-import { z } from 'zod';
+import { boolean, with_default, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { DiskfileTabs } from './diskfile_tabs.svelte.ts';
 import type { DiskfileTab } from './diskfile_tab.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
 /**
  * A tab close waiting on the user — see `DiskfilesEditor.request_close_tab`.
@@ -20,11 +20,14 @@ export interface DiskfileTabCloseRequest {
 	cancelled: boolean;
 }
 
-export const DiskfilesEditorJson = CellJson.extend({
-	show_sort_controls: z.boolean().default(false)
-}).meta({ cell_class_name: 'DiskfilesEditor' });
-export type DiskfilesEditorJson = z.infer<typeof DiskfilesEditorJson>;
-export type DiskfilesEditorJsonInput = z.input<typeof DiskfilesEditorJson>;
+export const DiskfilesEditorJson = cell_json_schema(
+	{
+		show_sort_controls: with_default(boolean, false)
+	},
+	'DiskfilesEditor'
+);
+export type DiskfilesEditorJson = Infer<typeof DiskfilesEditorJson>;
+export type DiskfilesEditorJsonInput = InferInput<typeof DiskfilesEditorJson>;
 
 export type DiskfilesEditorOptions = CellOptions<typeof DiskfilesEditorJson>;
 

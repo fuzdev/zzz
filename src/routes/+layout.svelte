@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 	import 'virtual:fuz.css';
 	// declare every theme variable the imported stylesheets read (fuz_css also scans `.css`
 	// imports; these keep the set explicit) - first fuz_code's `theme.css` and
@@ -129,8 +130,8 @@
 		// detached from the effect that runs this — the app outlives it (see `create_detached`)
 		const new_app = create_detached(() => {
 			const created = new App({ on_unauthenticated: () => void recheck_session() });
-			created.add_providers(zzz_config.providers.map((p) => ProviderJson.parse(p))); // TODO handle errors
-			created.models.add_many(zzz_config.models.map((m) => ModelJson.parse(m))); // TODO handle errors
+			created.add_providers(zzz_config.providers.map((p) => parse_or_throw(ProviderJson, p))); // TODO handle errors
+			created.models.add_many(zzz_config.models.map((m) => parse_or_throw(ModelJson, m))); // TODO handle errors
 			return created;
 		});
 

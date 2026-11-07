@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -18,7 +19,7 @@ beforeEach(() => {
 
 describe('Workspace', () => {
 	test('initializes with path and defaults', () => {
-		const path = DiskfileDirectoryPath.parse('/some/dir/');
+		const path = parse_or_throw(DiskfileDirectoryPath, '/some/dir/');
 		const workspace = new Workspace({ app, json: { path } });
 
 		assert.isDefined(workspace.id);
@@ -28,7 +29,7 @@ describe('Workspace', () => {
 	});
 
 	test('initializes with provided json', () => {
-		const path = DiskfileDirectoryPath.parse('/home/user/project/');
+		const path = parse_or_throw(DiskfileDirectoryPath, '/home/user/project/');
 		const workspace = new Workspace({
 			app,
 			json: {
@@ -44,13 +45,13 @@ describe('Workspace', () => {
 	});
 
 	test('registers in cell registry', () => {
-		const path = DiskfileDirectoryPath.parse('/some/dir/');
+		const path = parse_or_throw(DiskfileDirectoryPath, '/some/dir/');
 		const workspace = new Workspace({ app, json: { path } });
 		assert.ok(app.cell_registry.all.has(workspace.id));
 	});
 
 	test('serializes to json', () => {
-		const path = DiskfileDirectoryPath.parse('/some/dir/');
+		const path = parse_or_throw(DiskfileDirectoryPath, '/some/dir/');
 		const workspace = new Workspace({
 			app,
 			json: { path, name: 'dir', opened_at: '2026-01-01T00:00:00.000Z' }
@@ -74,7 +75,7 @@ describe('Workspaces', () => {
 
 	test('add creates a workspace and auto-activates first', () => {
 		const workspaces = new Workspaces({ app });
-		const path = DiskfileDirectoryPath.parse('/home/user/project/');
+		const path = parse_or_throw(DiskfileDirectoryPath, '/home/user/project/');
 
 		const workspace = workspaces.add({
 			path,
@@ -89,7 +90,7 @@ describe('Workspaces', () => {
 
 	test('add deduplicates by path', () => {
 		const workspaces = new Workspaces({ app });
-		const path = DiskfileDirectoryPath.parse('/home/user/project/');
+		const path = parse_or_throw(DiskfileDirectoryPath, '/home/user/project/');
 
 		const first = workspaces.add({ path, name: 'project', opened_at: '2026-01-01T00:00:00.000Z' });
 		const second = workspaces.add({ path, name: 'project', opened_at: '2026-02-01T00:00:00.000Z' });
@@ -100,8 +101,8 @@ describe('Workspaces', () => {
 
 	test('add multiple workspaces', () => {
 		const workspaces = new Workspaces({ app });
-		const path_a = DiskfileDirectoryPath.parse('/path/a/');
-		const path_b = DiskfileDirectoryPath.parse('/path/b/');
+		const path_a = parse_or_throw(DiskfileDirectoryPath, '/path/a/');
+		const path_b = parse_or_throw(DiskfileDirectoryPath, '/path/b/');
 
 		const a = workspaces.add({ path: path_a, name: 'a', opened_at: '' });
 		const b = workspaces.add({ path: path_b, name: 'b', opened_at: '' });
@@ -114,8 +115,8 @@ describe('Workspaces', () => {
 
 	test('remove deletes workspace and updates active_id', () => {
 		const workspaces = new Workspaces({ app });
-		const path_a = DiskfileDirectoryPath.parse('/path/a/');
-		const path_b = DiskfileDirectoryPath.parse('/path/b/');
+		const path_a = parse_or_throw(DiskfileDirectoryPath, '/path/a/');
+		const path_b = parse_or_throw(DiskfileDirectoryPath, '/path/b/');
 
 		const a = workspaces.add({ path: path_a, name: 'a', opened_at: '' });
 		workspaces.add({ path: path_b, name: 'b', opened_at: '' });
@@ -132,7 +133,7 @@ describe('Workspaces', () => {
 
 	test('remove last workspace sets active_id to null', () => {
 		const workspaces = new Workspaces({ app });
-		const path = DiskfileDirectoryPath.parse('/path/only/');
+		const path = parse_or_throw(DiskfileDirectoryPath, '/path/only/');
 
 		const only = workspaces.add({ path, name: 'only', opened_at: '' });
 		workspaces.remove(only.id);
@@ -143,7 +144,7 @@ describe('Workspaces', () => {
 
 	test('get_by_path returns workspace or undefined', () => {
 		const workspaces = new Workspaces({ app });
-		const path = DiskfileDirectoryPath.parse('/home/user/project/');
+		const path = parse_or_throw(DiskfileDirectoryPath, '/home/user/project/');
 
 		assert.strictEqual(workspaces.get_by_path(path), undefined);
 
@@ -153,8 +154,8 @@ describe('Workspaces', () => {
 
 	test('activate changes active workspace', () => {
 		const workspaces = new Workspaces({ app });
-		const path_a = DiskfileDirectoryPath.parse('/path/a/');
-		const path_b = DiskfileDirectoryPath.parse('/path/b/');
+		const path_a = parse_or_throw(DiskfileDirectoryPath, '/path/a/');
+		const path_b = parse_or_throw(DiskfileDirectoryPath, '/path/b/');
 
 		const a = workspaces.add({ path: path_a, name: 'a', opened_at: '' });
 		const b = workspaces.add({ path: path_b, name: 'b', opened_at: '' });
@@ -168,7 +169,7 @@ describe('Workspaces', () => {
 
 	test('activate with unknown id is a no-op', () => {
 		const workspaces = new Workspaces({ app });
-		const path = DiskfileDirectoryPath.parse('/path/a/');
+		const path = parse_or_throw(DiskfileDirectoryPath, '/path/a/');
 
 		const a = workspaces.add({ path, name: 'a', opened_at: '' });
 		workspaces.activate('nonexistent-id' as Uuid);
@@ -177,8 +178,8 @@ describe('Workspaces', () => {
 	});
 
 	test('initializes from json with items', () => {
-		const path_a = DiskfileDirectoryPath.parse('/path/a/');
-		const path_b = DiskfileDirectoryPath.parse('/path/b/');
+		const path_a = parse_or_throw(DiskfileDirectoryPath, '/path/a/');
+		const path_b = parse_or_throw(DiskfileDirectoryPath, '/path/b/');
 
 		const workspaces = new Workspaces({
 			app,

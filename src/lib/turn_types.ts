@@ -1,29 +1,42 @@
-import { z } from 'zod';
-import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
+import {
+	array,
+	boolean,
+	nullable,
+	optional,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { CompletionRequest, CompletionResponse, CompletionRole } from './completion_types.ts';
 
 /**
  * Turn is a conversation turn (like A2A Message) that references one or more parts (content entities).
  * Turns contextualize reusable content within conversations, providing role, metadata, and ordering.
  */
-export const TurnJson = CellJson.extend({
-	part_ids: z.array(ZodUuid).default(() => []),
-	thread_id: ZodUuid.nullable().optional(),
-	role: CompletionRole,
-	request: CompletionRequest.optional(),
-	response: CompletionResponse.optional(),
-	/**
-	 * Set when a completion fails. The turn keeps any content that streamed in
-	 * before the failure; errored turns are excluded from later completion history.
-	 */
-	error_message: z.string().optional(),
-	/**
-	 * Set when the user stops a completion before it finished. The turn keeps any
-	 * partial content that streamed in, and stops showing as pending.
-	 */
-	cancelled: z.boolean().default(false)
-}).meta({ cell_class_name: 'Turn' });
-export type TurnJson = z.infer<typeof TurnJson>;
-export type TurnJsonInput = z.input<typeof TurnJson>;
+export const TurnJson = cell_json_schema(
+	{
+		part_ids: with_default_fn(array(Uuid), () => []),
+		thread_id: optional(nullable(Uuid)),
+		role: CompletionRole,
+		request: optional(CompletionRequest),
+		response: optional(CompletionResponse),
+		/**
+		 * Set when a completion fails. The turn keeps any content that streamed in
+		 * before the failure; errored turns are excluded from later completion history.
+		 */
+		error_message: optional(string),
+		/**
+		 * Set when the user stops a completion before it finished. The turn keeps any
+		 * partial content that streamed in, and stops showing as pending.
+		 */
+		cancelled: with_default(boolean, false)
+	},
+	'Turn'
+);
+export type TurnJson = Infer<typeof TurnJson>;
+export type TurnJsonInput = InferInput<typeof TurnJson>;

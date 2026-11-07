@@ -19,6 +19,19 @@ const TRUNCATION_STOP_REASONS: Record<
 	gemini: { MAX_TOKENS: 'max_tokens' }
 };
 
+/**
+ * Reads the value at `keys` through nested objects and arrays, or `undefined`
+ * where something on the way isn't one. Provider payloads are `unknown`.
+ */
+const read_path = (value: unknown, ...keys: Array<string | number>): unknown => {
+	let v = value;
+	for (const key of keys) {
+		if (typeof v !== 'object' || v === null) return undefined;
+		v = (v as Record<string | number, unknown>)[key];
+	}
+	return v;
+};
+
 // TODO hacky, shouldn't exist
 /**
  * Extracts the text content from a completion response.
@@ -33,7 +46,7 @@ export const to_completion_response_text = (
 
 	switch (data.type) {
 		case 'claude': {
-			const content: unknown = data.value?.content;
+			const content = read_path(data.value, 'content');
 			if (!Array.isArray(content)) return null;
 			let text = '';
 			for (const block of content) {
@@ -43,8 +56,10 @@ export const to_completion_response_text = (
 			}
 			return text || null;
 		}
-		case 'chatgpt':
-			return data.value?.choices?.[0]?.message?.content || null;
+		case 'chatgpt': {
+			const content = read_path(data.value, 'choices', 0, 'message', 'content');
+			return (typeof content === 'string' && content) || null;
+		}
 		case 'gemini':
 			return data.value.text || null;
 		default:
@@ -69,13 +84,13 @@ export const to_completion_stop_reason = (
 	let reason: unknown;
 	switch (data.type) {
 		case 'claude':
-			reason = data.value?.stop_reason;
+			reason = read_path(data.value, 'stop_reason');
 			break;
 		case 'chatgpt':
-			reason = data.value?.choices?.[0]?.finish_reason;
+			reason = read_path(data.value, 'choices', 0, 'finish_reason');
 			break;
 		case 'gemini':
-			reason = data.value.candidates?.[0]?.finishReason;
+			reason = read_path(data.value.candidates, 0, 'finishReason');
 			break;
 	}
 	return typeof reason === 'string' ? reason : null;

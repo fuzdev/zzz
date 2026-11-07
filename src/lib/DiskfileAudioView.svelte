@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
 	import { icon_delete, icon_file, icon_stop } from '@fuzdev/fuz_ui/icons.ts';
@@ -93,11 +94,11 @@
 		copy_error = null;
 		const path = to_transcript_copy_path(
 			diskfile.path,
-			(p) => diskfiles.get_by_path(DiskfilePath.parse(p)) !== undefined
+			(p) => diskfiles.get_by_path(parse_or_throw(DiskfilePath, p)) !== undefined
 		);
 		try {
 			await diskfiles.create_file_at(
-				DiskfilePath.parse(path),
+				parse_or_throw(DiskfilePath, path),
 				transcript_to_text(selected.transcript)
 			);
 		} catch (error) {

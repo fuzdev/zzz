@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -17,10 +18,10 @@ import type { SessionLoadData } from '#lib/action_specs.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
-const ZZZ_DIR = SerializableDisknode.shape.source_dir.parse('/zzz/');
-const PATH_A = DiskfilePath.parse('/zzz/a.txt');
-const PATH_B = DiskfilePath.parse('/zzz/b.txt');
-const PATH_C = DiskfilePath.parse('/zzz/c.txt');
+const ZZZ_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/zzz/');
+const PATH_A = parse_or_throw(DiskfilePath, '/zzz/a.txt');
+const PATH_B = parse_or_throw(DiskfilePath, '/zzz/b.txt');
+const PATH_C = parse_or_throw(DiskfilePath, '/zzz/c.txt');
 
 const create_disknode = (path: DiskfilePath, contents: string | null): SerializableDisknode => ({
 	id: path,

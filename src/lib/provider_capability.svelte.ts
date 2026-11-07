@@ -62,6 +62,6 @@ export class ProviderCapability implements Capability<null | undefined> {
 			console.log(`[capabilities] skipping ${this.name} check: backend unavailable`);
 			return;
 		}
-		await this.app.api.provider_load_status({ provider_name: this.name });
+		await this.app.api.provider_load_status({ provider_name: this.name, reload: true });
 	}
 }

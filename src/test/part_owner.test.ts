@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach } from 'vitest';
 import { flushSync, mount, unmount, type Component } from 'svelte';
 
@@ -124,7 +125,7 @@ describe('part remove label', () => {
 	test('an unnamed file part is labeled by its path', () => {
 		const prompt = app.prompts.add();
 		const part = prompt.add_part(
-			Part.create(app, { type: 'diskfile', path: DiskfilePath.parse('/ws/a.txt') })
+			Part.create(app, { type: 'diskfile', path: parse_or_throw(DiskfilePath, '/ws/a.txt') })
 		);
 
 		const target = render(PartView, { part, owner: prompt });

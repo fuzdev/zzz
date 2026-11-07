@@ -1,23 +1,34 @@
-import { z } from 'zod';
+import {
+	array,
+	boolean,
+	nullable,
+	one_of,
+	parse_or_throw,
+	string,
+	with_default,
+	with_default_fn,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
-import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-import { ZodUuid, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
+import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
+import { get_datetime_now } from './datetime.ts';
 import type { Model } from './model.svelte.ts';
 import { to_completion_response_text } from './response_helpers.ts';
 import { Thread } from './thread.svelte.ts';
 import type { Turn } from './turn.svelte.ts';
 import { reorder_list } from './list_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 import { get_unique_name, estimate_token_count } from './helpers.ts';
 import { CompletionRequest } from './completion_types.ts';
 import { render_message_with_role } from './thread_helpers.ts';
 import { to_provider_http_status } from './provider_types.ts';
 
-const ChatViewMode = z.enum(['simple', 'multi']).default('simple');
-export type ChatViewMode = z.infer<typeof ChatViewMode>;
+const ChatViewMode = with_default(one_of(['simple', 'multi']), 'simple');
+export type ChatViewMode = Infer<typeof ChatViewMode>;
 
 /** How many failed auto-naming attempts a chat makes before giving up. */
 export const CHAT_AUTONAME_ATTEMPTS_MAX = 3;
@@ -55,20 +66,23 @@ const is_permanent_autoname_error = (error: { code: number; data?: unknown }): b
 	return status !== null && AUTONAME_PERMANENT_HTTP_STATUSES.has(status);
 };
 
-export const ChatJson = CellJson.extend({
-	name: z.string().default(''),
-	/**
-	 * Whether auto-naming may still set `name` — true while it's a default
-	 * name, cleared once auto-naming succeeds or the user renames the chat.
-	 */
-	autoname: z.boolean().default(true),
-	thread_ids: z.array(ZodUuid).default(() => []),
-	main_input: z.string().default(''),
-	view_mode: ChatViewMode,
-	selected_thread_id: ZodUuid.nullable().default(null)
-}).meta({ cell_class_name: 'Chat' });
-export type ChatJson = z.infer<typeof ChatJson>;
-export type ChatJsonInput = z.input<typeof ChatJson>;
+export const ChatJson = cell_json_schema(
+	{
+		name: with_default(string, ''),
+		/**
+		 * Whether auto-naming may still set `name` — true while it's a default
+		 * name, cleared once auto-naming succeeds or the user renames the chat.
+		 */
+		autoname: with_default(boolean, true),
+		thread_ids: with_default_fn(array(Uuid), () => []),
+		main_input: with_default(string, ''),
+		view_mode: ChatViewMode,
+		selected_thread_id: with_default(nullable(Uuid), null)
+	},
+	'Chat'
+);
+export type ChatJson = Infer<typeof ChatJson>;
+export type ChatJsonInput = InferInput<typeof ChatJson>;
 
 export interface ChatOptions extends CellOptions<typeof ChatJson> {}
 
@@ -327,7 +341,7 @@ export class Chat extends Cell<typeof ChatJson> {
 			const name_response = await this.app.api.completion_create({
 				// TODO @many should parsing be automatic, so the types change to schema input types? makes sense yeah?
 				// I think perf is maybe the main reason not to do this?
-				completion_request: CompletionRequest.parse({
+				completion_request: parse_or_throw(CompletionRequest, {
 					provider_name: namerbot_model.provider_name,
 					model: this.app.bots.namerbot,
 					prompt: p

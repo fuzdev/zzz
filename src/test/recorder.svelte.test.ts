@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, assert, beforeEach, afterEach, vi } from 'vitest';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
@@ -12,7 +13,7 @@ import { FakeMediaRecorder, FakeStream } from './audio_capture_test_helpers.ts';
 import { FakeByteRoutes } from './byte_route_test_helpers.ts';
 import { flush, result_error, result_ok } from './terminal_test_helpers.ts';
 
-const DIR = DiskfileDirectoryPath.parse('/w/');
+const DIR = parse_or_throw(DiskfileDirectoryPath, '/w/');
 /** 2026-01-31 09:05:07 local time. */
 const STARTED = new Date(2026, 0, 31, 9, 5, 7).getTime();
 const PATH = '/w/2026-01-31_09-05-07.webm';

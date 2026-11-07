@@ -59,7 +59,7 @@ struct CompletionRequestInput {
     completion_messages: Option<Vec<provider::CompletionMessage>>,
 }
 
-/// Twin of `ProgressMeta` — a `z.looseObject`, so unknown keys pass.
+/// Twin of `ProgressMeta` — a loose object, so unknown keys pass.
 #[derive(Deserialize)]
 struct ProgressMeta {
     #[serde(

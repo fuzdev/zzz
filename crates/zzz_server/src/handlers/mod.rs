@@ -187,7 +187,7 @@ pub fn caller_account_id(ctx: &ActionContext<'_>) -> Result<Uuid, JsonrpcError> 
 }
 
 /// Deserialize an optional field that, when present, must not be `null` —
-/// zod's `.optional()`. Pair with `#[serde(default)]` for the absent case.
+/// a TS `optional` entry. Pair with `#[serde(default)]` for the absent case.
 /// (`parse_strict_params` refuses a top-level `null`; this covers the
 /// nested fields its walk doesn't reach.)
 pub(crate) fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>

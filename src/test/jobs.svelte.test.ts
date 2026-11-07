@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, assert, beforeEach, afterEach } from 'vitest';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -9,8 +10,8 @@ import type { JobSnapshot } from '#lib/job_types.ts';
 
 import { result_ok } from './terminal_test_helpers.ts';
 
-const PATH_A = DiskfilePath.parse('/w/a.webm');
-const PATH_B = DiskfilePath.parse('/w/b.webm');
+const PATH_A = parse_or_throw(DiskfilePath, '/w/a.webm');
+const PATH_B = parse_or_throw(DiskfilePath, '/w/b.webm');
 
 const create_snapshot = (overrides: Partial<JobSnapshot> = {}): JobSnapshot => ({
 	job_id: create_uuid(),
@@ -66,7 +67,7 @@ describe('Jobs.receive_changed', () => {
 			started_at: 2000,
 			ended_at: 5500,
 			progress: 1,
-			output_path: DiskfilePath.parse('/w/a.webm.base.en.transcript.json')
+			output_path: parse_or_throw(DiskfilePath, '/w/a.webm.base.en.transcript.json')
 		});
 		assert.ok(job.finished);
 		assert.ok(!job.cancellable);
@@ -106,7 +107,10 @@ describe('Jobs.latest_for_input', () => {
 		app.jobs.receive_changed(create_snapshot({ queued_at: 2, status: 'cancelled' }));
 		app.jobs.receive_changed(create_snapshot({ queued_at: 9, input_path: PATH_B }));
 		assert.strictEqual(app.jobs.latest_for_input(PATH_A), newest);
-		assert.strictEqual(app.jobs.latest_for_input(DiskfilePath.parse('/w/none.webm')), undefined);
+		assert.strictEqual(
+			app.jobs.latest_for_input(parse_or_throw(DiskfilePath, '/w/none.webm')),
+			undefined
+		);
 	});
 });
 

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { array, with_default_fn, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -7,13 +7,16 @@ import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import { get_unique_name } from './helpers.ts';
-import { CellJson } from './cell_types.ts';
+import { cell_json_schema } from './cell_types.ts';
 
-export const PartsJson = CellJson.extend({
-	items: z.array(PartJson).default(() => [])
-}).meta({ cell_class_name: 'Parts' });
-export type PartsJson = z.infer<typeof PartsJson>;
-export type PartsJsonInput = z.input<typeof PartsJson>;
+export const PartsJson = cell_json_schema(
+	{
+		items: with_default_fn(array(PartJson), () => [])
+	},
+	'Parts'
+);
+export type PartsJson = Infer<typeof PartsJson>;
+export type PartsJsonInput = InferInput<typeof PartsJson>;
 
 export interface PartsOptions extends CellOptions<typeof PartsJson> {}
 
@@ -47,7 +50,6 @@ export class Parts extends Cell<typeof PartsJson> {
 		this.init();
 	}
 
-	// TODO this json type is incorrect, it should have `json.type` as required
 	/**
 	 * Add a part to the collection.
 	 */
