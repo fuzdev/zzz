@@ -19,7 +19,7 @@
 	{#if text}
 		{@render text()}
 	{:else}
-		<small class="width_xl4 text-align:right">{value}%</small>
+		<small class="width:var(--space_xl4) text-align:right">{value}%</small>
 	{/if}
 	<div
 		class="flex:1 shade_50 border_radius_xs overflow:hidden"
