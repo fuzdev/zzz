@@ -7,10 +7,9 @@
  * **Surface source — inline TS.** `create_rust_spine_consumer_surface_spec`
  * builds the declared surface from `all_action_specs` plus the routes the Rust
  * spine mounts for every consumer (`/health`, `fuz_auth::account_router`,
- * signup, bootstrap, one `/api/rpc` endpoint with the standard actions), and
- * `host_gate: true` declares the `host_validation` layer `zzz_server` turns
- * on. No backend dependency: handlers are never invoked across the process
- * boundary.
+ * signup, bootstrap, one `/api/rpc` endpoint with the standard actions, and
+ * the `host` layer the spine mounts by default). No backend dependency:
+ * handlers are never invoked across the process boundary.
  *
  * @module
  */
@@ -37,8 +36,7 @@ const session_options = { ...fuz_session_config, cookie_name: handle.config.cook
 
 const surface_options = {
 	session_options,
-	domain_action_specs: all_action_specs,
-	host_gate: true
+	domain_action_specs: all_action_specs
 };
 
 // Built-in roles only — zzz registers no app-defined roles.

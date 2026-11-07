@@ -19,15 +19,13 @@ use fuz_actions::server::{BrowserGateSpec, StartupError};
 
 /// `zzzd`'s browser gates.
 ///
-/// The spine's allowlist var, the `Host` check on (the DNS-rebinding gate a
-/// loopback daemon needs, see [`crate::router`]), and what a page the allowlist
-/// trusts reaches here, for the wildcard origin text
+/// The spine's defaults (its allowlist var, the `Host` check on — the
+/// DNS-rebinding gate a loopback daemon needs, see [`crate::router`]), plus
+/// what a page the allowlist trusts reaches here, for the wildcard origin text
 /// (`fuz_http::origin_wildcard_warning`).
 pub const ZZZ_BROWSER_GATES: BrowserGateSpec = BrowserGateSpec {
-    allowed_origins_var: ALLOWED_ORIGINS_VAR,
-    host_gate: true,
     origin_wildcard_note: Some("On zzzd that includes terminals and file writes."),
-    port_wildcard_note: None,
+    ..BrowserGateSpec::DEFAULT
 };
 
 /// The allowlist from `FUZ_ALLOWED_ORIGINS`' value (`None` when unset).
