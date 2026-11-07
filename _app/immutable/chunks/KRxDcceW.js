@@ -1,0 +1,1 @@
+import"./DUbCpK4d.js";import{c as e,d as t,l as n}from"./D-3iQ8Lu.js";import{c as r,n as i,t as a}from"./AP1CzsNe.js";var o=i,s=class extends a{constructor(i){let a={...i};a.http_rpc_url||=n,a.socket_url||=t,a.api_url||=e,a.cell_classes||=r,super(a)}};export{o as n,s as t};
