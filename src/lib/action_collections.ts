@@ -2,7 +2,7 @@
 
 import type { ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 import * as specs from './action_specs.ts';
-import type { Infer } from '@fuzdev/fuz_schema/schema.ts';
+import type { Infer, InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import type {
 	ActionEventLocalCallData,
 	ActionEventRemoteNotificationData,
@@ -148,6 +148,43 @@ export interface ActionInputs {
 	workspace_close: Infer<typeof specs.workspace_close_action_spec.input>;
 	workspace_list: Infer<typeof specs.workspace_list_action_spec.input>;
 	workspace_changed: Infer<typeof specs.workspace_changed_action_spec.input>;
+}
+
+/**
+ * Action inputs as a caller passes them, indexed by method name:
+ * each input schema's input type, before the parse.
+ */
+export interface ActionCallInputs {
+	heartbeat: InferInput<typeof specs.heartbeat_action_spec.input>;
+	cancel: InferInput<typeof specs.cancel_action_spec.input>;
+	'peer/ping': InferInput<typeof specs.peer_ping_action_spec.input>;
+	ping: InferInput<typeof specs.ping_action_spec.input>;
+	session_load: InferInput<typeof specs.session_load_action_spec.input>;
+	filer_change: InferInput<typeof specs.filer_change_action_spec.input>;
+	diskfile_update: InferInput<typeof specs.diskfile_update_action_spec.input>;
+	diskfile_create: InferInput<typeof specs.diskfile_create_action_spec.input>;
+	diskfile_delete: InferInput<typeof specs.diskfile_delete_action_spec.input>;
+	directory_create: InferInput<typeof specs.directory_create_action_spec.input>;
+	media_finalize: InferInput<typeof specs.media_finalize_action_spec.input>;
+	transcription_create: InferInput<typeof specs.transcription_create_action_spec.input>;
+	transcription_progress: InferInput<typeof specs.transcription_progress_action_spec.input>;
+	job_cancel: InferInput<typeof specs.job_cancel_action_spec.input>;
+	job_changed: InferInput<typeof specs.job_changed_action_spec.input>;
+	completion_create: InferInput<typeof specs.completion_create_action_spec.input>;
+	completion_progress: InferInput<typeof specs.completion_progress_action_spec.input>;
+	toggle_main_menu: InferInput<typeof specs.toggle_main_menu_action_spec.input>;
+	provider_load_status: InferInput<typeof specs.provider_load_status_action_spec.input>;
+	terminal_create: InferInput<typeof specs.terminal_create_action_spec.input>;
+	terminal_data_send: InferInput<typeof specs.terminal_data_send_action_spec.input>;
+	terminal_data: InferInput<typeof specs.terminal_data_action_spec.input>;
+	terminal_ack: InferInput<typeof specs.terminal_ack_action_spec.input>;
+	terminal_resize: InferInput<typeof specs.terminal_resize_action_spec.input>;
+	terminal_close: InferInput<typeof specs.terminal_close_action_spec.input>;
+	terminal_exited: InferInput<typeof specs.terminal_exited_action_spec.input>;
+	workspace_open: InferInput<typeof specs.workspace_open_action_spec.input>;
+	workspace_close: InferInput<typeof specs.workspace_close_action_spec.input>;
+	workspace_list: InferInput<typeof specs.workspace_list_action_spec.input>;
+	workspace_changed: InferInput<typeof specs.workspace_changed_action_spec.input>;
 }
 
 /**
