@@ -2,7 +2,8 @@ import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import {
 	icon_capability,
@@ -113,6 +114,6 @@ export const goto_unless_current = async (
  */
 export const parse_url_param_uuid = (value: unknown): Uuid | null => {
 	if (!value) return null;
-	const parsed = Uuid.safeParse(value);
+	const parsed = ZodUuid.safeParse(value);
 	return parsed.success ? parsed.data : null;
 };

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Space, SpaceJson, type SpaceJsonInput } from './space.svelte.ts';
@@ -13,8 +14,8 @@ export const SCRATCHPAD_NAME = 'scratchpad';
 
 export const SpacesJson = CellJson.extend({
 	items: z.array(SpaceJson).default(() => []),
-	active_id: Uuid.nullable().default(null),
-	scratchpad_id: Uuid.nullable().default(null).meta({
+	active_id: ZodUuid.nullable().default(null),
+	scratchpad_id: ZodUuid.nullable().default(null).meta({
 		description:
 			"The scratchpad, the default space, which can't be removed. Renaming it keeps it the scratchpad."
 	})

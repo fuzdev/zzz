@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { test, beforeEach, describe, assert } from 'vitest';
-import { create_uuid, type Uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuidWithDefault } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { DISKFILE_TABS_CLOSED_MAX, DiskfileTabs } from '#lib/diskfile_tabs.svelte.ts';
 import { DiskfileTab } from '#lib/diskfile_tab.svelte.ts';
@@ -10,11 +11,11 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Test data
-const TEST_DISKFILE_ID_1 = UuidWithDefault.parse(undefined);
-const TEST_DISKFILE_ID_2 = UuidWithDefault.parse(undefined);
-const TEST_DISKFILE_ID_3 = UuidWithDefault.parse(undefined);
-const TEST_DISKFILE_ID_4 = UuidWithDefault.parse(undefined);
-const TEST_DISKFILE_ID_5 = UuidWithDefault.parse(undefined);
+const TEST_DISKFILE_ID_1 = ZodUuidWithDefault.parse(undefined);
+const TEST_DISKFILE_ID_2 = ZodUuidWithDefault.parse(undefined);
+const TEST_DISKFILE_ID_3 = ZodUuidWithDefault.parse(undefined);
+const TEST_DISKFILE_ID_4 = ZodUuidWithDefault.parse(undefined);
+const TEST_DISKFILE_ID_5 = ZodUuidWithDefault.parse(undefined);
 
 describe('DiskfileTabs', () => {
 	// Test suite
@@ -805,7 +806,7 @@ describe('DiskfileTabs', () => {
 
 			// Create more tabs than the max history size
 			for (let i = 0; i < 5; i++) {
-				const uuid = UuidWithDefault.parse(undefined);
+				const uuid = ZodUuidWithDefault.parse(undefined);
 				tabs.open_diskfile(uuid);
 			}
 
@@ -1025,7 +1026,7 @@ describe('DiskfileTabs', () => {
 			tabs.open_diskfile(TEST_DISKFILE_ID_1);
 
 			// Try to navigate to a non-existent tab
-			const result = tabs.navigate_to_tab(UuidWithDefault.parse(undefined));
+			const result = tabs.navigate_to_tab(ZodUuidWithDefault.parse(undefined));
 
 			// Should return null without changing selection
 			assert.isNull(result);
@@ -1108,7 +1109,7 @@ describe('DiskfileTabs', () => {
 
 			for (let i = 0; i < tab_count; i++) {
 				// Create proper UUIDs that will pass validation - these are real UUIDs
-				const uuid = UuidWithDefault.parse(undefined);
+				const uuid = ZodUuidWithDefault.parse(undefined);
 				const tab = tabs.open_diskfile(uuid);
 				created_tabs.push(tab);
 			}

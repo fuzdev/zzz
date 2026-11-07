@@ -2,11 +2,8 @@
 
 import { test, vi, beforeEach, describe, assert } from 'vitest';
 import { z } from 'zod';
-import {
-	create_uuid,
-	get_datetime_now,
-	UuidWithDefault
-} from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuidWithDefault, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { CellJson } from '#lib/cell_types.ts';
@@ -180,7 +177,7 @@ describe('Cell registry lifecycle', () => {
 describe('Cell id handling', () => {
 	// Define a test schema with required type field for these tests
 	const IdTestSchema = z.object({
-		id: UuidWithDefault,
+		id: ZodUuidWithDefault,
 		type: z.literal('test').default('test'),
 		content: z.string().default(''),
 		version: z.number().default(0)

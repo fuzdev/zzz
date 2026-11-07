@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DatetimeNow } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { DatetimeNow } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { ProviderName, ProviderDataSchema } from './provider_types.ts';
 

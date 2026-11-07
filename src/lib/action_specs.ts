@@ -11,7 +11,7 @@ import { heartbeat_action_spec } from '@fuzdev/fuz_app/actions/heartbeat.ts';
 import { cancel_action_spec } from '@fuzdev/fuz_app/actions/cancel.ts';
 import { peer_ping_action_spec } from '@fuzdev/fuz_app/actions/peer_ping.ts';
 import { protocol_action_specs } from '@fuzdev/fuz_app/actions/protocol.ts';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 // Re-export so codegen (which builds `import * as specs from './action_specs'`)
 // resolves `specs.heartbeat_action_spec` / `specs.cancel_action_spec` /
@@ -47,7 +47,7 @@ import { WorkspaceInfoJson, WorkspaceWatchStatus } from './workspace.svelte.ts';
  * with the originating request. `looseObject` lets transports tack on
  * additional MCP-style metadata without a schema bump.
  */
-export const ProgressMeta = z.looseObject({ progressToken: Uuid.optional() });
+export const ProgressMeta = z.looseObject({ progressToken: ZodUuid.optional() });
 export type ProgressMeta = z.infer<typeof ProgressMeta>;
 
 // -- Input/output schemas ---------------------------------------------------
@@ -86,14 +86,14 @@ export const SessionLoadData = z.strictObject({
 	provider_status: z.array(ProviderStatus),
 	workspaces: z.array(WorkspaceInfoJson),
 	/** Backend ids of the caller's live terminals. */
-	terminal_ids: z.array(Uuid),
+	terminal_ids: z.array(ZodUuid),
 	/** The caller's jobs, oldest first — running, queued, and recent finished ones. */
 	jobs: z.array(JobSnapshot),
 	/**
 	 * Minted each time the backend starts — a different id than the last
 	 * snapshot's means it restarted, losing its terminals and runtime workspaces.
 	 */
-	server_instance_id: Uuid
+	server_instance_id: ZodUuid
 });
 export type SessionLoadData = z.infer<typeof SessionLoadData>;
 
@@ -160,13 +160,13 @@ export type TranscriptionCreateInput = z.infer<typeof TranscriptionCreateInput>;
 
 /** Output for `transcription_create`: the job that will do it. */
 export const TranscriptionCreateOutput = z.strictObject({
-	job_id: Uuid
+	job_id: ZodUuid
 });
 export type TranscriptionCreateOutput = z.infer<typeof TranscriptionCreateOutput>;
 
 /** Input for the `transcription_progress` notification. */
 export const TranscriptionProgressInput = z.strictObject({
-	job_id: Uuid,
+	job_id: ZodUuid,
 	/** The segments decoded since the last notification. */
 	segments: z.array(TranscriptSegment)
 });
@@ -174,7 +174,7 @@ export type TranscriptionProgressInput = z.infer<typeof TranscriptionProgressInp
 
 /** Input for `job_cancel`. */
 export const JobCancelInput = z.strictObject({
-	job_id: Uuid
+	job_id: ZodUuid
 });
 export type JobCancelInput = z.infer<typeof JobCancelInput>;
 
@@ -259,26 +259,26 @@ export const TerminalCreateInput = z.strictObject({
 	args: z.array(z.string()).default(() => []),
 	/** The working directory — absolute, never resolved against the daemon's own. */
 	cwd: z.string().refine(is_path_absolute, { message: 'cwd must be an absolute path' }).optional(),
-	preset_id: Uuid.optional()
+	preset_id: ZodUuid.optional()
 });
 export type TerminalCreateInput = z.infer<typeof TerminalCreateInput>;
 
 /** Output for `terminal_create`. */
 export const TerminalCreateOutput = z.strictObject({
-	terminal_id: Uuid
+	terminal_id: ZodUuid
 });
 export type TerminalCreateOutput = z.infer<typeof TerminalCreateOutput>;
 
 /** Input for `terminal_data_send`. */
 export const TerminalDataSendInput = z.strictObject({
-	terminal_id: Uuid,
+	terminal_id: ZodUuid,
 	data: z.string()
 });
 export type TerminalDataSendInput = z.infer<typeof TerminalDataSendInput>;
 
 /** Input for `terminal_data` (backend → frontend stdout/stderr stream). */
 export const TerminalDataInput = z.strictObject({
-	terminal_id: Uuid,
+	terminal_id: ZodUuid,
 	data: z.string(),
 	/**
 	 * Bytes of output (`data` as UTF-8) the terminal has sent in total, this
@@ -290,7 +290,7 @@ export type TerminalDataInput = z.infer<typeof TerminalDataInput>;
 
 /** Input for `terminal_ack`. */
 export const TerminalAckInput = z.strictObject({
-	terminal_id: Uuid,
+	terminal_id: ZodUuid,
 	/**
 	 * The `sent_bytes` of the last `terminal_data` the client finished with.
 	 * Cumulative: the backend keeps the highest it has seen from a connection.
@@ -308,7 +308,7 @@ export type TerminalDimension = z.infer<typeof TerminalDimension>;
 
 /** Input for `terminal_resize`. */
 export const TerminalResizeInput = z.strictObject({
-	terminal_id: Uuid,
+	terminal_id: ZodUuid,
 	cols: TerminalDimension,
 	rows: TerminalDimension
 });
@@ -320,7 +320,7 @@ export type TerminalCloseSignal = z.infer<typeof TerminalCloseSignal>;
 
 /** Input for `terminal_close`. */
 export const TerminalCloseInput = z.strictObject({
-	terminal_id: Uuid,
+	terminal_id: ZodUuid,
 	signal: TerminalCloseSignal.default('SIGTERM').optional()
 });
 export type TerminalCloseInput = z.infer<typeof TerminalCloseInput>;
@@ -333,7 +333,7 @@ export type TerminalCloseOutput = z.infer<typeof TerminalCloseOutput>;
 
 /** Input for `terminal_exited`. */
 export const TerminalExitedInput = z.strictObject({
-	terminal_id: Uuid,
+	terminal_id: ZodUuid,
 	exit_code: z.number().nullable()
 });
 export type TerminalExitedInput = z.infer<typeof TerminalExitedInput>;

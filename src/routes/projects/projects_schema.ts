@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { CellJson } from '#lib/cell_types.ts';
 
@@ -20,7 +20,7 @@ export type PageJson = z.infer<typeof PageJson>;
 export type PageJsonInput = z.input<typeof PageJson>;
 
 export const RepoCheckout = z.strictObject({
-	id: Uuid,
+	id: ZodUuid,
 	path: z.string(),
 	label: z.string(),
 	tags: z.array(z.string())
@@ -46,9 +46,9 @@ export type ProjectJsonInput = z.input<typeof ProjectJson>;
 
 export const ProjectsJson = CellJson.extend({
 	projects: z.array(ProjectJson).default(() => []),
-	current_project_id: Uuid.nullable().default(null),
-	current_page_id: Uuid.nullable().default(null),
-	current_domain_id: Uuid.nullable().default(null),
+	current_project_id: ZodUuid.nullable().default(null),
+	current_page_id: ZodUuid.nullable().default(null),
+	current_domain_id: ZodUuid.nullable().default(null),
 	expanded_projects: z.record(z.string(), z.boolean()).default({}),
 	previewing: z.boolean().default(false)
 }).meta({ cell_class_name: 'Projects' });

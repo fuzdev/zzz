@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { AsyncStatus } from '@fuzdev/fuz_util/async.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
-import { get_datetime_now, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import type { Model } from './model.svelte.ts';
 import { to_completion_response_text } from './response_helpers.ts';
@@ -61,10 +62,10 @@ export const ChatJson = CellJson.extend({
 	 * name, cleared once auto-naming succeeds or the user renames the chat.
 	 */
 	autoname: z.boolean().default(true),
-	thread_ids: z.array(Uuid).default(() => []),
+	thread_ids: z.array(ZodUuid).default(() => []),
 	main_input: z.string().default(''),
 	view_mode: ChatViewMode,
-	selected_thread_id: Uuid.nullable().default(null)
+	selected_thread_id: ZodUuid.nullable().default(null)
 }).meta({ cell_class_name: 'Chat' });
 export type ChatJson = z.infer<typeof ChatJson>;
 export type ChatJsonInput = z.input<typeof ChatJson>;

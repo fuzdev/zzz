@@ -2,7 +2,8 @@
 
 import { z } from 'zod';
 import { SvelteMap } from 'svelte/reactivity';
-import { create_uuid, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
@@ -12,11 +13,11 @@ import { CellJson } from './cell_types.ts';
 import { create_map_by_property } from './iterable_helpers.ts';
 
 export const DiskfileTabsJson = CellJson.extend({
-	selected_tab_id: Uuid.nullable().default(null),
-	preview_tab_id: Uuid.nullable().default(null),
-	tab_order: z.array(Uuid).default(() => []),
+	selected_tab_id: ZodUuid.nullable().default(null),
+	preview_tab_id: ZodUuid.nullable().default(null),
+	tab_order: z.array(ZodUuid).default(() => []),
 	/** Tracks recently accessed tabs for better tab selection when closing tabs. */
-	recent_tab_ids: z.array(Uuid).default(() => []),
+	recent_tab_ids: z.array(ZodUuid).default(() => []),
 	/** Maximum number of tabs to track in access history. */
 	max_tab_history: z.number().default(20)
 }).meta({ cell_class_name: 'DiskfileTabs' });

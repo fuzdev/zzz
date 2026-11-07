@@ -1,7 +1,8 @@
 // @slop Claude Opus 4
 
 import { goto } from '$app/navigation';
-import { get_datetime_now, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { Page } from './page.svelte.ts';
 import type { Projects } from './projects.svelte.ts';

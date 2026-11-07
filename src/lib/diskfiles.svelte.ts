@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { untrack } from 'svelte';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { get_datetime_now, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import { jsonrpc_error_messages } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
@@ -38,7 +39,7 @@ import type { ActionInputs, ActionOutputs } from './action_collections.ts';
 
 export const DiskfilesJson = CellJson.extend({
 	diskfiles: z.array(DiskfileJson).default(() => []),
-	selected_file_id: Uuid.nullable().default(null)
+	selected_file_id: ZodUuid.nullable().default(null)
 }).meta({ cell_class_name: 'Diskfiles' });
 export type DiskfilesJson = z.infer<typeof DiskfilesJson>;
 export type DiskfilesJsonInput = z.input<typeof DiskfilesJson>;

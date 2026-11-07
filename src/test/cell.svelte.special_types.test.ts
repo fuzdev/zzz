@@ -2,12 +2,8 @@
 
 import { test, vi, beforeEach, assert } from 'vitest';
 import { z } from 'zod';
-import {
-	create_uuid,
-	DatetimeNow,
-	get_datetime_now,
-	UuidWithDefault
-} from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuidWithDefault, DatetimeNow, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { CellJson, type SchemaKeys } from '#lib/cell_types.ts';
@@ -116,7 +112,7 @@ test('Cell.encode_property uses $state.snapshot for values', () => {
 
 test('Cell handles special types like Map and Set', () => {
 	const CollectionsSchema = z.object({
-		id: UuidWithDefault,
+		id: ZodUuidWithDefault,
 		created: DatetimeNow,
 		updated: z.string().nullable().default(null),
 		// Test map collection

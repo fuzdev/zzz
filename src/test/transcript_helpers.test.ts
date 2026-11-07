@@ -1,5 +1,5 @@
 import { test, describe, assert } from 'vitest';
-import { FactHashSchema } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodFactHashSchema } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import {
 	find_transcripts,
@@ -21,7 +21,7 @@ const create_transcript = (
 	version: 1,
 	source: {
 		name: source_name,
-		blake3: FactHashSchema.parse(`blake3:${'ab'.repeat(32)}`),
+		blake3: ZodFactHashSchema.parse(`blake3:${'ab'.repeat(32)}`),
 		size: 10,
 		duration_ms: 1000
 	},
@@ -29,7 +29,7 @@ const create_transcript = (
 		backend: 'whisper_cpp',
 		version: '1.9.4',
 		model,
-		model_blake3: FactHashSchema.parse(`blake3:${'cd'.repeat(32)}`),
+		model_blake3: ZodFactHashSchema.parse(`blake3:${'cd'.repeat(32)}`),
 		params: { language: 'auto' }
 	},
 	language: 'en',

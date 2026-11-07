@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { DiskfilePath } from './diskfile_types.ts';
 
@@ -16,7 +16,7 @@ export type JobStatus = z.infer<typeof JobStatus>;
  * the request that started it. Twin of the backend's `JobSnapshot`.
  */
 export const JobSnapshot = z.strictObject({
-	job_id: Uuid,
+	job_id: ZodUuid,
 	kind: JobKind,
 	status: JobStatus,
 	/** How far along a running job is, 0 to 1 — `null` when unknown. */

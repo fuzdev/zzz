@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -35,12 +36,12 @@ export const TerminalJson = CellJson.extend({
 	args: z.array(z.string()).default(() => []),
 	cwd: z.string().optional(),
 	/** The backend PTY's id — changes on restart, `null` until `terminal_create` resolves. */
-	terminal_id: Uuid.nullable().default(null),
+	terminal_id: ZodUuid.nullable().default(null),
 	status: TerminalStatus.default('starting'),
 	exit_code: z.number().nullable().default(null),
 	/** The last failure to spawn, close, or send to the terminal. */
 	error_message: z.string().nullable().default(null),
-	preset_id: Uuid.nullable().default(null)
+	preset_id: ZodUuid.nullable().default(null)
 }).meta({ cell_class_name: 'Terminal' });
 export type TerminalJson = z.infer<typeof TerminalJson>;
 export type TerminalJsonInput = z.input<typeof TerminalJson>;

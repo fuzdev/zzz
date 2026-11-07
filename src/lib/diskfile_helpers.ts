@@ -1,5 +1,6 @@
 import { ensure_end } from '@fuzdev/fuz_util/string.ts';
-import { create_uuid, Datetime, DatetimeNow, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { Datetime, DatetimeNow } from '@fuzdev/fuz_app/zod_schemas.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 

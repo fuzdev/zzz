@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { zod_get_field_schema, zod_get_schema_keys } from '@fuzdev/fuz_app/zod.ts';
-import { type Datetime, get_datetime_now, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Datetime, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import type { Frontend } from './frontend.svelte.ts';
 import {

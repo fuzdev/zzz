@@ -2,12 +2,8 @@
 
 import { test, vi, beforeEach, assert } from 'vitest';
 import { z } from 'zod';
-import {
-	create_uuid,
-	DatetimeNow,
-	get_datetime_now,
-	UuidWithDefault
-} from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuidWithDefault, DatetimeNow, get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { CellJson } from '#lib/cell_types.ts';
@@ -69,7 +65,7 @@ test('Cell allows schema keys with no properties if a decoder is provided', () =
 
 test('Cell supports virtual properties with custom handling', () => {
 	const VirtualHandlerSchema = z.object({
-		id: UuidWithDefault,
+		id: ZodUuidWithDefault,
 		created: DatetimeNow,
 		updated: z.string().nullable().default(null),
 		visible_prop: z.string(),

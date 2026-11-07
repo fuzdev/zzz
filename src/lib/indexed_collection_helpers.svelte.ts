@@ -2,7 +2,7 @@
 
 import { SvelteMap } from 'svelte/reactivity';
 import { z } from 'zod';
-import { UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuidWithDefault } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import type { IndexDefinition, IndexedCollection } from './indexed_collection.svelte.ts';
 
@@ -14,7 +14,7 @@ import type { IndexDefinition, IndexedCollection } from './indexed_collection.sv
  * Interface for objects that can be stored in an `IndexedCollection`.
  */
 export const IndexedItem = z.strictObject({
-	id: UuidWithDefault
+	id: ZodUuidWithDefault
 });
 export type IndexedItem = z.infer<typeof IndexedItem>;
 

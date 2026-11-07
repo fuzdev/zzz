@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuidWithDefault } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 export const XmlAttributeKey = z.string().trim().min(1);
 export type XmlAttributeKey = z.infer<typeof XmlAttributeKey>;
@@ -16,7 +16,7 @@ export type XmlAttributeValueWithDefault = z.infer<typeof XmlAttributeValueWithD
 // TODO is strict desired?
 // Default attribute applies defaults and includes id with default
 export const XmlAttributeWithDefaults = z.strictObject({
-	id: UuidWithDefault,
+	id: ZodUuidWithDefault,
 	key: XmlAttributeKeyWithDefault,
 	value: XmlAttributeValueWithDefault
 });

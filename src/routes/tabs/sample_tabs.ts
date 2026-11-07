@@ -1,4 +1,5 @@
-import { create_uuid, get_datetime_now } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import type { BrowserTabJson } from './browser_tab.svelte.ts';
 

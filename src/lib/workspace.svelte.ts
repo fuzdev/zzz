@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Datetime } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import type { Datetime } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { CellJson } from './cell_types.ts';

@@ -16,7 +16,7 @@ import { bound_action_event_data } from './action_helpers.ts';
 
 // TODO this isnt in action_types.ts because of circular dependencies, idk what pattern is best yet
 export const ActionJson = CellJson.extend({
-	method: ActionMethod,
+	method: z.enum(ActionMethod.def),
 	// `ActionEventData` is a fuz_schema schema, which zod can't embed, so it's bridged
 	action_event_data: z.custom<ActionEventData>((v) => is(ActionEventData, v)).optional()
 }).meta({ cell_class_name: 'Action' });

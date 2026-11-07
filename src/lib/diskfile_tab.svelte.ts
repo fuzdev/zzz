@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { CellJson } from './cell_types.ts';
@@ -7,7 +8,7 @@ import type { Diskfile } from './diskfile.svelte.ts';
 import type { DiskfileTabs } from './diskfile_tabs.svelte.ts';
 
 export const DiskfileTabJson = CellJson.extend({
-	diskfile_id: Uuid
+	diskfile_id: ZodUuid
 }).meta({ cell_class_name: 'DiskfileTab' });
 export type DiskfileTabJson = z.infer<typeof DiskfileTabJson>;
 export type DiskfileTabJsonInput = z.input<typeof DiskfileTabJson>;

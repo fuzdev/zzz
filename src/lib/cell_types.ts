@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DatetimeNow, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuidWithDefault, DatetimeNow } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 /**
  * Get keys from a Zod schema object.
@@ -15,7 +15,7 @@ export type SchemaValue<T extends z.ZodType, K extends SchemaKeys<T>> = z.infer<
  * Base schema that defines common properties for all cells.
  */
 export const CellJson = z.strictObject({
-	id: UuidWithDefault,
+	id: ZodUuidWithDefault,
 	created: DatetimeNow,
 	/** Required and initially equal to `created`. */
 	updated: DatetimeNow

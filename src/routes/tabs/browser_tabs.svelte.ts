@@ -1,7 +1,8 @@
 // @slop Claude Opus 4
 
 import { z } from 'zod';
-import { create_uuid, get_datetime_now } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { get_datetime_now } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { Cell, type CellOptions } from '#lib/cell.svelte.ts';
 import { IndexedCollection } from '#lib/indexed_collection.svelte.ts';

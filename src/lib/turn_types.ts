@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { ZodUuid } from '@fuzdev/fuz_app/zod_schemas.ts';
 
 import { CellJson } from './cell_types.ts';
 import { CompletionRequest, CompletionResponse, CompletionRole } from './completion_types.ts';
@@ -9,8 +9,8 @@ import { CompletionRequest, CompletionResponse, CompletionRole } from './complet
  * Turns contextualize reusable content within conversations, providing role, metadata, and ordering.
  */
 export const TurnJson = CellJson.extend({
-	part_ids: z.array(Uuid).default(() => []),
-	thread_id: Uuid.nullable().optional(),
+	part_ids: z.array(ZodUuid).default(() => []),
+	thread_id: ZodUuid.nullable().optional(),
 	role: CompletionRole,
 	request: CompletionRequest.optional(),
 	response: CompletionResponse.optional(),
