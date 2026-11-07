@@ -69,7 +69,7 @@ import type { Result } from '@fuzdev/fuz_util/result.ts';
 
 import type { FrontendActionsApi } from './action_metatypes.ts';
 import type { FrontendActionHandlers } from './frontend_action_types.ts';
-import { ActionOutputs } from './action_collections.ts';
+import type { ActionOutputs } from './action_collections.ts';
 import { all_action_specs } from './action_specs.ts';
 import { create_frontend_action_handlers } from './frontend_action_handlers.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';

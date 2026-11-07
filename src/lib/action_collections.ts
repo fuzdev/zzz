@@ -81,42 +81,9 @@ export type ActionSpecs = {
 export const action_specs: Array<ActionSpecUnion> = Object.values(ActionSpecs);
 
 /**
- * Action parameter schemas indexed by method name.
- * These represent the input data for each action,
- * e.g. JSON-RPC request/notification params and local call arguments.
+ * Action inputs indexed by method name, as parsed: each input schema's output
+ * type, e.g. JSON-RPC request/notification params and local call arguments.
  */
-export const ActionInputs = {
-	heartbeat: specs.heartbeat_action_spec.input,
-	cancel: specs.cancel_action_spec.input,
-	'peer/ping': specs.peer_ping_action_spec.input,
-	ping: specs.ping_action_spec.input,
-	session_load: specs.session_load_action_spec.input,
-	filer_change: specs.filer_change_action_spec.input,
-	diskfile_update: specs.diskfile_update_action_spec.input,
-	diskfile_create: specs.diskfile_create_action_spec.input,
-	diskfile_delete: specs.diskfile_delete_action_spec.input,
-	directory_create: specs.directory_create_action_spec.input,
-	media_finalize: specs.media_finalize_action_spec.input,
-	transcription_create: specs.transcription_create_action_spec.input,
-	transcription_progress: specs.transcription_progress_action_spec.input,
-	job_cancel: specs.job_cancel_action_spec.input,
-	job_changed: specs.job_changed_action_spec.input,
-	completion_create: specs.completion_create_action_spec.input,
-	completion_progress: specs.completion_progress_action_spec.input,
-	toggle_main_menu: specs.toggle_main_menu_action_spec.input,
-	provider_load_status: specs.provider_load_status_action_spec.input,
-	terminal_create: specs.terminal_create_action_spec.input,
-	terminal_data_send: specs.terminal_data_send_action_spec.input,
-	terminal_data: specs.terminal_data_action_spec.input,
-	terminal_ack: specs.terminal_ack_action_spec.input,
-	terminal_resize: specs.terminal_resize_action_spec.input,
-	terminal_close: specs.terminal_close_action_spec.input,
-	terminal_exited: specs.terminal_exited_action_spec.input,
-	workspace_open: specs.workspace_open_action_spec.input,
-	workspace_close: specs.workspace_close_action_spec.input,
-	workspace_list: specs.workspace_list_action_spec.input,
-	workspace_changed: specs.workspace_changed_action_spec.input
-} as const;
 export interface ActionInputs {
 	heartbeat: Infer<typeof specs.heartbeat_action_spec.input>;
 	cancel: Infer<typeof specs.cancel_action_spec.input>;
@@ -188,42 +155,9 @@ export interface ActionCallInputs {
 }
 
 /**
- * Action result schemas indexed by method name.
- * These represent the output data for each action,
+ * Action outputs indexed by method name: each output schema's output type,
  * e.g. JSON-RPC response results and local call return values.
  */
-export const ActionOutputs = {
-	heartbeat: specs.heartbeat_action_spec.output,
-	cancel: specs.cancel_action_spec.output,
-	'peer/ping': specs.peer_ping_action_spec.output,
-	ping: specs.ping_action_spec.output,
-	session_load: specs.session_load_action_spec.output,
-	filer_change: specs.filer_change_action_spec.output,
-	diskfile_update: specs.diskfile_update_action_spec.output,
-	diskfile_create: specs.diskfile_create_action_spec.output,
-	diskfile_delete: specs.diskfile_delete_action_spec.output,
-	directory_create: specs.directory_create_action_spec.output,
-	media_finalize: specs.media_finalize_action_spec.output,
-	transcription_create: specs.transcription_create_action_spec.output,
-	transcription_progress: specs.transcription_progress_action_spec.output,
-	job_cancel: specs.job_cancel_action_spec.output,
-	job_changed: specs.job_changed_action_spec.output,
-	completion_create: specs.completion_create_action_spec.output,
-	completion_progress: specs.completion_progress_action_spec.output,
-	toggle_main_menu: specs.toggle_main_menu_action_spec.output,
-	provider_load_status: specs.provider_load_status_action_spec.output,
-	terminal_create: specs.terminal_create_action_spec.output,
-	terminal_data_send: specs.terminal_data_send_action_spec.output,
-	terminal_data: specs.terminal_data_action_spec.output,
-	terminal_ack: specs.terminal_ack_action_spec.output,
-	terminal_resize: specs.terminal_resize_action_spec.output,
-	terminal_close: specs.terminal_close_action_spec.output,
-	terminal_exited: specs.terminal_exited_action_spec.output,
-	workspace_open: specs.workspace_open_action_spec.output,
-	workspace_close: specs.workspace_close_action_spec.output,
-	workspace_list: specs.workspace_list_action_spec.output,
-	workspace_changed: specs.workspace_changed_action_spec.output
-} as const;
 export interface ActionOutputs {
 	heartbeat: Infer<typeof specs.heartbeat_action_spec.output>;
 	cancel: Infer<typeof specs.cancel_action_spec.output>;
