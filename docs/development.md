@@ -144,6 +144,26 @@ more accurate; the `.en` ones are English-only.
 The Vulkan build needs the Vulkan headers, a GLSL compiler, and the SPIR-V
 headers (`libvulkan-dev`, `glslc`, and `spirv-headers` on Debian).
 
+### Terminal emulator module
+
+The `fuz_terminal` library (`src/lib/fuz_terminal/`) binds
+[libghostty-vt](https://lib.ghostty.org/vt/), Ghostty's terminal emulator,
+compiled to WebAssembly. The terminal UI still renders with xterm.js, so the
+app runs without the module. Building it needs [Zig](https://ziglang.org/download/)
+0.17 (any 0.17.x release — libghostty-vt 1.0 builds with no other minor),
+plus `curl`, `tar`, and `sha256sum`:
+
+```bash
+cargo xtask ghostty-vt   # → static/fuz_terminal/ghostty-vt.wasm (gitignored)
+```
+
+It downloads the pinned release's source and dependency tarballs into
+`target/ghostty-vt/`, refuses either unless its sha256 matches the pin,
+then builds offline from them (a couple of minutes cold). A later run
+reuses the verified tarballs, and when the installed module is current for
+the pinned version, feature set, and Zig, it's a no-op. `cargo clean`
+removes the cache, not the module.
+
 ## Commands
 
 - `gro check` — All checks (typecheck, test, gen, format, lint)
@@ -161,7 +181,8 @@ user manages it; don't start it yourself.
 
 Three task runners, by role: **`gro`** for checks, build, gen, and tests
 (`gro check` / `build` / `gen` / `test`); **`cargo xtask`** for the dev server and
-env setup (`dev`, `dev-setup`, `prod-setup`); **`npm run`** for the package
+env setup (`dev`, `dev-setup`, `prod-setup`) and the terminal emulator's wasm
+module (`ghostty-vt`); **`npm run`** for the package
 scripts, notably `test:cross` (the Rust cross-process suites). `npm run dev`,
 `npm run dev:setup`, and `npm run prod:setup` alias the matching `cargo xtask`
 commands.

@@ -11,6 +11,10 @@ target/
 .fuz/
 .zzz/
 
+# Built by `cargo xtask ghostty-vt`, never committed
+/static/fuz_terminal/ghostty-vt.wasm
+/static/fuz_terminal/.*.tmp
+
 # Env
 .env*
 !.env.example

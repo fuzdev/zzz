@@ -8,15 +8,19 @@
 //!   Both fill `SECRET_FUZ_COOKIE_KEYS` with a freshly generated key.
 //! - `check-release` — the dep-graph audit (sanity check #2 of the test-binary
 //!   pattern); its work is delegated to [`fuz_audit::run_check_release_cli`].
+//! - `ghostty-vt` — build libghostty-vt's WebAssembly module from pinned,
+//!   verified sources for the `fuz_terminal` library, installing it at
+//!   [`ghostty_vt::MODULE_PATH`]; a no-op when the installed one is current
+//!   (see [`ghostty_vt`]).
 //! - no args / `help` / `-h` / `--help` — print the full subcommand list.
 //! - any other subcommand, or any argument after one — error to stderr +
 //!   usage, non-zero exit.
 //!
 //! Every subcommand runs from the workspace root (see [`workspace_root`]), so
 //! `cargo xtask` works the same from any directory in the checkout: the env
-//! files, `node_modules/.bin/vite`, `target/debug/zzzd`, and the relative
-//! paths inside `.env.development` (which the children resolve against their
-//! working directory) all mean the workspace's.
+//! files, `node_modules/.bin/vite`, `target/debug/zzzd`, `target/ghostty-vt/`,
+//! `static/`, and the relative paths inside `.env.development` (which the
+//! children resolve against their working directory) all mean the workspace's.
 //!
 //! Dispatch and the usage text live here (not in `fuz_audit`) so bare
 //! `cargo xtask` advertises zzz's own commands, not just `check-release`.
@@ -27,6 +31,7 @@
 // identically (xtask stays std-only; no shared crate needed for one file).
 #[path = "../../zzz/src/env_file.rs"]
 mod env_file;
+mod ghostty_vt;
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -93,6 +98,7 @@ fn main() -> ExitCode {
         Subcommand::ProdSetup => finish(setup_env(".env.production", ".env.production.example")),
         // The dep-graph audit is fuz_audit's; everything else (dispatch, help) is ours.
         Subcommand::CheckRelease => fuz_audit::run_check_release_cli(),
+        Subcommand::GhosttyVt => finish(ghostty_vt::run()),
         Subcommand::Help => ExitCode::SUCCESS,
     }
 }
@@ -104,6 +110,7 @@ enum Subcommand {
     DevSetup,
     ProdSetup,
     CheckRelease,
+    GhosttyVt,
     Help,
 }
 
@@ -119,6 +126,7 @@ fn parse_args(args: &[String]) -> std::result::Result<Subcommand, String> {
         "dev-setup" => Subcommand::DevSetup,
         "prod-setup" => Subcommand::ProdSetup,
         "check-release" => Subcommand::CheckRelease,
+        "ghostty-vt" => Subcommand::GhosttyVt,
         "help" | "-h" | "--help" => Subcommand::Help,
         other => return Err(format!("unknown subcommand `{other}`")),
     };
@@ -177,7 +185,10 @@ commands:
   dev            build zzz_server (port {DEV_BACKEND_PORT}), then run it alongside the Vite frontend
   dev-setup      create {DEV_ENV_FILE} from {DEV_ENV_FILE}.example
   prod-setup     create .env.production from .env.production.example
-  check-release  audit that no production binary depends on fuz_testing / fuz_audit"
+  check-release  audit that no production binary depends on fuz_testing / fuz_audit
+  ghostty-vt     build the libghostty-vt {ghostty_vt_version} wasm module (needs Zig 0.17) into {ghostty_vt_module}",
+        ghostty_vt_version = ghostty_vt::VERSION,
+        ghostty_vt_module = ghostty_vt::MODULE_PATH
     );
 }
 
@@ -791,6 +802,7 @@ mod tests {
             ("dev-setup", Subcommand::DevSetup),
             ("prod-setup", Subcommand::ProdSetup),
             ("check-release", Subcommand::CheckRelease),
+            ("ghostty-vt", Subcommand::GhosttyVt),
             ("help", Subcommand::Help),
             ("-h", Subcommand::Help),
             ("--help", Subcommand::Help),
@@ -804,6 +816,10 @@ mod tests {
         assert_eq!(
             parse_args(&args(&["check-release", "x"])),
             Err("`check-release` takes no arguments, got `x`".to_owned())
+        );
+        assert_eq!(
+            parse_args(&args(&["ghostty-vt", "--force"])),
+            Err("`ghostty-vt` takes no arguments, got `--force`".to_owned())
         );
         assert_eq!(
             parse_args(&args(&["deploy", "x"])),
