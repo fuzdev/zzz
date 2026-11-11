@@ -202,6 +202,7 @@ export const GHOSTTY_MANIFEST_FIXTURE: Record<string, any> = {
 				PWD_CHANGED: 26,
 				SCROLLBACK_MAX_BYTES: 28,
 				SCROLLBACK_MAX_LINES: 29,
+				RENDER_HOLD: 42,
 				MAX_VALUE: 2147483647
 			},
 			keys: {
@@ -228,6 +229,10 @@ export const GHOSTTY_MANIFEST_FIXTURE: Record<string, any> = {
 				SCROLLBACK_MAX_LINES: {
 					direction: 'in',
 					type: 'u32'
+				},
+				RENDER_HOLD: {
+					direction: 'in',
+					type: 'GhosttyTerminalRenderHoldFn'
 				}
 			}
 		},
@@ -300,6 +305,72 @@ export const GHOSTTY_MANIFEST_FIXTURE: Record<string, any> = {
 				{ type: 'pointer', elem: 'opaque', const: false, nullable: true }
 			],
 			return: { type: 'void' }
+		},
+		GhosttyTerminalRenderHoldFn: {
+			kind: 'callback',
+			size: 4,
+			align: 4,
+			params: [
+				{ type: 'GhosttyTerminal' },
+				{ type: 'pointer', elem: 'opaque', const: false, nullable: true },
+				{ type: 'bool' }
+			],
+			return: { type: 'void' }
+		},
+		GhosttyCell: {
+			kind: 'packed',
+			size: 8,
+			align: 8,
+			underlying: 'u64',
+			bits: {
+				content_tag: { lsb: 0, width: 2, type: 'GhosttyCellContentTag' },
+				content: {
+					lsb: 2,
+					width: 24,
+					kind: 'union',
+					tag: 'content_tag',
+					arms: {
+						CODEPOINT: {
+							kind: 'packed',
+							width: 24,
+							bits: { codepoint: { lsb: 0, width: 21, type: 'u21' } }
+						},
+						CODEPOINT_GRAPHEME: {
+							kind: 'packed',
+							width: 24,
+							bits: { codepoint: { lsb: 0, width: 21, type: 'u21' } }
+						},
+						BG_COLOR_PALETTE: {
+							kind: 'packed',
+							width: 24,
+							bits: { index: { lsb: 0, width: 8, type: 'GhosttyColorPaletteIndex' } }
+						},
+						BG_COLOR_RGB: {
+							kind: 'packed',
+							width: 24,
+							bits: {
+								r: { lsb: 0, width: 8, type: 'u8' },
+								g: { lsb: 8, width: 8, type: 'u8' },
+								b: { lsb: 16, width: 8, type: 'u8' }
+							}
+						}
+					}
+				},
+				style_id: { lsb: 26, width: 16, type: 'GhosttyStyleId' },
+				wide: { lsb: 42, width: 2, type: 'GhosttyCellWide' },
+				protected: { lsb: 44, width: 1, type: 'bool' },
+				hyperlink: { lsb: 45, width: 1, type: 'bool' },
+				semantic_content: { lsb: 46, width: 2, type: 'GhosttyCellSemanticContent' }
+			}
+		},
+		GhosttyStyleColorValue: {
+			kind: 'union',
+			size: 3,
+			align: 1,
+			fields: {
+				palette: { offset: 0, size: 1, type: 'GhosttyColorPaletteIndex' },
+				rgb: { offset: 0, size: 3, type: 'GhosttyColorRgb' }
+			}
 		},
 		GhosttyFormatterOption: {
 			kind: 'enum',

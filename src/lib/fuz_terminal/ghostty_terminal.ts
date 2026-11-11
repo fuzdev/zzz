@@ -182,15 +182,30 @@ interface EffectFailure {
 const utf8_encoder = new TextEncoder();
 
 /**
+ * A handle made over a terminal that must be freed before it — a
+ * `GhosttyRenderState`. `GhosttyTerminal.dispose` disposes each one still
+ * registered, first, so the order can't be got wrong.
+ *
+ * @internal
+ */
+export interface GhosttyTerminalDependent {
+	/** Free the handle; total and idempotent, and it unregisters itself. */
+	dispose(): void;
+}
+
+/**
  * A terminal emulator instance in a `GhosttyVt` module's memory.
  *
  * Its handle and the formatter it reads text through are freed by
  * `GhosttyTerminal.dispose`, which nothing does for you: call it when the
  * terminal is done with. Any use after that throws `GhosttyDisposedError`.
  *
+ * Handles made over it — a `GhosttyRenderState` — are disposed with it, first.
+ *
  * Effect handlers (`GhosttyTerminal.set_effect`) run inside `write` and
  * `resize`, while the library is mid-parse. From a handler the terminal can
- * be read (`format_text`, `disposed`), but `write`, `resize`, `dispose`, and
+ * be read (`format_text`, `disposed`, a `GhosttyRenderState` of it updated),
+ * but `write`, `resize`, `dispose`, and
  * `set_effect` throw `GhosttyReentrancyError`: the library isn't reentrant
  * and doesn't check. A handler's exception is caught inside the callback,
  * the call finishes, and the call then throws a `GhosttyEffectError` with the
@@ -226,6 +241,8 @@ export class GhosttyTerminal {
 	#busy = false;
 	/** The first handler exception of the running call, and how many threw. */
 	#effect_failure: EffectFailure | null = null;
+	/** The handles made over this terminal, disposed before it. */
+	readonly #dependents: Set<GhosttyTerminalDependent> = new Set();
 
 	/**
 	 * Create a terminal.
@@ -473,9 +490,52 @@ export class GhosttyTerminal {
 	}
 
 	/**
+	 * The terminal handle, for a handle of the binding's own made over this
+	 * terminal (`GhosttyRenderState`) to pass to the library. Never keep it:
+	 * it's freed with the terminal.
+	 *
+	 * @param caller - the method asking, for the errors
+	 * @throws GhosttyPoisonedError once the instance is poisoned (`GhosttyVt.poisoned`)
+	 * @throws GhosttyDisposedError after `dispose`
+	 * @internal
+	 */
+	handle(caller: string): number {
+		if (this.#ptr === 0) {
+			throw new GhosttyDisposedError(`${caller} called after its terminal was disposed`);
+		}
+		this.vt.assert_not_poisoned(caller);
+		return this.#ptr;
+	}
+
+	/**
+	 * Register a handle that must be freed before this terminal;
+	 * `GhosttyTerminal.dispose` disposes it first.
+	 *
+	 * @throws GhosttyDisposedError after `dispose`
+	 * @internal
+	 */
+	add_dependent(dependent: GhosttyTerminalDependent): void {
+		if (this.#ptr === 0) {
+			throw new GhosttyDisposedError('GhosttyTerminal.add_dependent called after dispose');
+		}
+		this.#dependents.add(dependent);
+	}
+
+	/**
+	 * Unregister a handle `GhosttyTerminal.add_dependent` registered, once it
+	 * has freed itself. Unknown ones are ignored.
+	 *
+	 * @internal
+	 */
+	remove_dependent(dependent: GhosttyTerminalDependent): void {
+		this.#dependents.delete(dependent);
+	}
+
+	/**
 	 * Free the terminal, the formatter it reads through, and its write buffer
-	 * — its dependents first. Idempotent; any other use afterward throws
-	 * `GhosttyDisposedError`.
+	 * — its dependents first: each `GhosttyRenderState` made over it is
+	 * disposed before anything of the terminal's is freed. Idempotent; any
+	 * other use afterward throws `GhosttyDisposedError`.
 	 *
 	 * The terminal is detached from effect dispatch before anything is freed.
 	 * Its library-side effect registrations aren't cleared one by one: they
@@ -491,8 +551,12 @@ export class GhosttyTerminal {
 	 */
 	dispose(): void {
 		if (this.#busy) throw this.#reentrancy_error('dispose');
+		if (this.#ptr === 0) return;
+		// dependents first, while the terminal they were made over is whole;
+		// each one's dispose unregisters it, and none throws
+		for (const dependent of [...this.#dependents]) dependent.dispose();
+		this.#dependents.clear();
 		const terminal = this.#ptr;
-		if (terminal === 0) return;
 		const formatter = this.#formatter;
 		const write_buffer = this.#write_buffer;
 		const write_buffer_len = this.#write_buffer_len;
@@ -631,6 +695,10 @@ export class GhosttyTerminal {
 					handler(this.#read_string_data(data_pwd, 'PWD'));
 					return;
 				}
+				case 'render_hold':
+					// a C `bool` arrives as an i32, 0 or 1
+					this.#handlers.render_hold?.(args[0] !== 0);
+					return;
 			}
 		} catch (error) {
 			if (this.#effect_failure) this.#effect_failure.count++;

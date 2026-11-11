@@ -34,6 +34,12 @@ export interface GhosttyMemoryExports {
 const utf8_decoder = new TextDecoder();
 
 /**
+ * Whether typed arrays on this host are little-endian, like wasm memory —
+ * so `GhosttyMemory.words` reads wasm's `u32` values as they are.
+ */
+export const GHOSTTY_HOST_LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+
+/**
  * Linear memory and the module's scratch allocator.
  */
 export class GhosttyMemory {
@@ -43,6 +49,7 @@ export class GhosttyMemory {
 	#cached_buffer: ArrayBuffer | null = null;
 	#cached_length = 0;
 	#cached_bytes: Uint8Array = new Uint8Array();
+	#cached_words: Uint32Array = new Uint32Array();
 	#cached_view: DataView = new DataView(new ArrayBuffer(0));
 
 	/**
@@ -77,6 +84,18 @@ export class GhosttyMemory {
 	}
 
 	/**
+	 * A view of all of linear memory as `u32` words — the word at a 4-aligned
+	 * `ptr` is at index `ptr >>> 2` — valid until the next export call. Use it
+	 * at once; never keep it. Typed arrays have the host's byte order, so the
+	 * words read as wasm's little-endian ones only on a little-endian host
+	 * (`GHOSTTY_HOST_LITTLE_ENDIAN`); a reader of them checks that first.
+	 */
+	words(): Uint32Array {
+		this.#refresh_views();
+		return this.#cached_words;
+	}
+
+	/**
 	 * A `DataView` of all of linear memory, valid until the next export call.
 	 * Use it at once; never keep it.
 	 */
@@ -95,6 +114,8 @@ export class GhosttyMemory {
 		this.#cached_buffer = buffer;
 		this.#cached_length = buffer.byteLength;
 		this.#cached_bytes = new Uint8Array(buffer);
+		// wasm memory is a whole number of 64 KiB pages, so it divides into words
+		this.#cached_words = new Uint32Array(buffer);
 		this.#cached_view = new DataView(buffer);
 	}
 

@@ -630,16 +630,20 @@ DOM or Svelte dependency, so its behavior is tested in Node:
   never held across an export call; scratch and opaque-slot allocations
   freed on every path. Buffers the library allocates
   (the formatter's output) are freed with `ghostty_free`.
+- `ghostty_render_state.ts` — `GhosttyRenderState`: the render-state
+  reader, turning the library's per-frame copy of the screen into plain
+  frame data a renderer draws (below). Its terminal disposes it first.
 - `ghostty_effects.ts` — the effects the binding registers (`write_pty`,
-  `bell`, `title_changed`, `pwd_changed`), their handler types, their
-  constants and callback signatures from the manifest, and
+  `bell`, `title_changed`, `pwd_changed`, `render_hold`), their handler
+  types, their constants and callback signatures from the manifest, and
   `GhosttyEffectRouter`, which dispatches each callback by terminal handle.
 - `ghostty_callback_table.ts`, `wasm_trampoline.ts` — function-table slots
   holding JS callbacks, each added once and kept for the instance's life;
   a trampoline is a tiny wasm module, encoded and compiled at runtime,
   that wraps a JS function as a wasm one (a table slot takes only those).
-- `ghostty_manifest.ts`, `ghostty_errors.ts` — the manifest reader and the
-  binding's errors.
+- `ghostty_manifest.ts`, `ghostty_errors.ts` — the manifest reader (enum
+  values, struct layouts, and the bit positions of packed types such as
+  `GhosttyCell`, which aren't ABI) and the binding's errors.
 
 **Effects.** A program's output asks the terminal for things it can't do
 itself — answer a query, ring the bell, retitle the window. libghostty-vt
@@ -709,6 +713,107 @@ included, with nothing to opt into:
 A poisoned instance's terminals dispose without calling in, and its memory
 goes when it's collected; a host builds a fresh instance from the compiled
 module. The guard costs a few nanoseconds a call.
+
+**Rendering data.** libghostty-vt's render state is a copy of what one
+frame needs, updated in place from the terminal — it redoes only what
+changed — with two layers of change tracking: the frame's (clean, partial,
+full) and a flag per row. An update only adds to them; the renderer clears
+both once it has drawn (`ghostty_render_state_clean`). `GhosttyRenderState`
+reads it into JS once per update and keeps nothing of wasm memory:
+
+```
+update() ─ ghostty_render_state_update ─ get_multi(dirty, size, cursor, colors)
+   │ clean: done — two calls, nothing allocated
+   └ else, per row: next + get_multi(dirty flag, id, raw cells, cells handle)
+        clean row with a known id → its previous object
+        dirty row → decode its raw cells (one u64 each, bits from the manifest)
+             a style id new to the row → select + STYLE, interned by value
+             a multi-code-point cluster → select + GRAPHEMES_BUF
+           → runs; equal to the previous object under that id → keep that
+```
+
+- **Rows** are `{id, runs}`, every viewport row in order. The id is the
+  library's row identity as a string: it stays with a row as the screen
+  scrolls, so it keys a keyed list. A row's object is replaced only when
+  its contents change — the library rebuilds every row after an ordinary
+  scroll, and
+  the reader compares what it decoded with the previous object under the
+  same id — so a keyed list re-renders just the rows whose object is new.
+  The row's position is its index; the object holds none, so it survives
+  moving. An edit that moves rows within the library's page — a scroll
+  inside a scroll region (DECSTBM), inserted or deleted lines, some erases
+  — gives every row of that page a new id, rows outside the edit included,
+  so those rows come back as new objects, on what may be only a `partial`
+  update. The library also numbers each screen's rows on its own: after a
+  switch between the primary and alternate screens an id can come back for
+  a different row, whose object then holds that row's contents.
+- **Runs** cover a row from column 0 without gaps, up to its last cell that
+  draws anything: trailing blanks in the default style are dropped (and
+  the unstyled spacer head a wrapped wide character leaves in the last
+  column), a
+  styled blank is kept, and a cell of background only (an erase with a
+  color, held in the cell rather than a style) is a space in that
+  background. A run is consecutive cells with one style and one hyperlink
+  flag, with its column `x` and its `width` in columns, so nothing needs
+  measuring: a plain run has one code point per narrow cell; a wide
+  character or a grapheme of several code points (combining marks, a ZWJ
+  sequence under mode 2027) is a run of its own, a `cluster` to box to its
+  width, since a fallback font's glyph needn't match the cell. The second
+  cell of a wide character has no text and makes no run.
+- **Styles** are interned per reader by value and carry a stable `key` to
+  cache derived CSS by. The cache holds two generations — the styles the
+  current update read and the previous update's — so it stays about two
+  screens' worth however many styles a program makes, and a style read in
+  consecutive updates that read rows keeps its object (a row kept unchanged
+  doesn't count as a read); one unread for such an update is let go, and
+  comes back as a new object with the same key, so styles are compared by
+  key. A color is `null` for the default, a palette index,
+  or RGB; palette colors stay indices, so a palette change recolors without
+  touching rows. Flags are the SGR ones; `inverse` is left for the renderer
+  to apply after resolving defaults. Style ids in cells are only meaningful
+  within their row's page, so the reader caches the ids it has read per row
+  only; id 0 is the default style, read without a call.
+- **Cursor and colors** are read on every update, since a cursor shape, its
+  visibility, or a default color (OSC 10/11/12) changes without dirtying a
+  row; a palette change (OSC 4) is a full update. Each is a new object
+  only when it changed. The default foreground and background are the
+  library's white-on-black placeholders until the terminal has both set:
+  the render state takes them only as a pair, so an OSC 11 alone still
+  reports the placeholders.
+
+A terminal has at most one live `GhosttyRenderState` — a second is refused
+— since an update consumes the terminal's change tracking and a second
+reader would miss what the first took. The output is plain immutable data,
+so any number of views can share one reader. After it's disposed a new one
+can be made, and its first update is a full frame.
+
+The library misses one change: with grapheme clustering (mode 2027) off, a
+combining mark or other zero-width character that arrives in a write of its
+own joins the cell before it without marking that row changed. The update is
+`clean` and the row keeps showing the cell without the mark until anything
+else changes the row, which brings it back right. With mode 2027 on, or the
+mark in the same write as its base, it's tracked. The reader can't detect
+it.
+
+The reader's calls only write buffers it owns, after the update itself, so
+it reads its views of memory across them, taking them again if one ever
+came back detached and always after growing its own grapheme buffer. The
+cell data is borrowed from the render state until the next update; the
+reader copies what it keeps before then.
+
+**Render holds.** A program redrawing the whole screen sets synchronized
+output (mode 2026) so it isn't seen half-drawn. The library reports the
+hold through the `render_hold` effect, `true` at the start — when the
+terminal holds exactly the frame to keep showing, later bytes of the same
+write not yet parsed — and `false` at the end (the mode reset, a full
+reset, or a resize). A renderer updates its `GhosttyRenderState` from the
+handler when a hold begins, then doesn't update until it ends — or until a
+timeout of its own, after which it stops honoring the hold, since the
+terminal has no clock and never ends one itself. Updating from
+a handler is allowed: an update reads the terminal and consumes its change
+tracking without changing what it shows, and effects fire between whole
+steps of the parse. Writing, resizing, or disposing the terminal from a
+handler still throws `GhosttyReentrancyError`.
 
 The module is a static asset (`static/fuz_terminal/ghostty-vt.wasm`) built by
 `cargo xtask ghostty-vt`, not an import, so a build without it still

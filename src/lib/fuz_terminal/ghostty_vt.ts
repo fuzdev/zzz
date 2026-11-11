@@ -58,8 +58,34 @@ export interface GhosttyVtExports extends GhosttyMemoryExports {
 		out_len: number
 	) => number;
 	ghostty_formatter_free: (formatter: number) => void;
-	// TODO: the render-state and input encoder exports join this list with the
-	// modules that call them
+	ghostty_render_state_new: (allocator: number, out: number) => number;
+	ghostty_render_state_free: (state: number) => void;
+	ghostty_render_state_update: (state: number, terminal: number) => number;
+	ghostty_render_state_clean: (state: number) => number;
+	ghostty_render_state_get: (state: number, data: number, out: number) => number;
+	ghostty_render_state_get_multi: (
+		state: number,
+		count: number,
+		keys: number,
+		values: number,
+		out_written: number
+	) => number;
+	ghostty_render_state_row_iterator_new: (allocator: number, out: number) => number;
+	ghostty_render_state_row_iterator_free: (iterator: number) => void;
+	/** Returns a C `bool`: 1 when it moved to a row, 0 at the end. */
+	ghostty_render_state_row_iterator_next: (iterator: number) => number;
+	ghostty_render_state_row_get_multi: (
+		iterator: number,
+		count: number,
+		keys: number,
+		values: number,
+		out_written: number
+	) => number;
+	ghostty_render_state_row_cells_new: (allocator: number, out: number) => number;
+	ghostty_render_state_row_cells_free: (cells: number) => void;
+	ghostty_render_state_row_cells_select: (cells: number, x: number) => number;
+	ghostty_render_state_row_cells_get: (cells: number, data: number, out: number) => number;
+	// TODO: the input encoder exports join this list with the module that calls them
 }
 
 const REQUIRED_FUNCTIONS = [
@@ -81,7 +107,21 @@ const REQUIRED_FUNCTIONS = [
 	'ghostty_formatter_terminal_new',
 	'ghostty_formatter_set',
 	'ghostty_formatter_format_alloc',
-	'ghostty_formatter_free'
+	'ghostty_formatter_free',
+	'ghostty_render_state_new',
+	'ghostty_render_state_free',
+	'ghostty_render_state_update',
+	'ghostty_render_state_clean',
+	'ghostty_render_state_get',
+	'ghostty_render_state_get_multi',
+	'ghostty_render_state_row_iterator_new',
+	'ghostty_render_state_row_iterator_free',
+	'ghostty_render_state_row_iterator_next',
+	'ghostty_render_state_row_get_multi',
+	'ghostty_render_state_row_cells_new',
+	'ghostty_render_state_row_cells_free',
+	'ghostty_render_state_row_cells_select',
+	'ghostty_render_state_row_cells_get'
 ] as const satisfies ReadonlyArray<
 	Exclude<keyof GhosttyVtExports, 'memory' | '__indirect_function_table'>
 >;

@@ -1,7 +1,8 @@
 /**
  * Effects: the callbacks through which a libghostty-vt terminal asks its host
  * for what it can't do itself — reply to the program (`write_pty`), ring the
- * bell, announce a new title or working directory.
+ * bell, announce a new title or working directory, hold the screen still
+ * while the program redraws it (`render_hold`).
  *
  * `GhosttyTerminal.set_effect` registers and clears them; this module holds
  * what they share. Each effect has **one trampoline per module instance**, a
@@ -17,9 +18,9 @@
  * answering stale queries — feed it with no `write_pty` registered. The
  * other effects the library has (clipboard read and write, desktop
  * notifications, the size, color-scheme, device-attributes, enquiry, and
- * XTVERSION responders, render holds, semantic prompts, unknown sequences,
- * and more) aren't bound, so they're never registered. The clipboard ones
- * stay that way until there's a way to ask the person first.
+ * XTVERSION responders, semantic prompts, unknown sequences, and more)
+ * aren't bound, so they're never registered. The clipboard ones stay that
+ * way until there's a way to ask the person first.
  *
  * @module
  */
@@ -61,6 +62,26 @@ export interface GhosttyTerminalEffectHandlers {
 	 * for OSC 7 a `file://` URI, otherwise usually a bare path.
 	 */
 	pwd_changed: (pwd: string) => void;
+	/**
+	 * A render hold began (`held` is `true`: the program set synchronized
+	 * output, mode 2026, to redraw without being seen halfway) or ended
+	 * (`false`: the program reset the mode, the terminal was fully reset, or
+	 * it was resized). The library reports only real changes — setting the
+	 * mode during a hold, or resetting it without one, fires nothing — so
+	 * `true` and `false` alternate. A handler registered during a hold sees
+	 * its end without its beginning, and a terminal disposed during one never
+	 * reports its end: a renderer tracks the hold itself and drops it with
+	 * the terminal. When a hold begins the
+	 * terminal holds exactly the frame the program wants left on screen —
+	 * nothing after the mode set has been parsed yet, even later bytes of the
+	 * same write — so a renderer updates its `GhosttyRenderState` here, then
+	 * leaves it alone until the hold ends. The terminal has no clock and never
+	 * ends a hold itself: a renderer that sees one last too long (a second is
+	 * usual) stops honoring it and updates again.
+	 */
+	// TODO: ending a stuck hold the way the library suggests — resetting the
+	// mode through `GHOSTTY_TERMINAL_OPT_MODE` — needs that option bound
+	render_hold: (held: boolean) => void;
 }
 
 /** An effect `GhosttyTerminal.set_effect` takes. */
@@ -98,7 +119,12 @@ export const GHOSTTY_TERMINAL_EFFECTS: Readonly<
 	},
 	bell: { option: 'BELL', callback: 'GhosttyTerminalBellFn', args: [] },
 	title_changed: { option: 'TITLE_CHANGED', callback: 'GhosttyTerminalTitleChangedFn', args: [] },
-	pwd_changed: { option: 'PWD_CHANGED', callback: 'GhosttyTerminalPwdChangedFn', args: [] }
+	pwd_changed: { option: 'PWD_CHANGED', callback: 'GhosttyTerminalPwdChangedFn', args: [] },
+	render_hold: {
+		option: 'RENDER_HOLD',
+		callback: 'GhosttyTerminalRenderHoldFn',
+		args: ['bool']
+	}
 	// TODO: the responders (size, color scheme, device attributes) return a
 	// bool and fill an out struct; enquiry and XTVERSION return a
 	// `GhosttyString` by value, which the wasm C ABI returns through a hidden

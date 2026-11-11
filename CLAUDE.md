@@ -294,9 +294,11 @@ cursor position, device attributes, mode reports — for the PTY, as a copied
 string, read from the terminal inside the callback). An effect with no handler
 is ignored by the library: a query gets no reply, then or later, which is how
 a history is fed without answering its stale queries (the state it sets still
-carries forward — see ./docs/architecture.md § fuz_terminal). Nothing else is bound, so the
-library's other effects — the clipboard ones included — are never registered
-(`ghostty_effects.ts`). A callback is a slot in the module's function table
+carries forward — see ./docs/architecture.md § fuz_terminal). `render_hold`
+reports synchronized output (mode 2026): `true` when the program starts
+redrawing unseen, `false` when it's done (or on a resize or full reset).
+Nothing else is bound, so the library's other effects — the clipboard ones
+included — are never registered (`ghostty_effects.ts`). A callback is a slot in the module's function table
 holding a trampoline: a tiny wasm module, assembled and compiled at runtime
 (`wasm_trampoline.ts`), that wraps a JS function as a wasm one. Each effect
 has one per module instance, dispatching by the terminal handle the library
@@ -324,6 +326,49 @@ call's entry poisons too, since the guard can't tell it from one that
 disturbed the module. A host recovers with a fresh instance. Compiling the
 trampolines needs wasm compilation allowed, as loading the module does: a
 page Content-Security-Policy would need `'wasm-unsafe-eval'`.
+
+**The render state** (`ghostty_render_state.ts`) is what a renderer draws
+from. `new GhosttyRenderState(terminal)` (refused with `GhosttyLoadError` for
+a module without the `render_state` feature) holds libghostty-vt's render
+state — a per-frame copy of the screen that tracks what changed — and reads
+it into plain JS values: `update()` once per animation frame returns `clean`,
+`partial`, or `full`, and `clean()` marks the frame drawn (an update only adds
+to what's dirty). After an update, `rows` is every viewport row top to bottom,
+each a `GhosttyRenderRow` — an `id` (the library's row identity, a key for a
+keyed list) and its `runs`: consecutive cells sharing a style and hyperlink
+flag, each with its start column `x`, `width` in columns, and `text`. A run
+that isn't a `cluster` has one code point per narrow cell; a cluster run is
+one wide character or one multi-code-point grapheme, to be boxed to its
+`width`. Trailing blank default cells (and a wrapped wide character's
+unstyled spacer head) make no run; a cell of background only
+(an erase with a color) is a space in that background. A run's
+`GhosttyRenderStyle` is interned and carries a stable `key`; its colors are
+`null` (the default), a palette index, or RGB — palette colors stay indices
+against `colors.palette`; a style read in consecutive updates that read rows
+keeps its object (two generations are cached), so compare styles by `key`. `cursor` (visibility, blink, shape, viewport
+position) and `colors` (default foreground and background, cursor color,
+palette) are read every update, since a cursor shape or a default color
+changes without dirtying a row; the default foreground and background are
+the library's placeholders until both are set. Everything is immutable and
+copied out of wasm memory; a value is replaced only when it changed — a row
+unchanged since the last update keeps its object, even after an ordinary
+scroll rebuilt it — so a renderer compares references. A row id stays with
+its row as the screen scrolls, but an edit that moves rows within the
+library's page (a scroll inside a scroll region, inserted or deleted lines)
+gives every row of that page a new id, so those rows come back as new
+objects. An update without a change makes two calls
+into the module and allocates nothing; otherwise each row costs two calls
+(its id and its cells, read in bulk), and a changed row two more for each
+style new to that row and each multi-code-point cluster. A render state may be updated from an
+effect handler — a `render_hold` handler captures the frame there when a hold
+begins — and its terminal disposes it first. A terminal has at most one live
+render state (an update consumes its change tracking; a second is refused);
+views share one reader's data. With mode 2027 off, the library doesn't mark
+a row changed when a zero-width mark arrives in a write of its own, so that
+row is stale until something else touches it. Row ids are unique within an
+update, but the library numbers the alternate screen's rows apart from the
+primary's, so an id can come back for a different row after a screen switch
+(its object then holds that row).
 
 The module isn't committed: `cargo xtask ghostty-vt` builds it from the
 pinned libghostty-vt release (needs Zig 0.17; ./docs/development.md §

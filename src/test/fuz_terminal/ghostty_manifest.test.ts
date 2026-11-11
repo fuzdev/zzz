@@ -2,7 +2,12 @@ import { test, describe, assert } from 'vitest';
 
 import { resolve_ghostty_effect_constants } from '#lib/fuz_terminal/ghostty_effects.ts';
 import { GhosttyManifestError } from '#lib/fuz_terminal/ghostty_errors.ts';
-import { GhosttyManifest, parse_ghostty_manifest } from '#lib/fuz_terminal/ghostty_manifest.ts';
+import {
+	GhosttyManifest,
+	parse_ghostty_manifest,
+	read_ghostty_bits,
+	to_ghostty_bit_reader
+} from '#lib/fuz_terminal/ghostty_manifest.ts';
 import { resolve_ghostty_terminal_constants } from '#lib/fuz_terminal/ghostty_terminal.ts';
 import { resolve_ghostty_vt_constants } from '#lib/fuz_terminal/ghostty_vt.ts';
 
@@ -193,6 +198,82 @@ describe('GhosttyManifest lookups', () => {
 	});
 });
 
+describe('GhosttyManifest packed bits', () => {
+	const manifest = new GhosttyManifest(create_ghostty_manifest_fixture());
+
+	test('a field, and a field inside a union arm, counted from bit 0', () => {
+		assert.deepEqual(manifest.packed_bits('GhosttyCell', ['style_id']), {
+			lsb: 26,
+			width: 16,
+			type: 'GhosttyStyleId'
+		});
+		assert.deepEqual(manifest.packed_bits('GhosttyCell', ['content', 'CODEPOINT', 'codepoint']), {
+			lsb: 2,
+			width: 21,
+			type: 'u21'
+		});
+		assert.deepEqual(manifest.packed_bits('GhosttyCell', ['content', 'BG_COLOR_RGB', 'b']), {
+			lsb: 18,
+			width: 8,
+			type: 'u8'
+		});
+	});
+
+	test('a missing or misplaced field is refused', () => {
+		const cases: Array<[(types: Record<string, any>) => void, ReadonlyArray<string>, string]> = [
+			[() => {}, ['nope'], 'no usable bit field GhosttyCell.nope'],
+			[() => {}, ['content', 'NOPE', 'codepoint'], 'no packed arm GhosttyCell.content.NOPE'],
+			[() => {}, ['content', 'CODEPOINT'], 'no packed arm GhosttyCell.content.CODEPOINT'],
+			[() => {}, ['style_id', 'x', 'y'], 'no packed arm GhosttyCell.style_id'],
+			[(types) => (types.GhosttyCell.bits.wide.lsb = 63), ['wide'], 'no usable bit field'],
+			[(types) => (types.GhosttyCell.bits.wide.width = 0), ['wide'], 'no usable bit field'],
+			[(types) => (types.GhosttyCell.bits.wide.lsb = -1), ['wide'], 'no usable bit field'],
+			[(types) => delete types.GhosttyCell.bits.wide.type, ['wide'], 'has no type'],
+			[
+				// an arm's field past the union's own width
+				(types) => (types.GhosttyCell.bits.content.arms.CODEPOINT.bits.codepoint.lsb = 4),
+				['content', 'CODEPOINT', 'codepoint'],
+				'no usable bit field'
+			],
+			[(types) => (types.GhosttyCell.kind = 'struct'), ['wide'], 'is a "struct", not a packed'],
+			[(types) => delete types.GhosttyCell.size, ['wide'], 'has no size']
+		];
+		for (const [doctor, path, message] of cases) {
+			const json = create_ghostty_manifest_fixture();
+			doctor(json.types);
+			const doctored = new GhosttyManifest(json);
+			const error = catch_manifest_error(() => doctored.packed_bits('GhosttyCell', path));
+			assert.include(error.message, message, path.join('.'));
+		}
+	});
+
+	test('a bit reader reads fields in either word, or across both', () => {
+		// a u64 with a 16-bit field at 26..42, straddling the words, and fields either side
+		const value = (0x1234n << 26n) | (0x2n << 42n) | (0x3n << 0n) | (0x1fffffn << 2n);
+		const lo = Number(value & 0xffff_ffffn);
+		const hi = Number(value >> 32n);
+		const read = (lsb: number, width: number): number =>
+			read_ghostty_bits(lo, hi, to_ghostty_bit_reader({ lsb, width, type: 'u' }, 'test'));
+		assert.strictEqual(read(26, 16), 0x1234);
+		assert.strictEqual(read(42, 2), 0x2);
+		assert.strictEqual(read(0, 2), 0x3);
+		assert.strictEqual(read(2, 21), 0x1f_ffff);
+		assert.strictEqual(read(44, 20), 0);
+		// whole words, unsigned
+		const ones = to_ghostty_bit_reader({ lsb: 32, width: 32, type: 'u32' }, 'test');
+		assert.strictEqual(read_ghostty_bits(0, 0xffff_ffff, ones), 0xffff_ffff);
+		const low = to_ghostty_bit_reader({ lsb: 0, width: 32, type: 'u32' }, 'test');
+		assert.strictEqual(read_ghostty_bits(0x8000_0001, 0, low), 0x8000_0001);
+		const across = to_ghostty_bit_reader({ lsb: 16, width: 32, type: 'u32' }, 'test');
+		assert.strictEqual(read_ghostty_bits(0xabcd_0000, 0x1234, across), 0x1234_abcd);
+		assert.throws(
+			() => to_ghostty_bit_reader({ lsb: 0, width: 33, type: 'u33' }, 'wide'),
+			GhosttyManifestError,
+			'at most 32 bits'
+		);
+	});
+});
+
 describe('GhosttyManifest callbacks', () => {
 	const manifest = new GhosttyManifest(create_ghostty_manifest_fixture());
 
@@ -298,6 +379,10 @@ describe('constants resolvers', () => {
 				signature: { params: ['i32', 'i32'], results: [] }
 			});
 		}
+		assert.deepEqual(effects.effects.render_hold, {
+			option: 42,
+			signature: { params: ['i32', 'i32', 'i32'], results: [] }
+		});
 		assert.strictEqual(effects.data_title, 12);
 		assert.strictEqual(effects.data_pwd, 13);
 		assert.strictEqual(effects.string_size, 8);

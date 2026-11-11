@@ -191,6 +191,22 @@ describe('bell, title, and pwd', () => {
 		terminal.dispose();
 	});
 
+	test('the render hold handler gets each begin and end, in pairs', async () => {
+		const terminal = new GhosttyTerminal(await load_test_ghostty_vt(), { cols: 80, rows: 24 });
+		const holds: Array<boolean> = [];
+		terminal.write(`${ESC}[?2026h`);
+		terminal.set_effect('render_hold', (held) => void holds.push(held));
+		// a hold begun before registering ends once registered
+		terminal.write(`${ESC}[?2026l${ESC}[?2026h${ESC}[?2026h${ESC}[?2026l${ESC}[?2026l`);
+		assert.deepEqual(holds, [false, true, false]);
+		// from the handler, the terminal can't be written
+		terminal.set_effect('render_hold', () => terminal.write('x'));
+		const error = catch_effect_error(() => terminal.write(`${ESC}[?2026h`));
+		assert.strictEqual(error.effect, 'render_hold');
+		assert(error.cause instanceof GhosttyReentrancyError, String(error.cause));
+		terminal.dispose();
+	});
+
 	test('every effect at once, from one write, in output order', async () => {
 		const terminal = new GhosttyTerminal(await load_test_ghostty_vt(), { cols: 80, rows: 24 });
 		const events: Array<string> = [];
@@ -390,9 +406,11 @@ describe('lifetime and the function table', () => {
 		terminal.set_effect('bell', count('bell'));
 		terminal.set_effect('title_changed', count('title_changed'));
 		terminal.set_effect('pwd_changed', count('pwd_changed'));
+		terminal.set_effect('render_hold', count('render_hold'));
 	};
 
-	const FIRE_ALL = `${CPR}${BEL}${ESC}]2;t${ST}${ESC}]7;/p${ST}`;
+	/** Fires every effect once — the render hold twice, a begin and an end. */
+	const FIRE_ALL = `${CPR}${BEL}${ESC}]2;t${ST}${ESC}]7;/p${ST}${ESC}[?2026h${ESC}[?2026l`;
 
 	test('the table grows by one slot per effect, however many terminals come and go', async () => {
 		const vt = await load_test_ghostty_vt();
@@ -410,7 +428,9 @@ describe('lifetime and the function table', () => {
 		}
 		assert.strictEqual(table.length, initial + EFFECT_NAMES.length);
 		assert.strictEqual(vt.callbacks.length, table.length);
-		for (const name of EFFECT_NAMES) assert.strictEqual(counts.get(name), 300, name);
+		for (const name of EFFECT_NAMES) {
+			assert.strictEqual(counts.get(name), name === 'render_hold' ? 600 : 300, name);
+		}
 		assert.strictEqual(vt.effect_router.attached_count, 0);
 	});
 

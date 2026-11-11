@@ -41,6 +41,32 @@ export interface GhosttyManifestField {
 	type: string;
 }
 
+/**
+ * A bit field of a packed type, with its position counted from bit 0 of the
+ * whole packed value — a field inside a union arm included.
+ */
+export interface GhosttyManifestBits {
+	/** The lowest bit. */
+	lsb: number;
+	/** How many bits. */
+	width: number;
+	/** The field's type by name, such as `u21` or `GhosttyCellWide`. */
+	type: string;
+}
+
+/**
+ * How to read one bit field of a packed value split into two `u32` words:
+ * the bits in the low word, then the bits in the high word above them.
+ */
+export interface GhosttyBitReader {
+	lo_shift: number;
+	lo_mask: number;
+	hi_shift: number;
+	hi_mask: number;
+	/** How many of the field's bits are in the low word. */
+	lo_bits: number;
+}
+
 /** A callback type: its parameters' types and its return type, by name. */
 export interface GhosttyManifestCallback {
 	params: ReadonlyArray<string>;
@@ -153,6 +179,13 @@ export class GhosttyManifest {
 		return entry;
 	}
 
+	/** The entry of a type with fields at offsets: a struct, or a union (every field at its own offset). */
+	#layout_entry(type_name: string): Record<string, unknown> {
+		const entry = this.#types[type_name];
+		if (is_record(entry) && entry.kind === 'union') return entry;
+		return this.type_entry(type_name, 'struct');
+	}
+
 	/**
 	 * An enum's values by name (without the prefix), every one an integer in
 	 * the range of the enum's underlying type — so none is truncated on its way
@@ -243,12 +276,12 @@ export class GhosttyManifest {
 	}
 
 	/**
-	 * A struct's size in bytes.
+	 * A struct's (or union's) size in bytes.
 	 *
 	 * @throws GhosttyManifestError when the struct is missing or has no integer size
 	 */
 	struct_size(type_name: string): number {
-		const { size } = this.type_entry(type_name, 'struct');
+		const { size } = this.#layout_entry(type_name);
 		if (!is_integer(size) || size <= 0) {
 			throw new GhosttyManifestError(`the manifest's ${type_name} has no size`);
 		}
@@ -256,14 +289,14 @@ export class GhosttyManifest {
 	}
 
 	/**
-	 * A struct field's offset, size, and type.
+	 * A struct field's (or union field's) offset, size, and type.
 	 *
 	 * @throws GhosttyManifestError when the struct or field is missing, or the
 	 *   field doesn't fit in the struct
 	 */
 	struct_field(type_name: string, field_name: string): GhosttyManifestField {
 		const size = this.struct_size(type_name);
-		const { fields } = this.type_entry(type_name, 'struct');
+		const { fields } = this.#layout_entry(type_name);
 		const field = is_record(fields) ? fields[field_name] : undefined;
 		if (
 			!is_record(field) ||
@@ -279,6 +312,69 @@ export class GhosttyManifest {
 			);
 		}
 		return { offset: field.offset, size: field.size, type: field.type };
+	}
+
+	/**
+	 * A bit field of a packed type (`GhosttyCell`, `GhosttyStyleFlags`), found
+	 * by its path: a field name, or for a field inside a union of packed arms,
+	 * the union's name, the arm's, and the field's
+	 * (`['content', 'CODEPOINT', 'codepoint']`). Bit positions of packed types
+	 * aren't ABI, so they're read here rather than assumed.
+	 *
+	 * @param path - the field's names, outermost first
+	 * @throws GhosttyManifestError when the type or a step of the path is
+	 *   missing, or a field isn't a positive width that fits inside what holds it
+	 */
+	packed_bits(type_name: string, path: ReadonlyArray<string>): GhosttyManifestBits {
+		const entry = this.type_entry(type_name, 'packed');
+		const size = entry.size;
+		if (!is_integer(size) || size <= 0) {
+			throw new GhosttyManifestError(`the manifest's packed ${type_name} has no size`);
+		}
+		const where = `${type_name}.${path.join('.')}`;
+		// the field's container: its bits, and the range of the whole value it spans
+		let bits = entry.bits;
+		let base = 0;
+		let limit = size * 8;
+		for (let i = 0; i < path.length; i++) {
+			const field = is_record(bits) ? bits[path[i]!] : undefined;
+			if (
+				!is_record(field) ||
+				!is_integer(field.lsb) ||
+				!is_integer(field.width) ||
+				field.lsb < 0 ||
+				field.width <= 0 ||
+				base + field.lsb + field.width > limit
+			) {
+				throw new GhosttyManifestError(
+					`the manifest has no usable bit field ${where}: ${JSON.stringify(field)}`
+				);
+			}
+			const lsb = base + field.lsb;
+			if (i === path.length - 1) {
+				if (typeof field.type !== 'string') {
+					throw new GhosttyManifestError(`the manifest's bit field ${where} has no type`);
+				}
+				return { lsb, width: field.width, type: field.type };
+			}
+			// a union of packed arms: the next two steps are the arm and its field
+			const arm_name = path[++i];
+			const arm = is_record(field.arms) && arm_name ? field.arms[arm_name] : undefined;
+			if (
+				field.kind !== 'union' ||
+				!is_record(arm) ||
+				arm.kind !== 'packed' ||
+				i === path.length - 1
+			) {
+				throw new GhosttyManifestError(
+					`the manifest has no packed arm ${type_name}.${path.slice(0, i + 1).join('.')}`
+				);
+			}
+			bits = arm.bits;
+			base = lsb;
+			limit = lsb + field.width;
+		}
+		throw new GhosttyManifestError(`no bit field path given for ${type_name}`);
 	}
 
 	/**
@@ -378,4 +474,35 @@ export const parse_ghostty_manifest = (text: string): GhosttyManifest => {
 		throw new GhosttyManifestError('the manifest is not valid JSON', { cause: error });
 	}
 	return new GhosttyManifest(json);
+};
+
+/** Read a bit field of a packed `u64` held as two `u32` words. */
+export const read_ghostty_bits = (lo: number, hi: number, field: GhosttyBitReader): number =>
+	(((lo >>> field.lo_shift) & field.lo_mask) |
+		(((hi >>> field.hi_shift) & field.hi_mask) << field.lo_bits)) >>>
+	0;
+
+/**
+ * How to read a bit field of a packed `u64` from its two words.
+ *
+ * @throws GhosttyManifestError when it's wider than 32 bits or not inside 64
+ */
+export const to_ghostty_bit_reader = (
+	bits: GhosttyManifestBits,
+	what: string
+): GhosttyBitReader => {
+	if (bits.width > 32 || bits.lsb + bits.width > 64) {
+		throw new GhosttyManifestError(
+			`the manifest's ${what} spans bits ${bits.lsb}..${bits.lsb + bits.width}, not a field of at most 32 bits in a u64`
+		);
+	}
+	const lo_bits = bits.lsb >= 32 ? 0 : Math.min(bits.width, 32 - bits.lsb);
+	const hi_bits = bits.width - lo_bits;
+	return {
+		lo_shift: lo_bits === 0 ? 0 : bits.lsb,
+		lo_mask: lo_bits === 32 ? 0xffff_ffff : (1 << lo_bits) - 1,
+		hi_shift: lo_bits === 0 ? bits.lsb - 32 : 0,
+		hi_mask: hi_bits === 0 ? 0 : hi_bits === 32 ? 0xffff_ffff : (1 << hi_bits) - 1,
+		lo_bits
+	};
 };
