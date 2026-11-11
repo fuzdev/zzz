@@ -1,0 +1,1110 @@
+// @vitest-environment jsdom
+
+import { test, describe, assert, afterEach, vi } from 'vitest';
+import { flushSync, mount, unmount } from 'svelte';
+
+import type FuzTerminal from '#lib/fuz_terminal/FuzTerminal.svelte';
+import {
+	FUZ_TERMINAL_MAX_CALLBACK_WRITES,
+	type FuzTerminalOptions,
+	type FuzTerminalStatus
+} from '#lib/fuz_terminal/fuz_terminal_state.svelte.ts';
+import type { FuzTerminalMeasurement } from '#lib/fuz_terminal/fuz_terminal_layout.ts';
+import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';
+
+import FuzTerminalHarness from './FuzTerminalHarness.svelte';
+import {
+	create_test_fuz_terminal_deps,
+	measurement_for,
+	type TestFuzTerminalDeps
+} from './fuz_terminal_test_helpers.ts';
+import {
+	compile_test_ghostty_vt,
+	load_test_ghostty_vt,
+	load_wrapped_ghostty_vt
+} from './ghostty_vt_test_helpers.ts';
+
+// counts row renders: the row snippet splits its runs once each time it runs
+const { split_calls } = vi.hoisted(() => ({
+	split_calls: [] as Array<ReadonlyArray<unknown>>
+}));
+vi.mock('#lib/fuz_terminal/fuz_terminal_layout.ts', async (import_original) => {
+	const original =
+		await import_original<typeof import('#lib/fuz_terminal/fuz_terminal_layout.ts')>();
+	return {
+		...original,
+		split_fuz_terminal_runs: (runs: Parameters<typeof original.split_fuz_terminal_runs>[0]) => {
+			split_calls.push(runs);
+			return original.split_fuz_terminal_runs(runs);
+		}
+	};
+});
+
+const ESC = '\x1b';
+const BEL = '\x07';
+const ST = `${ESC}\\`;
+
+const cleanups: Array<() => void> = [];
+afterEach(() => {
+	for (const cleanup of cleanups.splice(0)) cleanup();
+});
+
+interface Mounted {
+	deps: TestFuzTerminalDeps;
+	target: HTMLElement;
+	root: HTMLElement;
+	view: FuzTerminal;
+	statuses: Array<FuzTerminalStatus>;
+	/** Run the pending frames and flush the DOM. */
+	step: () => void;
+	unmount: () => void;
+}
+
+/**
+ * Mount a terminal view under test deps and wait until it leaves `loading`.
+ * The default measurement fits 20 × 4 cells.
+ */
+const mount_terminal = async (
+	options: {
+		props?: Partial<FuzTerminalOptions>;
+		measurement?: FuzTerminalMeasurement | null;
+		load_vt?: (module: WebAssembly.Module) => Promise<GhosttyVt>;
+		/** Called with the view as soon as it's mounted. */
+		oninstance?: (view: FuzTerminal) => void;
+	} = {}
+): Promise<Mounted> => {
+	const module = await compile_test_ghostty_vt();
+	const deps = create_test_fuz_terminal_deps(
+		options.load_vt ?? (() => load_test_ghostty_vt()),
+		options.measurement === undefined ? measurement_for(20, 4) : options.measurement
+	);
+	const statuses: Array<FuzTerminalStatus> = [];
+	let settled!: () => void;
+	const left_loading = new Promise<void>((resolve) => (settled = resolve));
+	const target = document.createElement('div');
+	document.body.append(target);
+	let view: FuzTerminal | undefined;
+	const user_onstatus = options.props?.onstatus;
+	const mounted = mount(FuzTerminalHarness, {
+		target,
+		props: {
+			deps,
+			props: {
+				module,
+				...options.props,
+				onstatus: (status: FuzTerminalStatus) => {
+					statuses.push(status);
+					user_onstatus?.(status);
+					settled();
+				}
+			},
+			oninstance: (instance: FuzTerminal) => {
+				view = instance;
+				written_by_host = instance;
+				options.oninstance?.(instance);
+			}
+		}
+	});
+	flushSync();
+	let unmounted = false;
+	const do_unmount = (): void => {
+		if (unmounted) return;
+		unmounted = true;
+		void unmount(mounted);
+		flushSync();
+		target.remove();
+	};
+	cleanups.push(do_unmount);
+	await left_loading;
+	flushSync();
+	assert.ok(view, 'the harness handed back the view');
+	const root = target.querySelector<HTMLElement>('.fuz-terminal');
+	assert.ok(root);
+	return {
+		deps,
+		target,
+		root,
+		view,
+		statuses,
+		step: () => {
+			deps.frames.step();
+			flushSync();
+		},
+		unmount: do_unmount
+	};
+};
+
+/** The view under test, for callbacks that write back to it (set when each view mounts). */
+let written_by_host: FuzTerminal | undefined;
+
+const row_elements = (root: HTMLElement): Array<HTMLElement> =>
+	Array.from(root.querySelectorAll<HTMLElement>('.row'));
+
+const rows_text = (root: HTMLElement): Array<string> =>
+	row_elements(root).map((row) => row.textContent);
+
+const run_elements = (row: HTMLElement): Array<HTMLElement> =>
+	Array.from(row.querySelectorAll<HTMLElement>('.run'));
+
+/** A run's boxed width in cells, from its `--run_width`. */
+const run_width = (run: HTMLElement): string => run.style.getPropertyValue('--run_width');
+
+const cursor_element = (root: HTMLElement): HTMLElement | null =>
+	root.querySelector<HTMLElement>('.cursor');
+
+describe('drawing', () => {
+	test('the first frame: every row, each run boxed to its columns', async () => {
+		const t = await mount_terminal();
+		assert.deepEqual(t.statuses, [{ kind: 'ready' }]);
+		assert.deepEqual(t.view.get_size(), { cols: 20, rows: 4 });
+		t.view.write('hello\r\nworld');
+		t.step();
+		assert.deepEqual(rows_text(t.root), ['hello', 'world', '', '']);
+		const [first] = row_elements(t.root);
+		const runs = run_elements(first!);
+		assert.strictEqual(runs.length, 1);
+		assert.strictEqual(run_width(runs[0]!), '5');
+		// a default-styled run carries nothing but its width
+		assert.strictEqual(runs[0]!.getAttribute('style')?.replace(/[\s;]+$/, ''), '--run_width: 5');
+	});
+
+	test('rows hold their runs and nothing else: no stray whitespace text', async () => {
+		const t = await mount_terminal();
+		t.view.write(`a${ESC}[1mb${ESC}[0m c`);
+		t.step();
+		const [row] = row_elements(t.root);
+		// Svelte may leave an empty text node as an anchor, which draws and copies nothing
+		for (const node of row!.childNodes) {
+			if (node.nodeType === Node.TEXT_NODE) assert.strictEqual(node.textContent, '');
+		}
+		assert.deepEqual(
+			run_elements(row!).map((run) => [run.textContent, run_width(run)]),
+			[
+				['a', '1'],
+				['b', '1'],
+				[' c', '2']
+			]
+		);
+		for (const run of run_elements(row!)) {
+			assert.deepEqual(
+				Array.from(run.childNodes).map((n) => n.nodeType),
+				[Node.TEXT_NODE],
+				'a run is one text node'
+			);
+		}
+	});
+
+	test('colored and flagged text gets its style and classes', async () => {
+		const t = await mount_terminal({ measurement: measurement_for(40, 2) });
+		t.view.write(
+			`${ESC}[31mred${ESC}[0m${ESC}[1;4:3mbold${ESC}[0m${ESC}[38;2;1;2;3mrgb${ESC}[0m${ESC}[5mblink${ESC}[0m${ESC}[7minv${ESC}[0m`
+		);
+		t.step();
+		const runs = run_elements(row_elements(t.root)[0]!);
+		assert.deepEqual(
+			runs.map((r) => r.textContent),
+			['red', 'bold', 'rgb', 'blink', 'inv']
+		);
+		const style = (i: number): string => runs[i]!.getAttribute('style') ?? '';
+		assert.include(style(0), 'color: var(--fuz_terminal_palette_1)');
+		assert.include(style(1), 'font-weight: bold');
+		assert.include(style(1), 'text-decoration-style: wavy');
+		// jsdom serializes a hex color as `rgb()`
+		assert.include(style(2), 'color: rgb(1, 2, 3)');
+		assert.isTrue(runs[3]!.classList.contains('run-blink'));
+		assert.isFalse(runs[0]!.classList.contains('run-blink'));
+		assert.include(style(4), 'background-color: var(--fuz_terminal_fg)');
+	});
+
+	test('program output reaches the DOM as text, never markup', async () => {
+		const t = await mount_terminal({ measurement: measurement_for(40, 2) });
+		t.view.write('<img src=x onerror=alert(1)>');
+		t.step();
+		assert.isNull(t.root.querySelector('img'));
+		assert.strictEqual(rows_text(t.root)[0], '<img src=x onerror=alert(1)>');
+	});
+
+	test('hyperlinks are marked by a class, with no link to follow', async () => {
+		const t = await mount_terminal();
+		t.view.write(`${ESC}]8;;https://a.fuz.dev/${ST}link${ESC}]8;;${ST} plain`);
+		t.step();
+		const runs = run_elements(row_elements(t.root)[0]!);
+		assert.deepEqual(
+			runs.map((r) => [r.textContent, r.classList.contains('run-link')]),
+			[
+				['link', true],
+				[' plain', false]
+			]
+		);
+		assert.isNull(t.root.querySelector('a'));
+	});
+
+	test('wide characters and graphemes are boxed clusters; mixed text splits at ASCII', async () => {
+		const t = await mount_terminal();
+		t.view.write('a漢b─┼c');
+		t.step();
+		const runs = run_elements(row_elements(t.root)[0]!);
+		assert.deepEqual(
+			runs.map((r) => [r.textContent, run_width(r), r.classList.contains('run-cluster')]),
+			[
+				['a', '1', false],
+				['漢', '2', true],
+				['b', '1', false],
+				['─┼', '2', false],
+				['c', '1', false]
+			]
+		);
+	});
+});
+
+describe('the frame loop', () => {
+	test('idle with nothing to draw; many writes, one frame', async () => {
+		const t = await mount_terminal();
+		t.step();
+		assert.strictEqual(t.deps.frames.pending, 0, 'idle');
+		const before = t.deps.frames.requested;
+		for (let i = 0; i < 20; i++) t.view.write(`${i} `);
+		assert.strictEqual(t.deps.frames.requested - before, 1);
+		assert.deepEqual(rows_text(t.root)[0], '', 'nothing drawn before the frame');
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], '0 1 2 3 4 5 6 7 8 9');
+		assert.strictEqual(t.deps.frames.pending, 0);
+	});
+
+	test('an unchanged row keeps its element and nodes; a changed one is updated', async () => {
+		const t = await mount_terminal();
+		t.view.write('one\r\ntwo');
+		t.step();
+		const [first, second] = row_elements(t.root);
+		const first_run = run_elements(first!)[0]!;
+		const first_text = first_run.firstChild;
+		const mutations: Array<MutationRecord> = [];
+		const observer = new MutationObserver((records) => mutations.push(...records));
+		observer.observe(t.root, {
+			subtree: true,
+			childList: true,
+			characterData: true,
+			attributes: true
+		});
+		split_calls.length = 0;
+		t.view.write('!');
+		t.step();
+		// only the changed row's block ran: the unchanged rows are the same objects, skipped
+		assert.strictEqual(split_calls.length, 1, 'one row rendered');
+		assert.strictEqual(
+			(split_calls[0]![0] as { text: string }).text,
+			'two!',
+			'the changed row rendered'
+		);
+		const records = observer.takeRecords();
+		mutations.push(...records);
+		observer.disconnect();
+		const [first_after, second_after] = row_elements(t.root);
+		assert.strictEqual(first_after, first, 'the same row element');
+		assert.strictEqual(run_elements(first_after!)[0], first_run, 'the same run element');
+		assert.strictEqual(run_elements(first_after!)[0]!.firstChild, first_text, 'the same text node');
+		assert.strictEqual(second_after, second);
+		assert.deepEqual(rows_text(t.root), ['one', 'two!', '', '']);
+		// nothing under the unchanged row was touched
+		assert.isFalse(
+			mutations.some((m) => first!.contains(m.target)),
+			'no mutation inside the unchanged row'
+		);
+		assert.isTrue(mutations.some((m) => second!.contains(m.target)));
+	});
+
+	test('a scroll moves the rows still on screen: the same elements, by key', async () => {
+		const t = await mount_terminal();
+		t.view.write('a\r\nb\r\nc\r\nd');
+		t.step();
+		const before = row_elements(t.root);
+		t.view.write('\r\ne');
+		t.step();
+		const after = row_elements(t.root);
+		assert.deepEqual(rows_text(t.root), ['b', 'c', 'd', 'e']);
+		assert.strictEqual(after[0], before[1]);
+		assert.strictEqual(after[1], before[2]);
+		assert.strictEqual(after[2], before[3]);
+		assert.notInclude(after, before[0]);
+	});
+
+	test('the theme: a palette entry a program changes overrides the theme’s, and a reset restores it', async () => {
+		const t = await mount_terminal();
+		const style = (): string => t.root.getAttribute('style') ?? '';
+		assert.notInclude(style(), '--fuz_terminal_palette_1:');
+		assert.include(style(), '--fuz_terminal_palette_16: #000000');
+		t.view.write(`${ESC}]4;1;rgb:12/34/56${ST}`);
+		t.step();
+		assert.include(style(), '--fuz_terminal_palette_1: #123456');
+		t.view.write(`${ESC}]104;1${ST}`);
+		t.step();
+		assert.notInclude(style(), '--fuz_terminal_palette_1:');
+	});
+
+	test('default colors: the theme’s until a program sets both', async () => {
+		const t = await mount_terminal();
+		const style = (): string => t.root.getAttribute('style') ?? '';
+		assert.notInclude(style(), '--fuz_terminal_fg:');
+		t.view.write(`${ESC}]10;rgb:11/22/33${ST}`);
+		t.step();
+		// the library takes the defaults only as a pair: one alone changes nothing
+		assert.notInclude(style(), '--fuz_terminal_fg:');
+		t.view.write(`${ESC}]11;rgb:44/55/66${ST}`);
+		t.step();
+		assert.include(style(), '--fuz_terminal_fg: #112233');
+		assert.include(style(), '--fuz_terminal_bg: #445566');
+	});
+});
+
+describe('the cursor', () => {
+	test('drawn at its cell, a block over the text when focused, hollow otherwise', async () => {
+		const t = await mount_terminal();
+		t.view.write('abc\r\nde\x08');
+		t.step();
+		const cursor = cursor_element(t.root);
+		assert.ok(cursor);
+		assert.strictEqual(cursor.style.getPropertyValue('--cursor_x'), '1');
+		assert.strictEqual(cursor.style.getPropertyValue('--cursor_y'), '1');
+		assert.strictEqual(cursor.style.getPropertyValue('--cursor_width'), '1');
+		assert.isTrue(cursor.classList.contains('cursor-block-hollow'), 'unfocused');
+		assert.strictEqual(cursor.textContent, '');
+		t.view.focus();
+		flushSync();
+		const focused = cursor_element(t.root)!;
+		assert.isTrue(focused.classList.contains('cursor-block'));
+		assert.strictEqual(focused.textContent, 'e');
+		t.root.blur();
+		flushSync();
+		assert.isTrue(cursor_element(t.root)!.classList.contains('cursor-block-hollow'));
+	});
+
+	test('its shape, blinking, a wide character, and hidden', async () => {
+		const t = await mount_terminal();
+		t.view.focus();
+		t.view.write(`${ESC}[6 q`);
+		t.step();
+		let cursor = cursor_element(t.root)!;
+		assert.isTrue(cursor.classList.contains('cursor-bar'));
+		assert.isFalse(cursor.classList.contains('cursor-blinking'));
+		t.view.write(`${ESC}[3 q`);
+		t.step();
+		cursor = cursor_element(t.root)!;
+		assert.isTrue(cursor.classList.contains('cursor-underline'));
+		assert.isTrue(cursor.classList.contains('cursor-blinking'));
+		// on the tail of a wide character: both its columns
+		t.view.write(`${ESC}[2 q漢\x08`);
+		t.step();
+		cursor = cursor_element(t.root)!;
+		assert.strictEqual(cursor.style.getPropertyValue('--cursor_x'), '0');
+		assert.strictEqual(cursor.style.getPropertyValue('--cursor_width'), '2');
+		assert.strictEqual(cursor.textContent, '漢');
+		t.view.write(`${ESC}[?25l`);
+		t.step();
+		assert.isNull(cursor_element(t.root));
+		t.view.write(`${ESC}[?25h`);
+		t.step();
+		assert.ok(cursor_element(t.root));
+	});
+});
+
+describe('replayed output and replies', () => {
+	/** A view whose module loads only once `open` is called, recording replies and bells. */
+	const mount_gated = async (
+		before_ready: (view: FuzTerminal) => void,
+		props: Partial<FuzTerminalOptions> = {}
+	): Promise<Mounted & { replies: Array<string>; bells: () => number }> => {
+		const replies: Array<string> = [];
+		let bells = 0;
+		let open!: () => void;
+		const gate = new Promise<void>((resolve) => (open = resolve));
+		const t = await mount_terminal({
+			props: {
+				ondata: (data) => replies.push(new TextDecoder().decode(data)),
+				onbell: () => bells++,
+				...props
+			},
+			load_vt: async () => {
+				await gate;
+				return load_test_ghostty_vt();
+			},
+			oninstance: (view) => {
+				assert.strictEqual(view.get_status().kind, 'loading');
+				before_ready(view);
+				open();
+			}
+		});
+		return { ...t, replies, bells: () => bells };
+	};
+
+	const QUERY = `${ESC}[6n`;
+
+	test('replay and live both written while loading: only the live query is answered', async () => {
+		const t = await mount_gated((view) => {
+			view.write(`old${QUERY}${BEL}`, { replay: true });
+			view.write(`|new${QUERY}${BEL}`);
+		});
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'old|new');
+		assert.deepEqual(t.replies, [`${ESC}[1;8R`]);
+		assert.strictEqual(t.bells(), 1);
+	});
+
+	test('replay while loading, live once ready', async () => {
+		const t = await mount_gated((view) => view.write(`old${QUERY}${BEL}`, { replay: true }));
+		assert.deepEqual(t.replies, []);
+		assert.strictEqual(t.bells(), 0);
+		t.view.write(`|new${QUERY}${BEL}`);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'old|new');
+		assert.deepEqual(t.replies, [`${ESC}[1;8R`]);
+		assert.strictEqual(t.bells(), 1);
+	});
+
+	test('replay and live both once ready, in either order', async () => {
+		const replies: Array<string> = [];
+		const t = await mount_terminal({
+			props: { ondata: (data) => replies.push(new TextDecoder().decode(data)) }
+		});
+		t.view.write(`a${QUERY}`, { replay: true });
+		t.view.write(`b${QUERY}`);
+		t.view.write(`c${QUERY}`, { replay: true });
+		t.view.write(`d${QUERY}`);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'abcd');
+		// the live queries only, each at the cursor where it was parsed
+		assert.deepEqual(replies, [`${ESC}[1;3R`, `${ESC}[1;5R`]);
+	});
+
+	test('interleaved while loading and after: written in call order, live queries answered', async () => {
+		const t = await mount_gated((view) => {
+			view.write(`1${QUERY}`);
+			view.write(`2${QUERY}`, { replay: true });
+			view.write(`3${QUERY}`);
+		});
+		t.view.write(`4${QUERY}`, { replay: true });
+		t.view.write(`5${QUERY}`);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], '12345');
+		assert.deepEqual(t.replies, [`${ESC}[1;2R`, `${ESC}[1;4R`, `${ESC}[1;6R`]);
+	});
+
+	test('a replay’s title reaches the host, and a hold it leaves open is honored', async () => {
+		const titles: Array<string> = [];
+		const t = await mount_gated(
+			(view) =>
+				view.write(`${ESC}]2;from replay${ST}shown${ESC}[?2026h\r${ESC}[2Khidden`, {
+					replay: true
+				}),
+			{ ontitle: (title) => titles.push(title) }
+		);
+		assert.deepEqual(titles, ['from replay']);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'shown', 'held');
+		assert.strictEqual(t.deps.timers.pending, 1);
+		t.deps.timers.advance(1000);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'hidden');
+	});
+
+	test('a write from onstatus(ready) comes after what was written while loading', async () => {
+		const t = await mount_gated(
+			(view) => {
+				view.write('A');
+				view.write('B', { replay: true });
+			},
+			{
+				onstatus: (status) => {
+					if (status.kind === 'ready') written_by_host?.write('C');
+				}
+			}
+		);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'ABC');
+	});
+
+	test('a write from onresize comes after what was written while loading, at creation and later', async () => {
+		const t = await mount_gated((view) => view.write('A'), {
+			onresize: (size) => written_by_host?.write(`<${size.cols}>`)
+		});
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'A<20>');
+		t.deps.measurement = measurement_for(30, 4);
+		t.deps.fire_resize();
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'A<20><30>');
+	});
+
+	test('a write from a callback inside a write runs right after it', async () => {
+		const echo: { view?: FuzTerminal } = {};
+		const t = await mount_terminal({
+			props: {
+				ondata: () => echo.view?.write('[echo]')
+			}
+		});
+		echo.view = t.view;
+		t.view.write(`x${ESC}[6ny`);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'xy[echo]');
+		assert.isNull(t.root.querySelector('.message'), 'nothing failed');
+	});
+
+	test('get_text reads the screen as plain text', async () => {
+		const t = await mount_terminal();
+		t.view.write('one  \r\ntwo');
+		assert.strictEqual(t.view.get_text(), 'one\ntwo');
+	});
+});
+
+describe('render holds', () => {
+	test('a hold keeps the frame from its start until it ends', async () => {
+		const t = await mount_terminal();
+		t.view.write('done');
+		t.step();
+		t.view.write(`${ESC}[?2026h\r${ESC}[2Khalf`);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'done', 'held');
+		assert.strictEqual(t.deps.timers.pending, 1, 'the hold has a timeout');
+		t.view.write(` more${ESC}[?2026l`);
+		assert.strictEqual(t.deps.timers.pending, 0, 'its timeout cleared');
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'half more');
+	});
+
+	test('the frame a hold starts on is drawn, though later bytes of its write were parsed', async () => {
+		const t = await mount_terminal();
+		t.view.write(`before${ESC}[?2026h\r${ESC}[2Kafter`);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'before');
+	});
+
+	test('a hold that never ends times out, and the view draws again', async () => {
+		const t = await mount_terminal();
+		t.view.write(`stuck${ESC}[?2026h\r${ESC}[2Knew`);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'stuck');
+		t.deps.timers.advance(999);
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'stuck', 'still held');
+		t.deps.timers.advance(1);
+		assert.strictEqual(t.deps.frames.pending, 1, 'the timeout requests a frame');
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'new');
+		t.view.write('!');
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'new!', 'and keeps drawing');
+	});
+});
+
+describe('sizing', () => {
+	test('the terminal follows the box; a storm of changes is one resize per frame', async () => {
+		const sizes: Array<string> = [];
+		const t = await mount_terminal({
+			props: { onresize: ({ cols, rows }) => sizes.push(`${cols}x${rows}`) }
+		});
+		assert.deepEqual(sizes, ['20x4']);
+		for (let i = 0; i < 10; i++) {
+			t.deps.measurement = measurement_for(30 + i, 6);
+			t.deps.fire_resize();
+		}
+		assert.strictEqual(t.deps.frames.pending, 1);
+		t.step();
+		assert.deepEqual(sizes, ['20x4', '39x6']);
+		assert.deepEqual(t.view.get_size(), { cols: 39, rows: 6 });
+		assert.strictEqual(row_elements(t.root).length, 6);
+		// the same size again: no resize
+		t.deps.fire_resize();
+		t.step();
+		assert.deepEqual(sizes, ['20x4', '39x6']);
+	});
+
+	test('an unmeasurable box never resizes', async () => {
+		const sizes: Array<string> = [];
+		const t = await mount_terminal({
+			props: { onresize: ({ cols, rows }) => sizes.push(`${cols}x${rows}`) }
+		});
+		for (const measurement of [
+			null,
+			{ width: 0, height: 0, cell_width: 8, cell_height: 16 },
+			{ width: 800, height: 400, cell_width: 0, cell_height: 16 },
+			{ width: 800, height: 400, cell_width: 8, cell_height: NaN }
+		]) {
+			t.deps.measurement = measurement;
+			t.deps.fire_resize();
+			t.step();
+		}
+		assert.deepEqual(sizes, ['20x4']);
+		assert.deepEqual(t.view.get_size(), { cols: 20, rows: 4 });
+	});
+
+	test('unmeasurable at creation: the default size, then the box once it can be measured', async () => {
+		const sizes: Array<string> = [];
+		const t = await mount_terminal({
+			measurement: null,
+			props: { onresize: ({ cols, rows }) => sizes.push(`${cols}x${rows}`) }
+		});
+		assert.deepEqual(sizes, ['80x24']);
+		t.deps.measurement = measurement_for(10, 3);
+		t.deps.fire_resize();
+		t.step();
+		assert.deepEqual(sizes, ['80x24', '10x3']);
+	});
+});
+
+describe('failure', () => {
+	test('a module that fails to instantiate shows a plain message', async () => {
+		const t = await mount_terminal({
+			load_vt: () => Promise.reject(new Error('no wasm here'))
+		});
+		assert.strictEqual(t.statuses.length, 1);
+		assert.strictEqual(t.statuses[0]!.kind, 'failed');
+		assert.strictEqual(t.view.get_status().kind, 'failed');
+		assert.strictEqual(
+			t.root.querySelector('.message')?.textContent,
+			'the terminal failed: no wasm here'
+		);
+		// writes and reads after failing are quiet
+		t.view.write('ignored');
+		assert.strictEqual(t.view.get_text(), '');
+		assert.strictEqual(t.deps.frames.pending, 0);
+	});
+
+	test('a terminal that can’t be created fails the view', async () => {
+		const t = await mount_terminal({
+			load_vt: () =>
+				load_wrapped_ghostty_vt(() => ({
+					ghostty_terminal_new: () => 1 // a GhosttyResult that isn't success
+				}))
+		});
+		assert.strictEqual(t.view.get_status().kind, 'failed');
+		assert.include(t.root.querySelector('.message')?.textContent, 'ghostty_terminal_new');
+	});
+
+	test('a poisoned instance stops drawing, says so, and tells the host', async () => {
+		const fail = { on: false };
+		const boom = new Error('trap');
+		const t = await mount_terminal({
+			load_vt: () =>
+				load_wrapped_ghostty_vt((exports) => ({
+					ghostty_render_state_update: (...args: Array<unknown>) => {
+						if (fail.on) throw boom;
+						return exports.ghostty_render_state_update(...args);
+					}
+				}))
+		});
+		t.view.write('before');
+		t.step();
+		fail.on = true;
+		t.view.write(' after');
+		t.step();
+		const status = t.view.get_status();
+		assert.strictEqual(status.kind, 'poisoned');
+		assert(status.kind === 'poisoned');
+		assert.strictEqual(status.error, boom);
+		assert.deepEqual(
+			t.statuses.map((s) => s.kind),
+			['ready', 'poisoned']
+		);
+		assert.include(t.root.querySelector('.message')?.textContent, 'must be reopened');
+		assert.strictEqual(rows_text(t.root)[0], 'before', 'the last frame stays');
+		t.view.write('more');
+		assert.strictEqual(t.deps.frames.pending, 0, 'nothing more is drawn');
+	});
+
+	test('a callback that throws is reported, and the terminal goes on', async () => {
+		const errors: Array<unknown> = [];
+		const boom = new Error('host bug');
+		const t = await mount_terminal({
+			props: {
+				onbell: () => {
+					throw boom;
+				},
+				onerror: (error) => errors.push(error)
+			}
+		});
+		t.view.write(`a${BEL}b`);
+		t.step();
+		assert.deepEqual(errors, [boom]);
+		assert.strictEqual(t.view.get_status().kind, 'ready');
+		assert.strictEqual(rows_text(t.root)[0], 'ab');
+		assert.strictEqual(
+			t.root.querySelector('.message')?.textContent,
+			'a terminal callback failed: host bug'
+		);
+	});
+
+	test('a resize callback that throws, from a frame, is reported, not thrown', async () => {
+		const errors: Array<unknown> = [];
+		const t = await mount_terminal({
+			props: {
+				onresize: (size) => {
+					if (size.cols === 30) throw new Error('resize bug');
+				},
+				onerror: (error) => errors.push(error)
+			}
+		});
+		t.deps.measurement = measurement_for(30, 4);
+		t.deps.fire_resize();
+		t.step();
+		assert.strictEqual(errors.length, 1);
+		assert.deepEqual(t.view.get_size(), { cols: 30, rows: 4 });
+	});
+});
+
+describe('unmounting', () => {
+	test('disposes everything: no frame, timer, observer, or call into the module after', async () => {
+		let calls = 0;
+		const t = await mount_terminal({
+			load_vt: () =>
+				load_wrapped_ghostty_vt((exports) => {
+					const counted: Record<string, unknown> = {};
+					for (const [name, value] of Object.entries(exports)) {
+						if (typeof value !== 'function') continue;
+						counted[name] = (...args: Array<unknown>): unknown => {
+							calls++;
+							return value(...args);
+						};
+					}
+					return counted;
+				})
+		});
+		t.view.write(`x${ESC}[?2026h`); // a hold, so a timer is pending
+		assert.strictEqual(t.deps.timers.pending, 1);
+		assert.strictEqual(t.deps.frames.pending, 1);
+		assert.strictEqual(t.deps.observing, 1);
+		const view = t.view;
+		const before_unmount = calls;
+		t.unmount();
+		assert.isAbove(calls, before_unmount, 'freeing called in');
+		const after_unmount = calls;
+		assert.strictEqual(t.deps.frames.pending, 0);
+		assert.strictEqual(t.deps.timers.pending, 0);
+		assert.strictEqual(t.deps.observing, 0);
+		// a stray callback or host call after unmount reaches nothing
+		view.write('late');
+		assert.strictEqual(view.get_text(), '');
+		t.deps.frames.step();
+		t.deps.timers.advance(5000);
+		t.deps.fire_resize();
+		assert.strictEqual(calls, after_unmount);
+	});
+
+	test('unmounted while loading: the instance is dropped unused', async () => {
+		const module = await compile_test_ghostty_vt();
+		let resolve_vt!: (vt: GhosttyVt) => void;
+		const deps = create_test_fuz_terminal_deps(
+			() => new Promise((resolve) => (resolve_vt = resolve)),
+			measurement_for(20, 4)
+		);
+		const statuses: Array<FuzTerminalStatus> = [];
+		const target = document.createElement('div');
+		document.body.append(target);
+		const mounted = mount(FuzTerminalHarness, {
+			target,
+			props: { deps, props: { module, onstatus: (s) => statuses.push(s) }, oninstance: () => {} }
+		});
+		flushSync();
+		// the instantiate is in flight
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.isFunction(resolve_vt);
+		void unmount(mounted);
+		flushSync();
+		target.remove();
+		let calls = 0;
+		const vt = await load_wrapped_ghostty_vt((exports) => {
+			const counted: Record<string, unknown> = {};
+			for (const [name, value] of Object.entries(exports)) {
+				if (typeof value !== 'function') continue;
+				counted[name] = (...args: Array<unknown>): unknown => {
+					calls++;
+					return value(...args);
+				};
+			}
+			return counted;
+		});
+		// constructing the instance called in; only what follows counts
+		calls = 0;
+		resolve_vt(vt);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.strictEqual(calls, 0);
+		assert.deepEqual(statuses, []);
+		assert.strictEqual(deps.frames.pending, 0);
+	});
+});
+
+/** A load that counts every call into the instance after it's made (construction excluded). */
+const counted_load = (): {
+	load_vt: () => Promise<GhosttyVt>;
+	calls: () => number;
+	fail: { call: string | null; error: Error };
+} => {
+	let calls = 0;
+	let counting = false;
+	const fail: { call: string | null; error: Error } = { call: null, error: new Error('trap') };
+	return {
+		calls: () => calls,
+		fail,
+		load_vt: async () => {
+			const vt = await load_wrapped_ghostty_vt((exports) => {
+				const counted: Record<string, unknown> = {};
+				for (const [name, value] of Object.entries(exports)) {
+					if (typeof value !== 'function') continue;
+					counted[name] = (...args: Array<unknown>): unknown => {
+						if (counting) calls++;
+						if (name === fail.call) throw fail.error;
+						return value(...args);
+					};
+				}
+				return counted;
+			});
+			counting = true;
+			return vt;
+		}
+	};
+};
+
+describe('colors and the cursor color', () => {
+	test('reverse video over the theme’s defaults isn’t drawn: the library swaps only colors a program set', async () => {
+		const t = await mount_terminal();
+		const before = t.root.getAttribute('style');
+		t.view.write(`${ESC}[?5h`);
+		t.step();
+		assert.strictEqual(t.root.getAttribute('style'), before);
+		assert.notInclude(before ?? '', '--fuz_terminal_fg:');
+	});
+
+	test('a program’s cursor color is its own property; the palette string is left alone', async () => {
+		const t = await mount_terminal();
+		const theme = (): string =>
+			(t.root.getAttribute('style') ?? '').replace(/;?\s*--fuz_terminal_cursor:[^;]*/, '');
+		const before = theme();
+		assert.strictEqual(t.root.style.getPropertyValue('--fuz_terminal_cursor'), '');
+		t.view.write(`${ESC}]12;rgb:00/ff/00${ST}`);
+		t.step();
+		assert.strictEqual(t.root.style.getPropertyValue('--fuz_terminal_cursor'), '#00ff00');
+		assert.strictEqual(theme(), before);
+		t.view.write(`${ESC}]112${ST}`);
+		t.step();
+		assert.strictEqual(t.root.style.getPropertyValue('--fuz_terminal_cursor'), '');
+	});
+
+	test('the measured cell sizes every box, as custom properties on the root', async () => {
+		const t = await mount_terminal({
+			measurement: { width: 200, height: 70, cell_width: 8.5, cell_height: 17 }
+		});
+		assert.strictEqual(t.root.style.getPropertyValue('--fuz_terminal_cell_width'), '8.5px');
+		assert.strictEqual(t.root.style.getPropertyValue('--fuz_terminal_cell_height'), '17px');
+		t.deps.measurement = { width: 200, height: 70, cell_width: 9, cell_height: 18 };
+		t.deps.fire_resize();
+		t.step();
+		assert.strictEqual(t.root.style.getPropertyValue('--fuz_terminal_cell_width'), '9px');
+	});
+
+	test('unmeasured: no cell properties, so the boxes fall back to the font’s own', async () => {
+		const t = await mount_terminal({ measurement: null });
+		assert.strictEqual(t.root.style.getPropertyValue('--fuz_terminal_cell_width'), '');
+		assert.strictEqual(t.root.style.getPropertyValue('--fuz_terminal_cell_height'), '');
+	});
+});
+
+describe('structure', () => {
+	test('a root box holding a layer of block rows of inline runs, a cursor, and a probe', async () => {
+		const t = await mount_terminal();
+		t.view.write(`a${ESC}[31mb`);
+		t.step();
+		const children = Array.from(t.root.children).map((child) => child.className.split(' ')[0]);
+		assert.deepEqual(children, ['grid', 'probe']);
+		const grid = t.root.querySelector('.grid')!;
+		// the rows and cursor live in the layer, never as the root's own content
+		assert.strictEqual(grid.querySelectorAll('.row').length, 4);
+		assert.ok(grid.querySelector('.cursor'));
+		for (const row of row_elements(t.root)) {
+			assert.strictEqual(row.parentElement, grid);
+			assert.strictEqual(row.tagName, 'DIV');
+			for (const run of run_elements(row)) assert.strictEqual(run.tagName, 'SPAN');
+		}
+	});
+});
+
+describe('guards', () => {
+	test('a hold that begins after a callback unmounted the view, in the same write, does nothing', async () => {
+		const { load_vt, calls } = counted_load();
+		const t = await mount_terminal({
+			load_vt,
+			props: { ontitle: () => t_ref.unmount() }
+		});
+		const t_ref = t;
+		t.view.write(`abc${ESC}]2;x${ST}${ESC}[?2026hdef`);
+		const after = calls();
+		assert.strictEqual(t.deps.timers.pending, 0, 'no hold timer');
+		assert.strictEqual(t.deps.frames.pending, 0);
+		t.deps.frames.step();
+		t.deps.timers.advance(5000);
+		assert.strictEqual(calls(), after, 'nothing called in after the write');
+		assert.strictEqual(t.view.get_text(), '');
+	});
+
+	test('a hold whose own update poisons leaves no timer, and stops the view', async () => {
+		const { load_vt, fail } = counted_load();
+		const t = await mount_terminal({ load_vt });
+		fail.call = 'ghostty_render_state_update';
+		t.view.write(`x${ESC}[?2026h`);
+		assert.strictEqual(t.view.get_status().kind, 'poisoned');
+		assert.strictEqual(t.deps.timers.pending, 0);
+		assert.strictEqual(t.deps.frames.pending, 0);
+	});
+
+	test('disposing after poison calls nothing into the module', async () => {
+		const { load_vt, calls, fail } = counted_load();
+		const t = await mount_terminal({ load_vt });
+		t.view.write('x');
+		t.step();
+		fail.call = 'ghostty_terminal_vt_write';
+		t.view.write('y');
+		assert.strictEqual(t.view.get_status().kind, 'poisoned');
+		const before = calls();
+		t.unmount();
+		assert.strictEqual(calls(), before);
+	});
+
+	test('an ondata that writes its replies back is bounded, reported, and the view goes on', async () => {
+		const errors: Array<unknown> = [];
+		let replies = 0;
+		const t = await mount_terminal({
+			measurement: measurement_for(40, 4),
+			props: {
+				ondata: () => {
+					replies++;
+					// the host stops echoing on its own, so a regressed bound fails the count below instead of hanging
+					if (replies <= 4 * FUZ_TERMINAL_MAX_CALLBACK_WRITES) written_by_host?.write(`${ESC}[6n`);
+				},
+				onerror: (error) => errors.push(error)
+			}
+		});
+		t.view.write(`${ESC}[6n`);
+		assert.strictEqual(replies, FUZ_TERMINAL_MAX_CALLBACK_WRITES + 1);
+		assert.strictEqual(errors.length, 1, 'reported once');
+		assert.include(String(errors[0]), 'dropped output written from a callback');
+		assert.strictEqual(t.view.get_status().kind, 'ready');
+		// the next outermost write has a budget of its own
+		t.view.write(`ok${ESC}[6n`);
+		assert.strictEqual(replies, 2 * (FUZ_TERMINAL_MAX_CALLBACK_WRITES + 1));
+		assert.strictEqual(errors.length, 2);
+		t.step();
+		assert.include(rows_text(t.root)[0], 'ok');
+	});
+});
+
+describe('an unsized box', () => {
+	const UNSIZED = 'its box has no size';
+	const warnings = (spy: { mock: { calls: Array<Array<unknown>> } }): number =>
+		spy.mock.calls.filter((call) => String(call[0]).includes(UNSIZED)).length;
+
+	test('unmeasurable at ready: one console warning on the first frame, never a status', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const t = await mount_terminal({ measurement: null });
+			assert.strictEqual(warnings(warn), 0, 'not before a frame');
+			t.step();
+			assert.strictEqual(warnings(warn), 1);
+			assert.include(String(warn.mock.calls[0]![0]), 'FuzTerminal');
+			assert.include(String(warn.mock.calls[0]![0]), 'definite size');
+			assert.strictEqual(t.view.get_status().kind, 'ready');
+			// still unmeasurable on later frames: no more warnings
+			t.deps.fire_resize();
+			t.step();
+			t.view.write('x');
+			t.step();
+			assert.strictEqual(warnings(warn), 1);
+			// sized, then unsized again: still the one
+			t.deps.measurement = measurement_for(10, 3);
+			t.deps.fire_resize();
+			t.step();
+			t.deps.measurement = null;
+			t.deps.fire_resize();
+			t.step();
+			assert.strictEqual(warnings(warn), 1);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	test('measurable: no warning', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const t = await mount_terminal();
+			t.step();
+			t.deps.measurement = null;
+			t.deps.fire_resize();
+			t.step();
+			assert.strictEqual(warnings(warn), 0);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	test('unmeasurable at start but sized by the first frame: no warning', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const t = await mount_terminal({ measurement: null });
+			t.deps.measurement = measurement_for(10, 3);
+			t.step();
+			assert.strictEqual(warnings(warn), 0);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+});
+
+describe('the module as a promise', () => {
+	test('loading until it settles; a rejection fails the view with a plain message', async () => {
+		let reject!: (error: Error) => void;
+		const module = new Promise<WebAssembly.Module>((_, r) => (reject = r));
+		const pending = mount_terminal({ props: { module } });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		reject(new Error('404 ghostty-vt.wasm'));
+		const t = await pending;
+		assert.deepEqual(
+			t.statuses.map((s) => s.kind),
+			['failed']
+		);
+		assert.strictEqual(
+			t.root.querySelector('.message')?.textContent,
+			'the terminal failed: 404 ghostty-vt.wasm'
+		);
+	});
+
+	test('a promise of the compiled module works like the module', async () => {
+		const t = await mount_terminal({ props: { module: compile_test_ghostty_vt() } });
+		t.view.write('hi');
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'hi');
+	});
+
+	test('unmounted before it settles: nothing is loaded or reported', async () => {
+		let resolve!: (module: WebAssembly.Module) => void;
+		const module = new Promise<WebAssembly.Module>((r) => (resolve = r));
+		let loads = 0;
+		const deps = create_test_fuz_terminal_deps(
+			() => {
+				loads++;
+				return load_test_ghostty_vt();
+			},
+			measurement_for(20, 4)
+		);
+		const statuses: Array<FuzTerminalStatus> = [];
+		const target = document.createElement('div');
+		document.body.append(target);
+		const mounted = mount(FuzTerminalHarness, {
+			target,
+			props: { deps, props: { module, onstatus: (s) => statuses.push(s) }, oninstance: () => {} }
+		});
+		flushSync();
+		void unmount(mounted);
+		flushSync();
+		target.remove();
+		resolve(await compile_test_ghostty_vt());
+		await new Promise((r) => setTimeout(r, 0));
+		assert.strictEqual(loads, 0);
+		assert.deepEqual(statuses, []);
+	});
+});

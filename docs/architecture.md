@@ -609,9 +609,11 @@ clients find them `lost` when they resync.
 ### fuz_terminal
 
 `src/lib/fuz_terminal/` binds libghostty-vt's wasm build — Ghostty's
-emulator: parsing, the screens, scrollback with reflow — for a renderer of
-zzz's own to replace xterm.js. The terminal views don't use it yet. It has no
-DOM or Svelte dependency, so its behavior is tested in Node:
+emulator: parsing, the screens, scrollback with reflow — and draws it with
+`FuzTerminal.svelte`, a DOM renderer of zzz's own to replace xterm.js. The
+terminal views don't use either yet: they render with xterm.js, and no page
+hosts `FuzTerminal`. The binding has no DOM or Svelte dependency, so its
+behavior is tested in Node:
 
 - `ghostty_vt.ts` — `load_ghostty_vt` and `GhosttyVt`: the instance (its
   function exports guarded against an escaping exception, below), its
@@ -644,6 +646,23 @@ DOM or Svelte dependency, so its behavior is tested in Node:
 - `ghostty_manifest.ts`, `ghostty_errors.ts` — the manifest reader (enum
   values, struct layouts, and the bit positions of packed types such as
   `GhosttyCell`, which aren't ABI) and the binding's errors.
+
+The renderer, beside it (tested under jsdom with the built module):
+
+- `FuzTerminal.svelte` — the view: the root element, the keyed rows, the
+  cursor, a cell probe, and a plain-text message for a failure.
+- `fuz_terminal_state.svelte.ts` — `FuzTerminalState`: the view's instance,
+  terminal, and reader, the frame loop, render holds, sizing, and errors;
+  `FuzTerminalOptions` is the host's side (the component's props).
+- `fuz_terminal_style.ts` — styles and colors to CSS: a style's declarations
+  (cached by key), and the root's color custom properties for a frame.
+- `fuz_terminal_layout.ts` — the size in cells from a measurement, a row's
+  runs split for boxing, and the cursor's box.
+- `fuz_terminal_frame.ts` — `FuzTerminalFrameLoop`, at most one frame
+  pending.
+- `fuz_terminal_deps.ts` — `FuzTerminalDeps` (loading, frames, a timer,
+  resize observation, measuring), the browser's defaults, and the context
+  a test sets its own through.
 
 **Effects.** A program's output asks the terminal for things it can't do
 itself — answer a query, ring the bell, retitle the window. libghostty-vt
@@ -814,6 +833,182 @@ a handler is allowed: an update reads the terminal and consumes its change
 tracking without changing what it shows, and effects fire between whole
 steps of the parse. Writing, resizing, or disposing the terminal from a
 handler still throws `GhosttyReentrancyError`.
+
+**The DOM renderer.** `FuzTerminal` draws one terminal's screen as DOM
+text — output only. It takes no keyboard input, paste, IME, or mouse
+reporting yet, doesn't scroll into the scrollback, and has no selection or
+copy of its own: the rows are text, so the browser's selection works over
+them. Each row is a block of inline runs, so a selection copies a row as one
+line and a block of rows as one line per row — a soft-wrapped line copies
+broken at the wrap (the rows don't carry the wrap flag yet). It has no
+dependency on zzz's app — no cells, no actions.
+
+*Ownership.* The host loads and compiles the module and passes it — or the
+promise of it, a fetch and compile in flight — as `module`; the view is
+`loading` until it settles and `failed` if it rejects. The view
+instantiates its own instance, terminal, and render-state reader, and frees
+the terminal (which frees the reader first) and drops the instance on
+unmount; unmounted before the module arrives, it instantiates nothing. One
+instance per view: an escape that poisons an instance stops only that view,
+a huge terminal's memory growth is its own, and an unmounted view's linear
+memory can be collected (wasm memory never shrinks while its instance
+lives). Instantiating from a compiled module and creating the terminal and
+reader is cheap next to the compile the host does once; each instance
+parses its own type manifest, the larger part of that cost.
+
+*Host API.* Props: `module`; `scrollback_max_bytes`; `label`, the
+accessible name; and the callbacks `ondata` (bytes for the PTY), `onresize`
+(the size in cells, at creation and on each change), `ontitle`, `onbell`,
+`onstatus`, and `onerror`. `module` and `scrollback_max_bytes` are read once,
+when the view starts; the callbacks whenever they're called, and never once
+the view is destroyed. Through `bind:this` the host calls:
+
+- `write(data, options?)` — bytes or a string, written in call order:
+  queued while the module loads; from a callback inside a write, written
+  right after that write rather than reentering it. Callbacks may make at
+  most `FUZ_TERMINAL_MAX_CALLBACK_WRITES` writes during one outermost write
+  or resize — past that they're dropped and reported through `onerror`, so
+  an `ondata` that writes its replies back as output can't loop forever.
+  `{replay: true}` marks output replayed from a buffer: it's processed with
+  the reply effects (`write_pty`, `bell`) unregistered, whether it arrives
+  while loading or later, so a query in it is never answered and a bell in it
+  never rings, whatever it's interleaved with. A title it sets reaches
+  `ontitle`, a render hold it starts is honored, and what it does to the
+  terminal's state carries forward (above).
+- `get_text()` — the screen as plain text through the formatter, for a
+  copy-all.
+- `focus()`, `get_status()`, `get_size()`.
+
+The status is `loading`, `ready`, `failed` (the module didn't arrive,
+compile, or instantiate, the terminal couldn't be created, or the library
+failed), or `poisoned` (`GhosttyVt.poisoned`); a failed or poisoned view
+keeps its last frame, shows a plain-text message, ignores writes, and a host
+recovers by mounting a new one. `onstatus` hears of `ready` after the writes
+queued while loading are written, so a write it makes follows them, and
+replies to those writes reach `ondata` before it. A
+callback that throws — inside a write, from a frame, or on a resize — never
+escapes: it's handed to `onerror` (or the console) and shown as a notice,
+and the view goes on.
+
+*What a host provides.* A sized box: the view fills its container (`width`
+and `height` 100%), and its own content never sizes it — the rows are a
+layer positioned over the root's box. So the container needs a definite
+size: an explicit height, or a stretched flex or grid item (`min-height: 0`
+in a flex column). A container with no size leaves the view unmeasurable,
+and the terminal keeps its size (`FUZ_TERMINAL_DEFAULT_SIZE` at first)
+until the box has one. A view whose first frame finds no size warns once in
+the console, naming what's missing (a hidden view warns too); it's never a
+failure.
+
+*The frame loop.* A frame is requested after output, after the box changes
+size, and when a render hold ends, and at most one is pending
+(`FuzTerminalFrameLoop`); with nothing changing nothing is scheduled. A
+frame resizes the terminal if the box changed, then updates the reader and
+takes `rows` when the update wasn't clean, and the `cursor` and colors by
+reference every frame, since those change on clean updates too, then cleans
+it. The rows are held in `$state.raw` and drawn by a keyed `{#each}` over the
+row ids: an unchanged row is the same object, and Svelte skips a keyed item
+whose value is the same reference, so its elements aren't touched; an
+ordinary scroll moves the elements of the rows still on screen. A scroll
+inside a scroll region, or inserted or deleted lines, gives every row of the
+library's page a new id, so those frames recreate every row's elements.
+
+*Render holds.* On the `render_hold` effect's start the view updates from
+inside the handler — the frame the program wants left on screen — and
+updates nothing more until the hold ends or `FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS`
+passes; after that it draws again. It can't end the hold in the terminal
+(that needs the mode option, unbound), so a hold the program starts before
+resetting a timed-out one isn't seen. A hold that begins after the view was
+destroyed or stopped — later in the same write — does nothing.
+
+*Drawing a row.* A row is a block with a pinned height; each run is an
+inline box (`inline-block`, top-aligned) as wide as its columns. Every box —
+runs, clusters, the cursor — is sized in one cell width, the probe's
+measurement, set on the root as `--fuz_terminal_cell_width` and
+`--fuz_terminal_cell_height` in pixels (falling back to the font's own `1ch`
+and line until there's a measurement), never each run's own font: a bold
+face whose advance differs can't shift the columns after it. So a glyph from
+a fallback font can't shift what follows either. A cluster run (a wide
+character, a multi-code-point grapheme) is one box of its width; a run whose
+text mixes ASCII and other code points is split where it changes between
+them (`split_fuz_terminal_runs`), so a stretch of glyphs the font lacks
+shifts at most within itself. The root turns off ligatures and resets
+letter and word spacing, so a host's typography can't break the grid.
+Trailing blanks make no run, so the row's background shows. Text reaches
+the DOM only as text nodes; a run's `style` attribute holds only
+declarations built from the style's flags and colors formatted from numbers
+(`to_fuz_terminal_style_css`, cached by style key and bounded): colors,
+`inverse` swapping the resolved colors (defaults included), `faint` as the
+text color mixed toward transparent, `invisible` as transparent text and
+lines, bold, italic, and the underline kinds, strikethrough, and overline
+as `text-decoration` lines. Blink and hyperlinks are classes: blinking
+text, off under `prefers-reduced-motion`; a hyperlink underlined on hover,
+with no link to follow.
+
+*Colors.* Colors are never read from the theme into JS. Runs name custom
+properties — `--fuz_terminal_fg`, `--fuz_terminal_bg`, and
+`--fuz_terminal_palette_0` … `_255` — that the root defines. The stylesheet
+gives the defaults and the base 16 from the theme; the root's inline style
+(`to_fuz_terminal_theme_css`) sets palette entries 16–255 from the frame,
+and overrides a base-16 entry only when it differs from the palette the
+reader reported before any output (a program changed it with OSC 4; OSC 104
+gives the theme's back). The default text color and background are the
+theme's while the reader reports the library's placeholders, and the
+program's once it has set both (OSC 10 and 11 — the library takes them only
+as a pair). Reverse video (DECSCNM) isn't drawn while the defaults are the
+theme's: the library swaps only colors a program set, so with its
+placeholders the frame's colors don't change. A cursor color the program
+sets (OSC 12) is its own property on the root, so a program that recolors
+the cursor often (vim, per mode) leaves the palette's style alone. A host
+themes the view by setting, on an ancestor:
+
+| custom property | default |
+| --- | --- |
+| `--fuz_terminal_foreground` | `--text_color` |
+| `--fuz_terminal_background` | `--shade_00` |
+| `--fuz_terminal_cursor_color` | the text color in effect (a program's own included) |
+| `--fuz_terminal_color_0` (black), `_8` (bright black) | `#1c1c1c`, `#808080` |
+| `--fuz_terminal_color_7` (white), `_15` (bright white) | `#c8c8c8`, `#f8f8f8` |
+| `--fuz_terminal_color_1`–`_6` (red, green, yellow, blue, magenta, cyan) | `--palette_c_50`, `_b_`, `_e_`, `_a_`, `_d_`, `_i_` |
+| `--fuz_terminal_color_9`–`_14` (the bright ones) | the same hues at `_70` |
+| `--fuz_terminal_font_family` | `--font_family_mono` |
+| `--fuz_terminal_font_size` | `--font_size_sm` |
+| `--fuz_terminal_line_height` | `1.2` |
+
+Only the default foreground and background follow the color scheme. ANSI
+black is dark and white light in either scheme — programs rely on that
+(black text on a green status bar, white on blue) — and fuz_css's gray
+scales follow the scheme (its only fixed opaque neutrals are pure black and
+white), so these are literal grays. The six
+hues are fuz_css palette stops, the bright ones the higher-contrast stops in
+either scheme. The terminal itself isn't told the theme, so a program that
+queries a color (OSC 10, 11, or 4) gets the library's placeholders.
+
+*The cursor.* One element over the rows at the cursor's cell, two cells
+wide over a wide character (on either of its cells), in the shape the
+program set — a block (drawing the cell's text in the background color, or
+a blank over invisible text), a bar, an underline, or a hollow block — and
+hidden when the program hides it or it's out of the viewport. Without focus
+a block is hollow and nothing blinks; a blinking cursor blinks by CSS, not
+under `prefers-reduced-motion`.
+
+*Sizing.* A hidden probe — a run of cells in the terminal's font, with the
+line height the rows fall back to — measures the cell (its width over its
+length, its height a row's), and the root's box is the area;
+`to_fuz_terminal_size` turns them into cols and rows — whole cells, at least
+`FUZ_TERMINAL_MIN_COLS` × `FUZ_TERMINAL_MIN_ROWS`, at most
+`GHOSTTY_TERMINAL_MAX_SIZE` — or `null` when anything is zero or not finite
+(not laid out, `display: none`, no size from the container), which never
+resizes the terminal. A `ResizeObserver` on the root and the probe (so a font
+that loads late re-measures too) requests a frame, so a storm of size
+changes costs one resize per frame. The terminal is created at the measured
+size, or `FUZ_TERMINAL_DEFAULT_SIZE` when there's nothing to measure yet.
+
+*Accessibility.* The root is focusable (`tabindex="0"`, a `group` with the
+`terminal` role description and `label` as its name); the rows are plain
+text in the accessibility tree, the cursor and probe are hidden from it,
+and nothing is a live region, so a repaint announces nothing. A deliberate
+screen-reader mode is still to come.
 
 The module is a static asset (`static/fuz_terminal/ghostty-vt.wasm`) built by
 `cargo xtask ghostty-vt`, not an import, so a build without it still

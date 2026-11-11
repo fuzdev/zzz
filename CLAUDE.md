@@ -213,7 +213,7 @@ src/
 │   ├── cell.svelte.ts            # Base Cell class
 │   ├── cell_classes.ts           # Cell class registry
 │   ├── indexed_collection.svelte.ts
-│   ├── fuz_terminal/             # libghostty-vt binding (DOM-free; the terminal UI doesn't use it yet)
+│   ├── fuz_terminal/             # libghostty-vt binding + `FuzTerminal.svelte`, its DOM renderer (the terminal UI doesn't use them yet)
 │   │
 │   ├── *.svelte                  # UI components
 │   ├── *.gen.ts                  # Generators (hand-written) — run `gro gen`
@@ -267,9 +267,11 @@ See ./docs/architecture.md for detailed data flow, content model, and IndexedCol
 
 `src/lib/fuz_terminal/` is a TypeScript binding over
 [libghostty-vt](https://lib.ghostty.org/vt/), Ghostty's terminal emulator as
-a C library, compiled to WebAssembly. It is DOM-free and Svelte-free, runs in
-Node and browsers, and **the terminal UI doesn't use it yet** — terminals
-render with xterm.js. `load_ghostty_vt` (`ghostty_vt.ts`) takes the module's
+a C library, compiled to WebAssembly, and `FuzTerminal.svelte`, a DOM
+renderer over it (see **The DOM renderer** below). The binding is DOM-free
+and Svelte-free and runs in Node and browsers. **The terminal UI doesn't use
+either yet** — no page hosts `FuzTerminal`, and terminals render with
+xterm.js. `load_ghostty_vt` (`ghostty_vt.ts`) takes the module's
 bytes, a `Response`, or a compiled module from its caller (it never fetches
 an app path), checks it imports nothing and exports what the binding calls,
 and reads the type manifest (`ghostty_type_json()`): every enum value, struct
@@ -369,6 +371,44 @@ row is stale until something else touches it. Row ids are unique within an
 update, but the library numbers the alternate screen's rows apart from the
 primary's, so an id can come back for a different row after a screen switch
 (its object then holds that row).
+
+**The DOM renderer** (`FuzTerminal.svelte`, state in
+`fuz_terminal_state.svelte.ts` as `FuzTerminalState`) draws one terminal,
+output only: no keyboard input, paste, IME, mouse reporting, or scrollback
+scrolling, and selection is the browser's own over the row text (a row
+copies as one line; a soft-wrapped line copies as one line per row). It
+knows nothing of zzz's app. Its `module` prop is the compiled module or a
+promise of it (`loading` until it settles, `failed` if it rejects); it
+instantiates its own instance — one per view, so a poisoned instance or a
+huge terminal affects only that view, and an unmounted view's memory can be
+collected — and creates and, on unmount, frees its terminal and reader. Its
+other props are `scrollback_max_bytes`, `label`, and the callbacks `ondata`
+(bytes for the PTY: replies to queries), `onresize` (cols and rows),
+`ontitle`, `onbell`, `onstatus` (`loading` → `ready`, or `failed` /
+`poisoned`, each shown as a plain-text message; a host recovers by
+remounting), and `onerror` (a callback threw, or wrote back too much;
+reported, not fatal). Via `bind:this` the host calls `write(data, options?)`
+— bytes or a string, in call order, queued while loading; `{replay: true}`
+for buffered history, processed with no reply effects registered, so its
+queries go unanswered and its bells silent — plus `get_text` (the
+formatter's plain text, for a copy-all), `focus`, `get_status`, and
+`get_size`. It draws at most once per animation frame and only after output,
+a resize, or a render hold ending — idle otherwise; render holds are honored
+for up to `FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS`. Rows are a keyed list over
+the reader's `rows` (`$state.raw`), so an unchanged row is skipped; each run
+is an inline box sized in measured cells. The host gives it a sized box —
+it fills its container, which needs a definite size; its own content never
+sizes it — and its size in cells follows that box (`ResizeObserver` and a
+probe of the font's cell; an unmeasurable box never resizes it). Colors are
+CSS custom properties: a host themes it by setting
+`--fuz_terminal_foreground`, `--fuz_terminal_background`,
+`--fuz_terminal_cursor_color`, `--fuz_terminal_color_0` …
+`--fuz_terminal_color_15`, `--fuz_terminal_font_family`,
+`--fuz_terminal_font_size`, or `--fuz_terminal_line_height` on an ancestor;
+the default foreground and background follow the theme, ANSI black and
+white stay dark and light in either scheme. Frames, timers, measuring, and
+loading come from `fuz_terminal_deps_context` (`FuzTerminalDeps`), so tests
+step them by hand. ./docs/architecture.md § fuz_terminal has the details.
 
 The module isn't committed: `cargo xtask ghostty-vt` builds it from the
 pinned libghostty-vt release (needs Zig 0.17; ./docs/development.md §
