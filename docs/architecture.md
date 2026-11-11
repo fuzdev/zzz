@@ -606,6 +606,36 @@ server's environment minus its secrets and config (`SECRET_*`, `FUZ_*`,
 in-memory process state — no persistence; a server restart ends them, and
 clients find them `lost` when they resync.
 
+### fuz_terminal
+
+`src/lib/fuz_terminal/` binds libghostty-vt's wasm build — Ghostty's
+emulator: parsing, the screens, scrollback with reflow — for a renderer of
+zzz's own to replace xterm.js. The terminal views don't use it yet. It has no
+DOM or Svelte dependency, so its behavior is tested in Node:
+
+- `ghostty_vt.ts` — `load_ghostty_vt` and `GhosttyVt`: the instance, its
+  validated type manifest, its build info (version, compiled-in features),
+  and `check` for result codes. The core resolves its constants at load
+  (`GhosttyVt.constants`); each other module resolves its own once, on first
+  use (`GhosttyVt.resolve`), so enum values and offsets are never hardcoded.
+- `ghostty_terminal.ts` — `GhosttyTerminal`: write, resize, plain-text
+  format, dispose. A query in the output gets no reply: no `write_pty`
+  effect is registered. Width and height are capped at
+  `GHOSTTY_TERMINAL_MAX_SIZE` cells: the screen is allocated up front and
+  wasm memory never shrinks, so an absurd size (a bad cell measurement) is
+  refused before it can grow memory by gigabytes. Writes go through a
+  per-terminal buffer kept between writes.
+- `ghostty_memory.ts` — linear memory: views cached until memory grows,
+  never held across an export call; scratch and opaque-slot allocations
+  freed on every path. Buffers the library allocates
+  (the formatter's output) are freed with `ghostty_free`.
+- `ghostty_manifest.ts`, `ghostty_errors.ts` — the manifest reader and the
+  binding's errors.
+
+The module is a static asset (`static/fuz_terminal/ghostty-vt.wasm`) built by
+`cargo xtask ghostty-vt`, not an import, so a build without it still
+succeeds.
+
 ## Recording
 
 `Recorder` (`recorder.svelte.ts`) is an app-level cell that records the microphone to a file on disk. Being app-level, a recording carries on across route changes; `RecorderIndicator` in the root layout shows it — status, duration, pause and stop — on every page while the microphone may be open.

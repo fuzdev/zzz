@@ -202,7 +202,7 @@ JSON object is an error (exit 2) even when a daemon is already running.
 crates/                               # Rust workspace
 │   ├── CLAUDE.md                     # Rust backend docs
 │   ├── zzz/                          # Rust CLI (argh) — daemon lifecycle, init, open, version
-│   ├── xtask/                        # Dev automation: `cargo xtask dev` (build + run zzzd + Vite), `dev-setup`/`prod-setup` (env files), `check-release` (dep-graph audit — sanity check #2 of the test-binary pattern)
+│   ├── xtask/                        # Dev automation: `cargo xtask dev` (build + run zzzd + Vite), `dev-setup`/`prod-setup` (env files), `check-release` (dep-graph audit — sanity check #2 of the test-binary pattern), `ghostty-vt` (the terminal emulator's wasm module)
 │   ├── testing_zzz_server/           # Test-mode binary — wires `fuz_testing::TestingArgon2idHasher` for fast cross-process integration tests. **Never ships in a release.**
 │   └── zzz_server/                   # Axum JSON-RPC server — full spine consumer (single `/api/rpc` + `/api/ws` on `fuz_actions::ActionRegistry`)
 │       └── src/                      # `run_app` lifecycle (`lib.rs`) + thin `main.rs`; `handlers/` (App state + `broadcast` shim + per-domain RPC handlers) + `zzz_action_specs/` (spec builders), `provider/` (AI providers), `file_bytes.rs` (byte routes), `filer.rs`, `job_manager.rs`, `media.rs` + `tool.rs` (`ffmpeg` runs, local tools), `transcription/`, `pty_manager.rs`, `scoped_fs.rs`, `utf8_stream.rs`. Startup errors, the spine core, route states, and serving come from `fuz_actions::server`. Auth / HTTP / realtime (WS + SSE) / dispatch / DB (and the JSON-RPC `notification` builder + error constructors + socket revocation) all come from the spine crates. See ./crates/CLAUDE.md for the full tree.
@@ -213,6 +213,7 @@ src/
 │   ├── cell.svelte.ts            # Base Cell class
 │   ├── cell_classes.ts           # Cell class registry
 │   ├── indexed_collection.svelte.ts
+│   ├── fuz_terminal/             # libghostty-vt binding (DOM-free; the terminal UI doesn't use it yet)
 │   │
 │   ├── *.svelte                  # UI components
 │   ├── *.gen.ts                  # Generators (hand-written) — run `gro gen`
@@ -250,6 +251,7 @@ src/
     ├── cell.svelte.*.test.ts
     ├── action_event.test.ts
     ├── indexed_collection.svelte.*.test.ts
+    ├── fuz_terminal/             # `*.wasm.test.ts` here need the built module (the `fuz_terminal_wasm` project)
     └── ...
 ```
 
@@ -260,6 +262,38 @@ The two core abstractions are **Cells** (reactive state) and **Actions** (RPC). 
 Content model: `Chat → Thread[] → Turn[] → Part[]` (TextPart or DiskfilePart). Prompts also hold Parts.
 
 See ./docs/architecture.md for detailed data flow, content model, and IndexedCollection docs.
+
+### fuz_terminal
+
+`src/lib/fuz_terminal/` is a TypeScript binding over
+[libghostty-vt](https://lib.ghostty.org/vt/), Ghostty's terminal emulator as
+a C library, compiled to WebAssembly. It is DOM-free and Svelte-free, runs in
+Node and browsers, and **the terminal UI doesn't use it yet** — terminals
+render with xterm.js. `load_ghostty_vt` (`ghostty_vt.ts`) takes the module's
+bytes, a `Response`, or a compiled module from its caller (it never fetches
+an app path), checks it imports nothing and exports what the binding calls,
+and reads the type manifest (`ghostty_type_json()`): every enum value, struct
+offset, and option value type comes from there (`ghostty_manifest.ts`), and a
+missing or reshaped entry throws `GhosttyManifestError` naming it. Every
+`GhosttyResult` is checked (`GhosttyResultError` carries the result's name).
+`GhosttyTerminal` (`ghostty_terminal.ts`) writes bytes or strings, resizes
+(reflowing the primary screen; each dimension is capped at
+`GHOSTTY_TERMINAL_MAX_SIZE` cells, since wasm memory never shrinks), reads the
+screen as plain text through the
+formatter (trimmed, soft wraps unwrapped), and is freed by an idempotent
+`dispose()` — after which every use throws. `GhosttyMemory`
+(`ghostty_memory.ts`) caches its views of linear memory until it grows; no
+caller keeps one across an export call, since any allocation can grow it.
+Scratch allocations are freed on every path.
+
+The module isn't committed: `cargo xtask ghostty-vt` builds it from the
+pinned libghostty-vt release (needs Zig 0.17; ./docs/development.md §
+Terminal emulator module) into `static/fuz_terminal/ghostty-vt.wasm`
+(gitignored). Tests that load it are `src/test/fuz_terminal/**/*.wasm.test.ts`,
+run by the `fuz_terminal_wasm` vitest project, which `vite.config.ts` defines
+only when the module is there — so a checkout without it (CI included) runs
+everything else, with a one-line notice that the project was skipped, and the
+manifest and load checks that need no module run in `unit`.
 
 ## Cell Classes
 

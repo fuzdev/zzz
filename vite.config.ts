@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { execSync } from 'node:child_process';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
@@ -43,6 +44,34 @@ const cross_backend_projects = cross_backend_enabled
 				global_setup: GLOBAL_SETUP,
 				include: [PROXY_TEST]
 			})
+		]
+	: [];
+
+// The `fuz_terminal_wasm` project runs the tests that load libghostty-vt's wasm
+// module, which isn't committed: `cargo xtask ghostty-vt` builds it (it needs
+// Zig). The project exists only once the module does, so a checkout without it
+// (CI included) runs everything else — saying so once per test run — and
+// `unit` never runs these files.
+const GHOSTTY_VT_MODULE = 'static/fuz_terminal/ghostty-vt.wasm';
+const GHOSTTY_VT_TESTS = 'src/test/fuz_terminal/**/*.wasm.test.ts';
+const ghostty_vt_module_present = existsSync(new URL(`./${GHOSTTY_VT_MODULE}`, import.meta.url));
+// only under vitest, never `vite dev` or a build
+if (process.env.VITEST && !ghostty_vt_module_present) {
+	console.warn(
+		`[vite.config] skipping the fuz_terminal_wasm tests: ${GHOSTTY_VT_MODULE} is missing — build it with \`cargo xtask ghostty-vt\``
+	);
+}
+const ghostty_vt_projects = ghostty_vt_module_present
+	? [
+			{
+				extends: true,
+				test: {
+					name: 'fuz_terminal_wasm',
+					include: [GHOSTTY_VT_TESTS],
+					maxWorkers: max_workers,
+					sequence: { groupOrder: 1 }
+				}
+			}
 		]
 	: [];
 
@@ -121,7 +150,7 @@ export default defineConfig(({ mode }) => ({
 				test: {
 					name: 'unit',
 					include: ['src/test/**/*.test.ts'],
-					exclude: ['src/test/**/*.db.test.ts', 'src/test/**/*.cross.test.ts'],
+					exclude: ['src/test/**/*.db.test.ts', 'src/test/**/*.cross.test.ts', GHOSTTY_VT_TESTS],
 					maxWorkers: max_workers,
 					sequence: { groupOrder: 1 }
 				}
@@ -136,6 +165,7 @@ export default defineConfig(({ mode }) => ({
 					sequence: { groupOrder: 2 }
 				}
 			},
+			...ghostty_vt_projects,
 			...cross_backend_projects
 		]
 	},
