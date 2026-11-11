@@ -1,7 +1,7 @@
 /**
  * The entries of libghostty-vt 1.0.0's wasm type manifest (`ghostty_type_json()`)
  * the binding reads, copied verbatim from the module `cargo xtask ghostty-vt`
- * builds — `GhosttyTerminalOption` trimmed to the options used. Lets the
+ * builds — the key enums trimmed to the keys used. Lets the
  * manifest checks run without the module; `ghostty_vt.wasm.test.ts` holds this
  * copy to the real manifest.
  *
@@ -197,6 +197,9 @@ export const GHOSTTY_MANIFEST_FIXTURE: Record<string, any> = {
 			values: {
 				INVALID: 0,
 				WRITE_PTY: 2,
+				BELL: 3,
+				TITLE_CHANGED: 6,
+				PWD_CHANGED: 26,
 				SCROLLBACK_MAX_BYTES: 28,
 				SCROLLBACK_MAX_LINES: 29,
 				MAX_VALUE: 2147483647
@@ -205,6 +208,18 @@ export const GHOSTTY_MANIFEST_FIXTURE: Record<string, any> = {
 				WRITE_PTY: {
 					direction: 'in',
 					type: 'GhosttyTerminalWritePtyFn'
+				},
+				BELL: {
+					direction: 'in',
+					type: 'GhosttyTerminalBellFn'
+				},
+				TITLE_CHANGED: {
+					direction: 'in',
+					type: 'GhosttyTerminalTitleChangedFn'
+				},
+				PWD_CHANGED: {
+					direction: 'in',
+					type: 'GhosttyTerminalPwdChangedFn'
 				},
 				SCROLLBACK_MAX_BYTES: {
 					direction: 'in',
@@ -215,6 +230,76 @@ export const GHOSTTY_MANIFEST_FIXTURE: Record<string, any> = {
 					type: 'u32'
 				}
 			}
+		},
+		GhosttyTerminalData: {
+			kind: 'enum',
+			size: 4,
+			align: 4,
+			underlying: 'i32',
+			prefix: 'GHOSTTY_TERMINAL_DATA_',
+			values: {
+				INVALID: 0,
+				TITLE: 12,
+				PWD: 13,
+				MAX_VALUE: 2147483647
+			},
+			keys: {
+				TITLE: {
+					direction: 'out',
+					type: 'GhosttyString'
+				},
+				PWD: {
+					direction: 'out',
+					type: 'GhosttyString'
+				}
+			}
+		},
+		GhosttyTerminal: {
+			kind: 'opaque',
+			size: 4,
+			align: 4
+		},
+		GhosttyTerminalWritePtyFn: {
+			kind: 'callback',
+			size: 4,
+			align: 4,
+			params: [
+				{ type: 'GhosttyTerminal' },
+				{ type: 'pointer', elem: 'opaque', const: false, nullable: true },
+				{ type: 'pointer', elem: 'u8', const: true },
+				{ type: 'u32' }
+			],
+			return: { type: 'void' }
+		},
+		GhosttyTerminalBellFn: {
+			kind: 'callback',
+			size: 4,
+			align: 4,
+			params: [
+				{ type: 'GhosttyTerminal' },
+				{ type: 'pointer', elem: 'opaque', const: false, nullable: true }
+			],
+			return: { type: 'void' }
+		},
+		GhosttyTerminalTitleChangedFn: {
+			kind: 'callback',
+			size: 4,
+			align: 4,
+			params: [
+				{ type: 'GhosttyTerminal' },
+				{ type: 'pointer', elem: 'opaque', const: false, nullable: true }
+			],
+			return: { type: 'void' }
+		},
+		GhosttyTerminalPwdChangedFn: {
+			kind: 'callback',
+			size: 4,
+			align: 4,
+			params: [
+				{ type: 'GhosttyTerminal' },
+				{ type: 'pointer', elem: 'opaque', const: false, nullable: true }
+			],
+			return: { type: 'void' }
 		},
 		GhosttyFormatterOption: {
 			kind: 'enum',

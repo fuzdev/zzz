@@ -45,7 +45,9 @@ export const load_doctored_ghostty_vt = async (
 
 /**
  * An instance of the built module with the exports `wrap` returns in place
- * of the real ones — for observing a call or making one fail.
+ * of the real ones — for observing a call or making one fail. `GhosttyVt`
+ * guards the replacements like the real exports, so one that throws poisons
+ * the instance (`GhosttyVt.poisoned`) as an escape from the module would.
  */
 export const load_wrapped_ghostty_vt = async (
 	wrap: (exports: Record<string, any>) => Record<string, any>

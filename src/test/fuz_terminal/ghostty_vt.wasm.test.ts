@@ -1,8 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { test, describe, assert } from 'vitest';
 
-import { GhosttyManifestError, GhosttyResultError } from '#lib/fuz_terminal/ghostty_errors.ts';
-import { load_ghostty_vt } from '#lib/fuz_terminal/ghostty_vt.ts';
+import {
+	GhosttyLoadError,
+	GhosttyManifestError,
+	GhosttyResultError
+} from '#lib/fuz_terminal/ghostty_errors.ts';
+import { GhosttyVt, load_ghostty_vt } from '#lib/fuz_terminal/ghostty_vt.ts';
 
 import { GHOSTTY_MANIFEST_FIXTURE } from './ghostty_manifest_fixture.ts';
 import { GHOSTTY_VT_MODULE_URL, load_test_ghostty_vt } from './ghostty_vt_test_helpers.ts';
@@ -69,6 +73,17 @@ describe('load_ghostty_vt', () => {
 				assert.deepEqual(real_keys[key_name], key, `${name} key ${key_name}`);
 			}
 		}
+	});
+
+	test('an empty function table is a load error', async () => {
+		const bytes = await readFile(GHOSTTY_VT_MODULE_URL);
+		const instance = await WebAssembly.instantiate(await WebAssembly.compile(bytes), {});
+		const empty = new WebAssembly.Table({ element: 'anyfunc', initial: 0 });
+		assert.throws(
+			() => new GhosttyVt({ exports: { ...instance.exports, __indirect_function_table: empty } }),
+			GhosttyLoadError,
+			'function table is empty'
+		);
 	});
 
 	test('instances share no memory', async () => {

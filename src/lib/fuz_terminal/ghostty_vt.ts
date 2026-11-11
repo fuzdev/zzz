@@ -12,7 +12,14 @@
  * @module
  */
 
-import { GhosttyLoadError, GhosttyManifestError, GhosttyResultError } from './ghostty_errors.ts';
+import { GhosttyCallbackTable } from './ghostty_callback_table.ts';
+import { GhosttyEffectRouter, resolve_ghostty_effect_constants } from './ghostty_effects.ts';
+import {
+	GhosttyLoadError,
+	GhosttyManifestError,
+	GhosttyPoisonedError,
+	GhosttyResultError
+} from './ghostty_errors.ts';
 import { GhosttyManifest, parse_ghostty_manifest } from './ghostty_manifest.ts';
 import { GhosttyMemory, type GhosttyMemoryExports } from './ghostty_memory.ts';
 
@@ -24,6 +31,8 @@ import { GhosttyMemory, type GhosttyMemoryExports } from './ghostty_memory.ts';
  * 2 GiB arrives negative and is read with `>>> 0`.
  */
 export interface GhosttyVtExports extends GhosttyMemoryExports {
+	/** The function table a C function pointer indexes; callbacks are slots added to it. */
+	__indirect_function_table: WebAssembly.Table;
 	ghostty_type_json: () => number;
 	ghostty_version: () => number;
 	ghostty_build_info: (data: number, out: number) => number;
@@ -31,6 +40,7 @@ export interface GhosttyVtExports extends GhosttyMemoryExports {
 	ghostty_terminal_new: (allocator: number, out: number, cols: number, rows: number) => number;
 	ghostty_terminal_free: (terminal: number) => void;
 	ghostty_terminal_set: (terminal: number, option: number, value: number) => number;
+	ghostty_terminal_get: (terminal: number, data: number, out: number) => number;
 	ghostty_terminal_vt_write: (terminal: number, data: number, len: number) => void;
 	ghostty_terminal_resize: (
 		terminal: number,
@@ -48,8 +58,8 @@ export interface GhosttyVtExports extends GhosttyMemoryExports {
 		out_len: number
 	) => number;
 	ghostty_formatter_free: (formatter: number) => void;
-	// TODO: the effects (function-table callbacks), render-state, and input
-	// encoder exports join this list with the modules that call them
+	// TODO: the render-state and input encoder exports join this list with the
+	// modules that call them
 }
 
 const REQUIRED_FUNCTIONS = [
@@ -65,13 +75,16 @@ const REQUIRED_FUNCTIONS = [
 	'ghostty_terminal_new',
 	'ghostty_terminal_free',
 	'ghostty_terminal_set',
+	'ghostty_terminal_get',
 	'ghostty_terminal_vt_write',
 	'ghostty_terminal_resize',
 	'ghostty_formatter_terminal_new',
 	'ghostty_formatter_set',
 	'ghostty_formatter_format_alloc',
 	'ghostty_formatter_free'
-] as const satisfies ReadonlyArray<Exclude<keyof GhosttyVtExports, 'memory'>>;
+] as const satisfies ReadonlyArray<
+	Exclude<keyof GhosttyVtExports, 'memory' | '__indirect_function_table'>
+>;
 
 /** What `load_ghostty_vt` accepts: the module's bytes, a response carrying them, or a compiled module. */
 export type GhosttyVtSource = BufferSource | Response | WebAssembly.Module;
@@ -171,11 +184,46 @@ export const load_ghostty_vt = async (source: GhosttyVtSource): Promise<GhosttyV
 };
 
 /**
+ * Each module instance's poison, keyed by its linear memory: poison belongs
+ * to the instance, so every `GhosttyVt` wrapping the same one sees it.
+ */
+const instance_poisons: WeakMap<WebAssembly.Memory, GhosttyVtPoison> = new WeakMap();
+
+/** The first exception that escaped a call into an instance, which poisoned it. */
+export interface GhosttyVtPoison {
+	/** The export it escaped from. */
+	call: string;
+	/** The exception. */
+	cause: unknown;
+}
+
+/**
  * A loaded libghostty-vt instance. Every handle made from it lives in its
  * linear memory; instances share nothing.
+ *
+ * An exception that escapes a call into the module — a trap, or the JS stack
+ * running out inside its frames or at a callback boundary — unwinds past the
+ * frames' epilogues, leaving the stack pointer kept in linear memory moved, a
+ * write abandoned mid-parse, and possibly the shared heap mid-allocation. So
+ * every function export is guarded once, here: the first escape **poisons**
+ * the module instance (`GhosttyVt.poisoned`) — every `GhosttyVt` wrapping
+ * it sees the same poison. The exception reaches the caller of the call it
+ * escaped from unchanged (cleanup on its way out skips its calls in), and
+ * every later call throws `GhosttyPoisonedError` before entering wasm. A
+ * `GhosttyTerminal.write` or `resize` during which a nested call poisoned
+ * the instance throws `GhosttyPoisonedError` too, and no effect handler runs
+ * once it's poisoned. A stack overflow at a call's very entry poisons as
+ * well, though it disturbed nothing: the guard can't tell it from one that
+ * did. An effect handler's own exception doesn't escape — the terminal
+ * catches it inside the callback — so it never poisons.
  */
 export class GhosttyVt {
-	/** The raw exports, for the binding's own modules. */
+	/**
+	 * The exports, for the binding's own modules: each function guarded as
+	 * above, the memory, table, and globals as they are. A function that
+	 * replaces an export before the instance is wrapped (a test's stand-in) is
+	 * guarded the same way, so a throw from it poisons too.
+	 */
 	readonly exports: GhosttyVtExports;
 	/** The validated type manifest. */
 	readonly manifest: GhosttyManifest;
@@ -185,8 +233,14 @@ export class GhosttyVt {
 	readonly constants: GhosttyVtConstants;
 	/** What the module reports about its build. */
 	readonly build_info: GhosttyBuildInfo;
+	/** The callback slots added to the module's function table. */
+	readonly callbacks: GhosttyCallbackTable;
+	/** The effect trampolines, and the terminals they dispatch to. */
+	readonly effect_router: GhosttyEffectRouter;
 
 	readonly #resolved: Map<(manifest: GhosttyManifest) => unknown, unknown> = new Map();
+	/** The raw instance's memory, which keys its poison. */
+	readonly #instance_memory: WebAssembly.Memory;
 
 	/**
 	 * Wrap an instance of the module. `load_ghostty_vt` compiles and
@@ -196,12 +250,15 @@ export class GhosttyVt {
 	 * @throws GhosttyManifestError when its manifest lacks what the binding reads
 	 */
 	constructor(instance: WebAssembly.Instance) {
-		this.exports = to_ghostty_vt_exports(instance.exports);
+		const exports = to_ghostty_vt_exports(instance.exports);
+		this.#instance_memory = exports.memory;
+		this.exports = this.#guard_exports(exports);
 		// the out-of-memory code is read from the manifest, which reading the
 		// manifest doesn't need: nothing allocates until the constants are set
 		this.memory = new GhosttyMemory(
 			this.exports,
-			(call) => new GhosttyResultError(call, this.constants.out_of_memory, 'OUT_OF_MEMORY')
+			(call) => new GhosttyResultError(call, this.constants.out_of_memory, 'OUT_OF_MEMORY'),
+			() => this.poisoned !== null
 		);
 		this.manifest = parse_ghostty_manifest(
 			this.memory.read_c_string(this.exports.ghostty_type_json() >>> 0)
@@ -214,6 +271,33 @@ export class GhosttyVt {
 			);
 		}
 		this.build_info = this.#read_build_info(version);
+		this.callbacks = new GhosttyCallbackTable(this.exports.__indirect_function_table);
+		this.effect_router = new GhosttyEffectRouter(this.callbacks, () =>
+			this.resolve(resolve_ghostty_effect_constants)
+		);
+	}
+
+	/**
+	 * The first exception that escaped a call into the module instance —
+	 * through this wrapper or any other of the same instance — or `null`.
+	 * Once set, every call is refused (`GhosttyPoisonedError`) and the
+	 * instance's handles are dropped without freeing on dispose; build a
+	 * fresh instance to go on.
+	 */
+	get poisoned(): GhosttyVtPoison | null {
+		return instance_poisons.get(this.#instance_memory) ?? null;
+	}
+
+	/**
+	 * Throw unless the instance is usable — for a method about to call in,
+	 * so it refuses before doing any work of its own.
+	 *
+	 * @param call - what is refused, for the error
+	 * @throws GhosttyPoisonedError once an exception has escaped a call
+	 */
+	assert_not_poisoned(call: string): void {
+		const poison = instance_poisons.get(this.#instance_memory);
+		if (poison) throw new GhosttyPoisonedError(call, poison.call, poison.cause);
 	}
 
 	/** The library version, such as `1.0.0`. */
@@ -269,6 +353,36 @@ export class GhosttyVt {
 		return value;
 	}
 
+	/**
+	 * A copy of `exports` with each function wrapped: refused once poisoned,
+	 * and poisoning the instance when an exception escapes it. Every call the
+	 * binding makes goes through one of these, so modules added later are
+	 * covered without opting in.
+	 */
+	#guard_exports(exports: GhosttyVtExports): GhosttyVtExports {
+		const guarded: Record<string, unknown> = {};
+		const key = this.#instance_memory;
+		for (const [name, value] of Object.entries(exports)) {
+			if (typeof value !== 'function') {
+				guarded[name] = value;
+				continue;
+			}
+			const fn = value as (...args: Array<unknown>) => unknown;
+			guarded[name] = (...args: Array<unknown>): unknown => {
+				const poison = instance_poisons.get(key);
+				if (poison) throw new GhosttyPoisonedError(name, poison.call, poison.cause);
+				try {
+					return fn(...args);
+				} catch (error) {
+					// a nested call's escape (from a callback) poisons first; keep that one
+					if (!instance_poisons.has(key)) instance_poisons.set(key, { call: name, cause: error });
+					throw error;
+				}
+			};
+		}
+		return guarded as unknown as GhosttyVtExports;
+	}
+
 	#read_build_info(version: string): GhosttyBuildInfo {
 		const { manifest, memory, exports } = this;
 		const keys = manifest.enum_keys('GhosttyBuildInfo');
@@ -301,6 +415,12 @@ const to_ghostty_vt_exports = (exports: WebAssembly.Exports): GhosttyVtExports =
 	if (!(exports.memory instanceof WebAssembly.Memory)) missing.push('memory');
 	for (const name of REQUIRED_FUNCTIONS) {
 		if (typeof exports[name] !== 'function') missing.push(name);
+	}
+	if (!(exports.__indirect_function_table instanceof WebAssembly.Table)) {
+		missing.push('__indirect_function_table');
+	} else if (exports.__indirect_function_table.length === 0) {
+		// a C module's table reserves slot 0 as the null function pointer
+		throw new GhosttyLoadError("the module's function table is empty, so it isn't libghostty-vt");
 	}
 	if (missing.length > 0) {
 		throw new GhosttyLoadError(

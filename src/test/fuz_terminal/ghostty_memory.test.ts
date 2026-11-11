@@ -20,7 +20,11 @@ const create_memory_exports = (memory: WebAssembly.Memory): GhosttyMemoryExports
 describe('GhosttyMemory views', () => {
 	test('are cached until memory grows, then the live ones', () => {
 		const memory = new WebAssembly.Memory({ initial: 1, maximum: 4 });
-		const ghostty_memory = new GhosttyMemory(create_memory_exports(memory), () => new Error('oom'));
+		const ghostty_memory = new GhosttyMemory(
+			create_memory_exports(memory),
+			() => new Error('oom'),
+			() => false
+		);
 		const bytes = ghostty_memory.bytes();
 		const view = ghostty_memory.view();
 		assert.strictEqual(ghostty_memory.bytes(), bytes);
@@ -44,7 +48,8 @@ describe('GhosttyMemory views', () => {
 	test('a scalar that doesn’t fit its type is refused', () => {
 		const ghostty_memory = new GhosttyMemory(
 			create_memory_exports(new WebAssembly.Memory({ initial: 1 })),
-			() => new Error('oom')
+			() => new Error('oom'),
+			() => false
 		);
 		assert.throws(() => ghostty_memory.write_scalar(0, 'u16', 70_000), RangeError, 'a u16');
 		assert.throws(() => ghostty_memory.write_scalar(0, 'bool', 2), RangeError, 'a bool');

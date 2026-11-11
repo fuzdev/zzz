@@ -41,6 +41,13 @@ export interface GhosttyManifestField {
 	type: string;
 }
 
+/** A callback type: its parameters' types and its return type, by name. */
+export interface GhosttyManifestCallback {
+	params: ReadonlyArray<string>;
+	/** The return type; `void` when there's none. */
+	returns: string;
+}
+
 /**
  * How a value of a manifest type is read and written in linear memory: the
  * primitive types, and each enum as its underlying integer.
@@ -84,6 +91,8 @@ export class GhosttyManifest {
 	readonly size_max: number;
 	/** How a `size_t` sits in memory on this target (`u32`: the constructor accepts only 4-byte `size_t`). */
 	readonly usize_scalar: GhosttyScalar = 'u32';
+	/** How a pointer sits in memory on this target (`u32`: the constructor accepts only 4-byte pointers). */
+	readonly pointer_scalar: GhosttyScalar = 'u32';
 
 	readonly #types: Record<string, unknown>;
 
@@ -270,6 +279,65 @@ export class GhosttyManifest {
 			);
 		}
 		return { offset: field.offset, size: field.size, type: field.type };
+	}
+
+	/**
+	 * A callback type's parameter types and return type, by name — a pointer
+	 * parameter is `pointer`, whatever it points to.
+	 *
+	 * @throws GhosttyManifestError when the type is missing, isn't a callback,
+	 *   or a parameter or the return has no type
+	 */
+	callback(type_name: string): GhosttyManifestCallback {
+		const entry = this.type_entry(type_name, 'callback');
+		const returns = is_record(entry.return) ? entry.return.type : undefined;
+		if (!Array.isArray(entry.params) || typeof returns !== 'string') {
+			throw new GhosttyManifestError(
+				`the manifest's callback ${type_name} has no params or return: ${JSON.stringify(entry)}`
+			);
+		}
+		const params: Array<string> = [];
+		for (const param of entry.params) {
+			if (!is_record(param) || typeof param.type !== 'string') {
+				throw new GhosttyManifestError(
+					`the manifest's callback ${type_name} has a parameter without a type: ${JSON.stringify(param)}`
+				);
+			}
+			params.push(param.type);
+		}
+		return { params, returns };
+	}
+
+	/**
+	 * How a value of `type_name` passes through a wasm call: every integer
+	 * type up to 32 bits, enum, opaque handle, and pointer is an `i32` (this
+	 * is wasm32), and a 64-bit integer an `i64`; an alias is its target's.
+	 *
+	 * @throws GhosttyManifestError for any other type — a struct or union
+	 *   passed by value, which the C ABI lowers to a pointer the binding
+	 *   doesn't build
+	 */
+	wasm_value_type(type_name: string): 'i32' | 'i64' {
+		const seen = new Set<string>();
+		for (let name = type_name; !seen.has(name);) {
+			seen.add(name);
+			if (name === 'pointer' || name === 'bool' || name in INTEGER_RANGES) return 'i32';
+			if (name === 'u64' || name === 'i64') return 'i64';
+			const entry = this.#types[name];
+			if (!is_record(entry)) throw new GhosttyManifestError(`the manifest has no type ${name}`);
+			if (entry.kind === 'alias' && typeof entry.type === 'string') {
+				name = entry.type;
+				continue;
+			}
+			const passes =
+				(entry.kind === 'opaque' && entry.size === this.abi.pointer_size) ||
+				(entry.kind === 'enum' &&
+					typeof entry.underlying === 'string' &&
+					entry.underlying in INTEGER_RANGES);
+			if (passes) return 'i32';
+			break;
+		}
+		throw new GhosttyManifestError(`the manifest's ${type_name} doesn't pass as a wasm number`);
 	}
 
 	/**

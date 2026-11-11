@@ -39,6 +39,7 @@ const utf8_decoder = new TextDecoder();
 export class GhosttyMemory {
 	readonly #exports: GhosttyMemoryExports;
 	readonly #out_of_memory: (call: string) => Error;
+	readonly #is_poisoned: () => boolean;
 	#cached_buffer: ArrayBuffer | null = null;
 	#cached_length = 0;
 	#cached_bytes: Uint8Array = new Uint8Array();
@@ -47,10 +48,18 @@ export class GhosttyMemory {
 	/**
 	 * @param exports - the module's memory and wasm helper exports
 	 * @param out_of_memory - the error to throw when an allocation fails, given the export's name
+	 * @param is_poisoned - whether the instance is poisoned (`GhosttyVt.poisoned`):
+	 *   then the scratch helpers skip their frees, which would be refused and
+	 *   replace the exception that poisoned it
 	 */
-	constructor(exports: GhosttyMemoryExports, out_of_memory: (call: string) => Error) {
+	constructor(
+		exports: GhosttyMemoryExports,
+		out_of_memory: (call: string) => Error,
+		is_poisoned: () => boolean
+	) {
 		this.#exports = exports;
 		this.#out_of_memory = out_of_memory;
+		this.#is_poisoned = is_poisoned;
 	}
 
 	/** The current size of linear memory in bytes. */
@@ -117,14 +126,15 @@ export class GhosttyMemory {
 
 	/**
 	 * Run `fn` with `len` bytes of scratch storage, freed when it returns or
-	 * throws.
+	 * throws — unless the instance was poisoned meanwhile, when the free is
+	 * skipped so `fn`'s exception propagates unchanged.
 	 */
 	with_scratch<T>(len: number, fn: (ptr: number) => T): T {
 		const ptr = this.alloc(len);
 		try {
 			return fn(ptr);
 		} finally {
-			this.free(ptr, len);
+			if (!this.#is_poisoned()) this.free(ptr, len);
 		}
 	}
 
@@ -132,7 +142,8 @@ export class GhosttyMemory {
 	 * Run `fn` with an opaque out-parameter slot — the `GhosttyX*` a
 	 * constructor writes its handle to — freed when it returns or throws.
 	 * Read the handle with `GhosttyMemory.take_opaque` once the call that
-	 * filled the slot has succeeded.
+	 * filled the slot has succeeded. Like `GhosttyMemory.with_scratch`, the
+	 * free is skipped once the instance is poisoned.
 	 */
 	with_opaque<T>(fn: (slot: number) => T): T {
 		const slot = this.#exports.ghostty_wasm_alloc_opaque() >>> 0;
@@ -140,7 +151,7 @@ export class GhosttyMemory {
 		try {
 			return fn(slot);
 		} finally {
-			this.#exports.ghostty_wasm_free_opaque(slot);
+			if (!this.#is_poisoned()) this.#exports.ghostty_wasm_free_opaque(slot);
 		}
 	}
 

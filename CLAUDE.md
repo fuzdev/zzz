@@ -286,6 +286,45 @@ formatter (trimmed, soft wraps unwrapped), and is freed by an idempotent
 caller keeps one across an export call, since any allocation can grow it.
 Scratch allocations are freed on every path.
 
+**Effects** are the callbacks through which the terminal asks its host for
+what it can't do itself. `GhosttyTerminal.set_effect` registers a handler, or
+clears it with `null`, for `write_pty` (replies to the program's queries —
+cursor position, device attributes, mode reports — for the PTY, as a copied
+`Uint8Array`), `bell`, `title_changed`, and `pwd_changed` (each handed the new
+string, read from the terminal inside the callback). An effect with no handler
+is ignored by the library: a query gets no reply, then or later, which is how
+a history is fed without answering its stale queries (the state it sets still
+carries forward — see ./docs/architecture.md § fuz_terminal). Nothing else is bound, so the
+library's other effects — the clipboard ones included — are never registered
+(`ghostty_effects.ts`). A callback is a slot in the module's function table
+holding a trampoline: a tiny wasm module, assembled and compiled at runtime
+(`wasm_trampoline.ts`), that wraps a JS function as a wasm one. Each effect
+has one per module instance, dispatching by the terminal handle the library
+passes to the terminal attached under it, so the table grows by one slot per
+effect however many terminals come and go (`GhosttyCallbackTable`,
+`GhosttyEffectRouter`); a terminal detaches before its handle is freed.
+Handlers run synchronously inside `write` and `resize`. From one, the
+terminal can be read (`format_text`), but `write`, `resize`, `dispose`, and
+`set_effect` on it throw `GhosttyReentrancyError` — the library isn't
+reentrant and doesn't check. A handler's exception is caught inside the
+callback, the call finishes, and the call then throws `GhosttyEffectError`
+with the first exception as its `cause`. An exception that escapes a call
+into the module anyway — a trap, or the JS stack running out inside its
+frames or at the callback boundary — skips the frames' epilogues, leaving the
+stack pointer in linear memory moved, a write abandoned mid-parse, and maybe
+the shared heap mid-allocation. So `GhosttyVt` guards every function export
+once at load: the first escape **poisons** the module instance
+(`GhosttyVt.poisoned`, seen by every wrapper of it). The exception reaches
+the caller of the call it escaped from (cleanup skips its frees rather than
+replace it); every later call throws `GhosttyPoisonedError` before entering
+wasm; a `write` or `resize` during which a nested call — a handler's — poisoned
+it throws `GhosttyPoisonedError`, over any handler exception; no handler runs
+once poisoned; and `dispose` just drops the handles. A stack overflow at a
+call's entry poisons too, since the guard can't tell it from one that
+disturbed the module. A host recovers with a fresh instance. Compiling the
+trampolines needs wasm compilation allowed, as loading the module does: a
+page Content-Security-Policy would need `'wasm-unsafe-eval'`.
+
 The module isn't committed: `cargo xtask ghostty-vt` builds it from the
 pinned libghostty-vt release (needs Zig 0.17; ./docs/development.md §
 Terminal emulator module) into `static/fuz_terminal/ghostty-vt.wasm`

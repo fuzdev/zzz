@@ -1,15 +1,27 @@
 /**
  * A libghostty-vt terminal: the emulator's screen, scrollback, and modes,
- * fed program output as bytes and read back as text.
+ * fed program output as bytes and read back as text, and telling its host
+ * what the output asks for through the effects it registers.
  *
- * Nothing here draws or takes input. Queries in the output (cursor position,
- * device attributes) get no reply, since no `write_pty` effect is registered,
- * and the terminal sets no title or clipboard.
+ * Nothing here draws or takes input. A query in the output (cursor position,
+ * device attributes) is answered only through a registered `write_pty`
+ * effect — with none, it gets no reply. No clipboard effect exists.
  *
  * @module
  */
 
-import { GhosttyDisposedError, GhosttyManifestError } from './ghostty_errors.ts';
+import {
+	GHOSTTY_TERMINAL_EFFECTS,
+	resolve_ghostty_effect_constants,
+	type GhosttyTerminalEffectHandlers,
+	type GhosttyTerminalEffectName
+} from './ghostty_effects.ts';
+import {
+	GhosttyDisposedError,
+	GhosttyEffectError,
+	GhosttyManifestError,
+	GhosttyReentrancyError
+} from './ghostty_errors.ts';
 import type { GhosttyManifest, GhosttyScalar } from './ghostty_manifest.ts';
 import { GhosttyMemory, to_ghostty_integer } from './ghostty_memory.ts';
 import type { GhosttyVt } from './ghostty_vt.ts';
@@ -160,6 +172,13 @@ const WRITE_CHUNK_CODE_UNITS = Math.floor(WRITE_CHUNK_BYTES / 3);
 
 const U32_MAX = 0xffff_ffff;
 
+/** The first effect handler exception during one library call, and how many threw. */
+interface EffectFailure {
+	effect: GhosttyTerminalEffectName;
+	error: unknown;
+	count: number;
+}
+
 const utf8_encoder = new TextEncoder();
 
 /**
@@ -168,6 +187,17 @@ const utf8_encoder = new TextEncoder();
  * Its handle and the formatter it reads text through are freed by
  * `GhosttyTerminal.dispose`, which nothing does for you: call it when the
  * terminal is done with. Any use after that throws `GhosttyDisposedError`.
+ *
+ * Effect handlers (`GhosttyTerminal.set_effect`) run inside `write` and
+ * `resize`, while the library is mid-parse. From a handler the terminal can
+ * be read (`format_text`, `disposed`), but `write`, `resize`, `dispose`, and
+ * `set_effect` throw `GhosttyReentrancyError`: the library isn't reentrant
+ * and doesn't check. A handler's exception is caught inside the callback,
+ * the call finishes, and the call then throws a `GhosttyEffectError` with the
+ * first exception as its `cause`. An exception that escapes the library
+ * anyway (a trap, the JS stack running out) poisons the instance
+ * (`GhosttyVt.poisoned`): every method then throws `GhosttyPoisonedError`,
+ * and `dispose` frees nothing.
  */
 export class GhosttyTerminal {
 	/** The module the terminal lives in. */
@@ -188,16 +218,26 @@ export class GhosttyTerminal {
 	#write_buffer = 0;
 	/** The write buffer's allocated length. */
 	#write_buffer_len = 0;
+	/** Whether the effect router routes to this terminal: detached at dispose only if so. */
+	#attached = false;
+	/** The registered effect handlers; an effect is registered with the library exactly while it has one. */
+	#handlers: Partial<GhosttyTerminalEffectHandlers> = {};
+	/** Whether a library call that can fire effects is running: a call now comes from a handler. */
+	#busy = false;
+	/** The first handler exception of the running call, and how many threw. */
+	#effect_failure: EffectFailure | null = null;
 
 	/**
 	 * Create a terminal.
 	 *
 	 * @throws RangeError when a size is over `GHOSTTY_TERMINAL_MAX_SIZE` or a
 	 *   limit doesn't fit its C type
+	 * @throws GhosttyPoisonedError once the instance is poisoned (`GhosttyVt.poisoned`)
 	 * @throws GhosttyResultError when the library refuses the options (a zero
 	 *   size is `INVALID_VALUE`)
 	 */
 	constructor(vt: GhosttyVt, options: GhosttyTerminalOptions) {
+		vt.assert_not_poisoned('new GhosttyTerminal');
 		this.vt = vt;
 		this.#constants = vt.resolve(resolve_ghostty_terminal_constants);
 		const cols = to_terminal_size(options.cols, 'cols');
@@ -220,6 +260,8 @@ export class GhosttyTerminal {
 			return memory.take_opaque(slot);
 		});
 		try {
+			vt.effect_router.attach(this.#ptr, this.#receive_effect);
+			this.#attached = true;
 			if (scrollback_max_bytes !== undefined) {
 				this.#set_scalar(
 					this.#constants.option_scrollback_max_bytes,
@@ -254,12 +296,28 @@ export class GhosttyTerminal {
 	 *   which a write can grow, detaching the view (it reads as empty); a
 	 *   string is encoded on its own, so a surrogate pair split across two
 	 *   writes is written as two U+FFFD — pass bytes to split mid-character
+	 * @throws GhosttyEffectError when an effect handler threw — after the
+	 *   whole write, every byte of which was written
+	 * @throws GhosttyPoisonedError once the instance is poisoned
+	 *   (`GhosttyVt.poisoned`), or when a call made during the write — a
+	 *   handler's, say — poisoned it: that wins over a handler's exception,
+	 *   which is dropped. An exception escaping this write's own call into the
+	 *   module propagates as itself, having poisoned the instance.
+	 * @throws GhosttyReentrancyError from an effect handler
 	 * @throws GhosttyDisposedError after `dispose`
 	 */
 	write(data: Uint8Array | string): void {
-		const terminal = this.#live('write');
+		const terminal = this.#idle('write');
 		if (data.length === 0) return;
+		this.#with_effects('write', () => this.#write(terminal, data));
+	}
+
+	#write(terminal: number, data: Uint8Array | string): void {
 		const { exports, memory } = this.vt;
+		// effect handlers run inside `ghostty_terminal_vt_write` and can grow
+		// memory (by reading the title, or writing to another terminal), so
+		// each chunk's view is taken after the previous call and dropped
+		// before this one
 		if (typeof data === 'string') {
 			const buffer = this.#ensure_write_buffer(Math.min(data.length * 3, WRITE_CHUNK_BYTES));
 			for (let start = 0; start < data.length;) {
@@ -272,9 +330,9 @@ export class GhosttyTerminal {
 				const { read, written } = utf8_encoder.encodeInto(piece, destination);
 				// the buffer holds 3 bytes per code unit, so a piece always fits whole
 				if (read !== piece.length) throw new Error('a write chunk did not fit its buffer');
-				// TODO: once effects are registered, they run inside this call and
-				// must not write to or dispose this terminal
 				exports.ghostty_terminal_vt_write(terminal, buffer, written);
+				// a handler's nested call poisoned the instance: the rest is abandoned
+				if (this.vt.poisoned) return;
 				start = end;
 			}
 			return;
@@ -284,6 +342,7 @@ export class GhosttyTerminal {
 			const chunk = data.subarray(offset, offset + WRITE_CHUNK_BYTES);
 			memory.write_bytes(buffer, chunk);
 			exports.ghostty_terminal_vt_write(terminal, buffer, chunk.length);
+			if (this.vt.poisoned) return;
 		}
 	}
 
@@ -294,10 +353,16 @@ export class GhosttyTerminal {
 	 * @throws RangeError when a size is over `GHOSTTY_TERMINAL_MAX_SIZE` or a
 	 *   pixel size doesn't fit its C type
 	 * @throws GhosttyResultError when the library refuses it (a zero size is `INVALID_VALUE`)
+	 * @throws GhosttyEffectError when an effect handler threw (a resize can
+	 *   send a size report through `write_pty`) — after the resize
+	 * @throws GhosttyPoisonedError once the instance is poisoned
+	 *   (`GhosttyVt.poisoned`), or when a call made during the resize poisoned
+	 *   it, as for `write`
+	 * @throws GhosttyReentrancyError from an effect handler
 	 * @throws GhosttyDisposedError after `dispose`
 	 */
 	resize(options: GhosttyTerminalResizeOptions): void {
-		const terminal = this.#live('resize');
+		const terminal = this.#idle('resize');
 		const cols = to_terminal_size(options.cols, 'cols');
 		const rows = to_terminal_size(options.rows, 'rows');
 		const cell_width_px = to_ghostty_integer(
@@ -313,16 +378,56 @@ export class GhosttyTerminal {
 			'cell_height_px'
 		);
 		// a u32 above 2^31 reaches the i32 parameter with the same bits (ToInt32)
-		this.vt.check(
-			this.vt.exports.ghostty_terminal_resize(terminal, cols, rows, cell_width_px, cell_height_px),
-			'ghostty_terminal_resize'
+		const result = this.#with_effects('resize', () =>
+			this.vt.exports.ghostty_terminal_resize(terminal, cols, rows, cell_width_px, cell_height_px)
 		);
+		this.vt.check(result, 'ghostty_terminal_resize');
+	}
+
+	/**
+	 * Register a handler for an effect, replacing any it has, or clear it with
+	 * `null` — after which the library ignores what fires it (a query goes
+	 * unanswered). See `GhosttyTerminalEffectHandlers` for each effect and
+	 * the rules a handler runs under.
+	 *
+	 * @throws TypeError when `handler` is neither a function nor `null`
+	 * @throws GhosttyResultError when the library refuses the registration
+	 * @throws GhosttyManifestError when the manifest lacks the effects' entries
+	 * @throws GhosttyPoisonedError once the instance is poisoned (`GhosttyVt.poisoned`)
+	 * @throws GhosttyReentrancyError from an effect handler
+	 * @throws GhosttyDisposedError after `dispose`
+	 */
+	set_effect<TName extends GhosttyTerminalEffectName>(
+		effect: TName,
+		handler: GhosttyTerminalEffectHandlers[TName] | null
+	): void {
+		const terminal = this.#idle('set_effect');
+		if (handler !== null && typeof handler !== 'function') {
+			throw new TypeError(`the ${effect} handler must be a function or null`);
+		}
+		const { option } = this.vt.resolve(resolve_ghostty_effect_constants).effects[effect];
+		const registered = this.#handlers[effect] !== undefined;
+		const call = `ghostty_terminal_set(${GHOSTTY_TERMINAL_EFFECTS[effect].option})`;
+		if (handler === null) {
+			if (!registered) return;
+			// a callback is passed by value, so NULL — 0 — clears it
+			this.vt.check(this.vt.exports.ghostty_terminal_set(terminal, option, 0), call);
+			this.#handlers[effect] = undefined;
+			return;
+		}
+		if (!registered) {
+			// the function pointer is the effect's shared trampoline slot, passed by value
+			const index = this.vt.effect_router.callback_index(effect);
+			this.vt.check(this.vt.exports.ghostty_terminal_set(terminal, option, index), call);
+		}
+		this.#handlers[effect] = handler;
 	}
 
 	/**
 	 * The active screen as plain text, scrollback included: each line ends in
 	 * `\n` except the last, and blank lines at the end are dropped.
 	 *
+	 * @throws GhosttyPoisonedError once the instance is poisoned (`GhosttyVt.poisoned`)
 	 * @throws GhosttyResultError when the module lacks the formatter feature (`UNSUPPORTED`)
 	 * @throws GhosttyDisposedError after `dispose`
 	 */
@@ -360,7 +465,8 @@ export class GhosttyTerminal {
 				try {
 					return memory.read_utf8(ptr, len);
 				} finally {
-					exports.ghostty_free(0, ptr, len);
+					// skipped once poisoned, so the exception that did it propagates
+					if (!this.vt.poisoned) exports.ghostty_free(0, ptr, len);
 				}
 			})
 		);
@@ -370,8 +476,21 @@ export class GhosttyTerminal {
 	 * Free the terminal, the formatter it reads through, and its write buffer
 	 * — its dependents first. Idempotent; any other use afterward throws
 	 * `GhosttyDisposedError`.
+	 *
+	 * The terminal is detached from effect dispatch before anything is freed.
+	 * Its library-side effect registrations aren't cleared one by one: they
+	 * live in the terminal, which `ghostty_terminal_free` releases whole, and
+	 * nothing can fire them once the handle is gone.
+	 *
+	 * On a poisoned instance (`GhosttyVt.poisoned`) nothing is freed — no
+	 * call goes into the module — and the handles are just dropped: the
+	 * memory goes with the instance. That never throws.
+	 *
+	 * @throws GhosttyReentrancyError from an effect handler: the terminal is
+	 *   mid-write, and freeing it would pull it out from under the parser
 	 */
 	dispose(): void {
+		if (this.#busy) throw this.#reentrancy_error('dispose');
 		const terminal = this.#ptr;
 		if (terminal === 0) return;
 		const formatter = this.#formatter;
@@ -382,6 +501,12 @@ export class GhosttyTerminal {
 		this.#formatter = 0;
 		this.#write_buffer = 0;
 		this.#write_buffer_len = 0;
+		this.#handlers = {};
+		if (this.#attached) {
+			this.#attached = false;
+			this.vt.effect_router.detach(terminal);
+		}
+		if (this.vt.poisoned) return;
 		const { exports, memory } = this.vt;
 		if (formatter !== 0) exports.ghostty_formatter_free(formatter);
 		if (write_buffer !== 0) memory.free(write_buffer, write_buffer_len);
@@ -412,12 +537,128 @@ export class GhosttyTerminal {
 		return this.#write_buffer;
 	}
 
-	/** The terminal handle, or a throw after `dispose`. */
+	/** The terminal handle, or a throw after `dispose` or once the instance is poisoned. */
 	#live(method: string): number {
 		if (this.#ptr === 0) {
 			throw new GhosttyDisposedError(`GhosttyTerminal.${method} called after dispose`);
 		}
+		this.vt.assert_not_poisoned(`GhosttyTerminal.${method}`);
 		return this.#ptr;
+	}
+
+	/**
+	 * The terminal handle for a method that mutates the terminal: a throw
+	 * after `dispose`, or from an effect handler.
+	 */
+	#idle(method: string): number {
+		const terminal = this.#live(method);
+		if (this.#busy) throw this.#reentrancy_error(method);
+		return terminal;
+	}
+
+	#reentrancy_error(method: string): GhosttyReentrancyError {
+		return new GhosttyReentrancyError(
+			`GhosttyTerminal.${method} called from an effect handler, in the middle of the library call that fired it: the terminal isn't reentrant`
+		);
+	}
+
+	/**
+	 * Run a library call that can fire effects, marked busy. Then, if a call
+	 * made during it poisoned the instance (a handler's own call, say), throw
+	 * `GhosttyPoisonedError`, dropping any kept handler exception; otherwise
+	 * throw the first exception a handler threw, if any. An exception out of
+	 * `call` itself propagates unchanged.
+	 */
+	#with_effects<T>(method: string, call: () => T): T {
+		// TODO: every library call that can fire effects goes through here: the
+		// library's reset fires the render-hold effect, and paste encoding fires
+		// `write_pty`, so binding either means guarding it the same way
+		this.#effect_failure = null;
+		this.#busy = true;
+		let value: T;
+		try {
+			value = call();
+		} finally {
+			this.#busy = false;
+		}
+		// set by `#receive_effect` during the call, which narrowing can't see
+		const failure = this.#effect_failure as EffectFailure | null;
+		this.#effect_failure = null;
+		this.vt.assert_not_poisoned(`GhosttyTerminal.${method}`);
+		if (failure) {
+			throw new GhosttyEffectError(failure.effect, failure.error, failure.count);
+		}
+		return value;
+	}
+
+	/**
+	 * The router's entry: an effect fired for this terminal, inside a library
+	 * call. Never throws — a handler's exception is kept for `#with_effects`.
+	 * Memory views are taken here, inside the callback, and dropped before it
+	 * returns. Once the instance is poisoned (by an earlier callback's call,
+	 * in the same parse), no handler runs.
+	 */
+	readonly #receive_effect = (
+		effect: GhosttyTerminalEffectName,
+		args: ReadonlyArray<number>
+	): void => {
+		if (this.vt.poisoned) return;
+		try {
+			switch (effect) {
+				case 'write_pty': {
+					const handler = this.#handlers.write_pty;
+					if (!handler) return;
+					const ptr = args[0]! >>> 0;
+					const len = args[1]! >>> 0;
+					// borrowed until the callback returns: copied
+					handler(this.vt.memory.bytes().slice(ptr, ptr + len));
+					return;
+				}
+				case 'bell':
+					this.#handlers.bell?.();
+					return;
+				case 'title_changed': {
+					const handler = this.#handlers.title_changed;
+					if (!handler) return;
+					const { data_title } = this.vt.resolve(resolve_ghostty_effect_constants);
+					handler(this.#read_string_data(data_title, 'TITLE'));
+					return;
+				}
+				case 'pwd_changed': {
+					const handler = this.#handlers.pwd_changed;
+					if (!handler) return;
+					const { data_pwd } = this.vt.resolve(resolve_ghostty_effect_constants);
+					handler(this.#read_string_data(data_pwd, 'PWD'));
+					return;
+				}
+			}
+		} catch (error) {
+			if (this.#effect_failure) this.#effect_failure.count++;
+			else this.#effect_failure = { effect, error, count: 1 };
+		}
+	};
+
+	/**
+	 * A `GhosttyString` terminal data value, decoded as UTF-8. The library
+	 * lends the bytes until its next mutating call, so they're decoded at
+	 * once; the out struct is scratch, freed here.
+	 */
+	#read_string_data(data: number, name: string): string {
+		const { exports, memory } = this.vt;
+		const constants = this.vt.resolve(resolve_ghostty_effect_constants);
+		const usize = this.vt.manifest.usize_scalar;
+		return memory.with_scratch(constants.string_size, (out) => {
+			this.vt.check(
+				exports.ghostty_terminal_get(this.#ptr, data, out),
+				`ghostty_terminal_get(${name})`
+			);
+			const ptr = memory.read_scalar(
+				out + constants.string_ptr_offset,
+				this.vt.manifest.pointer_scalar
+			);
+			const len = memory.read_scalar(out + constants.string_len_offset, usize);
+			return memory.read_utf8(ptr, len);
+		});
 	}
 
 	/** The plain-text formatter, created on first use. */
@@ -447,7 +688,8 @@ export class GhosttyTerminal {
 				);
 			});
 		} catch (error) {
-			exports.ghostty_formatter_free(formatter);
+			// skipped once poisoned, so the exception that did it propagates
+			if (!this.vt.poisoned) exports.ghostty_formatter_free(formatter);
 			throw error;
 		}
 		this.#formatter = formatter;

@@ -1,5 +1,6 @@
 import { test, describe, assert } from 'vitest';
 
+import { resolve_ghostty_effect_constants } from '#lib/fuz_terminal/ghostty_effects.ts';
 import { GhosttyManifestError } from '#lib/fuz_terminal/ghostty_errors.ts';
 import { GhosttyManifest, parse_ghostty_manifest } from '#lib/fuz_terminal/ghostty_manifest.ts';
 import { resolve_ghostty_terminal_constants } from '#lib/fuz_terminal/ghostty_terminal.ts';
@@ -192,6 +193,80 @@ describe('GhosttyManifest lookups', () => {
 	});
 });
 
+describe('GhosttyManifest callbacks', () => {
+	const manifest = new GhosttyManifest(create_ghostty_manifest_fixture());
+
+	test('a callback’s parameter and return types', () => {
+		assert.deepEqual(manifest.callback('GhosttyTerminalWritePtyFn'), {
+			params: ['GhosttyTerminal', 'pointer', 'pointer', 'u32'],
+			returns: 'void'
+		});
+		assert.deepEqual(manifest.callback('GhosttyTerminalBellFn'), {
+			params: ['GhosttyTerminal', 'pointer'],
+			returns: 'void'
+		});
+	});
+
+	test('a callback that’s missing, another kind, or malformed is refused', () => {
+		const cases: Array<[(types: Record<string, any>) => void, string, string]> = [
+			[() => {}, 'GhosttyTerminalNopeFn', 'no type GhosttyTerminalNopeFn'],
+			[() => {}, 'GhosttyString', 'is a "struct", not a callback'],
+			[(types) => delete types.GhosttyTerminalBellFn.params, 'GhosttyTerminalBellFn', 'no params'],
+			[
+				(types) => delete types.GhosttyTerminalBellFn.return,
+				'GhosttyTerminalBellFn',
+				'no params or return'
+			],
+			[
+				(types) => (types.GhosttyTerminalBellFn.params[1] = { elem: 'opaque' }),
+				'GhosttyTerminalBellFn',
+				'a parameter without a type'
+			]
+		];
+		for (const [doctor, type_name, message] of cases) {
+			const json = create_ghostty_manifest_fixture();
+			doctor(json.types);
+			const doctored = new GhosttyManifest(json);
+			assert.include(catch_manifest_error(() => doctored.callback(type_name)).message, message);
+		}
+	});
+
+	test('the wasm type each kind of value passes as', () => {
+		const json = create_ghostty_manifest_fixture();
+		json.types.TestAlias = { kind: 'alias', size: 2, align: 2, type: 'u16' };
+		json.types.TestWideAlias = { kind: 'alias', size: 8, align: 8, type: 'u64' };
+		json.types.TestLoopA = { kind: 'alias', size: 4, align: 4, type: 'TestLoopB' };
+		json.types.TestLoopB = { kind: 'alias', size: 4, align: 4, type: 'TestLoopA' };
+		const doctored = new GhosttyManifest(json);
+		const cases: Array<[string, string]> = [
+			['pointer', 'i32'],
+			['bool', 'i32'],
+			['u8', 'i32'],
+			['i16', 'i32'],
+			['u32', 'i32'],
+			['u64', 'i64'],
+			['GhosttyTerminal', 'i32'], // an opaque handle
+			['GhosttyResult', 'i32'], // an enum
+			['TestAlias', 'i32'],
+			['TestWideAlias', 'i64']
+		];
+		for (const [type_name, wasm] of cases) {
+			assert.strictEqual(doctored.wasm_value_type(type_name), wasm, type_name);
+		}
+		for (const [type_name, message] of [
+			['GhosttyString', "GhosttyString doesn't pass as a wasm number"], // a struct by value
+			['TestLoopA', "TestLoopA doesn't pass as a wasm number"],
+			['void', 'no type void'],
+			['GhosttyNope', 'no type GhosttyNope']
+		]) {
+			assert.include(
+				catch_manifest_error(() => doctored.wasm_value_type(type_name!)).message,
+				message!
+			);
+		}
+	});
+});
+
 describe('constants resolvers', () => {
 	test('resolve from the fixture', () => {
 		const manifest = new GhosttyManifest(create_ghostty_manifest_fixture());
@@ -208,6 +283,26 @@ describe('constants resolvers', () => {
 		assert.strictEqual(terminal.formatter_bool_scalar, 'bool');
 		assert.strictEqual(terminal.formatter_emit_scalar, 'i32');
 		assert.strictEqual(terminal.formatter_format_plain, 0);
+		const effects = resolve_ghostty_effect_constants(manifest);
+		assert.deepEqual(effects.effects.write_pty, {
+			option: 2,
+			signature: { params: ['i32', 'i32', 'i32', 'i32'], results: [] }
+		});
+		for (const [name, option] of [
+			['bell', 3],
+			['title_changed', 6],
+			['pwd_changed', 26]
+		] as const) {
+			assert.deepEqual(effects.effects[name], {
+				option,
+				signature: { params: ['i32', 'i32'], results: [] }
+			});
+		}
+		assert.strictEqual(effects.data_title, 12);
+		assert.strictEqual(effects.data_pwd, 13);
+		assert.strictEqual(effects.string_size, 8);
+		assert.strictEqual(effects.string_ptr_offset, 0);
+		assert.strictEqual(effects.string_len_offset, 4);
 	});
 
 	test('fail naming what a doctored manifest lacks', () => {
@@ -248,6 +343,56 @@ describe('constants resolvers', () => {
 				(types) => delete types.GhosttyFormatterFormat,
 				resolve_ghostty_terminal_constants,
 				'no type GhosttyFormatterFormat'
+			],
+			[
+				(types) => delete types.GhosttyTerminalOption.values.PWD_CHANGED,
+				resolve_ghostty_effect_constants,
+				'no value GhosttyTerminalOption.PWD_CHANGED'
+			],
+			[
+				(types) => (types.GhosttyTerminalOption.keys.BELL.type = 'GhosttyTerminalResetFn'),
+				resolve_ghostty_effect_constants,
+				'GhosttyTerminalOption.BELL takes GhosttyTerminalResetFn, not GhosttyTerminalBellFn'
+			],
+			[
+				(types) => delete types.GhosttyTerminalTitleChangedFn,
+				resolve_ghostty_effect_constants,
+				'no type GhosttyTerminalTitleChangedFn'
+			],
+			[
+				// a 64-bit length would be misread as the 32-bit one the receiver takes
+				(types) => (types.GhosttyTerminalWritePtyFn.params[3] = { type: 'u64' }),
+				resolve_ghostty_effect_constants,
+				'GhosttyTerminalWritePtyFn is (GhosttyTerminal, pointer, pointer, u64) -> void, but the binding reads (GhosttyTerminal, pointer, pointer, u32) -> void'
+			],
+			[
+				// the same wasm types, so only the names tell the length from the pointer
+				(types) => {
+					const params = types.GhosttyTerminalWritePtyFn.params;
+					[params[2], params[3]] = [params[3], params[2]];
+				},
+				resolve_ghostty_effect_constants,
+				'GhosttyTerminalWritePtyFn is (GhosttyTerminal, pointer, u32, pointer) -> void'
+			],
+			[
+				(types) => types.GhosttyTerminalBellFn.params.shift(),
+				resolve_ghostty_effect_constants,
+				'GhosttyTerminalBellFn is (pointer) -> void'
+			],
+			[
+				(types) => (types.GhosttyTerminalPwdChangedFn.return = { type: 'bool' }),
+				resolve_ghostty_effect_constants,
+				'GhosttyTerminalPwdChangedFn is (GhosttyTerminal, pointer) -> bool'
+			],
+			[
+				(types) => (types.GhosttyTerminalData.keys.TITLE.type = 'GhosttyColorRgb'),
+				resolve_ghostty_effect_constants,
+				'GhosttyTerminalData.TITLE gives GhosttyColorRgb, not GhosttyString'
+			],
+			[
+				(types) => (types.GhosttyString.fields.len.type = 'u16'),
+				resolve_ghostty_effect_constants,
+				'GhosttyString.len is not a size_t'
 			]
 		];
 		for (const [doctor, resolve, message] of cases) {

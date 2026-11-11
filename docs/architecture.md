@@ -613,14 +613,15 @@ emulator: parsing, the screens, scrollback with reflow — for a renderer of
 zzz's own to replace xterm.js. The terminal views don't use it yet. It has no
 DOM or Svelte dependency, so its behavior is tested in Node:
 
-- `ghostty_vt.ts` — `load_ghostty_vt` and `GhosttyVt`: the instance, its
+- `ghostty_vt.ts` — `load_ghostty_vt` and `GhosttyVt`: the instance (its
+  function exports guarded against an escaping exception, below), its
   validated type manifest, its build info (version, compiled-in features),
   and `check` for result codes. The core resolves its constants at load
   (`GhosttyVt.constants`); each other module resolves its own once, on first
   use (`GhosttyVt.resolve`), so enum values and offsets are never hardcoded.
 - `ghostty_terminal.ts` — `GhosttyTerminal`: write, resize, plain-text
-  format, dispose. A query in the output gets no reply: no `write_pty`
-  effect is registered. Width and height are capped at
+  format, effects, dispose. A query in the output gets a reply only through
+  a registered `write_pty` handler. Width and height are capped at
   `GHOSTTY_TERMINAL_MAX_SIZE` cells: the screen is allocated up front and
   wasm memory never shrinks, so an absurd size (a bad cell measurement) is
   refused before it can grow memory by gigabytes. Writes go through a
@@ -629,8 +630,85 @@ DOM or Svelte dependency, so its behavior is tested in Node:
   never held across an export call; scratch and opaque-slot allocations
   freed on every path. Buffers the library allocates
   (the formatter's output) are freed with `ghostty_free`.
+- `ghostty_effects.ts` — the effects the binding registers (`write_pty`,
+  `bell`, `title_changed`, `pwd_changed`), their handler types, their
+  constants and callback signatures from the manifest, and
+  `GhosttyEffectRouter`, which dispatches each callback by terminal handle.
+- `ghostty_callback_table.ts`, `wasm_trampoline.ts` — function-table slots
+  holding JS callbacks, each added once and kept for the instance's life;
+  a trampoline is a tiny wasm module, encoded and compiled at runtime,
+  that wraps a JS function as a wasm one (a table slot takes only those).
 - `ghostty_manifest.ts`, `ghostty_errors.ts` — the manifest reader and the
   binding's errors.
+
+**Effects.** A program's output asks the terminal for things it can't do
+itself — answer a query, ring the bell, retitle the window. libghostty-vt
+hands each to a callback the host registers (`GhosttyTerminal.set_effect`),
+and ignores it when none is: a cursor-position or device-attributes query
+gets no reply, and none arrives later. That's what lets a history be fed
+into a fresh terminal without answering its stale queries — feed it with no
+`write_pty` registered, then register one for the live output. What the
+history does to the terminal's state still carries forward, as it should
+when the live stream continues it: a history that turned on the in-band
+size report (mode 2048) makes the first resize after registering send a
+report, and a history that ends partway through a query is answered when
+the live output completes it.
+
+```
+write(bytes) ─ busy ─ ghostty_terminal_vt_write ── parser hits ESC[6n
+                                                       │ call_indirect(slot)
+                       trampoline (table slot, one per effect per instance)
+                                                       │ (terminal, userdata, ptr, len)
+                       GhosttyEffectRouter ── by terminal handle ──▶ the terminal's receiver
+                                                       │ copy the bytes, call the handler
+                                                       │ (a throw is kept, never rethrown here)
+           ◀── vt_write returns ── rest of the output parsed ──┘
+       idle; a kept handler exception is thrown now, as GhosttyEffectError
+```
+
+The rules follow from callbacks running in the middle of the library's
+parse: a handler can read the terminal but not write, resize, dispose, or
+re-register it (`GhosttyReentrancyError`); the data it's passed is borrowed,
+so the binding copies or decodes it before the handler sees it; it may write
+other terminals; its return value is ignored, so an async handler catches
+its own errors. The callback slots are bounded: one per effect per module
+instance, added on first registration and never released, since a wasm
+table can't shrink. The library's other effects aren't bound and are never
+registered; the clipboard ones stay that way until there's a way to ask the
+person first. The trampolines are compiled at runtime, so a page
+Content-Security-Policy would have to allow wasm compilation
+(`'wasm-unsafe-eval'`) — which loading the module needs anyway.
+
+**Poisoning.** A handler's exception is caught inside the callback and
+surfaced after the call. One can still escape a call into the module: a
+trap, or the JS stack running out inside the module's frames or at the
+callback boundary, before the catch is reached. Unwinding through wasm
+skips the frames' epilogues, so the stack pointer the module keeps in
+linear memory stays moved (enough escapes and an ordinary call traps), the
+write it abandoned left that terminal mid-parse, and it may have landed
+mid-allocation in the heap every terminal on the instance shares. Rather
+than guess at what survived, `GhosttyVt` wraps each function export once at
+load, and the first escape poisons the instance — later modules' calls
+included, with nothing to opt into:
+
+- The exception reaches the caller of the call it escaped from, unchanged:
+  the cleanup on its way out (scratch frees, the formatter's output)
+  skips its own calls into the module rather than have them refused.
+- Every later call throws `GhosttyPoisonedError`, with the escape as its
+  `cause`, before entering wasm. `GhosttyVt.poisoned` records the export
+  it escaped from and the exception.
+- A `write` or `resize` during which a nested call poisoned the instance —
+  a handler's own call, or its write to another terminal — throws
+  `GhosttyPoisonedError` once it returns, and that wins over any handler
+  exception. Once poisoned, no handler runs for the rest of the parse.
+- Poison belongs to the module instance, not the `GhosttyVt` object: every
+  wrapper of one instance sees it, and other instances don't.
+- A stack overflow at a call's very entry poisons too, though it disturbed
+  nothing: the guard can't tell it from one that did.
+
+A poisoned instance's terminals dispose without calling in, and its memory
+goes when it's collected; a host builds a fresh instance from the compiled
+module. The guard costs a few nanoseconds a call.
 
 The module is a static asset (`static/fuz_terminal/ghostty-vt.wasm`) built by
 `cargo xtask ghostty-vt`, not an import, so a build without it still
