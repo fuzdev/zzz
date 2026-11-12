@@ -1141,8 +1141,14 @@ passes; after that it draws again. It can't end the hold in the terminal
 resetting a timed-out one isn't seen. A hold that begins after the view was
 destroyed or stopped — later in the same write — does nothing.
 
-*Drawing a row.* A row is a block with a pinned height; each run is an
-inline box (`inline-block`, top-aligned) as wide as its columns. Every box —
+*Drawing a row.* The rows stack in block flow in the screen layer, so row
+`y` starts `y` rows down, where the cursor is placed; a row is a block with a
+pinned height, and each run is an inline box (`inline-block`, top-aligned) as
+wide as its columns. The layer and the rows set their own `display`, and
+their classes are prefixed (`fuz-terminal-screen`, `fuz-terminal-row`): no
+class the component renders is a fuz_css utility or base-style class
+(`FuzTerminal.classes.test.ts`), since a utility of the same name would lay
+them out too. Every box —
 runs, clusters, the cursor — is sized in one cell width, the probe's
 measurement, set on the root as `--fuz_terminal_cell_width` and
 `--fuz_terminal_cell_height` in pixels (falling back to the font's own `1ch`

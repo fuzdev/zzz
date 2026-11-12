@@ -139,7 +139,7 @@ const message_text = (view: MountedView): string =>
 	view.target.querySelector('.fuz-terminal .message')?.textContent ?? '';
 
 const rows_text = (view: MountedView): Array<string> =>
-	Array.from(view.target.querySelectorAll('.fuz-terminal .row')).map((row) => row.textContent);
+	Array.from(view.target.querySelectorAll('.fuz-terminal-row')).map((row) => row.textContent);
 
 /** The input sent to the PTY so far, answering each send so the next goes out. */
 const sent_input = async (): Promise<string> => {
@@ -268,7 +268,7 @@ describe('TerminalView output', () => {
 		terminal.receive_output('\r\n👨‍👩‍👧!', 30);
 		view.step();
 		const runs = Array.from(
-			view.target.querySelectorAll<HTMLElement>('.row')
+			view.target.querySelectorAll<HTMLElement>('.fuz-terminal-row')
 		)[1]!.querySelectorAll<HTMLElement>('.run');
 		assert.deepEqual(
 			Array.from(runs).map((r) => [r.textContent, r.style.getPropertyValue('--run_width')]),

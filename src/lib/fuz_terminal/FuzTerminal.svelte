@@ -110,7 +110,7 @@ nothing is a live region, so a repaint announces nothing -->
 	{onkeyup}
 >
 	<!-- a layer over the root's box: the rows never size the box they're measured from -->
-	<div class="grid">
+	<div class="fuz-terminal-screen">
 		{#each terminal.rows as row (row.id)}
 			{@render terminal_row(row)}
 		{/each}
@@ -145,7 +145,7 @@ nothing is a live region, so a repaint announces nothing -->
 
 <!-- an unchanged row is the same object in the next frame, so its block doesn't rerun -->
 {#snippet terminal_row(row: GhosttyRenderRow)}
-	<div class="row">
+	<div class="fuz-terminal-row">
 		{#each split_fuz_terminal_runs(row.runs) as run (run.x)}
 			<span
 				class={[
@@ -216,13 +216,20 @@ nothing is a live region, so a repaint announces nothing -->
 	.fuz-terminal:focus-visible {
 		outline-offset: -2px;
 	}
-	.grid {
+	/* the screen and row classes are prefixed, never a utility's name, and set
+	their own `display`, so no global class lays them out: a grid screen would
+	spread the rows over its leftover height, drifting them from the cursor,
+	and a flex row would split its runs into lines. In block flow row `y`
+	starts at `y` rows, where the cursor is placed */
+	.fuz-terminal-screen {
+		display: block;
 		position: absolute;
 		inset: 0;
 		overflow: hidden;
 	}
 	/* a block per row, so a selection copies a row as one line */
-	.row {
+	.fuz-terminal-row {
+		display: block;
 		height: var(--fuz_terminal_row);
 		line-height: var(--fuz_terminal_row);
 		white-space: pre;

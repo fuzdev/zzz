@@ -139,7 +139,7 @@ const mount_terminal = async (
 let written_by_host: FuzTerminal | undefined;
 
 const row_elements = (root: HTMLElement): Array<HTMLElement> =>
-	Array.from(root.querySelectorAll<HTMLElement>('.row'));
+	Array.from(root.querySelectorAll<HTMLElement>('.fuz-terminal-row'));
 
 const rows_text = (root: HTMLElement): Array<string> =>
 	row_elements(root).map((row) => row.textContent);
@@ -913,13 +913,13 @@ describe('structure', () => {
 		t.view.write(`a${ESC}[31mb`);
 		t.step();
 		const children = Array.from(t.root.children).map((child) => child.className.split(' ')[0]);
-		assert.deepEqual(children, ['grid', 'probe']);
-		const grid = t.root.querySelector('.grid')!;
+		assert.deepEqual(children, ['fuz-terminal-screen', 'probe']);
+		const screen = t.root.querySelector('.fuz-terminal-screen')!;
 		// the rows and cursor live in the layer, never as the root's own content
-		assert.strictEqual(grid.querySelectorAll('.row').length, 4);
-		assert.ok(grid.querySelector('.cursor'));
+		assert.strictEqual(screen.querySelectorAll('.fuz-terminal-row').length, 4);
+		assert.ok(screen.querySelector('.cursor'));
 		for (const row of row_elements(t.root)) {
-			assert.strictEqual(row.parentElement, grid);
+			assert.strictEqual(row.parentElement, screen);
 			assert.strictEqual(row.tagName, 'DIV');
 			for (const run of run_elements(row)) assert.strictEqual(run.tagName, 'SPAN');
 		}
