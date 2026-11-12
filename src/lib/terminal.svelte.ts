@@ -12,6 +12,7 @@ import {
 } from '@fuzdev/fuz_schema/schema.ts';
 import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { utf8_length } from '@fuzdev/fuz_app/actions/transports.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
@@ -89,6 +90,10 @@ const INPUT_RETRY_DELAY_MAX = 2000;
  * what paces a process that prints faster than this client takes it: with
  * views attached, once every view has consumed a chunk; with none, as soon as
  * it's buffered (the buffer drops its oldest output, so it never backs up).
+ * The backend paces it only against a connection that has acked it, so the
+ * consumed position is announced when the process starts, and after each
+ * socket connect from the first chunk on the new connection (see
+ * `receive_socket_connect`).
  *
  * Input goes through a per-terminal queue with at most one `terminal_data_send`
  * in flight — the backend dispatches one socket's requests concurrently, so
@@ -138,6 +143,13 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	/** Acks the current process's output — `null` unless it's running. */
 	#output_acker: TerminalOutputAcker | null = null;
 
+	/**
+	 * Where the socket connection's output for the current process starts:
+	 * 0 for a process started on it, `null` after the socket connects anew
+	 * until the first chunk on the new connection says.
+	 */
+	#ack_floor: number | null = 0;
+
 	#input_pending = '';
 	#input_sending = false;
 	#input_retry_timer: ReturnType<typeof setTimeout> | null = null;
@@ -181,6 +193,8 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	 */
 	receive_output(data: string, sent_bytes: number): void {
 		if (!data) return;
+		const first_on_connection = this.#ack_floor === null;
+		if (first_on_connection) this.#ack_floor = Math.max(0, sent_bytes - utf8_length(data));
 		this.output.push(data);
 		if (sent_bytes > this.#received_bytes) this.#received_bytes = sent_bytes;
 		const { run } = this;
@@ -194,8 +208,12 @@ export class Terminal extends Cell<typeof TerminalJson> {
 				this.#ack_consumed();
 			});
 		}
-		// with no listeners, buffering it was consuming it
-		if (this.#output_listeners.size === 0) this.#ack_consumed();
+		if (first_on_connection) {
+			this.#announce_consumed();
+		} else if (this.#output_listeners.size === 0) {
+			// with no listeners, buffering it was consuming it
+			this.#ack_consumed();
+		}
 	}
 
 	/**
@@ -216,8 +234,9 @@ export class Terminal extends Cell<typeof TerminalJson> {
 		this.#output_acker = new TerminalOutputAcker({
 			send: (bytes) => this.#send_ack(terminal_id, bytes)
 		});
-		// output that arrived before the `terminal_create` reply
-		this.#ack_consumed();
+		// makes this connection one the backend paces against before the view
+		// consumes anything, covering output that arrived before the reply
+		this.#announce_consumed();
 		void this.#pump_input();
 		void this.#pump_resize();
 	}
@@ -264,6 +283,21 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	}
 
 	/**
+	 * Re-announces the consumed position to a new socket connection, which
+	 * the backend doesn't pace against until it acks. A position consumed
+	 * before the connect is behind the output the backend sent while the
+	 * socket was down, which never arrives — acking it could leave the
+	 * backend paused for good on output this tab can't consume — so acks hold until the first chunk on the new
+	 * connection, whose start is announced then (`TerminalOutputAcker.hold`).
+	 * Called on each socket connect. A terminal whose process ended has no
+	 * acks, and a restart starts the new process's count over.
+	 */
+	receive_socket_connect(): void {
+		this.#ack_floor = null;
+		this.#output_acker?.hold();
+	}
+
+	/**
 	 * Flags possibly missing output after a reconnect (see `output_gap`).
 	 * Ignored unless running.
 	 */
@@ -285,6 +319,7 @@ export class Terminal extends Cell<typeof TerminalJson> {
 		this.output.clear();
 		this.#stop_io();
 		this.#received_bytes = 0;
+		this.#ack_floor = 0;
 		for (const listener of this.#output_listeners.keys()) {
 			this.#output_listeners.set(listener, 0);
 		}
@@ -355,15 +390,33 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	}
 
 	/**
-	 * Tells the acker how far the output has been consumed: through the least
-	 * any attached listener has, or everything received when none is attached.
+	 * How far the output has been consumed: through the least any attached
+	 * listener has, or everything received when none is attached.
 	 */
-	#ack_consumed(): void {
+	#consumed_bytes(): number {
 		let consumed = this.#received_bytes;
 		for (const listener_consumed of this.#output_listeners.values()) {
 			if (listener_consumed < consumed) consumed = listener_consumed;
 		}
-		this.#output_acker?.consumed(consumed);
+		return consumed;
+	}
+
+	/** Tells the acker how far the output has been consumed. */
+	#ack_consumed(): void {
+		this.#output_acker?.consumed(this.#consumed_bytes());
+	}
+
+	/**
+	 * Announces the consumed position to the backend at once — no less than
+	 * where the connection's output starts — or holds the acks while that
+	 * start is unknown (see `receive_socket_connect`).
+	 */
+	#announce_consumed(): void {
+		if (this.#ack_floor === null) {
+			this.#output_acker?.hold();
+		} else {
+			this.#output_acker?.announce(Math.max(this.#consumed_bytes(), this.#ack_floor));
+		}
 	}
 
 	/**

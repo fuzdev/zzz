@@ -42,10 +42,11 @@ export type TerminalViewLinkTerminal = Pick<Terminal, 'attach_output' | 'send_in
  * writes have been parsed, and every waiting chunk is consumed in order;
  * at `failed` or `poisoned` nothing will parse them, and they're consumed
  * too, so a view that can't draw never holds the process blocked. So the
- * backend's window bounds the output that can queue while a view loads,
- * once this connection has acked the terminal; until its first ack (a new
- * terminal, or after a reconnect) the backend has no consumer to pace
- * against. A load that never finishes is ended by the loader's timeout
+ * backend's window bounds the output that can queue while a view loads:
+ * the cell announces its position to the backend when the process starts
+ * and with the first chunk after each socket connect, so it doesn't wait on this view's first
+ * consumed chunk to be paced (see `Terminal.receive_socket_connect`). A
+ * load that never finishes is ended by the loader's timeout
  * (`FUZ_TERMINAL_MODULE_LOAD_TIMEOUT_MS`): the view fails, and what it held
  * is released.
  * Disconnecting detaches from the cell, which then waits on this view for

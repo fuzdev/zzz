@@ -50,9 +50,18 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+/** A running terminal, the ack of 0 its start announces answered and dropped from `calls`. */
 const create_running = (terminal_id: Uuid = create_uuid()): Terminal => {
 	const terminal = app.terminals.add({ command: 'sh' });
 	terminal.start(terminal_id);
+	const announce = calls_of(calls, 'terminal_ack');
+	assert.deepEqual(
+		announce.map((c) => c.input),
+		[{ terminal_id, bytes: 0 }],
+		'the start announces 0'
+	);
+	calls.splice(calls.indexOf(announce[0]!), 1);
+	announce[0]!.resolve(result_ok());
 	return terminal;
 };
 

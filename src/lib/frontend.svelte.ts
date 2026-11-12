@@ -537,6 +537,9 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 * `terminal_exited`), or, on the first connect, those between an HTTP
 	 * boot load and the socket opening. So:
 	 *
+	 * - on every connect, this tab's terminals hold their acks and announce
+	 *   their position to the new connection with its first chunk
+	 *   (`Terminals.receive_socket_connect`)
 	 * - with no load yet, this is the boot load (see `boot_session`)
 	 * - on the first connect, a load sent while the socket was already open
 	 *   (so over it) needs nothing more
@@ -553,6 +556,8 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		const first = this.#socket_connect_time === null;
 		this.#socket_connect_time = connect_time;
 		if (this.#disposed) return false;
+		// a new connection, which the backend paces no terminal against yet
+		this.terminals.receive_socket_connect();
 		const over_socket = this.#session_load_over_socket;
 		if (over_socket === null) {
 			void this.load_session();

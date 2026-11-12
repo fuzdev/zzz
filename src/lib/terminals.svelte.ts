@@ -200,6 +200,16 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 	}
 
 	/**
+	 * Has each terminal announce its position to a new socket connection
+	 * with the first chunk on it (see `Terminal.receive_socket_connect`) —
+	 * called on every socket connect. Only this tab's terminals: the others' output is never
+	 * acked from here.
+	 */
+	receive_socket_connect(): void {
+		for (const terminal of this.items.values) terminal.receive_socket_connect();
+	}
+
+	/**
 	 * Marks every running terminal as possibly missing output (see
 	 * `Terminal.output_gap`) — called when the socket reconnects.
 	 */

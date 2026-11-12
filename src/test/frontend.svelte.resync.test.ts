@@ -297,6 +297,19 @@ describe('reconnect detection', () => {
 		assert.ok(!running.output_gap, 'a fresh process has no gap');
 	});
 
+	test("every connect re-announces the terminals' output, the first included", () => {
+		const receive_socket_connect = vi.spyOn(app.terminals, 'receive_socket_connect');
+		app.handle_socket_connect(null);
+		assert.strictEqual(receive_socket_connect.mock.calls.length, 0, 'not connected yet');
+		const first = connect_time();
+		app.handle_socket_connect(first);
+		assert.strictEqual(receive_socket_connect.mock.calls.length, 1, 'a new connection');
+		app.handle_socket_connect(first);
+		assert.strictEqual(receive_socket_connect.mock.calls.length, 1, 'the same connect seen again');
+		app.handle_socket_connect(connect_time());
+		assert.strictEqual(receive_socket_connect.mock.calls.length, 2, 'a reconnect');
+	});
+
 	test('does nothing once disposed', () => {
 		app.handle_socket_connect(connect_time());
 		app.dispose();

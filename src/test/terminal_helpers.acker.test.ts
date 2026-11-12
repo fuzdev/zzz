@@ -170,6 +170,145 @@ describe('TerminalOutputAcker', () => {
 		});
 	});
 
+	describe('announce', () => {
+		test('acks 0 at once', () => {
+			acker.announce();
+			assert.deepEqual(sent_bytes(), [0], 'no delay, and nothing consumed is no reason to wait');
+		});
+
+		test('acks what was consumed at once, with no delay', () => {
+			acker.consumed(10);
+			acker.announce();
+			assert.deepEqual(sent_bytes(), [10]);
+			assert.strictEqual(vi.getTimerCount(), 0, 'the pending ack is the announce');
+		});
+
+		test('acks a position already acked again', async () => {
+			acker.consumed(TERMINAL_ACK_THRESHOLD_BYTES);
+			await sent[0]!.settle('ok');
+			acker.announce();
+			assert.deepEqual(sent_bytes(), [TERMINAL_ACK_THRESHOLD_BYTES, TERMINAL_ACK_THRESHOLD_BYTES]);
+		});
+
+		test('counts output through `bytes` as consumed, never less than consumed', async () => {
+			acker.consumed(10);
+			acker.announce(50);
+			assert.deepEqual(sent_bytes(), [50]);
+			await sent[0]!.settle('ok');
+			acker.consumed(40);
+			acker.announce(20);
+			assert.deepEqual(sent_bytes(), [50, 50], 'a lower count moves nothing back');
+		});
+
+		test('with an ack in flight, follows it when it returns, even with nothing new', async () => {
+			acker.consumed(TERMINAL_ACK_THRESHOLD_BYTES);
+			acker.announce();
+			assert.deepEqual(sent_bytes(), [TERMINAL_ACK_THRESHOLD_BYTES], 'one ack in flight');
+			await sent[0]!.settle('ok');
+			assert.deepEqual(sent_bytes(), [TERMINAL_ACK_THRESHOLD_BYTES, TERMINAL_ACK_THRESHOLD_BYTES]);
+			await sent[1]!.settle('ok');
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_DELAY * 10);
+			assert.strictEqual(sent.length, 2, 'once');
+		});
+
+		test('a failed announce is retried, even with nothing new waiting', async () => {
+			acker.announce();
+			await sent[0]!.settle('retry');
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY - 1);
+			assert.strictEqual(sent.length, 1);
+			await vi.advanceTimersByTimeAsync(1);
+			assert.deepEqual(sent_bytes(), [0, 0]);
+		});
+
+		test('then acks by the batching rule', async () => {
+			acker.announce();
+			await sent[0]!.settle('ok');
+			acker.consumed(10);
+			assert.strictEqual(sent.length, 1, 'waits out the delay');
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_DELAY);
+			assert.deepEqual(sent_bytes(), [0, 10]);
+		});
+
+		test('does nothing once stopped', () => {
+			acker.stop();
+			acker.announce();
+			assert.strictEqual(sent.length, 0);
+		});
+	});
+
+	describe('hold', () => {
+		test('sends nothing until the announce, the threshold included', async () => {
+			acker.hold();
+			acker.consumed(10);
+			acker.consumed(2 * TERMINAL_ACK_THRESHOLD_BYTES);
+			acker.flush();
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY * 10);
+			assert.strictEqual(sent.length, 0);
+			acker.announce(5);
+			assert.deepEqual(sent_bytes(), [2 * TERMINAL_ACK_THRESHOLD_BYTES], 'what was consumed');
+		});
+
+		test('a pending ack waits for the announce', async () => {
+			acker.consumed(10);
+			acker.hold();
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_DELAY * 10);
+			assert.strictEqual(sent.length, 0);
+			acker.announce();
+			assert.deepEqual(sent_bytes(), [10]);
+		});
+
+		test('lets an ack in flight finish without a follow-up', async () => {
+			acker.consumed(TERMINAL_ACK_THRESHOLD_BYTES);
+			acker.consumed(3 * TERMINAL_ACK_THRESHOLD_BYTES);
+			acker.hold();
+			await sent[0]!.settle('ok');
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_DELAY * 10);
+			assert.deepEqual(sent_bytes(), [TERMINAL_ACK_THRESHOLD_BYTES]);
+			acker.announce(4 * TERMINAL_ACK_THRESHOLD_BYTES);
+			assert.deepEqual(sent_bytes(), [
+				TERMINAL_ACK_THRESHOLD_BYTES,
+				4 * TERMINAL_ACK_THRESHOLD_BYTES
+			]);
+		});
+
+		test('does not retry an ack that failed in flight, until the announce', async () => {
+			// the old socket closed under it, rejecting it
+			acker.consumed(TERMINAL_ACK_THRESHOLD_BYTES);
+			acker.hold();
+			await sent[0]!.settle('retry');
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY * 10);
+			assert.strictEqual(sent.length, 1, 'its count may predate the connection');
+			acker.announce(5 * TERMINAL_ACK_THRESHOLD_BYTES);
+			assert.deepEqual(sent_bytes(), [
+				TERMINAL_ACK_THRESHOLD_BYTES,
+				5 * TERMINAL_ACK_THRESHOLD_BYTES
+			]);
+		});
+
+		test('an announce during the ack in flight follows it, one at a time', async () => {
+			acker.consumed(TERMINAL_ACK_THRESHOLD_BYTES);
+			acker.hold();
+			acker.announce(2 * TERMINAL_ACK_THRESHOLD_BYTES);
+			assert.strictEqual(sent.length, 1);
+			await sent[0]!.settle('retry');
+			assert.deepEqual(
+				sent_bytes(),
+				[TERMINAL_ACK_THRESHOLD_BYTES, 2 * TERMINAL_ACK_THRESHOLD_BYTES],
+				'the announce goes out at once, not after the retry delay'
+			);
+		});
+
+		test('a hold during a failed announce keeps it owed for the next announce', async () => {
+			acker.announce();
+			acker.hold();
+			await sent[0]!.settle('retry');
+			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY * 10);
+			assert.strictEqual(sent.length, 1);
+			acker.announce(7);
+			assert.deepEqual(sent_bytes(), [0, 7]);
+		});
+	});
+
 	test('ignores counts that go backwards', async () => {
 		acker.consumed(100);
 		acker.consumed(40);

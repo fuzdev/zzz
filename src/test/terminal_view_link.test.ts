@@ -39,9 +39,19 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
-const create_running = (terminal_id: Uuid = create_uuid()): Terminal => {
+/** A running terminal, the ack of 0 its start announces settled and dropped from `calls`. */
+const create_running = async (terminal_id: Uuid = create_uuid()): Promise<Terminal> => {
 	const terminal = app.terminals.add({ command: 'sh' });
 	terminal.start(terminal_id);
+	const announce = calls_of(calls, 'terminal_ack');
+	assert.deepEqual(
+		announce.map((c) => c.input),
+		[{ terminal_id, bytes: 0 }],
+		'the start announces 0'
+	);
+	calls.splice(calls.indexOf(announce[0]!), 1);
+	announce[0]!.resolve(result_ok());
+	await flush();
 	return terminal;
 };
 
@@ -88,8 +98,8 @@ const settle_calls = async (): Promise<void> => {
 };
 
 describe('TerminalViewLink output', () => {
-	test('replays the buffered history, then writes live output plainly', () => {
-		const terminal = create_running();
+	test('replays the buffered history, then writes live output plainly', async () => {
+		const terminal = await create_running();
 		terminal.receive_output('one\r\n', 5);
 		terminal.receive_output('two\r\n', 10);
 		const view = create_view();
@@ -99,15 +109,15 @@ describe('TerminalViewLink output', () => {
 		assert.deepEqual(view.writes[1], { data: 'three', options: undefined });
 	});
 
-	test('writes nothing for an empty history', () => {
-		const terminal = create_running();
+	test('writes nothing for an empty history', async () => {
+		const terminal = await create_running();
 		const view = create_view();
 		new TerminalViewLink(terminal).connect(view);
 		assert.deepEqual(view.writes, []);
 	});
 
-	test('replays the truncated notice ahead of a history that lost output', () => {
-		const terminal = create_running();
+	test('replays the truncated notice ahead of a history that lost output', async () => {
+		const terminal = await create_running();
 		terminal.receive_output('kept', 4);
 		terminal.output.mark_dropped();
 		const view = create_view();
@@ -119,7 +129,7 @@ describe('TerminalViewLink output', () => {
 	});
 
 	test('a ready view consumes each chunk as soon as it is written', async () => {
-		const terminal = create_running();
+		const terminal = await create_running();
 		const view = create_view();
 		new TerminalViewLink(terminal).connect(view);
 		terminal.receive_output('a', 1);
@@ -130,7 +140,7 @@ describe('TerminalViewLink output', () => {
 
 	test('a throwing write is logged, never thrown into the cell, and still consumed', async () => {
 		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const terminal = create_running();
+		const terminal = await create_running();
 		const view = create_view();
 		const other: Array<string> = [];
 		new TerminalViewLink(terminal).connect(view);
@@ -147,7 +157,7 @@ describe('TerminalViewLink output', () => {
 	});
 
 	test('after disconnect nothing is written and the terminal waits on nothing', async () => {
-		const terminal = create_running();
+		const terminal = await create_running();
 		const view = create_view();
 		const link = new TerminalViewLink(terminal);
 		link.connect(view);
@@ -160,8 +170,8 @@ describe('TerminalViewLink output', () => {
 		assert.deepEqual(await new_acks(), [2], 'acked as buffered, with no view attached');
 	});
 
-	test('connects once', () => {
-		const terminal = create_running();
+	test('connects once', async () => {
+		const terminal = await create_running();
 		terminal.receive_output('one', 3);
 		const view = create_view();
 		const link = new TerminalViewLink(terminal);
@@ -183,7 +193,7 @@ describe('TerminalViewLink acks while the view loads', () => {
 	};
 
 	test('chunks are written but not consumed until the view is ready, then in order', async () => {
-		const terminal = create_running();
+		const terminal = await create_running();
 		const { view, link } = connect_loading(terminal);
 		terminal.receive_output('a', 1);
 		terminal.receive_output('b', 2);
@@ -261,7 +271,7 @@ describe('TerminalViewLink acks while the view loads', () => {
 		{ kind: 'poisoned', error: null, message: 'trap' }
 	] as const) {
 		test(`a view that goes ${status.kind} while loading consumes what waited`, async () => {
-			const terminal = create_running();
+			const terminal = await create_running();
 			const { view, link } = connect_loading(terminal);
 			terminal.receive_output('a', 1);
 			assert.deepEqual(await new_acks(), []);
@@ -274,7 +284,7 @@ describe('TerminalViewLink acks while the view loads', () => {
 	}
 
 	test('a detach while loading releases the waiting chunks through the cell, once', async () => {
-		const terminal = create_running();
+		const terminal = await create_running();
 		const { link } = connect_loading(terminal);
 		// a second view, ready, consumes as it goes: the cell acks the least of the two
 		const ready = create_view();
@@ -295,7 +305,7 @@ describe('TerminalViewLink acks while the view loads', () => {
 
 describe('TerminalViewLink input and size', () => {
 	test('decodes UTF-8 split across sends', async () => {
-		const terminal = create_running();
+		const terminal = await create_running();
 		const link = new TerminalViewLink(terminal);
 		link.connect(create_view());
 		const bytes = new TextEncoder().encode('é€');
@@ -319,7 +329,7 @@ describe('TerminalViewLink input and size', () => {
 
 	test('forwards the view size as a PTY resize', async () => {
 		const terminal_id = create_uuid();
-		const terminal = create_running(terminal_id);
+		const terminal = await create_running(terminal_id);
 		const link = new TerminalViewLink(terminal);
 		link.connect(create_view());
 		link.resize({ cols: 100, rows: 30 });
@@ -331,7 +341,7 @@ describe('TerminalViewLink input and size', () => {
 	});
 
 	test('sends and resizes nothing once disconnected', async () => {
-		const terminal = create_running();
+		const terminal = await create_running();
 		const link = new TerminalViewLink(terminal);
 		link.connect(create_view());
 		link.disconnect();

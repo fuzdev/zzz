@@ -542,11 +542,21 @@ and their output buffering, and coming back reattaches to them.
   is consumed in order; at `failed` or `poisoned` nothing will parse them,
   and they're consumed too, so a view that can't draw never holds the
   process blocked. So the backend's window bounds what can queue while a
-  view loads, once this connection has acked the terminal; until its first
-  ack (a new terminal, or after a reconnect) the backend has no consumer to
-  pace against. A view that detaches stops being waited on — the cell drops
-  its listener, and what that listener hadn't consumed counts no more. `TerminalOutputAcker` batches the acks: one at once
-  when 256 KiB are waiting, otherwise after a short delay so the last of a
+  view loads. The backend paces a terminal only against a connection that
+  has acked it, so the `Terminal` announces its position
+  (`TerminalOutputAcker.announce`: an ack sent at once, 0 when nothing has
+  been consumed) when the process starts, before any view has consumed
+  anything. On each socket connect (`Terminal.receive_socket_connect`) it
+  holds the acks (`TerminalOutputAcker.hold`) until the first chunk on the
+  new connection and announces that chunk's start: a position consumed
+  before the connect is behind the output sent while the socket was down,
+  which never arrives, so acking it could leave the terminal paused for
+  good on output this tab can't consume. Between a reconnect and that
+  announce reaching the backend — about a round trip after the first chunk —
+  the output is unpaced. A view that detaches stops being waited on — the
+  cell drops its listener, and what that listener hadn't consumed counts no
+  more. `TerminalOutputAcker` batches the acks: one at once when 256 KiB are
+  waiting, otherwise after a short delay so the last of a
   burst is acked too, and never more than one in flight — what's consumed
   meanwhile waits for it and goes in the next, by the same rule. The backend
   stops reading a terminal that gets 1 MiB ahead of its acks, which blocks

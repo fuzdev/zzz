@@ -203,7 +203,13 @@ export interface TerminalOutputAckerOptions {
  * `threshold_bytes` is at most the backend's low-water mark (see
  * `TERMINAL_ACK_THRESHOLD_BYTES`): once everything sent is consumed, at
  * least the threshold is waiting, and the ack goes out at once or as soon as
- * the one in flight returns. `delay` bounds every other case. Not reactive.
+ * the one in flight returns. `delay` bounds every other case.
+ *
+ * The backend paces a terminal only against connections that have acked it,
+ * so a connection's first ack is `announce`d — sent at once, even at 0 or
+ * at a position already acked — rather than left to the batching rule.
+ * After a reconnect, acks `hold` until the new connection's position is
+ * announced. Not reactive.
  */
 export class TerminalOutputAcker {
 	readonly #send: (bytes: number) => Promise<TerminalAckOutcome>;
@@ -215,6 +221,10 @@ export class TerminalOutputAcker {
 	#acked = 0;
 	#sending = false;
 	#stopped = false;
+	/** Whether the next ack goes out with nothing new waiting — see `announce`. */
+	#announcing = false;
+	/** Whether acks wait for the next `announce` — see `hold`. */
+	#holding = false;
 	#timer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(options: TerminalOutputAckerOptions) {
@@ -240,10 +250,44 @@ export class TerminalOutputAcker {
 	}
 
 	/**
+	 * Acks the consumed position at once — `bytes` at least — even when it's
+	 * 0 or already acked: it makes the connection the ack goes out on one the
+	 * backend paces the terminal against, before that connection has
+	 * consumed anything. Ends a `hold`. With an ack in flight, this one
+	 * follows it when it returns; a failed one is retried like any ack.
+	 *
+	 * @param bytes - the least position to ack: output through it counts as
+	 *   consumed from now on
+	 */
+	announce(bytes = 0): void {
+		if (bytes > this.#consumed) this.#consumed = bytes;
+		this.#holding = false;
+		this.#announcing = true;
+		this.flush();
+	}
+
+	/**
+	 * Holds every ack until the next `announce` — for a new connection, on
+	 * which a position consumed before it is unsafe to ack: it's behind the
+	 * output the backend sent while no connection was open, which never
+	 * arrives, so the backend could stay paused waiting for this client to
+	 * consume it. Counts still move forward meanwhile. An ack in flight
+	 * finishes; a failed one isn't retried until the announce.
+	 */
+	hold(): void {
+		this.#holding = true;
+	}
+
+	/**
 	 * Acks what's waiting by the batching rule: at once when it's the
-	 * threshold or more, after the delay when it's less.
+	 * threshold or more, after the delay when it's less — or at once when an
+	 * announce is waiting.
 	 */
 	#ack_waiting(): void {
+		if (this.#announcing) {
+			this.flush();
+			return;
+		}
 		const waiting = this.#consumed - this.#acked;
 		if (waiting >= this.#threshold_bytes) {
 			this.flush();
@@ -254,12 +298,16 @@ export class TerminalOutputAcker {
 
 	/**
 	 * Acks what's been consumed now, unless an ack is in flight (what it
-	 * leaves is acked when it returns) or nothing is waiting.
+	 * leaves is acked when it returns), acks are held, or nothing is waiting
+	 * and no announce is.
 	 */
 	flush(): void {
 		this.#clear_timer();
-		if (this.#stopped || this.#sending || this.#consumed <= this.#acked) return;
-		void this.#run(this.#consumed);
+		if (this.#stopped || this.#sending || this.#holding) return;
+		const announcing = this.#announcing;
+		if (!announcing && this.#consumed <= this.#acked) return;
+		this.#announcing = false;
+		void this.#run(this.#consumed, announcing);
 	}
 
 	/** Stops acking for good — pending and later output is never acked. */
@@ -268,7 +316,7 @@ export class TerminalOutputAcker {
 		this.#clear_timer();
 	}
 
-	async #run(bytes: number): Promise<void> {
+	async #run(bytes: number, announcing: boolean): Promise<void> {
 		this.#sending = true;
 		const outcome = await this.#send(bytes);
 		this.#sending = false;
@@ -276,6 +324,14 @@ export class TerminalOutputAcker {
 		if (outcome === 'stop') {
 			this.stop();
 		} else if (outcome === 'retry') {
+			if (announcing) {
+				// a failed announce is still owed, whatever the count is by the retry
+				this.#announcing = true;
+			} else if (this.#announcing) {
+				// one made while this was in flight goes out at once, covering its count
+				this.flush();
+				return;
+			}
 			this.#schedule(this.#retry_delay);
 		} else {
 			this.#acked = bytes;
