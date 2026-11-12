@@ -537,7 +537,8 @@ and their output buffering, and coming back reattaches to them.
   output, so it never backs up. A ready view parses a chunk before `write`
   returns, and `TerminalViewLink` calls the listener's `consumed` right
   after. A view still loading its module queues the chunk unparsed, so its
-  `consumed` waits until the view leaves `loading` (the view's `onstatus`):
+  `consumed` waits until the view leaves `loading` (the view's `onstatus`,
+  which calls `TerminalViewLink.view_status_changed`):
   at `ready` the queued writes have been parsed, and every chunk that waited
   is consumed in order; at `failed` or `poisoned` nothing will parse them,
   and they're consumed too, so a view that can't draw never holds the
@@ -555,7 +556,9 @@ and their output buffering, and coming back reattaches to them.
   announce reaching the backend — about a round trip after the first chunk —
   the output is unpaced. A view that detaches stops being waited on — the
   cell drops its listener, and what that listener hadn't consumed counts no
-  more. `TerminalOutputAcker` batches the acks: one at once when 256 KiB are
+  more. A `write` that throws is logged and its chunk still consumed: an
+  exception never reaches the cell's delivery to its other listeners.
+  `TerminalOutputAcker` batches the acks: one at once when 256 KiB are
   waiting, otherwise after a short delay so the last of a
   burst is acked too, and never more than one in flight — what's consumed
   meanwhile waits for it and goes in the next, by the same rule. The backend
@@ -599,13 +602,17 @@ and their output buffering, and coming back reattaches to them.
   again, so building it and retrying recovers without a page reload. The
   view takes keys (`accepts_input`) exactly while `send_input` takes bytes,
   so a terminal whose process ended leaves keys — Tab included — to the
-  browser. A view taking keys marks its root (`data-fuz-terminal-keys`), and
-  the dashboard's global shortcuts (`dashboard_shortcuts.ts`: `` ` ``, `~`,
+  browser. It never takes focus on its own: a click or Tab focuses it. A
+  view taking keys marks its root (`data-fuz-terminal-keys`), and the
+  dashboard's global shortcuts (`dashboard_shortcuts.ts`: `` ` ``, `~`,
   Escape) leave keys whose target is inside one
   (`is_fuz_terminal_key_target`) to the terminal, as they leave a text
-  field's. The copy button and the context
-  menu's "copy output" read the emulator's text (`get_text`: the scrollback
-  and screen, soft wraps joined). The view passes
+  field's — so with focus in a terminal, Escape goes to the program and
+  leaves an open desk menu open. The app's other global key handlers are on
+  pages that host no terminal, and a context menu takes keys only while
+  it's open; a new global shortcut makes the same check. The copy button
+  and the context menu's "copy output" read the emulator's text
+  (`get_text`: the scrollback and screen, soft wraps joined). The view passes
   `TERMINAL_SCROLLBACK_MAX_BYTES` (2 MiB) as the emulator's
   `scrollback_max_bytes`: the limit counts the emulator's memory, pruned in
   whole pages, so a wider or more styled terminal keeps fewer lines,
@@ -715,14 +722,24 @@ dependency, so its behavior is tested in Node:
   and `check` for result codes. The core resolves its constants at load
   (`GhosttyVt.constants`); each other module resolves its own once, on first
   use (`GhosttyVt.resolve`), so enum values and offsets are never hardcoded.
-- `ghostty_terminal.ts` — `GhosttyTerminal`: write, resize, plain-text
-  format, effects, dispose. A query in the output gets a reply only through
-  a registered `write_pty` handler. Width and height are capped at
-  `GHOSTTY_TERMINAL_MAX_SIZE` cells: the screen is allocated up front and
-  wasm memory never shrinks, so an absurd size (a bad cell measurement) is
-  refused before it can grow memory by gigabytes. Writes go through a
-  per-terminal buffer kept between writes. A terminal can be created with
-  modes set, each as its reset default too (`modes`).
+  `load_ghostty_vt` takes the module's bytes, a fetch `Response`, or a
+  compiled module from its caller — the binding never fetches an app path —
+  and refuses (`GhosttyLoadError`) bytes that don't compile, a module that
+  imports anything, or one that isn't libghostty-vt. A manifest entry
+  that's missing or reshaped throws `GhosttyManifestError` naming it; every
+  `GhosttyResult` is checked, a failure thrown as `GhosttyResultError` with
+  the export and the result's name.
+- `ghostty_terminal.ts` — `GhosttyTerminal`: write (bytes or a string),
+  resize (reflowing the primary screen), plain-text format (`format_text`:
+  the active screen with its scrollback, trimmed, soft wraps unwrapped),
+  paste encoding, effects, and an idempotent `dispose`, after which every
+  use throws `GhosttyDisposedError`. A query in the output gets a reply
+  only through a registered `write_pty` handler. Width and height are
+  capped at `GHOSTTY_TERMINAL_MAX_SIZE` cells: the screen is allocated up
+  front and wasm memory never shrinks, so an absurd size (a bad cell
+  measurement) is refused before it can grow memory by gigabytes. Writes
+  go through a per-terminal buffer kept between writes. A terminal can be
+  created with modes set, each as its reset default too (`modes`).
 - `fuz_terminal_module.ts` (beside the library, in `src/lib/`, since it knows
   the app's asset path) — `load_fuz_terminal_module`: the page's one fetch
   and compile of the module, for every view (see [Terminals](#terminals)).
@@ -740,12 +757,16 @@ dependency, so its behavior is tested in Node:
 - `ghostty_key_encoder.ts` — `GhosttyKeyEncoder`: key events to the bytes
   a program expects, following the terminal's input modes (below). Its
   terminal disposes it first.
+- `ghostty_paste.ts` — the paste safety rule (`get_ghostty_paste_hazard`),
+  the encoded length (`to_ghostty_paste_length`), and the encoder's
+  constants, under `GhosttyTerminal.encode_paste` (*Paste*, below).
 - `ghostty_effects.ts` — the effects the binding registers (`write_pty`,
   `bell`, `title_changed`, `pwd_changed`, `render_hold`), their handler
   types, their constants and callback signatures from the manifest, and
   `GhosttyEffectRouter`, which dispatches each callback by terminal handle.
-- `ghostty_callback_table.ts`, `wasm_trampoline.ts` — function-table slots
-  holding JS callbacks, each added once and kept for the instance's life;
+- `ghostty_callback_table.ts`, `wasm_trampoline.ts` — `GhosttyCallbackTable`:
+  function-table slots holding JS callbacks, each added once and kept for
+  the instance's life;
   a trampoline is a tiny wasm module, encoded and compiled at runtime,
   that wraps a JS function as a wasm one (a table slot takes only those).
 - `ghostty_manifest.ts`, `ghostty_errors.ts` — the manifest reader (enum
@@ -777,8 +798,12 @@ The renderer, beside it (tested under jsdom with the built module):
 
 **Effects.** A program's output asks the terminal for things it can't do
 itself — answer a query, ring the bell, retitle the window. libghostty-vt
-hands each to a callback the host registers (`GhosttyTerminal.set_effect`),
-and ignores it when none is: a cursor-position or device-attributes query
+hands each to a callback the host registers (`GhosttyTerminal.set_effect`,
+which replaces a handler, or clears it with `null`): `write_pty` gets a
+reply for the PTY as a copied `Uint8Array`, `bell` fires, and
+`title_changed` and `pwd_changed` are handed the new string, read from the
+terminal inside the callback. The library ignores an effect when no
+handler is registered: a cursor-position or device-attributes query
 gets no reply, and none arrives later. That's what lets a history be fed
 into a fresh terminal without answering its stale queries — feed it with no
 `write_pty` registered, then register one for the live output. What the
@@ -805,9 +830,16 @@ parse: a handler can read the terminal but not write, resize, dispose, or
 re-register it (`GhosttyReentrancyError`); the data it's passed is borrowed,
 so the binding copies or decodes it before the handler sees it; it may write
 other terminals; its return value is ignored, so an async handler catches
-its own errors. The callback slots are bounded: one per effect per module
-instance, added on first registration and never released, since a wasm
-table can't shrink. The library's other effects aren't bound and are never
+its own errors. Handlers run synchronously inside `write` and `resize`; a
+handler's exception is caught inside the callback, and the call finishes
+and then throws `GhosttyEffectError` with the first exception as its `cause`.
+The callback slots are bounded: one per effect per module instance
+(`GhosttyCallbackTable`), added on first registration and never released,
+since a wasm table can't shrink, and `GhosttyEffectRouter` dispatches each
+by the terminal handle the library passes to the terminal attached under
+it — so the table grows by one slot per effect however many terminals come
+and go. A terminal detaches from the router before its handle is freed.
+The library's other effects aren't bound and are never
 registered; the clipboard ones stay that way until there's a way to ask the
 person first. The trampolines are compiled at runtime, so a page
 Content-Security-Policy would have to allow wasm compilation
@@ -849,7 +881,10 @@ frame needs, updated in place from the terminal — it redoes only what
 changed — with two layers of change tracking: the frame's (clean, partial,
 full) and a flag per row. An update only adds to them; the renderer clears
 both once it has drawn (`ghostty_render_state_clean`). `GhosttyRenderState`
-reads it into JS once per update and keeps nothing of wasm memory:
+— refused with `GhosttyLoadError` for a module built without the
+`render_state` feature — reads it into JS once per update and keeps
+nothing of wasm memory: `update()`, once per animation frame, returns
+`clean`, `partial`, or `full`, and `clean()` marks the frame drawn.
 
 ```
 update() ─ ghostty_render_state_update ─ get_multi(dirty, size, cursor, colors)
@@ -874,7 +909,8 @@ update() ─ ghostty_render_state_update ─ get_multi(dirty, size, cursor, colo
   inside a scroll region (DECSTBM), inserted or deleted lines, some erases
   — gives every row of that page a new id, rows outside the edit included,
   so those rows come back as new objects, on what may be only a `partial`
-  update. The library also numbers each screen's rows on its own: after a
+  update. Ids are unique within an update, but the library numbers each
+  screen's rows on its own: after a
   switch between the primary and alternate screens an id can come back for
   a different row, whose object then holds that row's contents.
 - **Runs** cover a row from column 0 without gaps, up to its last cell that
@@ -950,10 +986,13 @@ handler still throws `GhosttyReentrancyError`.
 depends on modes the program sets in its output: the up arrow is `ESC [ A`
 until it turns on application cursor mode, then `ESC O A`; under the Kitty
 keyboard protocol most keys become `CSI … u` sequences. libghostty-vt's key
-encoder holds those modes as options, and its sync call copies them from a
-terminal when it's made — it doesn't stay attached. `GhosttyKeyEncoder`
-syncs before every encode, so a mode set by output written just before a
-key press decides what the key sends:
+encoder holds those modes as options — the cursor and keypad application
+modes, backarrow mode (DECBKM), the alt escape prefix, modifyOtherKeys, and
+the Kitty keyboard flags — and its sync call copies them from a terminal
+when it's made; it doesn't stay attached. `GhosttyKeyEncoder` (refused
+with `GhosttyLoadError` for a module built without the `input_encode`
+feature) syncs before every encode, so a mode set by output written just
+before a key press decides what the key sends:
 
 ```
 keydown ─ FuzTerminalState.handle_key
@@ -969,11 +1008,15 @@ keydown ─ FuzTerminalState.handle_key
   text), the output buffer grows once if a sequence doesn't fit, and after
   the first keys an encode allocates nothing in the module. A terminal may
   have any number; encoding reads the terminal and changes nothing. The
-  bytes are the library's encodings, Ghostty's own: Ctrl+Shift+letter is
-  CSI u, distinct from
-  Ctrl+letter, and modified Enter, Tab, and Escape send the library's
-  distinct sequences in every mode (Shift+Enter and Ctrl+Enter are
-  `CSI 27;2;13~` and `CSI 27;5;13~`). Mode 1035 is on by default, so
+  bytes are the library's encodings, Ghostty's own, which differ from what
+  xterm-style terminals commonly send: modified Enter, Tab, and Escape send
+  the library's distinct sequences in every mode (Shift+Enter and
+  Ctrl+Enter are `CSI 27;2;13~` and `CSI 27;5;13~` — a plain shell prints
+  junk for them); Ctrl+Shift+letter, distinct from Ctrl+letter, and Ctrl
+  with some punctuation (`;` `'` `,` `.` and backtick, and on macOS, where
+  the zoom keys aren't passed, `-` and `=`) send `CSI … u`; Ctrl+/ sends
+  `^_`; modified PgUp, PgDn, and Insert carry their modifiers; and
+  backarrow-key mode (DECBKM) is honoured. Mode 1035 is on by default, so
   application keypad mode (DECKPAM) leaves the keypad numeric until a
   program turns 1035 off.
 - **Classic Ctrl chords** are the one place the encoder departs from the
@@ -993,11 +1036,13 @@ keydown ─ FuzTerminalState.handle_key
   text when it's one byte, else, with Ctrl alone, the physical key's — so
   German Ctrl+Ü, on the US `[` key, is ESC, and a `[` typed with AltGr isn't
   a Ctrl chord at all. Ctrl+Shift+I and Ctrl+Shift+M stay the library's (`@`
-  takes Shift on a US layout, so Ctrl+Shift+2 is NUL).
+  takes Shift on a US layout, so Ctrl+Shift+2 is NUL). With the prefix,
+  Ctrl+Alt+[ sends ESC ESC.
 - **The mapping** (`to_fuz_terminal_key_input`) reads only the event's
   fields. The key comes from `code`: the library's key names follow the UI
   Events codes (`A` for `KeyA`, `DIGIT_1` for `Digit1`, `F12` for `F12`), so
-  the table is built from the manifest's names by that rule, plus a few
+  the table is built from the manifest's names by that rule
+  (`resolve_fuz_terminal_key_codes`), plus a few
   legacy aliases and the numpad with NumLock off, which a browser reports as
   the digit's `code` with the navigation key's `key` (`Numpad1` + `End` →
   `NUMPAD_END`). A unit test holds the rule to every name in the manifest,
@@ -1169,8 +1214,8 @@ the view is destroyed. Through `bind:this` the host calls:
   terminal's state carries forward (above).
 - `paste(text, options?)` — the text sent to `ondata` as a paste (*Paste*,
   below), returning what happened.
-- `get_text()` — the screen as plain text through the formatter, for a
-  copy-all.
+- `get_text()` — the active screen and its scrollback as plain text
+  through the formatter (trimmed, soft wraps joined), for a copy-all.
 - `focus()`, `get_status()`, `get_size()`.
 
 The status is `loading`, `ready`, `failed` (the module didn't arrive,
@@ -1390,7 +1435,16 @@ screen-reader mode is still to come.
 
 The module is a static asset (`static/fuz_terminal/ghostty-vt.wasm`) built by
 `cargo xtask ghostty-vt`, not an import, so a build without it still
-succeeds.
+succeeds. It isn't committed (the path is gitignored), so `gro build`'s
+cache, keyed on the commit, doesn't notice it appearing: a build cached
+before the module was built is reused without it, until `gro build
+--force_build`. The tests that load it
+(`src/test/fuz_terminal/**/*.wasm.test.ts` and
+`src/test/TerminalView.wasm.test.ts`) are the `fuz_terminal_wasm` vitest
+project, which `vite.config.ts` defines only when the module is there, so a
+checkout without it — CI included — runs everything else, with a one-line
+notice that the project was skipped; the manifest and load checks that need
+no module (against a manifest fixture) run in `unit`.
 
 ## Recording
 

@@ -222,9 +222,11 @@ The terminal emulator's module ships in `build/` only when it was built:
 `gro build` copies `static/`, and `static/fuz_terminal/ghostty-vt.wasm` is
 gitignored output of `cargo xtask ghostty-vt`. So whoever builds a release
 needs Zig 0.17 and runs that step first; a build without it works, and its
-terminals say the module is missing. `zzzd` serves it as `application/wasm`
-(so the browser compiles it as it downloads), and a missing one is a 404,
-never the SPA shell.
+terminals say the module is missing. `gro build`'s cache is keyed on the
+commit, and the module is gitignored, so building it doesn't invalidate a
+cached build: run `gro build --force_build` after building the module.
+`zzzd` serves it as `application/wasm` (so the browser compiles it as it
+downloads), and a missing one is a 404, never the SPA shell.
 
 Build and run the full self-hosted server:
 

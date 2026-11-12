@@ -69,7 +69,7 @@
 		paste_options?: FuzTerminalPasteOptions
 	): FuzTerminalPasteResult => view_state.paste(text, paste_options);
 
-	/** The screen as plain text, for a copy-all; see `FuzTerminalState.get_text`. */
+	/** The screen and its scrollback as plain text, for a copy-all; see `FuzTerminalState.get_text`. */
 	export const get_text = (): string => view_state.get_text();
 
 	/** Move focus to the terminal. */

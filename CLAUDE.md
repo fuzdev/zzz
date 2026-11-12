@@ -267,328 +267,102 @@ See ./docs/architecture.md for detailed data flow, content model, and IndexedCol
 
 ### fuz_terminal
 
-`src/lib/fuz_terminal/` is a TypeScript binding over
-[libghostty-vt](https://lib.ghostty.org/vt/), Ghostty's terminal emulator as
-a C library, compiled to WebAssembly, and `FuzTerminal.svelte`, a DOM
-renderer over it (see **The DOM renderer** below). The binding is DOM-free
-and Svelte-free and runs in Node and browsers. zzz's terminals are drawn
-with it: `TerminalView.svelte` hosts one `FuzTerminal` per view (see **The
-terminal UI** below). `load_ghostty_vt` (`ghostty_vt.ts`) takes the module's
-bytes, a `Response`, or a compiled module from its caller (it never fetches
-an app path), checks it imports nothing and exports what the binding calls,
-and reads the type manifest (`ghostty_type_json()`): every enum value, struct
-offset, and option value type comes from there (`ghostty_manifest.ts`), and a
-missing or reshaped entry throws `GhosttyManifestError` naming it. Every
-`GhosttyResult` is checked (`GhosttyResultError` carries the result's name).
-`GhosttyTerminal` (`ghostty_terminal.ts`) writes bytes or strings, resizes
-(reflowing the primary screen; each dimension is capped at
-`GHOSTTY_TERMINAL_MAX_SIZE` cells, since wasm memory never shrinks), reads the
-screen as plain text through the
-formatter (trimmed, soft wraps unwrapped), and is freed by an idempotent
-`dispose()` — after which every use throws. It can be created with modes
-set (`modes`), each as its reset default too, so a full reset keeps it. `GhosttyMemory`
-(`ghostty_memory.ts`) caches its views of linear memory until it grows; no
-caller keeps one across an export call, since any allocation can grow it.
-Scratch allocations are freed on every path.
+`src/lib/fuz_terminal/` binds [libghostty-vt](https://lib.ghostty.org/vt/),
+Ghostty's terminal emulator compiled to WebAssembly, and draws zzz's
+terminals with it, in three layers:
 
-**Effects** are the callbacks through which the terminal asks its host for
-what it can't do itself. `GhosttyTerminal.set_effect` registers a handler, or
-clears it with `null`, for `write_pty` (replies to the program's queries —
-cursor position, device attributes, mode reports — for the PTY, as a copied
-`Uint8Array`), `bell`, `title_changed`, and `pwd_changed` (each handed the new
-string, read from the terminal inside the callback). An effect with no handler
-is ignored by the library: a query gets no reply, then or later, which is how
-a history is fed without answering its stale queries (the state it sets still
-carries forward — see ./docs/architecture.md § fuz_terminal). `render_hold`
-reports synchronized output (mode 2026): `true` when the program starts
-redrawing unseen, `false` when it's done (or on a resize or full reset).
-Nothing else is bound, so the library's other effects — the clipboard ones
-included — are never registered (`ghostty_effects.ts`). A callback is a slot in the module's function table
-holding a trampoline: a tiny wasm module, assembled and compiled at runtime
-(`wasm_trampoline.ts`), that wraps a JS function as a wasm one. Each effect
-has one per module instance, dispatching by the terminal handle the library
-passes to the terminal attached under it, so the table grows by one slot per
-effect however many terminals come and go (`GhosttyCallbackTable`,
-`GhosttyEffectRouter`); a terminal detaches before its handle is freed.
-Handlers run synchronously inside `write` and `resize`. From one, the
-terminal can be read (`format_text`), but `write`, `resize`, `dispose`, and
-`set_effect` on it throw `GhosttyReentrancyError` — the library isn't
-reentrant and doesn't check. A handler's exception is caught inside the
-callback, the call finishes, and the call then throws `GhosttyEffectError`
-with the first exception as its `cause`. An exception that escapes a call
-into the module anyway — a trap, or the JS stack running out inside its
-frames or at the callback boundary — skips the frames' epilogues, leaving the
-stack pointer in linear memory moved, a write abandoned mid-parse, and maybe
-the shared heap mid-allocation. So `GhosttyVt` guards every function export
-once at load: the first escape **poisons** the module instance
-(`GhosttyVt.poisoned`, seen by every wrapper of it). The exception reaches
-the caller of the call it escaped from (cleanup skips its frees rather than
-replace it); every later call throws `GhosttyPoisonedError` before entering
-wasm; a `write` or `resize` during which a nested call — a handler's — poisoned
-it throws `GhosttyPoisonedError`, over any handler exception; no handler runs
-once poisoned; and `dispose` just drops the handles. A stack overflow at a
-call's entry poisons too, since the guard can't tell it from one that
-disturbed the module. A host recovers with a fresh instance. Compiling the
-trampolines needs wasm compilation allowed, as loading the module does: a
-page Content-Security-Policy would need `'wasm-unsafe-eval'`.
+- **The binding** (`ghostty_*.ts`, `wasm_trampoline.ts`) — DOM-free and
+  Svelte-free, so it runs, and is tested, in Node: `load_ghostty_vt` and
+  `GhosttyVt` (the instance), `GhosttyTerminal`, the render-state reader
+  `GhosttyRenderState` (the frame data's types are in
+  `ghostty_render_frame.ts`), the key encoder `GhosttyKeyEncoder`, and the
+  paste rule and encoding (`ghostty_paste.ts`).
+- **The renderer** — `FuzTerminal.svelte`, its state `FuzTerminalState`
+  (`fuz_terminal_state.svelte.ts`): one terminal drawn as DOM text, taking
+  its keys. It knows nothing of zzz's app.
+- **zzz's adapter** — `TerminalView.svelte` hosts one `FuzTerminal` per
+  view, linked to its `Terminal` cell by a `TerminalViewLink`
+  (`terminal_view_link.ts`), with the module from `load_fuz_terminal_module`
+  (`fuz_terminal_module.ts`, one fetch and compile per page).
 
-**The render state** (`ghostty_render_state.ts`) is what a renderer draws
-from. `new GhosttyRenderState(terminal)` (refused with `GhosttyLoadError` for
-a module without the `render_state` feature) holds libghostty-vt's render
-state — a per-frame copy of the screen that tracks what changed — and reads
-it into plain JS values: `update()` once per animation frame returns `clean`,
-`partial`, or `full`, and `clean()` marks the frame drawn (an update only adds
-to what's dirty). After an update, `rows` is every viewport row top to bottom,
-each a `GhosttyRenderRow` — an `id` (the library's row identity, a key for a
-keyed list) and its `runs`: consecutive cells sharing a style and hyperlink
-flag, each with its start column `x`, `width` in columns, and `text`. A run
-that isn't a `cluster` has one code point per narrow cell; a cluster run is
-one wide character or one multi-code-point grapheme, to be boxed to its
-`width`. Trailing blank default cells (and a wrapped wide character's
-unstyled spacer head) make no run; a cell of background only
-(an erase with a color) is a space in that background. A run's
-`GhosttyRenderStyle` is interned and carries a stable `key`; its colors are
-`null` (the default), a palette index, or RGB — palette colors stay indices
-against `colors.palette`; a style read in consecutive updates that read rows
-keeps its object (two generations are cached), so compare styles by `key`. `cursor` (visibility, blink, shape, viewport
-position) and `colors` (default foreground and background, cursor color,
-palette) are read every update, since a cursor shape or a default color
-changes without dirtying a row; the default foreground and background are
-the library's placeholders until both are set. Everything is immutable and
-copied out of wasm memory; a value is replaced only when it changed — a row
-unchanged since the last update keeps its object, even after an ordinary
-scroll rebuilt it — so a renderer compares references. A row id stays with
-its row as the screen scrolls, but an edit that moves rows within the
-library's page (a scroll inside a scroll region, inserted or deleted lines)
-gives every row of that page a new id, so those rows come back as new
-objects. An update without a change makes two calls
-into the module and allocates nothing; otherwise each row costs two calls
-(its id and its cells, read in bulk), and a changed row two more for each
-style new to that row and each multi-code-point cluster. A render state may be updated from an
-effect handler — a `render_hold` handler captures the frame there when a hold
-begins — and its terminal disposes it first. A terminal has at most one live
-render state (an update consumes its change tracking; a second is refused);
-views share one reader's data. With mode 2027 off, the library doesn't mark
-a row changed when a zero-width mark arrives in a write of its own, so that
-row is stale until something else touches it — which is why `FuzTerminal`
-turns the mode on. Row ids are unique within an
-update, but the library numbers the alternate screen's rows apart from the
-primary's, so an id can come back for a different row after a screen switch
-(its object then holds that row).
+What a change must not break:
 
-**Keyboard input.** `GhosttyKeyEncoder` (`ghostty_key_encoder.ts`; refused
-with `GhosttyLoadError` for a module without the `input_encode` feature) is
-libghostty-vt's key encoder for one terminal, which disposes it first.
-`encode(input)` takes a plain `GhosttyKeyInput` — the action (press,
-repeat, release), the physical key by its `GhosttyKey` name,
-`GHOSTTY_KEY_MODS` bits, the modifiers used up making the text, the text,
-the unshifted code point — copies the terminal's input modes into the
-encoder first (application cursor and keypad modes, DECBKM, the alt escape
-prefix, modifyOtherKeys, the Kitty keyboard flags), so a mode the output
-set just before a key decides its bytes, and returns the bytes, often none.
-It reuses one event and its buffers: a key allocates nothing in the module
-once warm. The encodings are the library's — Ghostty's — with one
-exception: Ctrl+[, Ctrl+I, Ctrl+M, and Ctrl+@ (and their Ctrl+Alt forms,
-ESC-prefixed) send the classic ESC, Tab, CR, and NUL unless the program has
-turned on the Kitty keyboard protocol or xterm's modifyOtherKeys mode 2,
-where the library's distinct `CSI … u` / `CSI 27;…~` forms are sent
-(`to_classic_ctrl_chord_bytes`: the library sends fixterms CSI u for them
-even in legacy mode, which programs without a keyboard protocol don't
-parse). Modified Enter, Tab, and Escape send the library's distinct
-sequences in every mode — Shift+Enter and Ctrl+Enter are `CSI 27;2;13~` and
-`CSI 27;5;13~`. `fuz_terminal_keyboard.ts` turns a
-`KeyboardEvent` (any object with its fields) into that input: the key from
-`code` by the regular correspondence between the library's names and the UI
-Events codes, built from the manifest's names
-(`resolve_fuz_terminal_key_codes`; the numpad with NumLock off by `code`
-and `key`); the text from `key` when it's a character, never a key name or
-a control character; the modifiers, with Ctrl and Alt dropped when AltGraph
-made the text, and on macOS Alt dropped when Option typed a character
-without Ctrl or Meta — so a Mac's Option characters (`[`, `@`, `å`) are
-typed as themselves and never reported as Alt, while Option+Left stays
-Alt+Left; the modifiers the text used up — Shift whenever it's held and the
-key made text (not on Space or the numpad); and the unshifted code point —
-the key's own text when the event shows it, otherwise the character a **US
-layout** has on that physical key (no layout table works in every browser;
-a key the US layout lacks, such as `IntlBackslash`, gets its text's own
-character), which is wrong for shifted digits and punctuation on other
-layouts. The platform is `FuzTerminalDeps.key_platform`, read from
-`navigator` by default (`to_fuz_terminal_key_platform`). `FuzTerminal`
-encodes `keydown` and `keyup` on its focused root and sends the bytes
-through `ondata`, the same callback its replies use, preventing the event's
-default exactly when bytes were sent (a modifier alone keeps it). **Copy**
-is Ctrl+Alt+C or Ctrl+Insert (`is_fuz_terminal_copy_key`; no Shift or Meta):
-while the page's selection takes some of the view's text
-(`FuzTerminalDeps.read_selection`) it copies that selection — all of it,
-what the user selected — with `navigator.clipboard.writeText`
-(`write_clipboard`), sends nothing, prevents the default, and holds no key
-(no release follows), whatever the status or `accepts_input`; a failed
-write is reported through `onerror` and the notice. With no selection there
-the chord is the program's like any other key. Ctrl+C is always the
-program's. C is matched by the layout's character, or by the physical key
-for another script's letter, never with AltGraph held nor when Ctrl+Alt
-made a Latin letter or symbol (Polish AltGr+C types `ć`). On macOS neither
-chord copies — Cmd+C passes to the browser as Meta and copies there — so
-they stay the program's. It ignores keys while not ready, a composition (an
-IME's, or a dead key's — the composed character arrives as the next keydown
-and is sent), and the keys the browser and the OS keep
-(`should_fuz_terminal_pass_key`): any Meta combination, Ctrl+Shift+C and
-Ctrl+Shift+V, reserved for copy and paste, and, except on macOS (where the
-browser zooms with Cmd), the page zoom keys: Ctrl with `=`, `+`, `-`, `_`,
-or `0` — by the layout's character, Shift or not, the numpad's included,
-never with Alt (AltGr on Windows). Tab, Escape, Ctrl+C, Ctrl+W, Ctrl+digit,
-and the function keys are the program's. **The
-Kitty keyboard protocol** can't be left unadvertised: the library always
-takes a program's push, set, and pop of the flags, and answers its query
-(`CSI ? u`) through `write_pty`; no option or build feature turns that off.
-So it's supported as far as browser events allow: the encoder follows the
-flags a program sets (each screen has its own), and a `keyup` is encoded —
-and sends bytes only while the program has event reporting on — for a key
-whose press was taken (it reached the encoder, whether or not it sent
-anything) and that hasn't left the view's focus, whatever the modifiers are
-by the release. Keys are matched to the layout only through the event's
-text and the US fallback above, so the protocol's key codes for shifted
-digits and punctuation, and its base-layout alternates, assume a US layout.
+- **The manifest, never constants** — every enum value, struct offset, and
+  option type comes from the module's type manifest (`ghostty_manifest.ts`),
+  never hardcoded; a missing or reshaped entry throws `GhosttyManifestError`.
+  Every `GhosttyResult` is checked.
+- **Memory** — a view of linear memory is taken again after any export call
+  that can allocate (growing the memory detaches every view), and scratch is
+  freed on every path.
+- **Effects** — handlers (`write_pty`, `bell`, `title_changed`,
+  `pwd_changed`, `render_hold`) run synchronously inside `write` and
+  `resize`, mid-parse: they may read the terminal, but `write`, `resize`,
+  `dispose`, and `set_effect` on it throw `GhosttyReentrancyError` (the
+  library isn't reentrant). No other effect is registered — the clipboard
+  ones included.
+- **Poisoning** — an exception that escapes a call into the module poisons
+  the instance (`GhosttyVt.poisoned`): every later call throws
+  `GhosttyPoisonedError`, and the recovery is a fresh instance. Each view
+  instantiates its own.
+- **One render state per terminal** — an update consumes the terminal's
+  change tracking, so a second reader is refused; views share one reader's
+  data. Every view's terminal starts with grapheme clustering (mode 2027) on
+  (`FUZ_TERMINAL_MODES`): with it off the library misses a lone combining
+  mark's change, which the reader can't detect.
+- **Replays answer nothing** — a view is fed the cell's buffered output as
+  a replay write (`{replay: true}`), with the reply effects unregistered, so
+  its queries get no second answer; live chunks are plain writes, whose
+  queries the emulator answers.
+- **Acks follow parsing** — a chunk is consumed (acked, which paces the
+  PTY) only once the emulator has parsed it: at once for a ready view, and
+  when it leaves `loading` for one still loading the module (`failed` and
+  `poisoned` release what waited). The cell announces its position when the
+  process starts and holds its acks after each socket connect until the
+  first chunk on it — see Known Limitations → Terminal output pacing.
+- **Keys** — the browser keeps any Meta combination, Ctrl+Shift+C and
+  Ctrl+Shift+V, and, except on macOS, the page zoom keys (Ctrl with `=`,
+  `+`, `-`, `_`, or `0`) — `should_fuz_terminal_pass_key`. Copy is
+  Ctrl+Alt+C or Ctrl+Insert while the page's selection takes some of the
+  view's text (with none, the chord is the program's; on macOS neither
+  copies, Cmd+C does); Ctrl+C is always the program's. The encodings are
+  Ghostty's, with one exception: Ctrl+[, Ctrl+I, Ctrl+M, and Ctrl+@ send the
+  classic ESC, Tab, CR, and NUL unless the program has turned on the Kitty
+  keyboard protocol or modifyOtherKeys 2 (`to_classic_ctrl_chord_bytes`).
+- **Paste** — only from zzz's context menu (`terminal_paste.ts` over
+  `FuzTerminal.paste`), whole or not at all: a paste the terminal's input
+  can't take now is refused before anything is sent or asked, and text that
+  could run commands as it arrives is sent only once the person confirms it.
+- **Global shortcuts** — a page's global key handler leaves a key whose
+  target is a terminal view taking keys (`is_fuz_terminal_key_target`, in
+  `fuz_terminal_key_target.ts`) to the terminal, as it leaves a text
+  field's: every key may be the program's, a backtick or Escape included.
+  The dashboard's (`dashboard_shortcuts.ts`) do; a new one must too.
+- **Classes and layout** — no class `FuzTerminal` renders may be a fuz_css
+  utility or base-style class (`FuzTerminal.classes.test.ts` guards it),
+  and each run is placed at its own column, never after the runs before
+  it, so a row can't drift off its cells. The host gives the view a sized
+  box: it fills its container and never sizes it.
+- **Theming** is the custom properties a host sets on an ancestor:
+  `--fuz_terminal_foreground`, `--fuz_terminal_background`,
+  `--fuz_terminal_cursor_color`, `--fuz_terminal_color_0` … `_15` (the ANSI
+  base 16), `--fuz_terminal_font_family`, `--fuz_terminal_font_size`, and
+  `--fuz_terminal_line_height`. The root sets its other `--fuz_terminal_*`
+  properties itself.
 
-**The DOM renderer** (`FuzTerminal.svelte`, state in
-`fuz_terminal_state.svelte.ts` as `FuzTerminalState`) draws one terminal
-and takes its keys and what its host pastes: no paste events of its own
-(Ctrl+Shift+V, Shift+Insert, a middle click), IME, focus reporting, mouse
-reporting, or scrollback scrolling yet, and selection is the browser's own
-over the row text, which the copy chords copy (a row copies as one line; a
-soft-wrapped line copies as one line per row). It knows nothing of zzz's
-app. Its `module` prop is the compiled module or a promise of it
-(`loading` until it
-settles, `failed` if it rejects); it instantiates its own instance — one
-per view, so a poisoned instance or a huge terminal affects only that view,
-and an unmounted view's memory can be collected — and creates and, on
-unmount, frees its terminal and reader. Its other props are
-`scrollback_max_bytes`, `label`, `accepts_input` (default on; off, a key is
-neither encoded nor prevented, so the browser's default runs, and the
-cursor is drawn hollow as when unfocused — the view still draws, selects,
-copies (on a copy chord too), resizes, and answers the program's queries),
-and the callbacks `ondata` (bytes for the PTY: the keys typed, and replies
-to queries), `onresize` (cols and rows), `ontitle`, `onbell`, `onstatus`
-(`loading` → `ready`, or `failed` / `poisoned`, each shown as a plain-text
-message; a host recovers by remounting), and `onerror` (a callback threw or
-wrote back too much, or a copy failed; reported, not fatal, and shown as a
-notice — a failed copy's until a copy succeeds). Via `bind:this` the host
-calls `write(data, options?)` — bytes or a string, in call order, queued
-while loading; `{replay: true}` for buffered history, processed with no
-reply effects registered, so its queries go unanswered and its bells silent
-— plus `paste(text, options?)`, `get_text` (the formatter's plain text,
-for a copy-all), `focus`, `get_status`, and `get_size`. **Paste** sends
-the text to `ondata` in one call, encoded under the terminal's modes as
-they are now (bracketed when the program asked for bracketed paste), whole
-or not at all: nothing is sent past `max_length`, nor while the view takes
-no input, and text that could inject commands is refused unless the host
-passes back the hazard and mode the person confirmed —
-./docs/architecture.md §
-fuz_terminal (*Paste*) has the encoding and the rule. Every view's
-terminal starts with grapheme clustering (mode 2027) on, as its reset
-default too (`FUZ_TERMINAL_MODES`):
-an emoji sequence or a base and its combining marks take one cell, and a
-mark arriving on its own is drawn; a program can turn it off. It draws at most once per animation frame and
-only after output, a resize, or a render hold ending — idle otherwise;
-render holds are honored for up to `FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS`.
-Rows are a keyed list over the reader's `rows` (`$state.raw`), so an
-unchanged row is skipped; each run is an inline box sized in measured
-cells and placed at its own column (`x` cells from the row's start, as the
-cursor is), so a row of many runs doesn't drift, and the root resets the
-inherited text properties — alignment, indent, direction, transform,
-spacing, weight, style, font variants and features, and `user-select` —
-through which a host's text styles would move or change the runs, or leave
-nothing to select. The host gives it a sized box — it fills its container,
-which needs a definite size; its own content never sizes it — and its size
-in cells follows that box (`ResizeObserver` and a probe of the font's cell;
-an unmeasurable box never resizes it). Colors are CSS custom properties: a
-host themes it by setting `--fuz_terminal_foreground`,
-`--fuz_terminal_background`, `--fuz_terminal_cursor_color`,
-`--fuz_terminal_color_0` … `--fuz_terminal_color_15`,
-`--fuz_terminal_font_family`, `--fuz_terminal_font_size`, or
-`--fuz_terminal_line_height` on an ancestor; the default foreground and
-background follow the theme, ANSI black and white stay dark and light in
-either scheme. Frames, timers, measuring, and loading come from
-`fuz_terminal_deps_context` (`FuzTerminalDeps`), so tests step them by
-hand. ./docs/architecture.md § fuz_terminal has the details.
+The module isn't committed: `cargo xtask ghostty-vt` builds it (Zig 0.17;
+./docs/development.md § Terminal emulator module) into
+`static/fuz_terminal/ghostty-vt.wasm`, which is gitignored, and `cargo xtask
+dev` builds it when it's missing or stale. Without it the app runs and each
+terminal says the module is missing. The tests that load it are the
+`fuz_terminal_wasm` vitest project, which exists only when the module does,
+so CI runs without them. **`gro build` doesn't notice the module
+appearing**: its cache is keyed on the commit and the module is gitignored,
+so a build cached before the module was built is reused without it — after
+building the module, run `gro build --force_build`.
 
-While a view takes keys (ready, `accepts_input` on), its root carries
-`data-fuz-terminal-keys` (`FUZ_TERMINAL_KEYS_ATTRIBUTE`), and
-`is_fuz_terminal_key_target(target)` says whether an event's target is
-inside such a view: a page's global shortcuts leave those keys to the
-terminal as they leave one typed into a text field — every key may be the
-program's, a backtick or Escape included. The dashboard's (`` ` ``, `~`,
-Escape; `dashboard_shortcuts.ts`) do — so with focus in a terminal, Escape
-goes to the program and leaves an open desk menu open. The app's other
-global key handlers are on pages that host no terminal, and a context
-menu takes keys only while it's open.
-
-**The terminal UI** (`TerminalView.svelte`) is one `FuzTerminal` linked to a
-`Terminal` cell by a `TerminalViewLink` (`terminal_view_link.ts`), which the
-view makes per emulator instance as soon as it's mounted. The cell's
-buffered output goes in as a replay write — after a dim "earlier output
-truncated" line when output was dropped — so the queries in it get no
-second answer; live chunks follow as plain writes, whose queries the
-emulator answers. A chunk is consumed — acked, which paces the PTY — once
-the emulator has parsed it: right after `write` returns for a ready view
-(the write parses synchronously); for a view still loading its module, which
-queues the chunk unparsed, not until the view leaves `loading` (its
-`onstatus`, `TerminalViewLink.view_status_changed`), when every chunk that
-waited is consumed in order — at `ready` they've been parsed, and at
-`failed` or `poisoned` nothing will parse them, so a view that can't draw
-never holds the PTY blocked. So the backend's window bounds what queues
-while a view loads — the cell announces its position as an ack when the
-process starts, and to a new socket connection with the first chunk on it
-(see Known Limitations → Terminal output pacing) — and queries that arrive
-meanwhile (a shell's startup ones) are answered live once it's ready. A detached view's waiting chunks
-are dropped: the cell no longer counts it. A `write` that throws is logged
-and its chunk consumed, never thrown into the cell's delivery. The view
-takes input — `accepts_input` — exactly while `Terminal.send_input` takes
-bytes (`starting` or `running`), so a terminal whose process ended leaves
-keys, Tab included, to the browser. The emulator's bytes (`ondata`: keys and replies) are
-decoded as UTF-8, streaming, into `Terminal.send_input`; its size in cells
-(`onresize`) is `Terminal.resize`. The copy button and the context menu's
-"copy output" take `FuzTerminal.get_text()`: the screen and the scrollback,
-which the view caps at `TERMINAL_SCROLLBACK_MAX_BYTES` (2 MiB of the
-emulator's memory, so a wider terminal keeps fewer lines; the oldest are
-dropped). The context menu's "paste"
-(enabled exactly while the view takes input) reads the clipboard in the
-entry's activation and hands the read to the view (`paste_terminal_text`,
-`terminal_paste.ts`): a paste longer than the terminal's input takes now is
-refused whole, before anything is sent or asked; text that could inject
-commands goes only once the person confirms it; and a failure is a notice
-in the view — ./docs/architecture.md § Terminals has the details. The
-module comes from `load_fuz_terminal_module` (`fuz_terminal_module.ts`):
-the app's `fuz_terminal/ghostty-vt.wasm` asset, fetched and compiled once
-per page for every view
-(compiled as it downloads when served as `application/wasm`), a
-failed load dropped so the next view retries; a 404, or an HTML page in its
-place, rejects with a message naming `cargo xtask ghostty-vt`, which the view
-shows as its `failed` state, and so does a load that hasn't settled within
-`FUZ_TERMINAL_MODULE_LOAD_TIMEOUT_MS` (about 30 seconds; the fetch is
-aborted) — that's what ends a load that would never finish: the view fails,
-the output it held is released, and its retry is offered. A `poisoned` view shows "reopen" and a `failed`
-one "retry": each remounts the emulator — a fresh instance, replayed from
-the cell's buffer — and a retry loads the module again, so building it and
-retrying recovers without a page reload. The view fills its host's height
-(each run on the terminals page is a fixed height) and lays the emulator's
-box absolutely over a stretched, `min-height: 0` flex item, so the box has a
-definite size. It never takes focus on its own: a click or Tab focuses it.
-
-The module isn't committed: `cargo xtask ghostty-vt` builds it from the
-pinned libghostty-vt release (needs Zig 0.17; ./docs/development.md §
-Terminal emulator module) into `static/fuz_terminal/ghostty-vt.wasm`
-(gitignored); `cargo xtask dev` runs that step before it starts, warning and
-carrying on when it can't, and `gro build` ships the module when it's there.
-Without it the app runs and its terminals say the module is missing (their
-processes still run, but nothing answers their queries, so a shell that
-waits for a reply at startup stalls until its own timeout). Tests that load
-it are `src/test/fuz_terminal/**/*.wasm.test.ts` and
-`src/test/TerminalView.wasm.test.ts`,
-run by the `fuz_terminal_wasm` vitest project, which `vite.config.ts` defines
-only when the module is there — so a checkout without it (CI included) runs
-everything else, with a one-line notice that the project was skipped, and the
-manifest and load checks that need no module run in `unit`.
+Everything else — mechanics, the frame data, the key mapping, drawing,
+the host API, and the view's wiring — is in ./docs/architecture.md
+§ fuz_terminal and § Terminals.
 
 ## Cell Classes
 
@@ -1274,14 +1048,14 @@ page is there. So the allowlist names only origins that are zzz's own:
 - **Domain state is in-memory** — auth/accounts are in the PostgreSQL DB, but zzz domain state (files, terminals, workspaces, jobs) is in-memory, lost on restart — a running transcription included, though the transcripts already written are files and stay. The frontend resyncs after every reconnect (a restart included): it reloads `session_load` and reconciles — workspaces the daemon no longer has are dropped (after a restart they're reopened instead, and dropped only if the directory is gone or forbidden), files it no longer indexes are pruned (a file with unsaved edits stays, flagged deleted on disk), and running terminals it doesn't list become `lost`. Notifications sent while the socket was down aren't replayed, so terminal output from that window is missing (the terminal view says so). See ./docs/architecture.md § File Editing.
 - **16 MiB messages** — a JSON-RPC message is capped at 16 MiB on both transports (`RPC_MESSAGE_MAX_BYTES`: the `/api/rpc` body limit and the `/api/ws` message limit). The server closes the socket on an oversized WebSocket message, so the frontend's `Socket` refuses any request over the cap before sending (`invalid_request`, `data.reason` `payload_too_large`; `src/lib/rpc_message_limit.ts`) — a huge save or a very long completion history fails cleanly instead of dropping the socket. Saving any file the filer loads (at most 4 MiB) fits, except in the worst case: JSON escapes a control character to 6 bytes, so a file dense with them can exceed the cap, and that save is refused the same clean way. The cap isn't confined to authenticated callers on HTTP (see ./crates/CLAUDE.md), which is acceptable only because the bind is loopback
 - **32 MiB outbound queue per socket** — what the server has queued for a WebSocket and not yet written is bounded at 32 MiB (`WS_OUTBOUND_QUEUE_BYTES`); past it the server closes the socket (code 4005) instead of holding more, and the frontend reconnects and resyncs like after any drop. Sized so the largest `filer_change` (a 4 MiB file, up to 24 MiB once JSON-escaped) still fits behind other frames. A batch of file changes is sent with a yield after each, so each socket's writer can take a frame before the next is queued — a client that keeps up gets the batch frame by frame, and one that falls more than the budget behind is closed like any other. A change that only moved a file's timestamps (a `touch`, a rewrite of the same bytes) is sent without the contents, so it never weighs on the budget; a large batch of files whose contents did change still does. Terminal output is paced instead (see Terminal output pacing below), so a terminal that prints faster than the browser takes it slows down rather than closing the socket; a client that doesn't ack output (not zzz's UI) isn't paced, and falling more than the budget behind closes its socket — the terminal keeps running (see ./crates/CLAUDE.md)
-- **Terminal output pacing** — the UI acks terminal output as it consumes it (`terminal_ack`, batched: once a mounted view's emulator has parsed a chunk — its write parses synchronously, so as soon as a ready view is handed it; a view still loading its module queues it unparsed and consumes it only once it leaves `loading`, so the backend's window bounds what piles up meanwhile; a view that failed or was poisoned consumes what it's handed — or as it's buffered with none), and the backend stops reading a terminal's PTY while more than 1 MiB of its output is unacked, resuming at 256 KiB — the kernel then blocks the process in its write, as a slow local terminal would. Input, resize, and close still work while it's blocked. So a flood (`cat` of a huge file, `yes`) runs at the speed the browser parses it — drawing is separate, at most once per animation frame, and skips the frames in between — and a tab in the background, where the browser throttles timers, may slow such a process further. A terminal is paced only against connections that have acked it and are still open, and against the fastest of those; a client that never acks (a raw API client) gets the output unpaced. So the UI announces each terminal's position — an ack sent at once, 0 when nothing has been consumed — when its process starts, which paces a new terminal from its first byte, and again on each socket connect, where the acks hold until the first chunk on the new connection and that chunk's start is announced: a position consumed before the connect is behind the output sent while the socket was down, which never arrives, so acking it could leave the terminal paused for good on output this tab can't consume. Between a reconnect and that announce reaching the backend — about a round trip after the first chunk — the output is unpaced. Output for a terminal this tab doesn't show — another tab's, or one left running by a reload — is dropped unacked, so a flood from one closes this tab's socket once it falls the outbound budget behind, and again after each reconnect while the flood lasts. Nothing times a stalled client out: a tab that stays connected and stops acking (its JavaScript frozen) keeps the terminals it alone shows blocked until it resumes or its socket closes
+- **Terminal output pacing** — the UI acks terminal output as it consumes it (`terminal_ack`, batched): once a view's emulator has parsed it, or as it's buffered with no view mounted (§ fuz_terminal; ./docs/architecture.md § Terminals has the details). The backend stops reading a terminal's PTY while more than 1 MiB of its output is unacked, resuming at 256 KiB — the kernel then blocks the process in its write, as a slow local terminal would. Input, resize, and close still work while it's blocked. So a flood (`cat` of a huge file, `yes`) runs at the speed the browser parses it — drawing is separate, at most once per animation frame, and skips the frames in between — and a tab in the background, where the browser throttles timers, may slow such a process further. A terminal is paced only against connections that have acked it and are still open, and against the fastest of those; a client that never acks (a raw API client) gets the output unpaced. So the UI announces each terminal's position — an ack sent at once — when its process starts, which paces a new terminal from its first byte, and again with the first chunk after each socket connect, holding its acks until then: a position consumed before the connect is behind the output sent while the socket was down, which never arrives, so acking it could leave the terminal paused for good. Between a reconnect and that announce reaching the backend — about a round trip after the first chunk — the output is unpaced. Output for a terminal this tab doesn't show — another tab's, or one left running by a reload — is dropped unacked, so a flood from one closes this tab's socket once it falls the outbound budget behind, and again after each reconnect while the flood lasts. Nothing times a stalled client out: a tab that stays connected and stops acking (its JavaScript frozen) keeps the terminals it alone shows blocked until it resumes or its socket closes
 - **Unloaded files are read-only** — the file index holds contents only for UTF-8 files up to 4 MiB it could read; any other file arrives with `contents: null` (`Diskfile.content_loaded` is `false`). The editor shows it read-only and empty with a "content not loaded" notice (no stale earlier text, no copy button) and never saves it (`DiskfileEditorState` ignores edits and refuses `save_changes`; `Diskfiles.update` refuses to write over it too, with `conflict` / `content_not_loaded`), since a save would overwrite a file nobody has seen. A file part for it contributes a `[content not loaded — …]` placeholder to a formatted prompt instead of silently dropping out
 - **No persistent undo** — saves overwrite the file on disk; the editor keeps an in-memory per-file history (`DiskfileHistory`) you can restore from, lost on reload, as are unsaved drafts — leaving the page while any file has unsaved changes asks first (`beforeunload`), and a session that ends (logout, or a recheck finding it revoked) drops the App and its drafts with it. A file's editing state is app-level (`Diskfiles.get_editor_state`): disk changes are recorded with no editor open, a draft survives tab switches and keeps a file deleted on disk, closing a draft's last tab asks save / don't save / cancel, and a disk change under a draft pauses saving until you overwrite or reload (see ./docs/architecture.md § File Editing). The conflict check is frontend-only: an external write landing between the backend receiving a save and its broadcast arriving is overwritten silently. Histories of files you've opened stay in memory for the session (each capped by entries and size)
 - **Symlinks are invisible** — the filer never follows or indexes a symlink (file or directory), and `ScopedFs` rejects symlinked paths, so linked files don't appear in the file tree
 - **File watching** — the filer adds one inotify watch per directory it indexes (never inside ignored directories like `node_modules/` or `target/`), and those watches come out of the user's `max_user_watches` budget, shared with every other process. An unreadable subdirectory is skipped (logged once) and picked up if it becomes readable; an unreadable root fails `workspace_open` with `forbidden` (`permission_denied`). When the watch limit is reached (or no watcher can be created), the workspace still opens with every file the scan found, but in **degraded mode**: `workspace_open` returns `watch_status: 'degraded'` (kept on the opening tab's `Workspace` cell; the workspaces page and the desk menu show it — another tab or a reload shows `'full'`), and the directories without a watch are rescanned every 5 seconds or more (retrying their watches each time), so changes there show up late. A workspace that degrades or recovers after it opened isn't re-announced — only the daemon log says so. Rescans re-read only files whose `lstat` changed, trusting a stamp only after the file has been still for 2 seconds
 - **Workspace scope** — opening a workspace makes its directory a writable `ScopedFs` root with its own filer until it's closed; closing never revokes the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). Any absolute directory can be opened — `/` makes the whole filesystem writable and scans it — except a `.zzz` directory (or a path inside one) other than the app dir. A workspace opened in another tab (or by `zzz <dir>`) appears here unactivated, and its files arrive with a session resync
 - **Terminals** — any authenticated account can create a terminal, which runs a command as the daemon's OS user (see Security posture). Each terminal belongs to the account that created it: its output (`terminal_data`, `terminal_exited`) reaches only that account's sockets, and other accounts' `terminal_data_send` / `terminal_resize` / `terminal_close` act as if it didn't exist (`not_found`, as for an unknown or ended id). `terminal_create` takes only an absolute `cwd`, and `terminal_close` only `SIGTERM` (the default) or `SIGKILL`. The frontend's terminal list is in-memory, so a page reload loses it while the backend processes keep running. A view mounted later (coming back to the terminals page, a restart's fresh view, a reopen) is replayed from the cell's output buffer (`TERMINAL_OUTPUT_MAX_LENGTH`), not from an earlier view's scrollback, and keeps the newest of it up to its scrollback limit (`TERMINAL_SCROLLBACK_MAX_BYTES`) — the buffer usually holds more than that
-- **Terminal emulator** — terminals are drawn by `FuzTerminal` (§ fuz_terminal), which doesn't do everything a desktop terminal does yet. **Paste is from zzz's context menu only** (right-click the terminal → paste): it's bracketed when the program has turned on bracketed paste (a shell then holds a multi-line paste for Enter, as bash 5.1+ does by default), and text that could run commands as it arrives — a line break when the program hasn't, or the bracketed-paste end sequence in either case — is pasted only once you confirm it (if the program switches bracketed paste while you're asked and the text is unsafe in the new mode, nothing is sent, and a notice says to paste again; a line break the switch made safe is pasted bracketed). A paste longer than the terminal's input queue takes (64 Ki characters, less any input still waiting to be sent) is refused whole, with a notice. The browser asks before the first clipboard read (Firefox shows a paste button each time). Ctrl+Shift+V does nothing in the terminal, Shift+Insert reaches the program as a key, a middle click pastes no primary selection, and the browser's own menu (Shift+right-click) has no usable Paste over the terminal. The input box under each terminal sends text. **No scrollback scrolling**: the wheel over a terminal scrolls the page's list of runs, never the terminal — inside `less`, `man`, or vim on the alternate screen too — and Shift+PgUp / Shift+PgDn go to the program; there's no scrollbar. The history is still in the emulator, up to its scrollback limit (`TERMINAL_SCROLLBACK_MAX_BYTES`, 2 MiB of the emulator's memory, so a wider terminal keeps fewer lines, the oldest dropped first), and the copy button copies all of it. **No IME composition**: text an input method composes, and dead keys on platforms that deliver them as a composition, isn't typed, nor is a virtual keyboard's. **No mouse reporting**: a program that asks for mouse events (vim with `mouse=a`, htop, tmux) gets none; a click focuses, a drag selects. **No reverse video** (DECSCNM) while the default colors are the theme's. **The look follows the app**: the default foreground and background are the theme's, while ANSI white and bright white stay light in both schemes, so text a program colors white is hard to read on a light theme, as in any light-themed terminal; the type is the app's monospace at the component's size. **Selection** is the browser's over the visible rows: a row copies as one line and a soft-wrapped line copies with a break per row (the copy button joins it), and a selection over rows that redraw is lost. **Copy** is Ctrl+Alt+C or Ctrl+Insert while a selection takes some of the terminal's text (with none, the key goes to the program); Ctrl+C is always the program's, and Ctrl+Shift+C is the browser's own shortcut (the element inspector in Chrome and Firefox). On macOS Cmd+C copies, and the two chords are the program's. The browser's menu (Shift+right-click) copies too. **Focus**: Tab and Shift+Tab are the program's while a terminal has focus, so keyboard focus doesn't leave it by Tab — click elsewhere; a terminal whose process ended takes no keys, Tab included. **Keys** follow Ghostty's encodings, which differ from what xterm-style terminals commonly send: Shift+Enter, Ctrl+Enter, and other modified Enter, Tab, and Escape send distinct sequences (`CSI 27;2;13~` for Shift+Enter — a plain shell prints junk for it); Ctrl+Shift+letter and Ctrl with some punctuation (`;` `'` `,` `.` and backtick, and on macOS `-` and `=`) send `CSI … u`; Ctrl+Alt+[ sends ESC ESC; Ctrl+/ sends `^_`; modified PgUp / PgDn / Insert carry their modifiers, and Ctrl+Insert goes to the program when there's no selection to copy; backarrow-key mode (DECBKM) is honoured. Ctrl+digit is taken by the terminal while it has focus, its default prevented — whether a browser still switches tabs on it is the browser's decision. The Kitty keyboard protocol is supported when a program turns it on. Meta combinations, Ctrl+Shift+C, Ctrl+Shift+V, and (except on macOS) the page zoom keys — Ctrl with `=`, `+`, `-`, `_`, or `0` — stay the browser's, so a program never gets them (Emacs's Ctrl+_ undo included). Without the built module (`cargo xtask ghostty-vt`, Zig 0.17) each terminal shows a message instead, with a retry button; its process still runs
+- **Terminal emulator** — terminals are drawn by `FuzTerminal` (§ fuz_terminal), which doesn't do everything a desktop terminal does yet. **Paste is from zzz's context menu only** (right-click the terminal → paste): it's bracketed when the program has turned on bracketed paste (a shell then holds a multi-line paste for Enter, as bash 5.1+ does by default), and text that could run commands as it arrives — a line break when the program hasn't, or the bracketed-paste end sequence in either case — is pasted only once you confirm it (if the program switches bracketed paste while you're asked and the text is unsafe in the new mode, nothing is sent, and a notice says to paste again; a line break the switch made safe is pasted bracketed). A paste longer than the terminal's input queue takes (64 Ki characters, less any input still waiting to be sent) is refused whole, with a notice. The browser asks before the first clipboard read (Firefox shows a paste button each time). Ctrl+Shift+V does nothing in the terminal, Shift+Insert reaches the program as a key, a middle click pastes no primary selection, and the browser's own menu (Shift+right-click) has no usable Paste over the terminal. The input box under each terminal sends text. **No scrollback scrolling**: the wheel over a terminal scrolls the page's list of runs, never the terminal — inside `less`, `man`, or vim on the alternate screen too — and Shift+PgUp / Shift+PgDn go to the program; there's no scrollbar. The history is still in the emulator, up to its scrollback limit (`TERMINAL_SCROLLBACK_MAX_BYTES`, 2 MiB of the emulator's memory, so a wider terminal keeps fewer lines, the oldest dropped first), and the copy button copies all of it. **No IME composition**: text an input method composes, and dead keys on platforms that deliver them as a composition, isn't typed, nor is a virtual keyboard's. **No mouse reporting**: a program that asks for mouse events (vim with `mouse=a`, htop, tmux) gets none; a click focuses, a drag selects. **No reverse video** (DECSCNM) while the default colors are the theme's. **The look follows the app**: the default foreground and background are the theme's, while ANSI white and bright white stay light in both schemes, so text a program colors white is hard to read on a light theme, as in any light-themed terminal; the type is the app's monospace at the component's size. **Selection** is the browser's over the visible rows: a row copies as one line and a soft-wrapped line copies with a break per row (the copy button joins it), and a selection over rows that redraw is lost. **Copy** is Ctrl+Alt+C or Ctrl+Insert while a selection takes some of the terminal's text (with none, the key goes to the program); Ctrl+C is always the program's, and Ctrl+Shift+C is the browser's own shortcut (the element inspector in Chrome and Firefox). On macOS Cmd+C copies, and the two chords are the program's. The browser's menu (Shift+right-click) copies too. **Focus**: Tab and Shift+Tab are the program's while a terminal has focus, so keyboard focus doesn't leave it by Tab — click elsewhere; a terminal whose process ended takes no keys, Tab included. **Keys** follow Ghostty's encodings, which differ from what xterm-style terminals commonly send — Shift+Enter is `CSI 27;2;13~`, which a plain shell prints as junk, and Ctrl+Shift+letter is `CSI … u`; ./docs/architecture.md § fuz_terminal (*Keyboard input*) lists the differences. Ctrl+digit is taken by the terminal while it has focus, its default prevented — whether a browser still switches tabs on it is the browser's decision. The Kitty keyboard protocol is supported when a program turns it on. Meta combinations, Ctrl+Shift+C, Ctrl+Shift+V, and (except on macOS) the page zoom keys — Ctrl with `=`, `+`, `-`, `_`, or `0` — stay the browser's, so a program never gets them (Emacs's Ctrl+_ undo included). Without the built module (`cargo xtask ghostty-vt`, Zig 0.17) each terminal shows a message instead, with a retry button; its process still runs
 - **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` runs one I/O task per terminal (readiness-driven reads paced by the client's output acks, an ordered input queue — at most 256 chunks and 4 MiB per terminal, beyond which input is refused with `queue_overflow` — that writes large pastes in full, reaping with `SIGKILL` escalation so closed terminals leave no zombies). Terminal children inherit zzzd's environment **minus** `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, and `PORT` — this keeps the daemon's API keys, cookie keys, and DB URL out of the child's environment, but it is not isolation (the shell runs as the same user and can read `/proc/<zzzd pid>/environ` or the `.env` files). The prefix match also drops the user's own `FUZ_*` variables from terminals; everything else (`PATH`, `HOME`, `SSH_AUTH_SOCK`, …) passes through, and `fuz_pty` sets `TERM=xterm-256color`, the xterm-compatible terminal Ghostty's emulator is. See ./crates/CLAUDE.md for details. Requires the sibling Rust workspace checked out alongside this repo (path dep).
 - **Recording** — two places record, over the same `Recorder`: the files page's record button (beside new file and new folder; disabled without an open workspace) records to the active workspace, and the recordings page (`/recordings`: a record button, a level meter, and the recordings with their transcripts) records to `recordings/` in the app directory, which needs no workspace and keeps voice notes out of a repository. Deleting on the recordings page removes a recording with its transcripts; on the files page, exactly the file selected. A recording is a new file named for the local time (`2026-01-31_09-05-07.webm`) — Opus in WebM where the browser records it, else Ogg, else MP4. The file is created under its final name and grows as chunks upload every few seconds (the byte routes), so a crashed or closed tab loses at most the last chunk and leaves a file that still plays but has no duration; `media_finalize` on it later fixes that. Stopping uploads the rest and finalizes, then queues a transcription when the recorder's "transcribe" toggle is on (the default; with no speech model set up it quietly doesn't). The microphone opens only from a click or key press in the UI — `Recorder.start` refuses without a user gesture, and no action the backend can send starts capture. While it may be open an indicator with pause and stop shows on every page (`RecorderIndicator` in the root layout), leaving the page asks first, and a session that ends (logout, or a recheck finding it revoked) closes it with the App. One recording at a time, per tab. The filer sees the file grow: it re-reads and broadcasts it on each chunk while it's under the index's size limit. An upload that fails for good — the session ended, the file changed on disk — ends the recording and says why; the file keeps what landed. See ./docs/architecture.md § Recording
 - **Transcription** — batch, not live: the transcript is made from the finished file, and text fills in while the job runs (whisper.cpp decodes in windows of about thirty seconds), not while you speak. It needs `ffmpeg`, whisper.cpp, and a model the operator placed and pointed `ZZZ_WHISPER_CPP_MODEL` at; without whisper.cpp or a model, recording still works and transcribing says what's missing. Without `ffmpeg`, recording still saves the audio, but every stop reports that it couldn't finalize, and the file has no duration. The UI offers transcription on audio extensions (`.webm`, `.ogg`, `.mp3`, `.wav`, `.flac`, `.m4a`, …); the action itself takes any container `ffmpeg` is told how to read here, a `.mkv` or `.mp4` included, and transcribes its first audio stream. The format is taken from the extension, so a mislabeled file fails to decode. The language is detected unless given. The model loads on every job. Word timings are whisper.cpp's own estimates. A transcript isn't checked against its audio afterward — if the audio's bytes change, the sidecar still shows (its recorded hash no longer matches). A sidecar over the file index's 4 MiB limit wouldn't load in the UI. One job runs at a time; jobs and their history are lost on a daemon restart, and a crash mid-transcription can leave a `.zzz-tmp-*` scratch directory in the app directory's `cache/` (hidden from the file index). A transcript's text is whatever was said near the microphone — it's shown as text, and nothing sends it to a chat, a prompt, or a terminal on its own
