@@ -31,7 +31,9 @@ export interface GhosttyMemoryExports {
 	ghostty_wasm_take_opaque: (slot: number) => number;
 }
 
-const utf8_decoder = new TextDecoder();
+// `ignoreBOM` keeps a leading U+FEFF — the screen's text, a title, a path — which a default
+// decoder strips from the start of every non-streaming decode
+const utf8_decoder = new TextDecoder('utf-8', { ignoreBOM: true });
 
 /**
  * Whether typed arrays on this host are little-endian, like wasm memory —
@@ -192,7 +194,7 @@ export class GhosttyMemory {
 
 	/**
 	 * Decode `len` bytes at `ptr` as UTF-8, replacing invalid sequences with
-	 * U+FFFD.
+	 * U+FFFD. A leading U+FEFF is kept, not taken for a byte order mark.
 	 */
 	read_utf8(ptr: number, len: number): string {
 		if (len === 0) return '';
@@ -200,7 +202,7 @@ export class GhosttyMemory {
 	}
 
 	/**
-	 * Decode the NUL-terminated UTF-8 string at `ptr`.
+	 * Decode the NUL-terminated UTF-8 string at `ptr`, a leading U+FEFF kept.
 	 *
 	 * @throws RangeError when `ptr` is null or no NUL ends the string in memory
 	 */

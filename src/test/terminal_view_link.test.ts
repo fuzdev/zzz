@@ -327,6 +327,24 @@ describe('TerminalViewLink input and size', () => {
 		);
 	});
 
+	test('keeps a U+FEFF at the start of the first input, and after', async () => {
+		const terminal = await create_running();
+		const link = new TerminalViewLink(terminal);
+		link.connect(create_view());
+		const bom = [0xef, 0xbb, 0xbf];
+		link.send(new Uint8Array([...bom, 0x61]));
+		await flush();
+		const first = calls_of(calls, 'terminal_data_send');
+		await settle_calls();
+		link.send(new Uint8Array([...bom, 0x62]));
+		await flush();
+		const second = calls_of(calls, 'terminal_data_send');
+		assert.deepEqual(
+			[...first, ...second].map((c) => c.input.data),
+			['\ufeffa', '\ufeffb']
+		);
+	});
+
 	test('forwards the view size as a PTY resize', async () => {
 		const terminal_id = create_uuid();
 		const terminal = await create_running(terminal_id);

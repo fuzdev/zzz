@@ -57,6 +57,8 @@ export type TerminalViewLinkTerminal = Pick<Terminal, 'attach_output' | 'send_in
  *
  * **Input**: the view's bytes (`ondata` — keys typed, replies to queries)
  * are decoded as UTF-8, streaming, since input goes over the wire as text.
+ * A U+FEFF is kept wherever it falls, the link's first input included: it's
+ * the user's or the program's text, not a byte order mark.
  *
  * **Size**: the view's size in cells (`onresize`) resizes the PTY.
  */
@@ -65,7 +67,8 @@ export class TerminalViewLink {
 	// TODO: mouse reporting can send bytes that aren't UTF-8 (X10 coordinates
 	// past 95), which this decoder turns into U+FFFD — those need a byte-safe
 	// input path
-	readonly #decoder = new TextDecoder();
+	// `ignoreBOM` keeps a leading U+FEFF, which a default decoder strips from the stream's start
+	readonly #decoder = new TextDecoder('utf-8', { ignoreBOM: true });
 	#view: TerminalViewLinkView | null = null;
 	#detach: (() => void) | null = null;
 	/** The `consumed` of each chunk written while the view loads, in order. */
