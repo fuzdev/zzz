@@ -27,7 +27,11 @@
 
 import type { GhosttyCallbackTable } from './ghostty_callback_table.ts';
 import { GhosttyManifestError } from './ghostty_errors.ts';
-import type { GhosttyManifest } from './ghostty_manifest.ts';
+import {
+	resolve_ghostty_string_layout,
+	type GhosttyManifest,
+	type GhosttyStringLayout
+} from './ghostty_manifest.ts';
 import type { WasmFunctionSignature } from './wasm_trampoline.ts';
 
 /**
@@ -140,19 +144,13 @@ export interface GhosttyEffectConstant {
 }
 
 /** The manifest constants the effects use, resolved once per module. */
-export interface GhosttyEffectConstants {
+export interface GhosttyEffectConstants extends GhosttyStringLayout {
 	/** Each effect's option and signature. */
 	effects: Readonly<Record<GhosttyTerminalEffectName, GhosttyEffectConstant>>;
 	/** `GHOSTTY_TERMINAL_DATA_TITLE`. */
 	data_title: number;
 	/** `GHOSTTY_TERMINAL_DATA_PWD`. */
 	data_pwd: number;
-	/** `sizeof(GhosttyString)`. */
-	string_size: number;
-	/** The offset of `GhosttyString.ptr`. */
-	string_ptr_offset: number;
-	/** The offset of `GhosttyString.len` (a `size_t`). */
-	string_len_offset: number;
 }
 
 /**
@@ -204,21 +202,12 @@ export const resolve_ghostty_effect_constants = (
 			);
 		}
 	}
-	const ptr = manifest.struct_field('GhosttyString', 'ptr');
-	const len = manifest.struct_field('GhosttyString', 'len');
-	if (ptr.type !== 'pointer' || ptr.size !== manifest.abi.pointer_size) {
-		throw new GhosttyManifestError("the manifest's GhosttyString.ptr is not a pointer");
-	}
-	if (len.type !== manifest.usize_scalar || len.size !== manifest.abi.usize_size) {
-		throw new GhosttyManifestError("the manifest's GhosttyString.len is not a size_t");
-	}
+	const string_layout = resolve_ghostty_string_layout(manifest);
 	return {
 		effects,
 		data_title: manifest.enum_value('GhosttyTerminalData', 'TITLE'),
 		data_pwd: manifest.enum_value('GhosttyTerminalData', 'PWD'),
-		string_size: manifest.struct_size('GhosttyString'),
-		string_ptr_offset: ptr.offset,
-		string_len_offset: len.offset
+		...string_layout
 	};
 };
 

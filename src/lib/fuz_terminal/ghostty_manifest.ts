@@ -506,3 +506,35 @@ export const to_ghostty_bit_reader = (
 		lo_bits
 	};
 };
+
+/** Where a `GhosttyString` keeps its fields: a pointer to UTF-8 bytes and their length. */
+export interface GhosttyStringLayout {
+	/** `sizeof(GhosttyString)`. */
+	string_size: number;
+	/** The offset of `GhosttyString.ptr`. */
+	string_ptr_offset: number;
+	/** The offset of `GhosttyString.len` (a `size_t`). */
+	string_len_offset: number;
+}
+
+/**
+ * Resolve the `GhosttyString` layout from a manifest, checking `ptr` is a
+ * pointer and `len` a `size_t`.
+ *
+ * @throws GhosttyManifestError when either field is missing or reshaped
+ */
+export const resolve_ghostty_string_layout = (manifest: GhosttyManifest): GhosttyStringLayout => {
+	const ptr = manifest.struct_field('GhosttyString', 'ptr');
+	const len = manifest.struct_field('GhosttyString', 'len');
+	if (ptr.type !== 'pointer' || ptr.size !== manifest.abi.pointer_size) {
+		throw new GhosttyManifestError("the manifest's GhosttyString.ptr is not a pointer");
+	}
+	if (len.type !== manifest.usize_scalar || len.size !== manifest.abi.usize_size) {
+		throw new GhosttyManifestError("the manifest's GhosttyString.len is not a size_t");
+	}
+	return {
+		string_size: manifest.struct_size('GhosttyString'),
+		string_ptr_offset: ptr.offset,
+		string_len_offset: len.offset
+	};
+};

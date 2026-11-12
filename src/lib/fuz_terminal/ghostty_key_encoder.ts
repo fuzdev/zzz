@@ -15,7 +15,11 @@
  */
 
 import { GhosttyDisposedError, GhosttyLoadError, GhosttyManifestError } from './ghostty_errors.ts';
-import type { GhosttyManifest } from './ghostty_manifest.ts';
+import {
+	resolve_ghostty_string_layout,
+	type GhosttyManifest,
+	type GhosttyStringLayout
+} from './ghostty_manifest.ts';
 import type { GhosttyTerminal, GhosttyTerminalDependent } from './ghostty_terminal.ts';
 import type { GhosttyVt } from './ghostty_vt.ts';
 
@@ -92,19 +96,13 @@ export interface GhosttyKeyInput {
 }
 
 /** The manifest constants a key encoder uses, resolved once per module. */
-export interface GhosttyKeyConstants {
+export interface GhosttyKeyConstants extends GhosttyStringLayout {
 	/** Each `GhosttyKey` value by name, without the prefix. */
 	keys: ReadonlyMap<string, number>;
 	/** Each `GhosttyKeyAction` value by action. */
 	actions: Readonly<Record<GhosttyKeyAction, number>>;
 	/** `GHOSTTY_OUT_OF_SPACE`. */
 	out_of_space: number;
-	/** `sizeof(GhosttyString)`. */
-	string_size: number;
-	/** The offset of `GhosttyString.ptr`. */
-	string_ptr_offset: number;
-	/** The offset of `GhosttyString.len` (a `size_t`). */
-	string_len_offset: number;
 	/** `GHOSTTY_TERMINAL_DATA_KITTY_KEYBOARD_FLAGS`, read as a `u8`. */
 	data_kitty_keyboard_flags: number;
 }
@@ -133,14 +131,7 @@ export const resolve_ghostty_key_constants = (manifest: GhosttyManifest): Ghostt
 			`the manifest's GhosttyMods is ${JSON.stringify(mods.type)}, not a u16`
 		);
 	}
-	const ptr = manifest.struct_field('GhosttyString', 'ptr');
-	const len = manifest.struct_field('GhosttyString', 'len');
-	if (ptr.type !== 'pointer' || ptr.size !== manifest.abi.pointer_size) {
-		throw new GhosttyManifestError("the manifest's GhosttyString.ptr is not a pointer");
-	}
-	if (len.type !== manifest.usize_scalar || len.size !== manifest.abi.usize_size) {
-		throw new GhosttyManifestError("the manifest's GhosttyString.len is not a size_t");
-	}
+	const string_layout = resolve_ghostty_string_layout(manifest);
 	const flags_key = manifest.enum_key('GhosttyTerminalData', 'KITTY_KEYBOARD_FLAGS', 'out');
 	const flags_type = manifest.type_entry(flags_key.type, 'alias');
 	if (flags_type.type !== 'u8') {
@@ -156,9 +147,7 @@ export const resolve_ghostty_key_constants = (manifest: GhosttyManifest): Ghostt
 			release: manifest.enum_value('GhosttyKeyAction', 'RELEASE')
 		},
 		out_of_space: manifest.enum_value('GhosttyResult', 'OUT_OF_SPACE'),
-		string_size: manifest.struct_size('GhosttyString'),
-		string_ptr_offset: ptr.offset,
-		string_len_offset: len.offset,
+		...string_layout,
 		data_kitty_keyboard_flags: manifest.enum_value('GhosttyTerminalData', 'KITTY_KEYBOARD_FLAGS')
 	};
 };
