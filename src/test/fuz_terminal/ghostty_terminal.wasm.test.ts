@@ -17,8 +17,7 @@ import {
 	load_test_ghostty_vt,
 	load_wrapped_ghostty_vt
 } from './ghostty_vt_test_helpers.ts';
-
-const ESC = '\x1b';
+import { ESC } from './vt_sequences.ts';
 
 /** The `GhosttyResultError` `fn` throws, failing when it throws nothing or something else. */
 const catch_result_error = (fn: () => unknown): GhosttyResultError => {

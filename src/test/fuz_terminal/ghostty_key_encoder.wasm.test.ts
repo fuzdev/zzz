@@ -23,10 +23,7 @@ import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';
 
 import { GHOSTTY_MANIFEST_FIXTURE } from './ghostty_manifest_fixture.ts';
 import { load_test_ghostty_vt, load_wrapped_ghostty_vt } from './ghostty_vt_test_helpers.ts';
-
-const ESC = '\x1b';
-const CSI = `${ESC}[`;
-const SS3 = `${ESC}O`;
+import { ESC, CSI, SS3 } from './vt_sequences.ts';
 
 /** A terminal and an encoder over it. */
 const create = async (

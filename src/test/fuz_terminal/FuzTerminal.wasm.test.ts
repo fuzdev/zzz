@@ -6,6 +6,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import type FuzTerminal from '#lib/fuz_terminal/FuzTerminal.svelte';
 import {
 	FUZ_TERMINAL_MAX_CALLBACK_WRITES,
+	FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS,
 	FuzTerminalState,
 	type FuzTerminalOptions,
 	type FuzTerminalStatus
@@ -29,6 +30,7 @@ import {
 	load_test_ghostty_vt,
 	load_wrapped_ghostty_vt
 } from './ghostty_vt_test_helpers.ts';
+import { ESC, BEL, ST } from './vt_sequences.ts';
 
 // counts row renders: the row snippet splits its runs once each time it runs
 const { split_calls } = vi.hoisted(() => ({
@@ -45,10 +47,6 @@ vi.mock('#lib/fuz_terminal/fuz_terminal_layout.ts', async (import_original) => {
 		}
 	};
 });
-
-const ESC = '\x1b';
-const BEL = '\x07';
-const ST = `${ESC}\\`;
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
@@ -513,7 +511,7 @@ describe('replayed output and replies', () => {
 		t.step();
 		assert.strictEqual(rows_text(t.root)[0], 'shown', 'held');
 		assert.strictEqual(t.deps.timers.pending, 1);
-		t.deps.timers.advance(1000);
+		t.deps.timers.advance(FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS);
 		t.step();
 		assert.strictEqual(rows_text(t.root)[0], 'hidden');
 	});
@@ -594,7 +592,7 @@ describe('render holds', () => {
 		t.view.write(`stuck${ESC}[?2026h\r${ESC}[2Knew`);
 		t.step();
 		assert.strictEqual(rows_text(t.root)[0], 'stuck');
-		t.deps.timers.advance(999);
+		t.deps.timers.advance(FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS - 1);
 		t.step();
 		assert.strictEqual(rows_text(t.root)[0], 'stuck', 'still held');
 		t.deps.timers.advance(1);

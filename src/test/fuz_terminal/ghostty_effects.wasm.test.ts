@@ -13,12 +13,8 @@ import { GhosttyTerminal } from '#lib/fuz_terminal/ghostty_terminal.ts';
 import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';
 
 import { load_test_ghostty_vt, load_wrapped_ghostty_vt } from './ghostty_vt_test_helpers.ts';
+import { ESC, BEL, ST, CPR } from './vt_sequences.ts';
 
-const ESC = '\x1b';
-const BEL = '\x07';
-const ST = `${ESC}\\`;
-/** Cursor position report request (DSR 6). */
-const CPR = `${ESC}[6n`;
 /** Primary device attributes. */
 const DA1 = `${ESC}[c`;
 /** DECRQM for wraparound (mode 7). */

@@ -11,8 +11,8 @@ import { GhosttyTerminal } from '#lib/fuz_terminal/ghostty_terminal.ts';
 import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';
 
 import { load_test_ghostty_vt, load_wrapped_ghostty_vt } from './ghostty_vt_test_helpers.ts';
+import { ESC } from './vt_sequences.ts';
 
-const ESC = '\x1b';
 const BRACKET_ON = `${ESC}[?2004h`;
 const BRACKET_OFF = `${ESC}[?2004l`;
 const START = `${ESC}[200~`;

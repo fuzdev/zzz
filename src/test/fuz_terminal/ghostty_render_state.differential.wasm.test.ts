@@ -6,6 +6,7 @@ import { GhosttyTerminal } from '#lib/fuz_terminal/ghostty_terminal.ts';
 import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';
 
 import { load_test_ghostty_vt } from './ghostty_vt_test_helpers.ts';
+import { ESC, CSI, ST } from './vt_sequences.ts';
 
 /*
  * The reader against a slow oracle: generated output, written frame by frame,
@@ -29,10 +30,6 @@ import { load_test_ghostty_vt } from './ghostty_vt_test_helpers.ts';
  * turns it off, and a full reset (RIS, which turns it off) is followed by
  * turning it on again.
  */
-
-const ESC = '\x1b';
-const CSI = `${ESC}[`;
-const ST = `${ESC}\\`;
 
 /** A seeded generator of numbers in `[0, 1)`. */
 const create_random = (seed: number): (() => number) => {

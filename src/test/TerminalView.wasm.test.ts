@@ -30,10 +30,7 @@ import {
 	stub_terminal_api,
 	type StubbedTerminalCall
 } from './terminal_test_helpers.ts';
-
-const ESC = '\x1b';
-/** A cursor position report request, which a live view answers with `ESC [ row ; col R`. */
-const CPR = `${ESC}[6n`;
+import { ESC, CPR } from './fuz_terminal/vt_sequences.ts';
 
 let app: Frontend;
 let calls: Array<StubbedTerminalCall>;

@@ -10,10 +10,7 @@ import {
 	load_test_ghostty_vt,
 	load_wrapped_ghostty_vt
 } from './ghostty_vt_test_helpers.ts';
-
-const ESC = '\x1b';
-const BEL = '\x07';
-const ST = `${ESC}\\`;
+import { ESC, BEL, ST } from './vt_sequences.ts';
 
 /** The error `fn` throws, failing when it throws nothing. */
 const catch_error = (fn: () => unknown): unknown => {
