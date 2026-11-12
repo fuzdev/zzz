@@ -234,7 +234,6 @@ export const resolve_ghostty_vt_constants = (manifest: GhosttyManifest): Ghostty
  * @throws GhosttyManifestError when its manifest lacks what the binding reads
  */
 export const load_ghostty_vt = async (source: GhosttyVtSource): Promise<GhosttyVt> => {
-	// TODO: `WebAssembly.compileStreaming` for a `Response` served as `application/wasm`
 	let module: WebAssembly.Module;
 	if (source instanceof WebAssembly.Module) {
 		module = source;

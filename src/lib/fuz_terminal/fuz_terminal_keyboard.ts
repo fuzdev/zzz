@@ -369,10 +369,10 @@ const FUZ_TERMINAL_ZOOM_KEYS: ReadonlySet<string> = new Set(['=', '+', '-', '_',
  *
  * @param platform - whose keyboard conventions apply
  */
-// TODO: paste on Ctrl+Shift+V (and copy on Ctrl+Shift+C) once the view takes
-// the browser's paste events (a hidden textarea); Shift+Insert joins the
-// pass-through then (other browser terminals leave it to the browser as
-// paste); a host override of which keys pass through
+// TODO: paste on Ctrl+Shift+V once the view takes the browser's paste events
+// (a hidden textarea); Shift+Insert joins the pass-through then (other
+// browser terminals leave it to the browser as paste); a host override of
+// which keys pass through
 export const should_fuz_terminal_pass_key = (
 	event: FuzTerminalKeyboardEvent,
 	platform: FuzTerminalKeyPlatform

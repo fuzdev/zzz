@@ -192,8 +192,6 @@ const utf8_encoder = new TextEncoder();
  * terminal's modes and changes nothing in it — and `encode` may be called
  * from the terminal's effect handlers.
  */
-// TODO: `GHOSTTY_KEY_ENCODER_OPT_MACOS_OPTION_AS_ALT`, which the library
-// reads only when built for macOS — never this module's freestanding target
 export class GhosttyKeyEncoder implements GhosttyTerminalDependent {
 	/** The terminal whose modes it follows. */
 	readonly terminal: GhosttyTerminal;
