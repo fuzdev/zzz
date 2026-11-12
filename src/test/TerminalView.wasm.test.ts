@@ -309,6 +309,31 @@ describe('TerminalView output', () => {
 			]
 		);
 	});
+
+	test('the scrollback keeps a long history, up to its limit', async () => {
+		// a numbered line each, and more than the library's default limit keeps at 20 columns
+		const history = (count: number): string =>
+			Array.from({ length: count }, (_, i) => `${i + 1}\r\n`).join('');
+		const kept = history(6000);
+		const terminal = create_running();
+		terminal.receive_output(kept, kept.length);
+		const view = mount_view(terminal);
+		await settle(view);
+		const lines = view.get_text().split('\n');
+		assert.strictEqual(lines.length, 6000, 'every replayed line is kept');
+		assert.strictEqual(lines[0], '1');
+
+		// and the limit is a limit: a history far past it loses its oldest lines
+		const pruned = history(40_000);
+		const other = create_running();
+		other.receive_output(pruned, pruned.length);
+		const other_view = mount_view(other);
+		await settle(other_view);
+		const other_lines = other_view.get_text().split('\n');
+		assert.ok(other_lines.length > 6000, 'the limit keeps more than the shorter history');
+		assert.ok(other_lines.length < 40_000, 'the oldest lines are dropped');
+		assert.strictEqual(other_lines.at(-1), '40000');
+	});
 });
 
 describe('TerminalView failures', () => {

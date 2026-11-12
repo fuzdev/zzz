@@ -13,6 +13,20 @@ export const ERROR_TERMINAL_COMMAND_NOT_FOUND = 'terminal_command_not_found';
 export const TERMINAL_OUTPUT_MAX_LENGTH = 1_000_000;
 
 /**
+ * The most scrollback a terminal view's emulator keeps, in bytes of its
+ * memory (`FuzTerminal`'s `scrollback_max_bytes`): the history above the
+ * screen that the copy button copies, the oldest lines dropped first, in
+ * whole pages. A line's cost grows with the terminal's width and its
+ * styles, so a wider terminal keeps fewer. Sized so a wide terminal still
+ * keeps around a thousand lines while a view's wasm memory stays a few MiB;
+ * each view has its own. The library's default keeps a single page. A view
+ * mounted later is replayed the whole output buffer
+ * (`TERMINAL_OUTPUT_MAX_LENGTH`), which usually holds more than this, so it
+ * keeps the newest history up to this limit.
+ */
+export const TERMINAL_SCROLLBACK_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
  * Max characters of input queued per terminal while a send is in flight or
  * waiting to retry. Input past this is refused and surfaced, not queued.
  */

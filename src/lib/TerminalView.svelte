@@ -13,6 +13,7 @@
 	import type { FuzTerminalStatus } from './fuz_terminal/fuz_terminal_state.svelte.ts';
 	import { load_fuz_terminal_module } from './fuz_terminal_module.ts';
 	import type { Terminal } from './terminal.svelte.ts';
+	import { TERMINAL_SCROLLBACK_MAX_BYTES } from './terminal_helpers.ts';
 	import { paste_terminal_text, type TerminalPasteOutcome } from './terminal_paste.ts';
 	import { TerminalViewLink } from './terminal_view_link.ts';
 
@@ -154,6 +155,7 @@
 				<FuzTerminal
 					bind:this={view}
 					module={load_module()}
+					scrollback_max_bytes={TERMINAL_SCROLLBACK_MAX_BYTES}
 					label="terminal: {terminal.display_command}"
 					{accepts_input}
 					ondata={(data) => link?.send(data)}

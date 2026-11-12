@@ -605,7 +605,14 @@ and their output buffering, and coming back reattaches to them.
   (`is_fuz_terminal_key_target`) to the terminal, as they leave a text
   field's. The copy button and the context
   menu's "copy output" read the emulator's text (`get_text`: the scrollback
-  and screen, soft wraps joined). The context menu's "paste" (enabled
+  and screen, soft wraps joined). The view passes
+  `TERMINAL_SCROLLBACK_MAX_BYTES` (2 MiB) as the emulator's
+  `scrollback_max_bytes`: the limit counts the emulator's memory, pruned in
+  whole pages, so a wider or more styled terminal keeps fewer lines,
+  dropping the oldest; the library's default keeps a single page. A remount
+  replays the whole output buffer, which usually holds more than that, so
+  the fresh emulator keeps the newest history up to the limit.
+  The context menu's "paste" (enabled
   exactly while the terminal takes input) reads the clipboard
   (`read_clipboard_text`, `navigator.clipboard.readText`, started in the
   entry's activation, since a browser allows the read only with a user
@@ -1127,7 +1134,9 @@ combining marks take one cell, and a mark in a write of its own is drawn. A
 program can still turn it off. It's the view's, not a prop: a host has no
 reason to want the stale rows that come with it off.
 
-*Host API.* Props: `module`; `scrollback_max_bytes`; `label`, the
+*Host API.* Props: `module`; `scrollback_max_bytes` (unset, the library's
+default, which keeps a single page of history; zzz's `TerminalView` passes
+`TERMINAL_SCROLLBACK_MAX_BYTES`); `label`, the
 accessible name; `accepts_input` (default on — off, a key is neither encoded
 nor prevented, so the browser's default runs, and the cursor is drawn
 hollow, as when unfocused: hollow rather than hidden, so where the program
