@@ -343,22 +343,42 @@ export const is_fuz_terminal_key_composing = (event: FuzTerminalKeyboardEvent): 
 	event.isComposing || event.key === 'Process' || event.keyCode === 229 || event.key === 'Dead';
 
 /**
+ * The characters whose Ctrl combinations are the browser's page zoom:
+ * Ctrl+= and Ctrl++ zoom in, Ctrl+- and Ctrl+_ zoom out, Ctrl+0 resets.
+ */
+const FUZ_TERMINAL_ZOOM_KEYS: ReadonlySet<string> = new Set(['=', '+', '-', '_', '0']);
+
+/**
  * Whether the browser and the OS keep a key rather than the terminal: any
  * combination with Meta (the OS's and the browser's shortcuts — on macOS,
- * copy and paste among them), and Ctrl+Shift+C and Ctrl+Shift+V, reserved for
- * copy and paste. The program never sees these; every other key the encoder
- * has bytes for is the program's, Tab, Escape, and Ctrl+W included.
+ * copy and paste among them), Ctrl+Shift+C and Ctrl+Shift+V, reserved for
+ * copy and paste, and, except on macOS, the browser's page zoom: Ctrl with
+ * `=`, `+`, `-`, `_`, or `0`, Shift or not, the numpad's `+`, `-`, and `0`
+ * included. The program never sees these; every other key the encoder has
+ * bytes for is the program's, Tab, Escape, Ctrl+W, and Ctrl+digit included.
  *
  * C and V are matched by the layout's character, or, when the layout's isn't
- * a Latin letter (Cyrillic, say), by the physical key.
+ * a Latin letter (Cyrillic, say), by the physical key. The zoom keys are
+ * matched by the layout's character alone, so they follow it to whichever
+ * physical key types it; a layout that types one only with AltGr (Ctrl and
+ * Alt held, as Windows reports it) leaves it the program's. On macOS the
+ * browser zooms with Cmd, a Meta combination, so Ctrl with these stays the
+ * program's.
+ *
+ * @param platform - whose keyboard conventions apply
  */
 // TODO: paste on Ctrl+Shift+V (and copy on Ctrl+Shift+C) once the terminal
 // pastes; Shift+Insert and Ctrl+Insert join the pass-through then (other
 // browser terminals leave them to the browser as paste and copy); a host
 // override of which keys pass through
-export const should_fuz_terminal_pass_key = (event: FuzTerminalKeyboardEvent): boolean => {
+export const should_fuz_terminal_pass_key = (
+	event: FuzTerminalKeyboardEvent,
+	platform: FuzTerminalKeyPlatform
+): boolean => {
 	if (event.metaKey) return true;
-	if (!event.ctrlKey || !event.shiftKey || event.altKey) return false;
+	if (!event.ctrlKey || event.altKey) return false;
+	if (platform !== 'mac' && FUZ_TERMINAL_ZOOM_KEYS.has(event.key)) return true;
+	if (!event.shiftKey) return false;
 	const letter = event.key.toLowerCase();
 	if (/^[a-z]$/.test(letter)) return letter === 'c' || letter === 'v';
 	return event.code === 'KeyC' || event.code === 'KeyV';

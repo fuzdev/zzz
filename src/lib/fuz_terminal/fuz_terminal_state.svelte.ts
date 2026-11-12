@@ -385,7 +385,7 @@ export class FuzTerminalState {
 			action = 'release';
 		} else {
 			if (is_fuz_terminal_key_composing(event)) return false;
-			if (should_fuz_terminal_pass_key(event)) return false;
+			if (should_fuz_terminal_pass_key(event, this.#deps.key_platform)) return false;
 			this.#held_keys.add(event.code);
 			action = event.repeat ? 'repeat' : 'press';
 		}

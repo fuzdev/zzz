@@ -995,11 +995,18 @@ keydown ─ FuzTerminalState.handle_key
   `Process`, key code 229) or a dead key — whose text arrives later (a dead
   key's composed character comes as the next keydown's `key`, and is sent;
   an IME's needs a text input, still to come); any combination with Meta,
-  the OS's and the browser's shortcuts; and Ctrl+Shift+C and Ctrl+Shift+V,
-  reserved for copy and paste (`should_fuz_terminal_pass_key`, one function
-  so a host override can be added). Everything else the encoder has bytes
-  for is the program's, as in other browser terminals: Tab, Escape, the
-  function keys, Ctrl+W. A modifier alone, or a key the encoder has nothing
+  the OS's and the browser's shortcuts; Ctrl+Shift+C and Ctrl+Shift+V,
+  reserved for copy and paste; and, except on macOS, the browser's page
+  zoom: Ctrl with `=`, `+`, `-`, `_`, or `0`, Shift or not, the numpad's
+  `+`, `-`, and `0` included (`should_fuz_terminal_pass_key`, one function
+  so a host override can be added). The zoom keys are matched by the
+  layout's character, so on a German layout Ctrl with the `+` key passes
+  and Ctrl+ß doesn't. With Alt held they stay the program's: Windows reports
+  AltGr as Ctrl+Alt, and browsers don't zoom on Ctrl+Alt. On macOS the
+  browser zooms with Cmd, a Meta combination already passed, and Ctrl with
+  them is the program's. Everything else the encoder has bytes for is the
+  program's, as in other browser terminals: Tab, Escape, the function keys,
+  Ctrl+W, Ctrl+digit. A modifier alone, or a key the encoder has nothing
   for, sends nothing and keeps its default.
 - **Errors** go the way writes' do: a library failure while encoding fails
   the view and an escape poisons it — neither leaves the event handler —

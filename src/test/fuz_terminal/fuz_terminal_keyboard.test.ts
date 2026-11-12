@@ -474,7 +474,7 @@ describe('should_fuz_terminal_pass_key', () => {
 			key_event('ArrowLeft', 'ArrowLeft', { metaKey: true, ctrlKey: true }),
 			key_event('KeyQ', 'q', { metaKey: true, altKey: true })
 		]) {
-			assert.isTrue(should_fuz_terminal_pass_key(event), `${event.code} ${event.key}`);
+			assert.isTrue(should_fuz_terminal_pass_key(event, 'other'), `${event.code} ${event.key}`);
 		}
 	});
 
@@ -493,8 +493,47 @@ describe('should_fuz_terminal_pass_key', () => {
 			// CapsLock or not
 			key_event('KeyC', 'c', ctrl_shift)
 		]) {
-			assert.isTrue(should_fuz_terminal_pass_key(event), `${event.code} ${event.key}`);
+			assert.isTrue(should_fuz_terminal_pass_key(event, 'other'), `${event.code} ${event.key}`);
 		}
+	});
+
+	test('the browser’s page zoom, by the layout’s character, Shift or not', () => {
+		const ctrl = { ctrlKey: true };
+		const ctrl_shift = { ctrlKey: true, shiftKey: true };
+		for (const event of [
+			key_event('Equal', '=', ctrl),
+			key_event('Minus', '-', ctrl),
+			key_event('Digit0', '0', ctrl),
+			// Ctrl++ and Ctrl+_ on a US layout
+			key_event('Equal', '+', ctrl_shift),
+			key_event('Minus', '_', ctrl_shift),
+			// the numpad, NumLock on
+			key_event('NumpadAdd', '+', ctrl),
+			key_event('NumpadSubtract', '-', ctrl),
+			key_event('Numpad0', '0', ctrl),
+			// German: + and - on other physical keys, = on Shift+0
+			key_event('BracketRight', '+', ctrl),
+			key_event('Slash', '-', ctrl),
+			key_event('Digit0', '=', ctrl_shift)
+		]) {
+			assert.isTrue(should_fuz_terminal_pass_key(event, 'other'), `${event.code} ${event.key}`);
+		}
+	});
+
+	test('on macOS the zoom keys with Ctrl are the program’s; Cmd’s zoom passes as Meta', () => {
+		for (const event of [
+			key_event('Equal', '=', { ctrlKey: true }),
+			key_event('Minus', '-', { ctrlKey: true }),
+			key_event('Digit0', '0', { ctrlKey: true }),
+			key_event('Minus', '_', { ctrlKey: true, shiftKey: true })
+		]) {
+			assert.isFalse(should_fuz_terminal_pass_key(event, 'mac'), `${event.code} ${event.key}`);
+		}
+		assert.isTrue(should_fuz_terminal_pass_key(key_event('Equal', '=', { metaKey: true }), 'mac'));
+		// Ctrl+Shift+C and V pass on every platform
+		assert.isTrue(
+			should_fuz_terminal_pass_key(key_event('KeyC', 'C', { ctrlKey: true, shiftKey: true }), 'mac')
+		);
 	});
 
 	test('everything else is the program’s', () => {
@@ -514,9 +553,22 @@ describe('should_fuz_terminal_pass_key', () => {
 			key_event('F5', 'F5'),
 			key_event('F4', 'F4', { altKey: true }),
 			key_event('KeyL', 'l', { ctrlKey: true }),
-			key_event('ControlLeft', 'Control', { ctrlKey: true })
+			key_event('ControlLeft', 'Control', { ctrlKey: true }),
+			// the zoom characters without Ctrl, or with Alt (AltGr on Windows)
+			key_event('Equal', '=', {}),
+			key_event('Minus', '-', { altKey: true }),
+			key_event('Equal', '=', { ctrlKey: true, altKey: true }),
+			key_event('Digit0', '0', { ctrlKey: true, altKey: true }),
+			// Ctrl+digit, Ctrl+Shift+0 on a US layout, the numpad's 0 with NumLock off
+			key_event('Digit1', '1', { ctrlKey: true }),
+			key_event('Digit9', '9', { ctrlKey: true }),
+			key_event('Digit0', ')', { ctrlKey: true, shiftKey: true }),
+			key_event('Numpad0', 'Insert', { ctrlKey: true }),
+			// German: the US minus key types ß, which isn't a zoom key
+			key_event('Minus', 'ß', { ctrlKey: true }),
+			key_event('Slash', '/', { ctrlKey: true })
 		]) {
-			assert.isFalse(should_fuz_terminal_pass_key(event), `${event.code} ${event.key}`);
+			assert.isFalse(should_fuz_terminal_pass_key(event, 'other'), `${event.code} ${event.key}`);
 		}
 	});
 });

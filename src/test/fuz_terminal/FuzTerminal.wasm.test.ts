@@ -1226,6 +1226,30 @@ describe('keyboard input', () => {
 		assert.deepEqual(t.sent, ['\x16']);
 	});
 
+	test('the browser’s page zoom keys are the browser’s, except on macOS', async () => {
+		const t = await mount_typing();
+		for (const event of [
+			press(t.root, 'Equal', '=', { ctrlKey: true }),
+			press(t.root, 'Equal', '+', { ctrlKey: true, shiftKey: true }),
+			press(t.root, 'Minus', '-', { ctrlKey: true }),
+			press(t.root, 'Minus', '_', { ctrlKey: true, shiftKey: true }),
+			press(t.root, 'Digit0', '0', { ctrlKey: true }),
+			press(t.root, 'NumpadAdd', '+', { ctrlKey: true }),
+			press(t.root, 'NumpadSubtract', '-', { ctrlKey: true }),
+			press(t.root, 'Numpad0', '0', { ctrlKey: true })
+		]) {
+			assert.isFalse(event.defaultPrevented, `${event.code} ${event.key}`);
+		}
+		assert.deepEqual(t.sent, []);
+		// Ctrl+digit stays the program's
+		assert.isTrue(press(t.root, 'Digit1', '1', { ctrlKey: true }).defaultPrevented);
+		assert.strictEqual(t.sent.length, 1);
+		// on macOS the browser zooms with Cmd, so Ctrl+= is the program's
+		t.deps.key_platform = 'mac';
+		assert.isTrue(press(t.root, 'Equal', '=', { ctrlKey: true }).defaultPrevented);
+		assert.strictEqual(t.sent.length, 2);
+	});
+
 	test('a composition is left alone; a dead key’s composed character is sent', async () => {
 		const t = await mount_typing();
 		assert.isFalse(press(t.root, 'KeyA', 'a', { isComposing: true }).defaultPrevented);
@@ -1462,6 +1486,8 @@ describe('keyboard input', () => {
 			press(t.root, 'KeyC', 'C', { ctrlKey: true, shiftKey: true });
 			press(t.root, 'KeyC', 'C', { ctrlKey: true, shiftKey: true, type: 'keyup' });
 			press(t.root, 'KeyC', 'c', { type: 'keyup' });
+			press(t.root, 'Equal', '=', { ctrlKey: true });
+			press(t.root, 'Equal', '=', { ctrlKey: true, type: 'keyup' });
 			press(t.root, 'Quote', 'Dead');
 			press(t.root, 'Quote', "'", { type: 'keyup' });
 			assert.deepEqual(t.sent, []);
