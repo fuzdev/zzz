@@ -12,7 +12,7 @@
 
 import { is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
 
-import { is_fuz_terminal_key_target } from './fuz_terminal/fuz_terminal_keyboard.ts';
+import { is_fuz_terminal_key_target } from './fuz_terminal/fuz_terminal_key_target.ts';
 
 /** What the shortcuts read and toggle — the app's `Ui`. */
 export interface DashboardShortcutsUi {

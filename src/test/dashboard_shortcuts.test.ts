@@ -3,7 +3,7 @@
 import { test, describe, assert, afterEach } from 'vitest';
 
 import { handle_dashboard_shortcut, type DashboardShortcutsUi } from '#lib/dashboard_shortcuts.ts';
-import { FUZ_TERMINAL_KEYS_ATTRIBUTE } from '#lib/fuz_terminal/fuz_terminal_keyboard.ts';
+import { FUZ_TERMINAL_KEYS_ATTRIBUTE } from '#lib/fuz_terminal/fuz_terminal_key_target.ts';
 
 interface TestUi extends DashboardShortcutsUi {
 	show_sidebar: boolean;

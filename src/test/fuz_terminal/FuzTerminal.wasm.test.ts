@@ -10,7 +10,7 @@ import {
 	type FuzTerminalOptions,
 	type FuzTerminalStatus
 } from '#lib/fuz_terminal/fuz_terminal_state.svelte.ts';
-import { is_fuz_terminal_key_target } from '#lib/fuz_terminal/fuz_terminal_keyboard.ts';
+import { is_fuz_terminal_key_target } from '#lib/fuz_terminal/fuz_terminal_key_target.ts';
 import {
 	create_fuz_terminal_deps,
 	get_fuz_terminal_selection_text

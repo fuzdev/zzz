@@ -758,6 +758,9 @@ The renderer, beside it (tested under jsdom with the built module):
 - `fuz_terminal_keyboard.ts` — a `KeyboardEvent` to a `GhosttyKeyInput`
   (the key from `code`, the modifiers, the text, the unshifted code point),
   and which keys the browser and the OS keep.
+- `fuz_terminal_key_target.ts` — whether a key event's target is a view
+  that takes keys, for a page's global shortcuts; apart from the keyboard
+  module, so every page's shortcuts load none of the key encoding.
 - `fuz_terminal_style.ts` — styles and colors to CSS: a style's declarations
   (cached by key), and the root's color custom properties for a frame.
 - `fuz_terminal_layout.ts` — the size in cells from a measurement, a row's
