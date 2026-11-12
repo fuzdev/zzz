@@ -28,7 +28,7 @@
 		type FuzTerminalStatus,
 		type FuzTerminalWriteOptions
 	} from './fuz_terminal_state.svelte.ts';
-	import type { GhosttyRenderRow } from './ghostty_render_state.ts';
+	import type { GhosttyRenderRow } from './ghostty_render_frame.ts';
 
 	const {
 		label = 'terminal',

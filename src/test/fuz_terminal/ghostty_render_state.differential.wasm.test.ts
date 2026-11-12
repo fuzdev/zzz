@@ -1,9 +1,7 @@
 import { test, describe, assert } from 'vitest';
 
-import {
-	GhosttyRenderState,
-	type GhosttyRenderRow
-} from '#lib/fuz_terminal/ghostty_render_state.ts';
+import type { GhosttyRenderRow } from '#lib/fuz_terminal/ghostty_render_frame.ts';
+import { GhosttyRenderState } from '#lib/fuz_terminal/ghostty_render_state.ts';
 import { GhosttyTerminal } from '#lib/fuz_terminal/ghostty_terminal.ts';
 import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';
 

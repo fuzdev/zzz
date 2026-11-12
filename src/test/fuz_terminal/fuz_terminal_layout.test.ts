@@ -13,7 +13,7 @@ import {
 	type GhosttyRenderCursor,
 	type GhosttyRenderRow,
 	type GhosttyRenderRun
-} from '#lib/fuz_terminal/ghostty_render_state.ts';
+} from '#lib/fuz_terminal/ghostty_render_frame.ts';
 import { GHOSTTY_TERMINAL_MAX_SIZE } from '#lib/fuz_terminal/ghostty_terminal.ts';
 
 const run = (

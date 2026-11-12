@@ -13,7 +13,7 @@ import {
 	type GhosttyRenderColors,
 	type GhosttyRenderStyle,
 	type GhosttyRenderUnderline
-} from '#lib/fuz_terminal/ghostty_render_state.ts';
+} from '#lib/fuz_terminal/ghostty_render_frame.ts';
 
 const palette = (index: number): GhosttyRenderColor => ({ kind: 'palette', index });
 const rgb = (value: number): GhosttyRenderColor => ({ kind: 'rgb', rgb: value });

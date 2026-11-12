@@ -30,7 +30,7 @@ import type {
 	GhosttyRenderColors,
 	GhosttyRenderStyle,
 	GhosttyRenderUnderline
-} from './ghostty_render_state.ts';
+} from './ghostty_render_frame.ts';
 
 /** How many palette entries the theme supplies: the base 16 (SGR 30–37, 90–97). */
 export const FUZ_TERMINAL_THEME_PALETTE_SIZE = 16;

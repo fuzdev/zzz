@@ -730,9 +730,13 @@ dependency, so its behavior is tested in Node:
   never held across an export call; scratch and opaque-slot allocations
   freed on every path. Buffers the library allocates
   (the formatter's output) are freed with `ghostty_free`.
+- `ghostty_render_frame.ts` — the frame data's types (`GhosttyRenderRow`,
+  `GhosttyRenderRun`, `GhosttyRenderStyle`, `GhosttyRenderCursor`,
+  `GhosttyRenderColors`, …) and `GHOSTTY_RENDER_DEFAULT_STYLE`: the plain,
+  immutable values a renderer draws from, with no dependency on the reader.
 - `ghostty_render_state.ts` — `GhosttyRenderState`: the render-state
-  reader, turning the library's per-frame copy of the screen into plain
-  frame data a renderer draws (below). Its terminal disposes it first.
+  reader, turning the library's per-frame copy of the screen into that
+  frame data (below). Its terminal disposes it first.
 - `ghostty_key_encoder.ts` — `GhosttyKeyEncoder`: key events to the bytes
   a program expects, following the terminal's input modes (below). Its
   terminal disposes it first.

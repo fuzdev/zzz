@@ -9,13 +9,13 @@
 import { GhosttyEffectError, to_thrown_message } from './ghostty_errors.ts';
 import { GhosttyKeyEncoder, type GhosttyKeyAction } from './ghostty_key_encoder.ts';
 import type { GhosttyPasteEncoding, GhosttyPasteRisk } from './ghostty_paste.ts';
-import {
-	GhosttyRenderState,
-	type GhosttyRenderColors,
-	type GhosttyRenderCursor,
-	type GhosttyRenderRow,
-	type GhosttyRenderStyle
-} from './ghostty_render_state.ts';
+import type {
+	GhosttyRenderColors,
+	GhosttyRenderCursor,
+	GhosttyRenderRow,
+	GhosttyRenderStyle
+} from './ghostty_render_frame.ts';
+import { GhosttyRenderState } from './ghostty_render_state.ts';
 import {
 	GHOSTTY_MODE_GRAPHEME_CLUSTER,
 	GhosttyTerminal,

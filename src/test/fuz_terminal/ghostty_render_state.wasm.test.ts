@@ -8,11 +8,13 @@ import {
 } from '#lib/fuz_terminal/ghostty_errors.ts';
 import {
 	GHOSTTY_RENDER_DEFAULT_STYLE,
-	GhosttyRenderState,
-	resolve_ghostty_render_constants,
 	type GhosttyRenderColor,
 	type GhosttyRenderRow,
 	type GhosttyRenderStyle
+} from '#lib/fuz_terminal/ghostty_render_frame.ts';
+import {
+	GhosttyRenderState,
+	resolve_ghostty_render_constants
 } from '#lib/fuz_terminal/ghostty_render_state.ts';
 import { GhosttyTerminal } from '#lib/fuz_terminal/ghostty_terminal.ts';
 import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';

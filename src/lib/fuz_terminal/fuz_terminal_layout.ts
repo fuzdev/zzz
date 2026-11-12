@@ -11,7 +11,7 @@ import type {
 	GhosttyRenderCursorStyle,
 	GhosttyRenderRow,
 	GhosttyRenderRun
-} from './ghostty_render_state.ts';
+} from './ghostty_render_frame.ts';
 import { GHOSTTY_TERMINAL_MAX_SIZE } from './ghostty_terminal.ts';
 
 /** The narrowest a terminal view makes its terminal, in cells. */
