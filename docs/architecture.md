@@ -990,6 +990,32 @@ keydown ─ FuzTerminalState.handle_key
   the key code sent, and its base-layout alternates assume US too. A
   browser's layout map (`navigator.keyboard.getLayoutMap()`) would fix it,
   but only Chromium has one.
+- **Copy chords**: Ctrl+Alt+C and Ctrl+Insert, with no Shift or Meta,
+  copy the page's selection when it takes some of the view's text — one
+  that only touches the view's edge, as a triple-click on the block above
+  it does, doesn't count (`is_fuz_terminal_copy_key`,
+  `FuzTerminalDeps.read_selection`). The copy is the whole selection's
+  text, even where it reaches outside the view — what the user selected,
+  and what the browser's own copy would take — written with
+  `navigator.clipboard.writeText` (`write_clipboard`; a secure context,
+  which `localhost` is, and the key press is the user activation it needs).
+  A key that copied sends nothing, is prevented, and isn't held, so it
+  sends no release either; it copies whatever the status or
+  `accepts_input`, since a stopped view still shows its last frame. A write
+  that fails or rejects is reported through `onerror` and the notice, never
+  thrown, and the next copy that succeeds clears that notice. With no
+  selection there the chord is the program's, as any other key. Ctrl+C is
+  always the program's. The view writes the clipboard itself rather than
+  leave the chord to the browser: Ctrl+Alt+C is no browser shortcut, and
+  Ctrl+Insert, which browsers on Linux and Windows copy with, must reach
+  the program when nothing is selected. C is matched by the layout's
+  character, or by the physical key when the layout's is a letter of
+  another script (Cyrillic `с`), never with AltGraph held, nor when
+  Ctrl+Alt made a Latin letter or a symbol — Windows reports AltGr as
+  Ctrl+Alt, and Polish AltGr+C types `ć`. On macOS neither chord copies:
+  Cmd+C is the platform's copy and passes to the browser as a Meta
+  combination, so, as with the zoom keys, Ctrl+Option+C and Ctrl+Insert
+  stay the program's.
 - **What the terminal doesn't take** keeps its default: a key while the
   view isn't ready; a keydown in a composition — an IME's (`isComposing`,
   `Process`, key code 229) or a dead key — whose text arrives later (a dead
@@ -1037,11 +1063,12 @@ the unshifted code points above, so their US-layout fallback carries over.
 **The DOM renderer.** `FuzTerminal` draws one terminal's screen as DOM
 text, and takes its keys (above). It takes no paste, IME, focus reporting,
 or mouse reporting yet, doesn't scroll into the scrollback, and has no
-selection or copy of its own: the rows are text, so the browser's selection
-works over them. Each row is a block of inline runs, so a selection copies
-a row as one line and a block of rows as one line per row — a soft-wrapped
-line copies broken at the wrap (the rows don't carry the wrap flag yet). It
-has no dependency on zzz's app — no cells, no actions.
+selection of its own: the rows are text, so the browser's selection works
+over them, and the copy chords (above) copy it. Each row is a block of
+inline runs, so a selection copies a row as one line and a block of rows as
+one line per row — a soft-wrapped line copies broken at the wrap (the rows
+don't carry the wrap flag yet). It has no dependency on zzz's app — no
+cells, no actions.
 
 *Ownership.* The host loads and compiles the module and passes it — or the
 promise of it, a fetch and compile in flight — as `module`; the view is
@@ -1101,7 +1128,7 @@ queued while loading are written, so a write it makes follows them, and
 replies to those writes reach `ondata` before it. A
 callback that throws — inside a write, from a frame, or on a resize — never
 escapes: it's handed to `onerror` (or the console) and shown as a notice,
-and the view goes on.
+and the view goes on; so is a failed copy (above), with its own notice.
 
 *Keys and the page.* While the view takes keys — ready, `accepts_input` on
 — its root carries `data-fuz-terminal-keys` (`FUZ_TERMINAL_KEYS_ATTRIBUTE`),
@@ -1219,10 +1246,11 @@ a block is hollow and nothing blinks; a blinking cursor blinks by CSS, not
 under `prefers-reduced-motion`.
 
 *Sizing.* A hidden probe — a run of cells in the terminal's font, with the
-line height the rows fall back to — measures the cell (its width over its
-length, its height a row's), and the root's box is the area;
-`to_fuz_terminal_size` turns them into cols and rows — whole cells, at least
-`FUZ_TERMINAL_MIN_COLS` × `FUZ_TERMINAL_MIN_ROWS`, at most
+line height the rows fall back to, unselectable so no copy takes its text —
+measures the cell (its width over its length, its height a row's), and the
+root's box is the area; `to_fuz_terminal_size` turns them into cols and
+rows — whole cells, at least `FUZ_TERMINAL_MIN_COLS` ×
+`FUZ_TERMINAL_MIN_ROWS`, at most
 `GHOSTTY_TERMINAL_MAX_SIZE` — or `null` when anything is zero or not finite
 (not laid out, `display: none`, no size from the container), which never
 resizes the terminal. A `ResizeObserver` on the root and the probe (so a font

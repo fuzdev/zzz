@@ -139,7 +139,7 @@ nothing is a live region, so a repaint announces nothing -->
 			the terminal stopped after an internal error and must be reopened: {terminal.status.message}
 		</p>
 	{:else if terminal.notice !== null}
-		<p class="message" role="status">a terminal callback failed: {terminal.notice}</p>
+		<p class="message" role="status">{terminal.notice}</p>
 	{/if}
 </div>
 
@@ -288,6 +288,8 @@ nothing is a live region, so a repaint announces nothing -->
 		visibility: hidden;
 		white-space: pre;
 		pointer-events: none;
+		/* never part of a selection a copy takes */
+		user-select: none;
 	}
 	.message {
 		position: absolute;

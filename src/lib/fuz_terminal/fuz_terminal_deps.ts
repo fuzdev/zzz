@@ -1,6 +1,7 @@
 /**
  * What a terminal view takes from its environment — loading the emulator,
- * frames, a timer, resize observation, and measuring — as one interface with
+ * frames, a timer, resize observation, measuring, and the selection and
+ * clipboard a copy reads and writes — as one interface with
  * browser defaults, provided through Svelte context so a test can step frames
  * and inject measurements without faking globals.
  *
@@ -34,7 +35,66 @@ export interface FuzTerminalDeps extends FuzTerminalFrameScheduler {
 	measure: (root: HTMLElement, probe: HTMLElement) => FuzTerminalMeasurement | null;
 	/** Whose keyboard conventions the keys follow (`to_fuz_terminal_key_input`). */
 	key_platform: FuzTerminalKeyPlatform;
+	/**
+	 * The page's selected text when the selection takes some of the view's
+	 * `root`, else `''` (`get_fuz_terminal_selection_text`) — what a copy
+	 * chord copies.
+	 */
+	read_selection: (root: HTMLElement) => string;
+	/** Put text on the system clipboard; rejects when it can't. */
+	write_clipboard: (text: string) => Promise<void>;
 }
+
+/**
+ * The text of `selection` when one of its ranges selects some of `root`'s
+ * text — something other than blanks — else `''`: as for a collapsed
+ * selection, one that only touches the view's edge (a triple-click above it
+ * ends at the view's start), or one of blank cells only. The whole
+ * selection's text, even where it reaches outside the view: it's what the
+ * user selected, and what the browser's own copy would take. Inside the
+ * view that's the rows, and the status message when one shows (selectable,
+ * so an error can be copied); the measuring probe and the cursor can't be
+ * selected.
+ */
+export const get_fuz_terminal_selection_text = (
+	selection: Selection | null,
+	root: Node
+): string => {
+	if (selection === null) return '';
+	for (let i = 0; i < selection.rangeCount; i++) {
+		const range = selection.getRangeAt(i);
+		if (!range.intersectsNode(root)) continue;
+		// only the part inside the view counts: a range that just touches its
+		// edge (a triple-click's end at the next block's start, a drag from the
+		// rows' end down out of it) selects none of it
+		const inside = range.cloneRange();
+		if (!root.contains(range.startContainer)) inside.setStart(root, 0);
+		if (!root.contains(range.endContainer)) inside.setEnd(root, root.childNodes.length);
+		// the probe and the cursor hold text no selection takes, and the
+		// template's whitespace between the view's elements is no one's text
+		// (so a selection of blank cells alone takes none either)
+		const contents = inside.cloneContents();
+		// TODO: aria-hidden doubles as "not text" — an a11y rung that hides the rows needs its own marker
+		for (const hidden of contents.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+		if (contents.textContent.trim() !== '') return selection.toString();
+	}
+	return '';
+};
+
+/**
+ * The browser's clipboard write, `navigator.clipboard.writeText`: it needs a
+ * secure context (`localhost` is one) and a user activation (a key press
+ * is one); without the API it rejects saying so.
+ */
+const write_browser_clipboard = (text: string): Promise<void> => {
+	const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard;
+	if (clipboard === undefined) {
+		return Promise.reject(
+			new Error('the clipboard is unavailable here: it needs a secure context (https or localhost)')
+		);
+	}
+	return clipboard.writeText(text);
+};
 
 /** The fields of `navigator` the platform is read from. */
 export interface FuzTerminalNavigatorPlatform {
@@ -58,7 +118,8 @@ export const to_fuz_terminal_key_platform = (
 /**
  * The browser's capabilities: `load_ghostty_vt`, `requestAnimationFrame`,
  * `setTimeout`, `ResizeObserver` (nothing is observed where it doesn't
- * exist), layout reads, and the platform from `navigator`.
+ * exist), layout reads, the platform from `navigator`, the document's
+ * selection, and `navigator.clipboard`.
  */
 export const create_fuz_terminal_deps = (): FuzTerminalDeps => ({
 	load_vt: (module) => load_ghostty_vt(module),
@@ -85,7 +146,10 @@ export const create_fuz_terminal_deps = (): FuzTerminalDeps => ({
 	},
 	key_platform: to_fuz_terminal_key_platform(
 		typeof navigator === 'undefined' ? undefined : navigator
-	)
+	),
+	read_selection: (root) =>
+		get_fuz_terminal_selection_text(root.ownerDocument.getSelection(), root),
+	write_clipboard: write_browser_clipboard
 });
 
 /**

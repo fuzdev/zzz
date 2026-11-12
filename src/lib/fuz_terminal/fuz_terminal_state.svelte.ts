@@ -24,6 +24,7 @@ import type { GhosttyVt } from './ghostty_vt.ts';
 import type { FuzTerminalDeps } from './fuz_terminal_deps.ts';
 import { FuzTerminalFrameLoop } from './fuz_terminal_frame.ts';
 import {
+	is_fuz_terminal_copy_key,
 	is_fuz_terminal_key_composing,
 	resolve_fuz_terminal_key_codes,
 	should_fuz_terminal_pass_key,
@@ -131,8 +132,9 @@ export interface FuzTerminalOptions {
 	/**
 	 * Whether the view takes keys; defaults to `true`. Off — say, the program
 	 * has exited — a key is neither encoded nor prevented, so the browser's
-	 * default runs (Tab moves focus); the view still draws, selects, copies,
-	 * and resizes, and its cursor is drawn as when unfocused.
+	 * default runs (Tab moves focus); the view still draws, selects, copies
+	 * (a copy chord included, `handle_key`), and resizes, and its cursor is
+	 * drawn as when unfocused.
 	 */
 	accepts_input?: boolean;
 	/**
@@ -148,7 +150,10 @@ export interface FuzTerminalOptions {
 	onbell?: () => void;
 	/** The view's status changed. */
 	onstatus?: (status: FuzTerminalStatus) => void;
-	/** A callback threw, or wrote too much; the view goes on. Without this, it's logged to the console. */
+	/**
+	 * A callback threw or wrote too much, or a copy failed; the view goes on.
+	 * Without this, it's logged to the console.
+	 */
 	onerror?: (error: unknown) => void;
 }
 
@@ -198,7 +203,11 @@ export class FuzTerminalState {
 	size: FuzTerminalSize | null = $state.raw(null);
 	/** Whether focus is in the view: the cursor is hollow and still without it. */
 	focused: boolean = $state(false);
-	/** The last callback error, shown as a plain-text notice; `null` when there's none. */
+	/**
+	 * The last error reported — a callback's, or a failed copy's — as the
+	 * plain-text notice the view shows; `null` when there's none. A failed
+	 * copy's notice is cleared by the next copy that succeeds.
+	 */
 	notice: string | null = $state(null);
 
 	/** Whether the view takes keys now: ready, and with input on (`FuzTerminalOptions.accepts_input`). */
@@ -243,6 +252,8 @@ export class FuzTerminalState {
 	#colors: GhosttyRenderColors | null = null;
 
 	#root: HTMLElement | null = null;
+	/** Whether `notice` is a failed copy's, which a successful copy clears. */
+	#notice_is_copy_failure = false;
 	#probe: HTMLElement | null = null;
 	#unobserve: (() => void) | null = null;
 	#attached = false;
@@ -364,11 +375,21 @@ export class FuzTerminalState {
 	 * keyboard protocol with event reporting on; the encoder decides. The
 	 * keys follow `FuzTerminalDeps.key_platform`'s conventions.
 	 *
-	 * @returns whether bytes were sent: the caller prevents the event's
-	 *   default exactly then, so a modifier alone, or a key the encoder has
-	 *   nothing for, keeps its default
+	 * A copy chord's keydown (`is_fuz_terminal_copy_key`: Ctrl+Alt+C,
+	 * Ctrl+Insert) while the selection takes some of the view's text
+	 * (`FuzTerminalDeps.read_selection`) copies it instead
+	 * (`FuzTerminalDeps.write_clipboard`): nothing is encoded or sent, and
+	 * the key isn't held, so its release sends nothing either. That's the
+	 * case whatever the status or `accepts_input`, since a stopped view still
+	 * shows its last frame. A failed write is reported, never thrown. With no
+	 * selection there, the chord is a key like any other.
+	 *
+	 * @returns whether the key was handled — bytes sent, or a selection
+	 *   copied: the caller prevents the event's default exactly then, so a
+	 *   modifier alone, or a key the encoder has nothing for, keeps its default
 	 */
 	handle_key(event: FuzTerminalKeyboardEvent, type: 'keydown' | 'keyup'): boolean {
+		if (type === 'keydown' && this.#copy_selection(event)) return true;
 		const encoder = this.#key_encoder;
 		const codes = this.#key_codes;
 		// keys arrive outside writes; one dispatched from inside a callback is refused
@@ -402,6 +423,57 @@ export class FuzTerminalState {
 		// TODO: scroll the viewport to the bottom on input, once it scrolls
 		this.#call_host(() => this.#options().ondata?.(bytes));
 		return true;
+	}
+
+	/**
+	 * On a copy chord with the selection in the view, write the selection to
+	 * the clipboard; a failure to read or write it is reported
+	 * (`#report_copy_failure`), and a write that succeeds clears a failed
+	 * copy's notice.
+	 *
+	 * @returns whether it copied (the write may still fail, later)
+	 */
+	#copy_selection(event: FuzTerminalKeyboardEvent): boolean {
+		const root = this.#root;
+		if (
+			root === null ||
+			is_fuz_terminal_key_composing(event) ||
+			!is_fuz_terminal_copy_key(event, this.#deps.key_platform)
+		) {
+			return false;
+		}
+		let text: string;
+		try {
+			text = this.#deps.read_selection(root);
+		} catch (error) {
+			this.#report_copy_failure(error);
+			return false;
+		}
+		if (text === '') return false;
+		try {
+			void Promise.resolve(this.#deps.write_clipboard(text)).then(
+				() => this.#clear_copy_failure(),
+				(error: unknown) => this.#report_copy_failure(error)
+			);
+		} catch (error) {
+			this.#report_copy_failure(error);
+		}
+		return true;
+	}
+
+	/** Report a failed copy, unless the view is gone by then. */
+	#report_copy_failure(error: unknown): void {
+		if (this.#destroyed) return;
+		const message = `copying the selection to the clipboard failed: ${to_message(error)}`;
+		this.#report(new Error(message, { cause: error }), message);
+		this.#notice_is_copy_failure = true;
+	}
+
+	/** Clear the notice when it's a failed copy's: a copy has since succeeded. */
+	#clear_copy_failure(): void {
+		if (this.#destroyed || !this.#notice_is_copy_failure) return;
+		this.#notice_is_copy_failure = false;
+		this.notice = null;
 	}
 
 	/**
@@ -769,13 +841,18 @@ export class FuzTerminalState {
 		}
 	}
 
-	/** Show an error and hand it to `onerror`, or the console. */
-	#report(error: unknown): void {
-		this.notice = to_message(error);
+	/**
+	 * Show an error and hand it to `onerror`, or the console.
+	 *
+	 * @param notice - what the view shows for it
+	 */
+	#report(error: unknown, notice = `a terminal callback failed: ${to_message(error)}`): void {
+		this.notice = notice;
+		this.#notice_is_copy_failure = false;
 		const { onerror } = this.#options();
 		try {
 			if (onerror) onerror(error);
-			else console.error('[FuzTerminal] a callback failed:', error);
+			else console.error(`[FuzTerminal] ${notice}`, error);
 		} catch (onerror_error) {
 			console.error('[FuzTerminal] onerror threw:', onerror_error, 'reporting:', error);
 		}

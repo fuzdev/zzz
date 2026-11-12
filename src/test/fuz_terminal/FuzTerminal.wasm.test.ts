@@ -6,10 +6,15 @@ import { flushSync, mount, unmount } from 'svelte';
 import type FuzTerminal from '#lib/fuz_terminal/FuzTerminal.svelte';
 import {
 	FUZ_TERMINAL_MAX_CALLBACK_WRITES,
+	FuzTerminalState,
 	type FuzTerminalOptions,
 	type FuzTerminalStatus
 } from '#lib/fuz_terminal/fuz_terminal_state.svelte.ts';
 import { is_fuz_terminal_key_target } from '#lib/fuz_terminal/fuz_terminal_keyboard.ts';
+import {
+	create_fuz_terminal_deps,
+	get_fuz_terminal_selection_text
+} from '#lib/fuz_terminal/fuz_terminal_deps.ts';
 import type { FuzTerminalMeasurement } from '#lib/fuz_terminal/fuz_terminal_layout.ts';
 import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';
 
@@ -1411,6 +1416,419 @@ describe('keyboard input', () => {
 		press(t.root, 'KeyL', '@', { altKey: true });
 		press(t.root, 'ArrowLeft', 'ArrowLeft', { altKey: true });
 		assert.deepEqual(t.sent, [`${ESC}[`, '[', '@', `${ESC}[1;3D`]);
+	});
+
+	describe('copying on Ctrl+Alt+C and Ctrl+Insert', () => {
+		/** Let the clipboard write's promise settle. */
+		const settle = async (): Promise<void> => {
+			await Promise.resolve();
+			await Promise.resolve();
+			flushSync();
+		};
+
+		test('with a selection in the view: copied, nothing sent, the default prevented', async () => {
+			const t = await mount_typing();
+			const roots: Array<HTMLElement> = [];
+			t.deps.selection = (root) => {
+				roots.push(root);
+				return 'selected text';
+			};
+			assert.isTrue(press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true }).defaultPrevented);
+			assert.isTrue(press(t.root, 'Insert', 'Insert', { ctrlKey: true }).defaultPrevented);
+			assert.deepEqual(t.deps.copied, ['selected text', 'selected text']);
+			assert.deepEqual(t.sent, []);
+			assert.deepEqual(roots, [t.root, t.root], 'the selection is read against the view’s root');
+		});
+
+		test('with no selection in the view: the program’s, as any other key', async () => {
+			const t = await mount_typing();
+			assert.isTrue(press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true }).defaultPrevented);
+			assert.isTrue(press(t.root, 'Insert', 'Insert', { ctrlKey: true }).defaultPrevented);
+			assert.deepEqual(t.sent, [`${ESC}\x03`, `${ESC}[2;5~`]);
+			assert.deepEqual(t.deps.copied, []);
+		});
+
+		test('Ctrl+C is always the program’s, a selection or not', async () => {
+			const t = await mount_typing();
+			t.deps.selection = 'selected text';
+			assert.isTrue(press(t.root, 'KeyC', 'c', { ctrlKey: true }).defaultPrevented);
+			assert.deepEqual(t.sent, ['\x03']);
+			assert.deepEqual(t.deps.copied, []);
+		});
+
+		test('AltGr typing on the C key keeps typing, a selection or not', async () => {
+			const t = await mount_typing();
+			t.deps.selection = 'selected text';
+			const ctrl_alt = { ctrlKey: true, altKey: true };
+			press(t.root, 'KeyC', 'ć', { ...ctrl_alt, modifierAltGraph: true });
+			// without AltGraph reported, the key the encoder makes of Ctrl+Alt+C, as before
+			press(t.root, 'KeyC', 'ć', ctrl_alt);
+			assert.deepEqual(t.sent, ['ć', `${ESC}\x03`]);
+			assert.deepEqual(t.deps.copied, []);
+		});
+
+		test('on macOS the chords are the program’s', async () => {
+			const t = await mount_typing();
+			t.deps.selection = 'selected text';
+			t.deps.key_platform = 'mac';
+			assert.isTrue(press(t.root, 'Insert', 'Insert', { ctrlKey: true }).defaultPrevented);
+			assert.deepEqual(t.sent, [`${ESC}[2;5~`]);
+			assert.deepEqual(t.deps.copied, []);
+		});
+
+		test('a copied press sends no release under the Kitty protocol; an uncopied one does', async () => {
+			const t = await mount_typing();
+			t.view.write(`${ESC}[>3u`);
+			t.deps.selection = 'selected text';
+			const ctrl_alt = { ctrlKey: true, altKey: true };
+			press(t.root, 'KeyC', 'c', ctrl_alt);
+			assert.isFalse(press(t.root, 'KeyC', 'c', { ...ctrl_alt, type: 'keyup' }).defaultPrevented);
+			press(t.root, 'Insert', 'Insert', { ctrlKey: true });
+			assert.isFalse(
+				press(t.root, 'Insert', 'Insert', { ctrlKey: true, type: 'keyup' }).defaultPrevented
+			);
+			assert.deepEqual(t.sent, []);
+			assert.strictEqual(t.deps.copied.length, 2);
+			t.deps.selection = '';
+			press(t.root, 'KeyC', 'c', ctrl_alt);
+			assert.isTrue(press(t.root, 'KeyC', 'c', { ...ctrl_alt, type: 'keyup' }).defaultPrevented);
+			assert.deepEqual(t.sent, [`${ESC}[99;7u`, `${ESC}[99;7:3u`]);
+		});
+
+		test('copies with input off, without sending; with no selection the key keeps its default', async () => {
+			const t = await mount_typing({ props: { accepts_input: false } });
+			assert.isFalse(press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true }).defaultPrevented);
+			t.deps.selection = 'selected text';
+			assert.isTrue(press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true }).defaultPrevented);
+			assert.deepEqual(t.deps.copied, ['selected text']);
+			assert.deepEqual(t.sent, []);
+		});
+
+		test('a failed clipboard write is reported, never thrown; the view goes on', async () => {
+			const errors: Array<unknown> = [];
+			const t = await mount_typing({ props: { onerror: (error) => errors.push(error) } });
+			t.deps.selection = 'selected text';
+			t.deps.clipboard_error = new Error('write denied');
+			assert.isTrue(press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true }).defaultPrevented);
+			await settle();
+			assert.strictEqual(errors.length, 1);
+			assert(errors[0] instanceof Error);
+			assert.include(errors[0].message, 'copying the selection to the clipboard failed');
+			assert.include(errors[0].message, 'write denied');
+			assert.strictEqual(errors[0].cause, t.deps.clipboard_error);
+			assert.strictEqual(
+				t.root.querySelector('.message')?.textContent,
+				'copying the selection to the clipboard failed: write denied'
+			);
+			assert.strictEqual(t.view.get_status().kind, 'ready');
+			assert.deepEqual(t.sent, []);
+			press(t.root, 'KeyA', 'a');
+			assert.deepEqual(t.sent, ['a']);
+		});
+
+		test('a copy that succeeds clears a failed copy’s notice', async () => {
+			const t = await mount_typing({ props: { onerror: () => {} } });
+			t.deps.selection = 'selected text';
+			t.deps.clipboard_error = new Error('write denied');
+			press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true });
+			await settle();
+			assert.isNotNull(t.root.querySelector('.message'));
+			t.deps.clipboard_error = undefined;
+			press(t.root, 'Insert', 'Insert', { ctrlKey: true });
+			await settle();
+			assert.isNull(t.root.querySelector('.message'));
+			assert.deepEqual(t.deps.copied, ['selected text', 'selected text']);
+		});
+
+		test('a copy that succeeds leaves a callback’s notice', async () => {
+			const t = await mount_typing({
+				props: {
+					onbell: () => {
+						throw new Error('host bug');
+					},
+					onerror: () => {}
+				}
+			});
+			t.deps.selection = 'selected text';
+			t.deps.clipboard_error = new Error('write denied');
+			press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true });
+			await settle();
+			// a callback's failure after the copy's replaces its notice, and stays
+			t.view.write(BEL);
+			t.step();
+			t.deps.clipboard_error = undefined;
+			press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true });
+			await settle();
+			assert.strictEqual(
+				t.root.querySelector('.message')?.textContent,
+				'a terminal callback failed: host bug'
+			);
+		});
+
+		test('without onerror, a failed copy is logged as itself', async () => {
+			const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+			cleanups.push(() => error.mockRestore());
+			const t = await mount_typing();
+			t.deps.selection = 'selected text';
+			t.deps.clipboard_error = new Error('write denied');
+			press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true });
+			await settle();
+			assert.strictEqual(error.mock.calls.length, 1);
+			assert.strictEqual(
+				error.mock.calls[0]![0],
+				'[FuzTerminal] copying the selection to the clipboard failed: write denied'
+			);
+		});
+
+		test('a clipboard write that throws, or a selection read that throws, is reported', async () => {
+			const errors: Array<unknown> = [];
+			const t = await mount_typing({ props: { onerror: (error) => errors.push(error) } });
+			t.deps.selection = 'selected text';
+			t.deps.write_clipboard = () => {
+				throw new Error('no clipboard');
+			};
+			assert.isTrue(press(t.root, 'Insert', 'Insert', { ctrlKey: true }).defaultPrevented);
+			await settle();
+			t.deps.selection = () => {
+				throw new Error('no selection');
+			};
+			// unreadable: the key is the program's
+			assert.isTrue(press(t.root, 'Insert', 'Insert', { ctrlKey: true }).defaultPrevented);
+			assert.deepEqual(t.sent, [`${ESC}[2;5~`]);
+			assert.deepEqual(
+				errors.map((error) => String(error)),
+				[
+					'Error: copying the selection to the clipboard failed: no clipboard',
+					'Error: copying the selection to the clipboard failed: no selection'
+				]
+			);
+		});
+
+		test('a write that fails after unmount reports nothing; once unmounted, nothing copies', async () => {
+			const errors: Array<unknown> = [];
+			const t = await mount_typing({ props: { onerror: (error) => errors.push(error) } });
+			t.deps.selection = 'selected text';
+			t.deps.clipboard_error = new Error('late');
+			press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true });
+			t.unmount();
+			await settle();
+			assert.deepEqual(errors, []);
+			assert.deepEqual(t.deps.copied, ['selected text']);
+			assert.isFalse(press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true }).defaultPrevented);
+			assert.strictEqual(t.deps.copied.length, 1);
+		});
+
+		test('a state not yet attached to its root copies nothing', async () => {
+			const deps = create_test_fuz_terminal_deps(() => load_test_ghostty_vt());
+			deps.selection = 'selected text';
+			const state = new FuzTerminalState(() => ({ module: compile_test_ghostty_vt() }), deps);
+			const event = new KeyboardEvent('keydown', {
+				code: 'KeyC',
+				key: 'c',
+				ctrlKey: true,
+				altKey: true
+			});
+			assert.isFalse(state.handle_key(event, 'keydown'));
+			assert.deepEqual(deps.copied, []);
+			state.destroy();
+		});
+
+		test('a chord in a composition is the composition’s', async () => {
+			const t = await mount_typing();
+			t.deps.selection = 'selected text';
+			const event = press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true, isComposing: true });
+			assert.isFalse(event.defaultPrevented);
+			assert.deepEqual(t.deps.copied, []);
+			assert.deepEqual(t.sent, []);
+		});
+
+		test('copies in a failed view', async () => {
+			const t = await mount_typing({ load_vt: () => Promise.reject(new Error('no module')) });
+			assert.strictEqual(t.view.get_status().kind, 'failed');
+			t.deps.selection = 'selected text';
+			assert.isTrue(press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true }).defaultPrevented);
+			assert.deepEqual(t.deps.copied, ['selected text']);
+			assert.deepEqual(t.sent, []);
+		});
+
+		test('copies in a poisoned view, which keeps its last frame', async () => {
+			const fail = { on: false };
+			const t = await mount_typing({
+				load_vt: () =>
+					load_wrapped_ghostty_vt((exports) => ({
+						ghostty_render_state_update: (...args: Array<unknown>) => {
+							if (fail.on) throw new Error('trap');
+							return exports.ghostty_render_state_update(...args);
+						}
+					}))
+			});
+			t.view.write('before');
+			t.step();
+			fail.on = true;
+			t.view.write(' after');
+			t.step();
+			assert.strictEqual(t.view.get_status().kind, 'poisoned');
+			assert.strictEqual(rows_text(t.root)[0], 'before');
+			t.deps.selection = 'before';
+			assert.isTrue(press(t.root, 'Insert', 'Insert', { ctrlKey: true }).defaultPrevented);
+			assert.deepEqual(t.deps.copied, ['before']);
+			assert.deepEqual(t.sent, []);
+		});
+
+		test('the numpad’s Insert, NumLock off, is a copy chord too', async () => {
+			const t = await mount_typing();
+			assert.isTrue(press(t.root, 'Numpad0', 'Insert', { ctrlKey: true }).defaultPrevented);
+			assert.deepEqual(t.sent, [`${ESC}[2;5~`]);
+			t.deps.selection = 'selected text';
+			assert.isTrue(press(t.root, 'Numpad0', 'Insert', { ctrlKey: true }).defaultPrevented);
+			assert.deepEqual(t.deps.copied, ['selected text']);
+			assert.deepEqual(t.sent, [`${ESC}[2;5~`]);
+		});
+
+		describe('the browser’s selection', () => {
+			const select = (
+				start: Node,
+				start_offset: number,
+				end: Node,
+				end_offset: number
+			): Selection => {
+				const selection = document.getSelection()!;
+				const range = document.createRange();
+				range.setStart(start, start_offset);
+				range.setEnd(end, end_offset);
+				selection.removeAllRanges();
+				selection.addRange(range);
+				return selection;
+			};
+			afterEach(() => document.getSelection()?.removeAllRanges());
+
+			/** A view showing two rows of text, after a paragraph outside it. */
+			const mount_text = async (): Promise<Mounted & { outside: HTMLElement }> => {
+				const t = await mount_typing();
+				const outside = document.createElement('p');
+				outside.textContent = 'outside';
+				t.target.before(outside);
+				cleanups.push(() => outside.remove());
+				t.view.write('hello\r\nworld');
+				t.step();
+				return { ...t, outside };
+			};
+
+			test('a selection inside the rows is the selection’s text', async () => {
+				const t = await mount_text();
+				const [first, second] = row_elements(t.root);
+				const selection = select(first!, 0, second!, second!.childNodes.length);
+				assert.strictEqual(
+					get_fuz_terminal_selection_text(selection, t.root),
+					selection.toString()
+				);
+				assert.include(selection.toString(), 'hello');
+				assert.include(selection.toString(), 'world');
+				// the browser's deps read the document's selection
+				assert.strictEqual(create_fuz_terminal_deps().read_selection(t.root), selection.toString());
+			});
+
+			test('one reaching in from outside is the whole selection’s text', async () => {
+				const t = await mount_text();
+				const first = row_elements(t.root)[0]!;
+				const selection = select(t.outside.firstChild!, 0, first, first.childNodes.length);
+				const text = get_fuz_terminal_selection_text(selection, t.root);
+				assert.include(text, 'outside');
+				assert.include(text, 'hello');
+			});
+
+			test('one outside the view, a collapsed one, or none is empty', async () => {
+				const t = await mount_text();
+				const text = t.outside.firstChild!;
+				assert.strictEqual(get_fuz_terminal_selection_text(select(text, 0, text, 3), t.root), '');
+				const first = row_elements(t.root)[0]!;
+				assert.strictEqual(get_fuz_terminal_selection_text(select(first, 0, first, 0), t.root), '');
+				assert.strictEqual(get_fuz_terminal_selection_text(null, t.root), '');
+				document.getSelection()!.removeAllRanges();
+				assert.strictEqual(create_fuz_terminal_deps().read_selection(t.root), '');
+			});
+
+			test('one that only touches the view’s edge is empty', async () => {
+				const t = await mount_text();
+				const text = t.outside.firstChild!;
+				const first = row_elements(t.root)[0]!;
+				// a triple-click's range ends at the start of the next block
+				for (const [end, offset] of [
+					[t.root, 0],
+					[first, 0]
+				] as const) {
+					assert.strictEqual(
+						get_fuz_terminal_selection_text(select(text, 0, end, offset), t.root),
+						''
+					);
+				}
+				// and one from the view's end into a block after it
+				const after = document.createElement('p');
+				after.textContent = 'after';
+				t.target.after(after);
+				cleanups.push(() => after.remove());
+				assert.strictEqual(
+					get_fuz_terminal_selection_text(
+						select(t.root, t.root.childNodes.length, after.firstChild!, 3),
+						t.root
+					),
+					''
+				);
+				// or from the rows' end, past the cursor and the probe, into it
+				const last = row_elements(t.root)[1]!.querySelector('.run:last-of-type')!
+					.firstChild as Text;
+				assert.strictEqual(
+					get_fuz_terminal_selection_text(select(last, last.length, after.firstChild!, 3), t.root),
+					''
+				);
+				// with the focused block cursor over the last character, its copy of it
+				// takes nothing either
+				t.view.write('\x1b[D');
+				t.root.focus();
+				t.step();
+				assert.strictEqual(t.root.querySelector('.cursor')!.textContent, 'd');
+				const before_cursor = row_elements(t.root)[1]!.querySelector('.run:last-of-type')!
+					.firstChild as Text;
+				assert.strictEqual(
+					get_fuz_terminal_selection_text(
+						select(before_cursor, before_cursor.length, after.firstChild!, 3),
+						t.root
+					),
+					''
+				);
+				// one ending past the view's start takes some of it
+				const selection = select(text, 0, first, first.childNodes.length);
+				assert.strictEqual(
+					get_fuz_terminal_selection_text(selection, t.root),
+					selection.toString()
+				);
+			});
+
+			test('the browser’s clipboard write is navigator.clipboard’s, rejecting without it', async () => {
+				const written: Array<string> = [];
+				Object.defineProperty(navigator, 'clipboard', {
+					configurable: true,
+					value: {
+						writeText: (text: string) => {
+							written.push(text);
+							return Promise.resolve();
+						}
+					}
+				});
+				cleanups.push(() => Reflect.deleteProperty(navigator, 'clipboard'));
+				await create_fuz_terminal_deps().write_clipboard('copied');
+				assert.deepEqual(written, ['copied']);
+				Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+				const error = await create_fuz_terminal_deps()
+					.write_clipboard('x')
+					.then(
+						() => null,
+						(e: unknown) => e
+					);
+				assert(error instanceof Error);
+				assert.include(error.message, 'secure context');
+			});
+		});
 	});
 
 	describe('the Kitty keyboard protocol', () => {

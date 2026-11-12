@@ -88,7 +88,8 @@ export const create_manual_timers = (): ManualTimers => {
 /**
  * Test deps for a terminal view: frames and timers stepped by hand, a
  * measurement the test sets (`null` for none), resize notifications the test
- * fires, and `load_vt` the test supplies.
+ * fires, `load_vt` the test supplies, and a selection and clipboard the test
+ * sets and reads.
  */
 export interface TestFuzTerminalDeps extends FuzTerminalDeps {
 	frames: ManualFrameScheduler;
@@ -99,6 +100,15 @@ export interface TestFuzTerminalDeps extends FuzTerminalDeps {
 	fire_resize: () => void;
 	/** How many observations are live. */
 	readonly observing: number;
+	/**
+	 * What `read_selection` returns: `''` for no selection in the view, or a
+	 * function of the root it's handed.
+	 */
+	selection: string | ((root: HTMLElement) => string);
+	/** The texts `write_clipboard` was handed, in order. */
+	readonly copied: Array<string>;
+	/** When set, `write_clipboard` records the text and rejects with this. */
+	clipboard_error: Error | undefined;
 }
 
 export const create_test_fuz_terminal_deps = (
@@ -123,6 +133,17 @@ export const create_test_fuz_terminal_deps = (
 		},
 		measure: () => deps.measurement,
 		key_platform: 'other',
+		selection: '',
+		copied: [],
+		clipboard_error: undefined,
+		read_selection: (root) =>
+			typeof deps.selection === 'function' ? deps.selection(root) : deps.selection,
+		write_clipboard: (text) => {
+			deps.copied.push(text);
+			return deps.clipboard_error === undefined
+				? Promise.resolve()
+				: Promise.reject(deps.clipboard_error);
+		},
 		fire_resize: () => {
 			for (const callback of [...observers]) callback();
 		},

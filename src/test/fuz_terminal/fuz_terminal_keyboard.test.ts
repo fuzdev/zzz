@@ -8,6 +8,7 @@ import {
 	get_fuz_terminal_key_mods,
 	get_fuz_terminal_key_text,
 	get_fuz_terminal_unshifted_codepoint,
+	is_fuz_terminal_copy_key,
 	is_fuz_terminal_key_composing,
 	resolve_fuz_terminal_key_codes,
 	should_fuz_terminal_pass_key,
@@ -567,6 +568,91 @@ describe('should_fuz_terminal_pass_key', () => {
 			// German: the US minus key types ß, which isn't a zoom key
 			key_event('Minus', 'ß', { ctrlKey: true }),
 			key_event('Slash', '/', { ctrlKey: true })
+		]) {
+			assert.isFalse(should_fuz_terminal_pass_key(event, 'other'), `${event.code} ${event.key}`);
+		}
+	});
+});
+
+describe('is_fuz_terminal_copy_key', () => {
+	test('Ctrl+Alt+C and Ctrl+Insert, by the layout’s letter or the physical key', () => {
+		const ctrl_alt = { ctrlKey: true, altKey: true };
+		for (const event of [
+			key_event('KeyC', 'c', ctrl_alt),
+			// CapsLock
+			key_event('KeyC', 'C', ctrl_alt),
+			// Dvorak: C is where US has I
+			key_event('KeyI', 'c', ctrl_alt),
+			// Russian and Greek: no Latin letter, so the physical key
+			key_event('KeyC', 'с', ctrl_alt),
+			key_event('KeyC', 'ψ', ctrl_alt),
+			key_event('Insert', 'Insert', { ctrlKey: true }),
+			// the numpad's Insert, NumLock off
+			key_event('Numpad0', 'Insert', { ctrlKey: true }),
+			// repeats too
+			key_event('KeyC', 'c', { ...ctrl_alt, repeat: true })
+		]) {
+			assert.isTrue(is_fuz_terminal_copy_key(event, 'other'), `${event.code} ${event.key}`);
+		}
+	});
+
+	test('Ctrl+C, Shift, Meta, and other keys are not copy chords', () => {
+		for (const event of [
+			key_event('KeyC', 'c', { ctrlKey: true }),
+			key_event('KeyC', 'c', { altKey: true }),
+			key_event('KeyC', 'c'),
+			key_event('KeyC', 'C', { ctrlKey: true, shiftKey: true }),
+			key_event('KeyC', 'C', { ctrlKey: true, altKey: true, shiftKey: true }),
+			key_event('KeyC', 'c', { ctrlKey: true, altKey: true, metaKey: true }),
+			key_event('KeyC', 'c', { metaKey: true }),
+			key_event('Insert', 'Insert'),
+			key_event('Insert', 'Insert', { shiftKey: true }),
+			key_event('Insert', 'Insert', { ctrlKey: true, shiftKey: true }),
+			key_event('Insert', 'Insert', { ctrlKey: true, altKey: true }),
+			key_event('Insert', 'Insert', { ctrlKey: true, metaKey: true }),
+			// Dvorak: the physical C key makes J
+			key_event('KeyC', 'j', { ctrlKey: true, altKey: true }),
+			key_event('KeyV', 'v', { ctrlKey: true, altKey: true }),
+			// Russian: another script's letter on another physical key
+			key_event('KeyV', 'м', { ctrlKey: true, altKey: true }),
+			// the numpad's 0 with NumLock on
+			key_event('Numpad0', '0', { ctrlKey: true })
+		]) {
+			assert.isFalse(is_fuz_terminal_copy_key(event, 'other'), `${event.code} ${event.key}`);
+		}
+	});
+
+	test('a third level typing on the C key keeps typing: AltGraph, or Ctrl+Alt making a Latin letter or a symbol', () => {
+		const ctrl_alt = { ctrlKey: true, altKey: true };
+		for (const event of [
+			// Polish: AltGr+C types ć, reported as Ctrl+Alt with AltGraph
+			key_event('KeyC', 'ć', { ...ctrl_alt, locks: ['AltGraph'] }),
+			// AltGraph held, whatever the text
+			key_event('KeyC', 'c', { ...ctrl_alt, locks: ['AltGraph'] }),
+			key_event('KeyC', 'с', { ...ctrl_alt, locks: ['AltGraph'] }),
+			// Ctrl+Alt made the text without AltGraph reported
+			key_event('KeyC', 'ć', ctrl_alt),
+			key_event('KeyC', '©', ctrl_alt),
+			key_event('KeyC', '¢', ctrl_alt)
+		]) {
+			assert.isFalse(is_fuz_terminal_copy_key(event, 'other'), `${event.code} ${event.key}`);
+		}
+	});
+
+	test('on macOS none is a copy chord: Cmd+C copies, as Meta', () => {
+		for (const event of [
+			key_event('KeyC', 'c', { ctrlKey: true, altKey: true }),
+			key_event('Insert', 'Insert', { ctrlKey: true })
+		]) {
+			assert.isFalse(is_fuz_terminal_copy_key(event, 'mac'), `${event.code} ${event.key}`);
+		}
+		assert.isTrue(should_fuz_terminal_pass_key(key_event('KeyC', 'c', { metaKey: true }), 'mac'));
+	});
+
+	test('a copy chord isn’t passed to the browser: without a selection it’s the program’s', () => {
+		for (const event of [
+			key_event('KeyC', 'c', { ctrlKey: true, altKey: true }),
+			key_event('Insert', 'Insert', { ctrlKey: true })
 		]) {
 			assert.isFalse(should_fuz_terminal_pass_key(event, 'other'), `${event.code} ${event.key}`);
 		}

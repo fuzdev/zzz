@@ -355,7 +355,9 @@ const FUZ_TERMINAL_ZOOM_KEYS: ReadonlySet<string> = new Set(['=', '+', '-', '_',
  * copy and paste, and, except on macOS, the browser's page zoom: Ctrl with
  * `=`, `+`, `-`, `_`, or `0`, Shift or not, the numpad's `+`, `-`, and `0`
  * included. The program never sees these; every other key the encoder has
- * bytes for is the program's, Tab, Escape, Ctrl+W, and Ctrl+digit included.
+ * bytes for is the program's, Tab, Escape, Ctrl+C, Ctrl+W, and Ctrl+digit
+ * included — except a copy chord while there's a selection to copy
+ * (`is_fuz_terminal_copy_key`).
  *
  * C and V are matched by the layout's character, or, when the layout's isn't
  * a Latin letter (Cyrillic, say), by the physical key. The zoom keys are
@@ -368,9 +370,9 @@ const FUZ_TERMINAL_ZOOM_KEYS: ReadonlySet<string> = new Set(['=', '+', '-', '_',
  * @param platform - whose keyboard conventions apply
  */
 // TODO: paste on Ctrl+Shift+V (and copy on Ctrl+Shift+C) once the terminal
-// pastes; Shift+Insert and Ctrl+Insert join the pass-through then (other
-// browser terminals leave them to the browser as paste and copy); a host
-// override of which keys pass through
+// pastes; Shift+Insert joins the pass-through then (other browser terminals
+// leave it to the browser as paste); a host override of which keys pass
+// through
 export const should_fuz_terminal_pass_key = (
 	event: FuzTerminalKeyboardEvent,
 	platform: FuzTerminalKeyPlatform
@@ -382,6 +384,44 @@ export const should_fuz_terminal_pass_key = (
 	const letter = event.key.toLowerCase();
 	if (/^[a-z]$/.test(letter)) return letter === 'c' || letter === 'v';
 	return event.code === 'KeyC' || event.code === 'KeyV';
+};
+
+/** A letter of any script; with `LATIN_SCRIPT`, a non-Latin layout's letter. */
+const LETTER = /^\p{L}$/u;
+const LATIN_SCRIPT = /^\p{Script=Latin}$/u;
+
+/**
+ * Whether a key is one of the terminal's copy chords, Ctrl+Alt+C and
+ * Ctrl+Insert — with no Shift or Meta, and except on macOS. A view copies
+ * its selection on one only while the selection takes some of its text; with none
+ * the key is the program's, as any other (`FuzTerminalState.handle_key`).
+ * Ctrl+C is always the program's.
+ *
+ * C is matched by the layout's character, or, when that's a letter of
+ * another script (Cyrillic `с`, say), by the physical key — never when
+ * AltGraph is held, or when Ctrl+Alt made a Latin letter or a symbol, which
+ * is a layout's third level typing it (Windows reports AltGr as Ctrl+Alt:
+ * Polish AltGr+C types `ć`). Insert is matched by `key`, so the numpad's
+ * Insert with NumLock off is one too.
+ *
+ * On macOS Cmd+C is the platform's copy and passes to the browser
+ * (`should_fuz_terminal_pass_key`), so Ctrl+Option+C and Ctrl+Insert stay
+ * the program's.
+ *
+ * @param platform - whose keyboard conventions apply
+ */
+// TODO: a host option for other copy modes (Ctrl+C copying while there's a
+// selection, copy on select)
+export const is_fuz_terminal_copy_key = (
+	event: FuzTerminalKeyboardEvent,
+	platform: FuzTerminalKeyPlatform
+): boolean => {
+	if (platform === 'mac' || !event.ctrlKey || event.shiftKey || event.metaKey) return false;
+	if (event.key === 'Insert') return !event.altKey;
+	if (!event.altKey || is_alt_graph(event)) return false;
+	const { key } = event;
+	if (key === 'c' || key === 'C') return true;
+	return LETTER.test(key) && !LATIN_SCRIPT.test(key) && event.code === 'KeyC';
 };
 
 /**
