@@ -40,14 +40,14 @@
 
 	// the options are read lazily: `module` and `scrollback_max_bytes` once, when
 	// the view starts; the callbacks whenever they're called
-	const terminal = new FuzTerminalState(() => options, fuz_terminal_deps_context.get());
+	const view_state = new FuzTerminalState(() => options, fuz_terminal_deps_context.get());
 
 	let root_el: HTMLDivElement | undefined = $state.raw();
 	let probe_el: HTMLSpanElement | undefined = $state.raw();
 
 	onMount(() => {
-		terminal.attach(root_el!, probe_el!);
-		return () => terminal.destroy();
+		view_state.attach(root_el!, probe_el!);
+		return () => view_state.destroy();
 	});
 
 	/**
@@ -55,7 +55,7 @@
 	 * answers nothing. See `FuzTerminalState.write`.
 	 */
 	export const write = (data: Uint8Array | string, write_options?: FuzTerminalWriteOptions): void =>
-		terminal.write(data, write_options);
+		view_state.write(data, write_options);
 
 	/**
 	 * Paste text as the person typing it: encoded under the terminal's modes
@@ -67,34 +67,34 @@
 	export const paste = (
 		text: string,
 		paste_options?: FuzTerminalPasteOptions
-	): FuzTerminalPasteResult => terminal.paste(text, paste_options);
+	): FuzTerminalPasteResult => view_state.paste(text, paste_options);
 
 	/** The screen as plain text, for a copy-all; see `FuzTerminalState.get_text`. */
-	export const get_text = (): string => terminal.get_text();
+	export const get_text = (): string => view_state.get_text();
 
 	/** Move focus to the terminal. */
 	export const focus = (): void => root_el?.focus();
 
 	/** Where the view is: loading, ready, failed, or poisoned. */
-	export const get_status = (): FuzTerminalStatus => terminal.status;
+	export const get_status = (): FuzTerminalStatus => view_state.status;
 
 	/** The terminal's size in cells, or `null` until it's created. */
-	export const get_size = (): FuzTerminalSize | null => terminal.size;
+	export const get_size = (): FuzTerminalSize | null => view_state.size;
 
 	const onfocusout = (event: FocusEvent): void => {
 		const next = event.relatedTarget;
-		terminal.focused = next instanceof Node && root_el?.contains(next) === true;
-		if (!terminal.focused) terminal.forget_held_keys();
+		view_state.focused = next instanceof Node && root_el?.contains(next) === true;
+		if (!view_state.focused) view_state.forget_held_keys();
 	};
 
 	// a key the terminal sent to the program is the program's alone: no
 	// browser default (Tab moving focus, a shortcut) runs for it
 	const onkeydown = (event: KeyboardEvent): void => {
-		if (terminal.handle_key(event, 'keydown')) event.preventDefault();
+		if (view_state.handle_key(event, 'keydown')) event.preventDefault();
 	};
 
 	const onkeyup = (event: KeyboardEvent): void => {
-		if (terminal.handle_key(event, 'keyup')) event.preventDefault();
+		if (view_state.handle_key(event, 'keyup')) event.preventDefault();
 	};
 </script>
 
@@ -111,26 +111,28 @@ nothing is a live region, so a repaint announces nothing -->
 	role="group"
 	aria-roledescription="terminal"
 	aria-label={label}
-	data-fuz-terminal-keys={terminal.takes_keys ? '' : undefined}
+	data-fuz-terminal-keys={view_state.takes_keys ? '' : undefined}
 	tabindex="0"
-	style={terminal.theme_css}
-	style:--fuz_terminal_cursor={terminal.cursor_color}
-	style:--fuz_terminal_cell_width={terminal.cell_width === null ? null : `${terminal.cell_width}px`}
-	style:--fuz_terminal_cell_height={terminal.cell_height === null
+	style={view_state.theme_css}
+	style:--fuz_terminal_cursor={view_state.cursor_color}
+	style:--fuz_terminal_cell_width={view_state.cell_width === null
 		? null
-		: `${terminal.cell_height}px`}
-	onfocusin={() => (terminal.focused = true)}
+		: `${view_state.cell_width}px`}
+	style:--fuz_terminal_cell_height={view_state.cell_height === null
+		? null
+		: `${view_state.cell_height}px`}
+	onfocusin={() => (view_state.focused = true)}
 	{onfocusout}
 	{onkeydown}
 	{onkeyup}
 >
 	<!-- a layer over the root's box: the rows never size the box they're measured from -->
 	<div class="fuz-terminal-screen">
-		{#each terminal.rows as row (row.id)}
+		{#each view_state.rows as row (row.id)}
 			{@render terminal_row(row)}
 		{/each}
-		{#if terminal.cursor_box}
-			{@const box = terminal.cursor_box}
+		{#if view_state.cursor_box}
+			{@const box = view_state.cursor_box}
 			<div
 				class={[
 					'cursor',
@@ -147,14 +149,14 @@ nothing is a live region, so a repaint announces nothing -->
 		{/if}
 	</div>
 	<span bind:this={probe_el} class="probe" aria-hidden="true">0000000000</span>
-	{#if terminal.status.kind === 'failed'}
-		<p class="message" role="alert">the terminal failed: {terminal.status.message}</p>
-	{:else if terminal.status.kind === 'poisoned'}
+	{#if view_state.status.kind === 'failed'}
+		<p class="message" role="alert">the terminal failed: {view_state.status.message}</p>
+	{:else if view_state.status.kind === 'poisoned'}
 		<p class="message" role="alert">
-			the terminal stopped after an internal error and must be reopened: {terminal.status.message}
+			the terminal stopped after an internal error and must be reopened: {view_state.status.message}
 		</p>
-	{:else if terminal.notice !== null}
-		<p class="message" role="status">{terminal.notice}</p>
+	{:else if view_state.notice !== null}
+		<p class="message" role="status">{view_state.notice}</p>
 	{/if}
 </div>
 
@@ -169,7 +171,7 @@ nothing is a live region, so a repaint announces nothing -->
 					run.style.blink && 'run-blink',
 					run.hyperlink && 'run-link'
 				]}
-				style={terminal.style_css(run.style)}
+				style={view_state.style_css(run.style)}
 				style:--run_x={run.x}
 				style:--run_width={run.width}
 			>
