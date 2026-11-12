@@ -744,6 +744,34 @@ describe('failure', () => {
 		);
 	});
 
+	test('a callback error with no usable message is still reported', async () => {
+		const errors: Array<unknown> = [];
+		const boom = new Error();
+		const unprintable = {
+			toString: () => {
+				throw new Error('no string');
+			}
+		};
+		Object.defineProperty(boom, 'message', { value: unprintable });
+		const t = await mount_terminal({
+			props: {
+				onbell: () => {
+					throw boom;
+				},
+				onerror: (error) => errors.push(error)
+			}
+		});
+		t.view.write(`a${BEL}b`);
+		t.step();
+		assert.deepEqual(errors, [boom]);
+		assert.strictEqual(t.view.get_status().kind, 'ready');
+		assert.strictEqual(rows_text(t.root)[0], 'ab');
+		assert.strictEqual(
+			t.root.querySelector('.message')?.textContent,
+			'a terminal callback failed: a value that has no message'
+		);
+	});
+
 	test('a resize callback that throws, from a frame, is reported, not thrown', async () => {
 		const errors: Array<unknown> = [];
 		const t = await mount_terminal({
@@ -1082,6 +1110,26 @@ describe('the module as a promise', () => {
 		assert.strictEqual(
 			t.root.querySelector('.message')?.textContent,
 			'the terminal failed: 404 ghostty-vt.wasm'
+		);
+	});
+
+	test('a rejection whose message is no string fails the view with it as a string', async () => {
+		const odd = new Error();
+		Object.defineProperty(odd, 'message', { value: Symbol('odd') });
+		let reject!: (error: Error) => void;
+		const module = new Promise<WebAssembly.Module>((_, r) => (reject = r));
+		const pending = mount_terminal({ props: { module } });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		reject(odd);
+		const t = await pending;
+		const status = t.view.get_status();
+		assert.strictEqual(status.kind, 'failed');
+		assert(status.kind === 'failed');
+		assert.strictEqual(status.message, 'Symbol(odd)');
+		assert.strictEqual(status.error, odd);
+		assert.strictEqual(
+			t.root.querySelector('.message')?.textContent,
+			'the terminal failed: Symbol(odd)'
 		);
 	});
 

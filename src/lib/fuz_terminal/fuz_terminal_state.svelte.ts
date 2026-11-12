@@ -6,7 +6,7 @@
  * @module
  */
 
-import { GhosttyEffectError } from './ghostty_errors.ts';
+import { GhosttyEffectError, to_thrown_message } from './ghostty_errors.ts';
 import { GhosttyKeyEncoder, type GhosttyKeyAction } from './ghostty_key_encoder.ts';
 import type { GhosttyPasteEncoding, GhosttyPasteRisk } from './ghostty_paste.ts';
 import {
@@ -550,7 +550,7 @@ export class FuzTerminalState {
 	/** Report a failed copy, unless the view is gone by then. */
 	#report_copy_failure(error: unknown): void {
 		if (this.#destroyed) return;
-		const message = `copying the selection to the clipboard failed: ${to_message(error)}`;
+		const message = `copying the selection to the clipboard failed: ${to_thrown_message(error)}`;
 		this.#report(new Error(message, { cause: error }), message);
 		this.#notice_is_copy_failure = true;
 	}
@@ -609,7 +609,8 @@ export class FuzTerminalState {
 			if (this.#destroyed) return;
 			vt = await this.#deps.load_vt(module);
 		} catch (error) {
-			if (!this.#destroyed) this.#stop({ kind: 'failed', error, message: to_message(error) });
+			if (!this.#destroyed)
+				this.#stop({ kind: 'failed', error, message: to_thrown_message(error) });
 			return;
 		}
 		// unmounted while loading: the instance is dropped, nothing made in it
@@ -895,14 +896,18 @@ export class FuzTerminalState {
 	#handle_error(error: unknown): boolean {
 		const poison = this.#vt?.poisoned;
 		if (poison) {
-			this.#stop({ kind: 'poisoned', error: poison.cause, message: to_message(poison.cause) });
+			this.#stop({
+				kind: 'poisoned',
+				error: poison.cause,
+				message: to_thrown_message(poison.cause)
+			});
 			return true;
 		}
 		if (error instanceof GhosttyEffectError) {
 			this.#report(error.cause);
 			return false;
 		}
-		this.#stop({ kind: 'failed', error, message: to_message(error) });
+		this.#stop({ kind: 'failed', error, message: to_thrown_message(error) });
 		return true;
 	}
 
@@ -932,7 +937,10 @@ export class FuzTerminalState {
 	 *
 	 * @param notice - what the view shows for it
 	 */
-	#report(error: unknown, notice = `a terminal callback failed: ${to_message(error)}`): void {
+	#report(
+		error: unknown,
+		notice = `a terminal callback failed: ${to_thrown_message(error)}`
+	): void {
 		this.notice = notice;
 		this.#notice_is_copy_failure = false;
 		const { onerror } = this.#options();
@@ -971,11 +979,3 @@ const cell_pixels = (
 	cell_width_px: Math.round(measurement.cell_width),
 	cell_height_px: Math.round(measurement.cell_height)
 });
-
-const to_message = (error: unknown): string => {
-	try {
-		return error instanceof Error ? error.message : String(error);
-	} catch {
-		return 'an error with no message';
-	}
-};

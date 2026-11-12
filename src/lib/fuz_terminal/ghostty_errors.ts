@@ -95,19 +95,21 @@ export class GhosttyEffectError extends Error {
 
 	constructor(effect: string, cause: unknown, thrown_count: number) {
 		const more = thrown_count > 1 ? ` (and ${thrown_count - 1} more handler calls threw)` : '';
-		super(`the ${effect} effect handler threw${more}: ${to_message(cause)}`, { cause });
+		super(`the ${effect} effect handler threw${more}: ${to_thrown_message(cause)}`, { cause });
 		this.effect = effect;
 		this.thrown_count = thrown_count;
 	}
 }
 
 /**
- * A thrown value's message, for an error built from it. Total: a value with
- * no usable message (`Object.create(null)`, a throwing `toString` or
- * `message` getter, a revoked proxy) can't make building the error throw
- * and lose the value.
+ * A thrown value's message as a string, for an error built from it or a
+ * message shown for it: an `Error`'s `message`, coerced, since a subclass or
+ * a getter can make it anything, else the value itself, coerced. Total: a
+ * value with no usable message (`Object.create(null)`, a throwing `toString`
+ * or `message` getter, a revoked proxy) can't make building the message
+ * throw and lose the value.
  */
-const to_message = (value: unknown): string => {
+export const to_thrown_message = (value: unknown): string => {
 	try {
 		// `message` is typed a string, but a subclass or a getter can make it anything
 		// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion
@@ -142,7 +144,7 @@ export class GhosttyPoisonedError extends Error {
 	 */
 	constructor(call: string, escaped_call: string, cause: unknown) {
 		super(
-			`${call} refused: an exception escaped ${escaped_call} earlier (${to_message(cause)}), so the libghostty-vt instance is in an undefined state — load a fresh one`,
+			`${call} refused: an exception escaped ${escaped_call} earlier (${to_thrown_message(cause)}), so the libghostty-vt instance is in an undefined state — load a fresh one`,
 			{ cause }
 		);
 		this.call = call;
