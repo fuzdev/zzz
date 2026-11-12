@@ -1108,3 +1108,330 @@ describe('the module as a promise', () => {
 		assert.deepEqual(statuses, []);
 	});
 });
+
+describe('keyboard input', () => {
+	/** Dispatch a keyboard event on `root` as a browser would; returns the event, to read `defaultPrevented`. */
+	const press = (
+		root: HTMLElement,
+		code: string,
+		key: string,
+		init: KeyboardEventInit & { type?: 'keydown' | 'keyup' } = {}
+	): KeyboardEvent => {
+		const { type = 'keydown', ...rest } = init;
+		const event = new KeyboardEvent(type, {
+			code,
+			key,
+			bubbles: true,
+			cancelable: true,
+			...rest
+		});
+		root.dispatchEvent(event);
+		return event;
+	};
+
+	/** A view recording what reaches `ondata`, decoded. */
+	const mount_typing = async (
+		options: Parameters<typeof mount_terminal>[0] = {}
+	): Promise<Mounted & { sent: Array<string> }> => {
+		const sent: Array<string> = [];
+		const t = await mount_terminal({
+			...options,
+			props: { ondata: (data) => sent.push(new TextDecoder().decode(data)), ...options.props }
+		});
+		return { ...t, sent };
+	};
+
+	test('a key the terminal sends is the program’s: its bytes go to ondata, its default is prevented', async () => {
+		const t = await mount_typing();
+		assert.isTrue(press(t.root, 'KeyA', 'a').defaultPrevented);
+		assert.isTrue(press(t.root, 'KeyA', 'A', { shiftKey: true }).defaultPrevented);
+		assert.isTrue(press(t.root, 'KeyC', 'c', { ctrlKey: true }).defaultPrevented);
+		assert.isTrue(press(t.root, 'Tab', 'Tab').defaultPrevented);
+		assert.isTrue(press(t.root, 'KeyW', 'w', { ctrlKey: true }).defaultPrevented);
+		assert.isTrue(press(t.root, 'Escape', 'Escape').defaultPrevented);
+		assert.isTrue(press(t.root, 'F5', 'F5').defaultPrevented);
+		assert.isTrue(press(t.root, 'Enter', 'Enter').defaultPrevented);
+		assert.deepEqual(t.sent, ['a', 'A', '\x03', '\t', '\x17', ESC, `${ESC}[15~`, '\r']);
+	});
+
+	test('Ctrl+[ is ESC to a program that asked for no keyboard protocol', async () => {
+		const bytes: Array<Array<number>> = [];
+		const t = await mount_terminal({ props: { ondata: (data) => bytes.push([...data]) } });
+		assert.isTrue(press(t.root, 'BracketLeft', '[', { ctrlKey: true }).defaultPrevented);
+		t.view.write(`${ESC}[>1u`);
+		press(t.root, 'BracketLeft', '[', { ctrlKey: true });
+		assert.deepEqual(bytes, [[0x1b], [...new TextEncoder().encode(`${ESC}[91;5u`)]]);
+	});
+
+	test('a modifier alone sends nothing and keeps its default', async () => {
+		const t = await mount_typing();
+		assert.isFalse(press(t.root, 'ShiftLeft', 'Shift', { shiftKey: true }).defaultPrevented);
+		assert.isFalse(press(t.root, 'ControlRight', 'Control', { ctrlKey: true }).defaultPrevented);
+		assert.isFalse(press(t.root, 'CapsLock', 'CapsLock').defaultPrevented);
+		assert.deepEqual(t.sent, []);
+	});
+
+	test('Meta combinations and Ctrl+Shift+C / V are the browser’s and the OS’s', async () => {
+		const t = await mount_typing();
+		for (const event of [
+			press(t.root, 'KeyC', 'c', { metaKey: true }),
+			press(t.root, 'KeyV', 'v', { metaKey: true }),
+			press(t.root, 'MetaLeft', 'Meta', { metaKey: true }),
+			press(t.root, 'KeyC', 'C', { ctrlKey: true, shiftKey: true }),
+			press(t.root, 'KeyV', 'V', { ctrlKey: true, shiftKey: true })
+		]) {
+			assert.isFalse(event.defaultPrevented, event.code);
+		}
+		assert.deepEqual(t.sent, []);
+		// Ctrl+V alone is the program's (a literal-next in a shell)
+		assert.isTrue(press(t.root, 'KeyV', 'v', { ctrlKey: true }).defaultPrevented);
+		assert.deepEqual(t.sent, ['\x16']);
+	});
+
+	test('a composition is left alone; a dead key’s composed character is sent', async () => {
+		const t = await mount_typing();
+		assert.isFalse(press(t.root, 'KeyA', 'a', { isComposing: true }).defaultPrevented);
+		assert.isFalse(press(t.root, 'KeyA', 'Process').defaultPrevented);
+		// a dead key, then the key it composes with
+		assert.isFalse(press(t.root, 'Quote', 'Dead').defaultPrevented);
+		assert.deepEqual(t.sent, []);
+		assert.isTrue(press(t.root, 'KeyE', 'é').defaultPrevented);
+		assert.deepEqual(t.sent, ['é']);
+	});
+
+	test('a mode the program’s output sets changes what an arrow sends', async () => {
+		const t = await mount_typing();
+		press(t.root, 'ArrowUp', 'ArrowUp');
+		t.view.write(`${ESC}[?1h`);
+		press(t.root, 'ArrowUp', 'ArrowUp');
+		t.view.write(`${ESC}[?1l`);
+		press(t.root, 'ArrowUp', 'ArrowUp');
+		assert.deepEqual(t.sent, [`${ESC}[A`, `${ESC}OA`, `${ESC}[A`]);
+	});
+
+	test('keys and the terminal’s replies share ondata, in order', async () => {
+		const t = await mount_typing();
+		press(t.root, 'KeyX', 'x');
+		t.view.write(`${ESC}[6n`);
+		press(t.root, 'KeyY', 'y');
+		assert.deepEqual(t.sent, ['x', `${ESC}[1;1R`, 'y']);
+	});
+
+	test('an ondata that throws on a key is reported; the key still counts as sent', async () => {
+		const errors: Array<unknown> = [];
+		let fail = true;
+		const sent: Array<string> = [];
+		const t = await mount_terminal({
+			props: {
+				ondata: (data) => {
+					if (fail) throw new Error('host broke');
+					sent.push(new TextDecoder().decode(data));
+				},
+				onerror: (error) => errors.push(error)
+			}
+		});
+		assert.isTrue(press(t.root, 'KeyA', 'a').defaultPrevented);
+		flushSync();
+		assert.strictEqual(errors.length, 1);
+		assert.include(String(errors[0]), 'host broke');
+		assert.include(t.root.querySelector('.message')?.textContent, 'host broke');
+		assert.strictEqual(t.view.get_status().kind, 'ready');
+		fail = false;
+		press(t.root, 'KeyB', 'b');
+		assert.deepEqual(sent, ['b']);
+	});
+
+	test('ignored while loading, and after unmount', async () => {
+		let open!: () => void;
+		const gate = new Promise<void>((resolve) => (open = resolve));
+		const loading_events: Array<KeyboardEvent> = [];
+		const sent: Array<string> = [];
+		let calls = 0;
+		const t = await mount_terminal({
+			props: { ondata: (data) => sent.push(new TextDecoder().decode(data)) },
+			load_vt: async () => {
+				await gate;
+				return load_wrapped_ghostty_vt((exports) => {
+					const counted: Record<string, unknown> = {};
+					for (const [name, value] of Object.entries(exports)) {
+						if (typeof value !== 'function' || !name.startsWith('ghostty_key_')) continue;
+						counted[name] = (...args: Array<unknown>): unknown => {
+							calls++;
+							return value(...args);
+						};
+					}
+					return counted;
+				});
+			},
+			oninstance: (view) => {
+				assert.strictEqual(view.get_status().kind, 'loading');
+				const root = document.querySelector<HTMLElement>('.fuz-terminal')!;
+				loading_events.push(press(root, 'KeyA', 'a'), press(root, 'Enter', 'Enter'));
+				open();
+			}
+		});
+		assert.strictEqual(loading_events.length, 2);
+		for (const event of loading_events) assert.isFalse(event.defaultPrevented);
+		assert.deepEqual(sent, []);
+		press(t.root, 'KeyB', 'b');
+		assert.deepEqual(sent, ['b']);
+		const root = t.root;
+		t.unmount();
+		const before = calls;
+		assert.isFalse(press(root, 'KeyC', 'c').defaultPrevented);
+		assert.strictEqual(calls, before);
+		assert.deepEqual(sent, ['b']);
+	});
+
+	test('ignored once failed', async () => {
+		const t = await mount_typing({ load_vt: () => Promise.reject(new Error('no wasm here')) });
+		assert.strictEqual(t.view.get_status().kind, 'failed');
+		assert.isFalse(press(t.root, 'KeyA', 'a').defaultPrevented);
+		assert.deepEqual(t.sent, []);
+	});
+
+	test('a library failure while encoding fails the view, and the key keeps its default', async () => {
+		const t = await mount_typing({
+			load_vt: () =>
+				load_wrapped_ghostty_vt(() => ({
+					ghostty_key_encoder_encode: () => -2 // GHOSTTY_INVALID_VALUE
+				}))
+		});
+		assert.isFalse(press(t.root, 'KeyA', 'a').defaultPrevented);
+		flushSync();
+		const status = t.view.get_status();
+		assert.strictEqual(status.kind, 'failed');
+		assert.include(t.root.querySelector('.message')?.textContent, 'ghostty_key_encoder_encode');
+		assert.isFalse(press(t.root, 'KeyB', 'b').defaultPrevented);
+		assert.deepEqual(t.sent, []);
+	});
+
+	test('an escape while encoding poisons the view without escaping the handler; later keys are ignored', async () => {
+		const boom = new Error('trap');
+		let fail = false;
+		let calls = 0;
+		const window_errors: Array<unknown> = [];
+		const on_error = (event: ErrorEvent): void => {
+			window_errors.push(event.error);
+		};
+		window.addEventListener('error', on_error);
+		cleanups.push(() => window.removeEventListener('error', on_error));
+		const t = await mount_typing({
+			load_vt: () =>
+				load_wrapped_ghostty_vt((exports) => ({
+					ghostty_key_encoder_encode: (...args: Array<unknown>): unknown => {
+						calls++;
+						if (fail) throw boom;
+						return exports.ghostty_key_encoder_encode(...args);
+					}
+				}))
+		});
+		press(t.root, 'KeyA', 'a');
+		fail = true;
+		assert.isFalse(press(t.root, 'KeyB', 'b').defaultPrevented);
+		flushSync();
+		const status = t.view.get_status();
+		assert(status.kind === 'poisoned');
+		assert.strictEqual(status.error, boom);
+		assert.deepEqual(window_errors, []);
+		assert.include(t.root.querySelector('.message')?.textContent, 'must be reopened');
+		const before = calls;
+		assert.isFalse(press(t.root, 'KeyC', 'c').defaultPrevented);
+		assert.strictEqual(calls, before);
+		assert.deepEqual(t.sent, ['a']);
+	});
+
+	test('the platform comes from the deps: on macOS, Option’s text is typed as itself', async () => {
+		const t = await mount_typing();
+		press(t.root, 'Digit5', '[', { altKey: true });
+		t.deps.key_platform = 'mac';
+		press(t.root, 'Digit5', '[', { altKey: true });
+		press(t.root, 'KeyL', '@', { altKey: true });
+		press(t.root, 'ArrowLeft', 'ArrowLeft', { altKey: true });
+		assert.deepEqual(t.sent, [`${ESC}[`, '[', '@', `${ESC}[1;3D`]);
+	});
+
+	describe('the Kitty keyboard protocol', () => {
+		test('the terminal reports it to a program that asks, and encodes as it asks', async () => {
+			const t = await mount_typing();
+			t.view.write(`${ESC}[?u`);
+			assert.deepEqual(t.sent, [`${ESC}[?0u`]);
+			t.view.write(`${ESC}[>1u${ESC}[?u`);
+			assert.deepEqual(t.sent, [`${ESC}[?0u`, `${ESC}[?1u`]);
+			press(t.root, 'Escape', 'Escape');
+			press(t.root, 'KeyC', 'c', { ctrlKey: true });
+			press(t.root, 'KeyA', 'A', { shiftKey: true });
+			assert.deepEqual(t.sent.slice(2), [`${ESC}[27u`, `${ESC}[99;5u`, 'A']);
+		});
+
+		test('releases reach the program only while it has event reporting on', async () => {
+			const t = await mount_typing();
+			press(t.root, 'KeyA', 'a');
+			assert.isFalse(press(t.root, 'KeyA', 'a', { type: 'keyup' }).defaultPrevented);
+			assert.deepEqual(t.sent, ['a']);
+			t.view.write(`${ESC}[>3u`);
+			press(t.root, 'KeyA', 'a');
+			assert.isTrue(press(t.root, 'KeyA', 'a', { type: 'keyup' }).defaultPrevented);
+			press(t.root, 'Escape', 'Escape');
+			press(t.root, 'Escape', 'Escape', { repeat: true });
+			press(t.root, 'Escape', 'Escape', { type: 'keyup' });
+			assert.deepEqual(t.sent, [
+				'a',
+				'a',
+				`${ESC}[97;1:3u`,
+				`${ESC}[27u`,
+				`${ESC}[27;1:2u`,
+				`${ESC}[27;1:3u`
+			]);
+			// the program turns it off: releases are left alone again
+			t.view.write(`${ESC}[<u`);
+			press(t.root, 'KeyB', 'b');
+			assert.isFalse(press(t.root, 'KeyB', 'b', { type: 'keyup' }).defaultPrevented);
+			assert.deepEqual(t.sent.slice(6), ['b']);
+		});
+
+		test('a taken press’s release is sent whatever the modifiers are by then, once', async () => {
+			const t = await mount_typing();
+			t.view.write(`${ESC}[>3u`);
+			// Meta added while A is held: the release isn't the browser's
+			press(t.root, 'KeyA', 'a');
+			assert.isTrue(press(t.root, 'KeyA', 'a', { type: 'keyup', metaKey: true }).defaultPrevented);
+			// Ctrl+C held, Shift added: a Ctrl+Shift+C keyup, still the program's
+			press(t.root, 'KeyC', 'c', { ctrlKey: true });
+			press(t.root, 'KeyC', 'C', { type: 'keyup', ctrlKey: true, shiftKey: true });
+			// a composition starting while a key is held
+			press(t.root, 'KeyB', 'b');
+			press(t.root, 'KeyB', 'b', { type: 'keyup', isComposing: true });
+			assert.deepEqual(t.sent, [
+				'a',
+				`${ESC}[97;9:3u`,
+				`${ESC}[99;5u`,
+				`${ESC}[99;6:3u`,
+				'b',
+				`${ESC}[98;1:3u`
+			]);
+			// each forgotten once released: a second keyup sends nothing
+			assert.isFalse(press(t.root, 'KeyA', 'a', { type: 'keyup' }).defaultPrevented);
+			assert.isFalse(press(t.root, 'KeyC', 'c', { type: 'keyup' }).defaultPrevented);
+			assert.strictEqual(t.sent.length, 6);
+		});
+
+		test('no release for a key whose press the program didn’t get', async () => {
+			const t = await mount_typing();
+			t.view.write(`${ESC}[>3u`);
+			// pressed before the view had focus, passed through, or composed
+			assert.isFalse(press(t.root, 'KeyQ', 'q', { type: 'keyup' }).defaultPrevented);
+			press(t.root, 'KeyC', 'C', { ctrlKey: true, shiftKey: true });
+			press(t.root, 'KeyC', 'C', { ctrlKey: true, shiftKey: true, type: 'keyup' });
+			press(t.root, 'KeyC', 'c', { type: 'keyup' });
+			press(t.root, 'Quote', 'Dead');
+			press(t.root, 'Quote', "'", { type: 'keyup' });
+			assert.deepEqual(t.sent, []);
+			// held when focus left: its release went elsewhere
+			press(t.root, 'KeyA', 'a');
+			t.root.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }));
+			press(t.root, 'KeyA', 'a', { type: 'keyup' });
+			assert.deepEqual(t.sent, ['a']);
+		});
+	});
+});

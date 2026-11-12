@@ -372,43 +372,102 @@ update, but the library numbers the alternate screen's rows apart from the
 primary's, so an id can come back for a different row after a screen switch
 (its object then holds that row).
 
+**Keyboard input.** `GhosttyKeyEncoder` (`ghostty_key_encoder.ts`; refused
+with `GhosttyLoadError` for a module without the `input_encode` feature) is
+libghostty-vt's key encoder for one terminal, which disposes it first.
+`encode(input)` takes a plain `GhosttyKeyInput` — the action (press,
+repeat, release), the physical key by its `GhosttyKey` name,
+`GHOSTTY_KEY_MODS` bits, the modifiers used up making the text, the text,
+the unshifted code point — copies the terminal's input modes into the
+encoder first (application cursor and keypad modes, DECBKM, the alt escape
+prefix, modifyOtherKeys, the Kitty keyboard flags), so a mode the output
+set just before a key decides its bytes, and returns the bytes, often none.
+It reuses one event and its buffers: a key allocates nothing in the module
+once warm. The encodings are the library's — Ghostty's — with one
+exception: Ctrl+[, Ctrl+I, Ctrl+M, and Ctrl+@ (and their Ctrl+Alt forms,
+ESC-prefixed) send the classic ESC, Tab, CR, and NUL unless the program has
+turned on the Kitty keyboard protocol or xterm's modifyOtherKeys mode 2,
+where the library's distinct `CSI … u` / `CSI 27;…~` forms are sent
+(`to_classic_ctrl_chord_bytes`: the library sends fixterms CSI u for them
+even in legacy mode, which programs without a keyboard protocol don't
+parse). Modified Enter, Tab, and Escape send the library's distinct
+sequences in every mode — Shift+Enter and Ctrl+Enter are `CSI 27;2;13~` and
+`CSI 27;5;13~`, unlike xterm.js. `fuz_terminal_keyboard.ts` turns a
+`KeyboardEvent` (any object with its fields) into that input: the key from
+`code` by the regular correspondence between the library's names and the UI
+Events codes, built from the manifest's names
+(`resolve_fuz_terminal_key_codes`; the numpad with NumLock off by `code`
+and `key`); the text from `key` when it's a character, never a key name or
+a control character; the modifiers, with Ctrl and Alt dropped when AltGraph
+made the text, and on macOS Alt dropped when Option typed a character
+without Ctrl or Meta — so a Mac's Option characters (`[`, `@`, `å`) are
+typed as themselves and never reported as Alt, while Option+Left stays
+Alt+Left; the modifiers the text used up — Shift whenever it's held and the
+key made text (not on Space or the numpad); and the unshifted code point —
+the key's own text when the event shows it, otherwise the character a **US
+layout** has on that physical key (no layout table works in every browser;
+a key the US layout lacks, such as `IntlBackslash`, gets its text's own
+character), which is wrong for shifted digits and punctuation on other
+layouts. The platform is `FuzTerminalDeps.key_platform`, read from
+`navigator` by default (`to_fuz_terminal_key_platform`). `FuzTerminal`
+encodes `keydown` and `keyup` on its focused root and sends the bytes
+through `ondata`, the same callback its replies use, preventing the event's
+default exactly when bytes were sent (a modifier alone keeps it). It
+ignores keys while not ready, a composition (an IME's, or a dead key's —
+the composed character arrives as the next keydown and is sent), and the
+keys the browser and the OS keep (`should_fuz_terminal_pass_key`): any Meta
+combination, and Ctrl+Shift+C and Ctrl+Shift+V, reserved for copy and
+paste. Tab, Escape, Ctrl+W, and the function keys are the program's. **The
+Kitty keyboard protocol** can't be left unadvertised: the library always
+takes a program's push, set, and pop of the flags, and answers its query
+(`CSI ? u`) through `write_pty`; no option or build feature turns that off.
+So it's supported as far as browser events allow: the encoder follows the
+flags a program sets (each screen has its own), and a `keyup` is encoded —
+and sends bytes only while the program has event reporting on — for a key
+whose press was taken (it reached the encoder, whether or not it sent
+anything) and that hasn't left the view's focus, whatever the modifiers are
+by the release. Keys are matched to the layout only through the event's
+text and the US fallback above, so the protocol's key codes for shifted
+digits and punctuation, and its base-layout alternates, assume a US layout.
+
 **The DOM renderer** (`FuzTerminal.svelte`, state in
-`fuz_terminal_state.svelte.ts` as `FuzTerminalState`) draws one terminal,
-output only: no keyboard input, paste, IME, mouse reporting, or scrollback
-scrolling, and selection is the browser's own over the row text (a row
-copies as one line; a soft-wrapped line copies as one line per row). It
-knows nothing of zzz's app. Its `module` prop is the compiled module or a
-promise of it (`loading` until it settles, `failed` if it rejects); it
-instantiates its own instance — one per view, so a poisoned instance or a
-huge terminal affects only that view, and an unmounted view's memory can be
-collected — and creates and, on unmount, frees its terminal and reader. Its
-other props are `scrollback_max_bytes`, `label`, and the callbacks `ondata`
-(bytes for the PTY: replies to queries), `onresize` (cols and rows),
-`ontitle`, `onbell`, `onstatus` (`loading` → `ready`, or `failed` /
-`poisoned`, each shown as a plain-text message; a host recovers by
-remounting), and `onerror` (a callback threw, or wrote back too much;
-reported, not fatal). Via `bind:this` the host calls `write(data, options?)`
-— bytes or a string, in call order, queued while loading; `{replay: true}`
-for buffered history, processed with no reply effects registered, so its
-queries go unanswered and its bells silent — plus `get_text` (the
-formatter's plain text, for a copy-all), `focus`, `get_status`, and
-`get_size`. It draws at most once per animation frame and only after output,
-a resize, or a render hold ending — idle otherwise; render holds are honored
-for up to `FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS`. Rows are a keyed list over
-the reader's `rows` (`$state.raw`), so an unchanged row is skipped; each run
-is an inline box sized in measured cells. The host gives it a sized box —
-it fills its container, which needs a definite size; its own content never
-sizes it — and its size in cells follows that box (`ResizeObserver` and a
-probe of the font's cell; an unmeasurable box never resizes it). Colors are
-CSS custom properties: a host themes it by setting
-`--fuz_terminal_foreground`, `--fuz_terminal_background`,
-`--fuz_terminal_cursor_color`, `--fuz_terminal_color_0` …
-`--fuz_terminal_color_15`, `--fuz_terminal_font_family`,
-`--fuz_terminal_font_size`, or `--fuz_terminal_line_height` on an ancestor;
-the default foreground and background follow the theme, ANSI black and
-white stay dark and light in either scheme. Frames, timers, measuring, and
-loading come from `fuz_terminal_deps_context` (`FuzTerminalDeps`), so tests
-step them by hand. ./docs/architecture.md § fuz_terminal has the details.
+`fuz_terminal_state.svelte.ts` as `FuzTerminalState`) draws one terminal
+and takes its keys: no paste, IME, focus reporting, mouse reporting, or
+scrollback scrolling yet, and selection is the browser's own over the row
+text (a row copies as one line; a soft-wrapped line copies as one line per
+row). It knows nothing of zzz's app. Its `module` prop is the compiled
+module or a promise of it (`loading` until it settles, `failed` if it
+rejects); it instantiates its own instance — one per view, so a poisoned
+instance or a huge terminal affects only that view, and an unmounted view's
+memory can be collected — and creates and, on unmount, frees its terminal
+and reader. Its other props are `scrollback_max_bytes`, `label`, and the
+callbacks `ondata` (bytes for the PTY: the keys typed, and replies to
+queries), `onresize` (cols and rows), `ontitle`, `onbell`, `onstatus`
+(`loading` → `ready`, or `failed` / `poisoned`, each shown as a plain-text
+message; a host recovers by remounting), and `onerror` (a callback threw,
+or wrote back too much; reported, not fatal). Via `bind:this` the host
+calls `write(data, options?)` — bytes or a string, in call order, queued
+while loading; `{replay: true}` for buffered history, processed with no
+reply effects registered, so its queries go unanswered and its bells silent
+— plus `get_text` (the formatter's plain text, for a copy-all), `focus`,
+`get_status`, and `get_size`. It draws at most once per animation frame and
+only after output, a resize, or a render hold ending — idle otherwise;
+render holds are honored for up to `FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS`.
+Rows are a keyed list over the reader's `rows` (`$state.raw`), so an
+unchanged row is skipped; each run is an inline box sized in measured
+cells. The host gives it a sized box — it fills its container, which needs
+a definite size; its own content never sizes it — and its size in cells
+follows that box (`ResizeObserver` and a probe of the font's cell; an
+unmeasurable box never resizes it). Colors are CSS custom properties: a
+host themes it by setting `--fuz_terminal_foreground`,
+`--fuz_terminal_background`, `--fuz_terminal_cursor_color`,
+`--fuz_terminal_color_0` … `--fuz_terminal_color_15`,
+`--fuz_terminal_font_family`, `--fuz_terminal_font_size`, or
+`--fuz_terminal_line_height` on an ancestor; the default foreground and
+background follow the theme, ANSI black and white stay dark and light in
+either scheme. Frames, timers, measuring, and loading come from
+`fuz_terminal_deps_context` (`FuzTerminalDeps`), so tests step them by
+hand. ./docs/architecture.md § fuz_terminal has the details.
 
 The module isn't committed: `cargo xtask ghostty-vt` builds it from the
 pinned libghostty-vt release (needs Zig 0.17; ./docs/development.md §

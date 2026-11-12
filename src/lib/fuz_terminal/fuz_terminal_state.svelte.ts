@@ -7,6 +7,7 @@
  */
 
 import { GhosttyEffectError } from './ghostty_errors.ts';
+import { GhosttyKeyEncoder, type GhosttyKeyAction } from './ghostty_key_encoder.ts';
 import {
 	GhosttyRenderState,
 	type GhosttyRenderColors,
@@ -18,6 +19,14 @@ import { GhosttyTerminal } from './ghostty_terminal.ts';
 import type { GhosttyVt } from './ghostty_vt.ts';
 import type { FuzTerminalDeps } from './fuz_terminal_deps.ts';
 import { FuzTerminalFrameLoop } from './fuz_terminal_frame.ts';
+import {
+	is_fuz_terminal_key_composing,
+	resolve_fuz_terminal_key_codes,
+	should_fuz_terminal_pass_key,
+	to_fuz_terminal_key_input,
+	type FuzTerminalKeyCodes,
+	type FuzTerminalKeyboardEvent
+} from './fuz_terminal_keyboard.ts';
 import {
 	fuz_terminal_size_equals,
 	to_fuz_terminal_cursor_box,
@@ -104,7 +113,10 @@ export interface FuzTerminalOptions {
 	module: WebAssembly.Module | Promise<WebAssembly.Module>;
 	/** The most scrollback to keep, in bytes; defaults to the library's small limit. */
 	scrollback_max_bytes?: number;
-	/** Bytes the terminal writes back to the program — replies to its queries — for the PTY, in order. */
+	/**
+	 * Bytes for the PTY, in order: the keys typed into the focused view, and
+	 * the terminal's replies to the program's queries.
+	 */
 	ondata?: (data: Uint8Array) => void;
 	/** The terminal's size in cells changed: at creation, and when the view's box or font changes. */
 	onresize?: (size: FuzTerminalSize) => void;
@@ -138,7 +150,7 @@ interface QueuedWrite {
  * changed: `rows` when the update wasn't clean, and `cursor` and the colors
  * by reference every frame, since they change on clean updates too.
  */
-// TODO: keyboard input, paste, and IME on the focused root; mouse reporting
+// TODO: paste and IME on the focused root; focus reporting; mouse reporting
 // TODO: scrollback — scrolling the viewport (`ghostty_terminal_scroll_viewport`) and a scrollbar
 // TODO: set the theme's colors on the terminal, so color queries (OSC 10/11/4)
 // answer with what's drawn rather than the library's placeholders, and
@@ -183,6 +195,14 @@ export class FuzTerminalState {
 	#vt: GhosttyVt | null = null;
 	#terminal: GhosttyTerminal | null = null;
 	#render_state: GhosttyRenderState | null = null;
+	#key_encoder: GhosttyKeyEncoder | null = null;
+	#key_codes: FuzTerminalKeyCodes | null = null;
+	/**
+	 * The `code`s of the keys whose press went to the encoder and that haven't
+	 * come up: a release is encoded only for one of these, so a program never
+	 * hears a key come up that it didn't hear go down.
+	 */
+	readonly #held_keys: Set<string> = new Set();
 	/** The colors before any output: the library's palette and placeholder defaults. */
 	#baseline: GhosttyRenderColors | null = null;
 	/** The colors `theme_css` was made from. */
@@ -295,6 +315,64 @@ export class FuzTerminalState {
 	}
 
 	/**
+	 * A key event on the focused view: a `keydown`'s press or repeat, or a
+	 * `keyup`'s release, encoded under the terminal's modes as they are now,
+	 * and its bytes, if any, sent to `ondata`.
+	 *
+	 * Not taken — nothing encoded or sent — while the view isn't ready, for a
+	 * keydown in a composition (an IME's, or a dead key's: the composed
+	 * character arrives as a later keydown) or one the browser and the OS keep
+	 * (`should_fuz_terminal_pass_key`), and for a keyup whose keydown wasn't
+	 * taken. A taken keydown's keyup is always encoded, whatever its
+	 * modifiers are by then. A release sends bytes only under the Kitty
+	 * keyboard protocol with event reporting on; the encoder decides. The
+	 * keys follow `FuzTerminalDeps.key_platform`'s conventions.
+	 *
+	 * @returns whether bytes were sent: the caller prevents the event's
+	 *   default exactly then, so a modifier alone, or a key the encoder has
+	 *   nothing for, keeps its default
+	 */
+	handle_key(event: FuzTerminalKeyboardEvent, type: 'keydown' | 'keyup'): boolean {
+		const encoder = this.#key_encoder;
+		const codes = this.#key_codes;
+		// keys arrive outside writes; one dispatched from inside a callback is refused
+		if (encoder === null || codes === null || !this.#usable || this.#busy) return false;
+		let action: GhosttyKeyAction;
+		if (type === 'keyup') {
+			// a taken press's release is always encoded, whatever the modifiers
+			// are by now (Meta added, Ctrl+Shift+C formed) — and only one
+			if (!this.#held_keys.delete(event.code)) return false;
+			action = 'release';
+		} else {
+			if (is_fuz_terminal_key_composing(event)) return false;
+			if (should_fuz_terminal_pass_key(event)) return false;
+			this.#held_keys.add(event.code);
+			action = event.repeat ? 'repeat' : 'press';
+		}
+		let bytes: Uint8Array;
+		try {
+			bytes = encoder.encode(
+				to_fuz_terminal_key_input(event, action, codes, this.#deps.key_platform)
+			);
+		} catch (error) {
+			this.#handle_error(error);
+			return false;
+		}
+		if (bytes.length === 0) return false;
+		// TODO: scroll the viewport to the bottom on input, once it scrolls
+		this.#call_host(() => this.#options().ondata?.(bytes));
+		return true;
+	}
+
+	/**
+	 * Forget the keys held down, when focus leaves the view: their releases
+	 * go elsewhere, so none is sent for them later.
+	 */
+	forget_held_keys(): void {
+		this.#held_keys.clear();
+	}
+
+	/**
 	 * Stop: cancel the frame and the hold timer, stop observing, free the
 	 * terminal and its reader, and drop the instance. Idempotent; from a
 	 * callback inside a write, the freeing waits for the write to return.
@@ -354,6 +432,8 @@ export class FuzTerminalState {
 			}
 			const render_state = new GhosttyRenderState(terminal);
 			this.#render_state = render_state;
+			this.#key_codes = vt.resolve(resolve_fuz_terminal_key_codes);
+			this.#key_encoder = new GhosttyKeyEncoder(terminal);
 			// read before any output can change them: the library's own palette
 			// and placeholder defaults, which `theme_css` compares against
 			render_state.update();
@@ -660,11 +740,14 @@ export class FuzTerminalState {
 		}
 	}
 
-	/** Free the terminal (which frees its reader first) and drop the instance. */
+	/** Free the terminal (which frees its reader and key encoder first) and drop the instance. */
 	#dispose(): void {
 		const terminal = this.#terminal;
 		this.#terminal = null;
 		this.#render_state = null;
+		this.#key_encoder = null;
+		this.#key_codes = null;
+		this.#held_keys.clear();
 		this.#vt = null;
 		if (terminal === null) return;
 		try {

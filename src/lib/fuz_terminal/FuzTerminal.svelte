@@ -1,8 +1,9 @@
 <script lang="ts">
 	// A terminal view over libghostty-vt: it instantiates the compiled module it's
 	// given, owns that instance's terminal and render-state reader, and draws the
-	// screen as DOM text — output only. See `FuzTerminalState` for the frame loop
-	// and `FuzTerminalOptions` for the props.
+	// screen as DOM text, and sends the keys typed into it to `ondata`. See
+	// `FuzTerminalState` for the frame loop and the keys, and `FuzTerminalOptions`
+	// for the props.
 	//
 	// The host gives it a sized box: it fills its container (`width` and `height`
 	// 100%), so the container needs a definite size — an explicit height, or a
@@ -64,14 +65,27 @@
 	const onfocusout = (event: FocusEvent): void => {
 		const next = event.relatedTarget;
 		terminal.focused = next instanceof Node && root_el?.contains(next) === true;
+		if (!terminal.focused) terminal.forget_held_keys();
+	};
+
+	// a key the terminal sent to the program is the program's alone: no
+	// browser default (Tab moving focus, a shortcut) runs for it
+	const onkeydown = (event: KeyboardEvent): void => {
+		if (terminal.handle_key(event, 'keydown')) event.preventDefault();
+	};
+
+	const onkeyup = (event: KeyboardEvent): void => {
+		if (terminal.handle_key(event, 'keyup')) event.preventDefault();
 	};
 </script>
 
-<!-- TODO: keyboard input attaches to this focused root (a hidden textarea for IME)
-and makes it interactive; until then it's focusable so the cursor shows focus -->
-<!-- TODO: a deliberate screen-reader mode; for now the rows are plain text in the
-tree, and nothing is a live region, so a repaint announces nothing -->
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- keys typed while the root has focus go to the program; TODO: a hidden textarea
+inside it for IME composition and paste -->
+<!-- TODO: a deliberate screen-reader mode, which settles the root's role (a
+`group` keeps the rows browsable as text; `application` would hand a screen
+reader's keys to the program); for now the rows are plain text in the tree, and
+nothing is a live region, so a repaint announces nothing -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
 	bind:this={root_el}
 	class="fuz-terminal"
@@ -87,6 +101,8 @@ tree, and nothing is a live region, so a repaint announces nothing -->
 		: `${terminal.cell_height}px`}
 	onfocusin={() => (terminal.focused = true)}
 	{onfocusout}
+	{onkeydown}
+	{onkeyup}
 >
 	<!-- a layer over the root's box: the rows never size the box they're measured from -->
 	<div class="grid">

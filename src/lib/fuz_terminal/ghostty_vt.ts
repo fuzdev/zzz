@@ -85,7 +85,28 @@ export interface GhosttyVtExports extends GhosttyMemoryExports {
 	ghostty_render_state_row_cells_free: (cells: number) => void;
 	ghostty_render_state_row_cells_select: (cells: number, x: number) => number;
 	ghostty_render_state_row_cells_get: (cells: number, data: number, out: number) => number;
-	// TODO: the input encoder exports join this list with the module that calls them
+	ghostty_key_encoder_new: (allocator: number, out: number) => number;
+	ghostty_key_encoder_free: (encoder: number) => void;
+	ghostty_key_encoder_set_from_terminal: (encoder: number, terminal: number) => number;
+	ghostty_key_encoder_encode: (
+		encoder: number,
+		event: number,
+		buf: number,
+		buf_len: number,
+		out_written: number
+	) => number;
+	ghostty_key_event_new: (allocator: number, out: number) => number;
+	ghostty_key_event_free: (event: number) => void;
+	ghostty_key_event_set_action: (event: number, action: number) => number;
+	ghostty_key_event_set_key: (event: number, key: number) => number;
+	ghostty_key_event_set_mods: (event: number, mods: number) => number;
+	ghostty_key_event_set_consumed_mods: (event: number, mods: number) => number;
+	/** `composing` is a C `bool`: 0 or 1. */
+	ghostty_key_event_set_composing: (event: number, composing: number) => number;
+	/** Takes a `GhosttyString` by value, which the wasm C ABI passes as a pointer to one. */
+	ghostty_key_event_set_utf8: (event: number, utf8: number) => number;
+	ghostty_key_event_set_unshifted_codepoint: (event: number, codepoint: number) => number;
+	// TODO: the mouse encoder, paste, and focus encoding join this list with the modules that call them
 }
 
 const REQUIRED_FUNCTIONS = [
@@ -121,7 +142,20 @@ const REQUIRED_FUNCTIONS = [
 	'ghostty_render_state_row_cells_new',
 	'ghostty_render_state_row_cells_free',
 	'ghostty_render_state_row_cells_select',
-	'ghostty_render_state_row_cells_get'
+	'ghostty_render_state_row_cells_get',
+	'ghostty_key_encoder_new',
+	'ghostty_key_encoder_free',
+	'ghostty_key_encoder_set_from_terminal',
+	'ghostty_key_encoder_encode',
+	'ghostty_key_event_new',
+	'ghostty_key_event_free',
+	'ghostty_key_event_set_action',
+	'ghostty_key_event_set_key',
+	'ghostty_key_event_set_mods',
+	'ghostty_key_event_set_consumed_mods',
+	'ghostty_key_event_set_composing',
+	'ghostty_key_event_set_utf8',
+	'ghostty_key_event_set_unshifted_codepoint'
 ] as const satisfies ReadonlyArray<
 	Exclude<keyof GhosttyVtExports, 'memory' | '__indirect_function_table'>
 >;

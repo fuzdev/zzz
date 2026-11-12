@@ -635,6 +635,9 @@ behavior is tested in Node:
 - `ghostty_render_state.ts` — `GhosttyRenderState`: the render-state
   reader, turning the library's per-frame copy of the screen into plain
   frame data a renderer draws (below). Its terminal disposes it first.
+- `ghostty_key_encoder.ts` — `GhosttyKeyEncoder`: key events to the bytes
+  a program expects, following the terminal's input modes (below). Its
+  terminal disposes it first.
 - `ghostty_effects.ts` — the effects the binding registers (`write_pty`,
   `bell`, `title_changed`, `pwd_changed`, `render_hold`), their handler
   types, their constants and callback signatures from the manifest, and
@@ -654,6 +657,9 @@ The renderer, beside it (tested under jsdom with the built module):
 - `fuz_terminal_state.svelte.ts` — `FuzTerminalState`: the view's instance,
   terminal, and reader, the frame loop, render holds, sizing, and errors;
   `FuzTerminalOptions` is the host's side (the component's props).
+- `fuz_terminal_keyboard.ts` — a `KeyboardEvent` to a `GhosttyKeyInput`
+  (the key from `code`, the modifiers, the text, the unshifted code point),
+  and which keys the browser and the OS keep.
 - `fuz_terminal_style.ts` — styles and colors to CSS: a style's declarations
   (cached by key), and the root's color custom properties for a frame.
 - `fuz_terminal_layout.ts` — the size in cells from a measurement, a row's
@@ -661,8 +667,8 @@ The renderer, beside it (tested under jsdom with the built module):
 - `fuz_terminal_frame.ts` — `FuzTerminalFrameLoop`, at most one frame
   pending.
 - `fuz_terminal_deps.ts` — `FuzTerminalDeps` (loading, frames, a timer,
-  resize observation, measuring), the browser's defaults, and the context
-  a test sets its own through.
+  resize observation, measuring, the keyboard platform), the browser's
+  defaults, and the context a test sets its own through.
 
 **Effects.** A program's output asks the terminal for things it can't do
 itself — answer a query, ring the bell, retitle the window. libghostty-vt
@@ -834,14 +840,143 @@ tracking without changing what it shows, and effects fire between whole
 steps of the parse. Writing, resizing, or disposing the terminal from a
 handler still throws `GhosttyReentrancyError`.
 
+**Keyboard input.** A key reaches a program as bytes, and which bytes
+depends on modes the program sets in its output: the up arrow is `ESC [ A`
+until it turns on application cursor mode, then `ESC O A`; under the Kitty
+keyboard protocol most keys become `CSI … u` sequences. libghostty-vt's key
+encoder holds those modes as options, and its sync call copies them from a
+terminal when it's made — it doesn't stay attached. `GhosttyKeyEncoder`
+syncs before every encode, so a mode set by output written just before a
+key press decides what the key sends:
+
+```
+keydown ─ FuzTerminalState.handle_key
+   │ not ready, composing, or a key the browser keeps → not taken (default runs)
+   └ to_fuz_terminal_key_input(event) → {action, key, mods, consumed_mods, text, unshifted}
+        GhosttyKeyEncoder.encode ─ set_from_terminal ─ set the event ─ encode
+           │ out of space → grow the output buffer to the size asked, encode again
+           └ bytes → ondata, and preventDefault; none → default runs
+```
+
+- **The encoder** keeps one key event and its own buffers for its life: the
+  event points into the encoder's text buffer (the library doesn't copy
+  text), the output buffer grows once if a sequence doesn't fit, and after
+  the first keys an encode allocates nothing in the module. A terminal may
+  have any number; encoding reads the terminal and changes nothing. The
+  bytes are the library's encodings, Ghostty's own, which differ from
+  xterm.js's in places: Ctrl+Shift+letter is CSI u, distinct from
+  Ctrl+letter, and modified Enter, Tab, and Escape send the library's
+  distinct sequences in every mode (Shift+Enter and Ctrl+Enter are
+  `CSI 27;2;13~` and `CSI 27;5;13~`). Mode 1035 is on by default, so
+  application keypad mode (DECKPAM) leaves the keypad numeric until a
+  program turns 1035 off.
+- **Classic Ctrl chords** are the one place the encoder departs from the
+  library, on purpose (`to_classic_ctrl_chord_bytes`). The library keeps
+  Ctrl+[, Ctrl+I, Ctrl+M, and Ctrl+@ distinct from Escape, Tab, Enter, and
+  NUL even in legacy mode, as fixterms `CSI … u` — junk to a program that
+  asked for no keyboard protocol (bash's readline, whose vi mode takes
+  Ctrl+[ for Escape; less; nano; a plain REPL). So when the program has
+  asked for nothing, those four send ESC, Tab, CR, and NUL — ESC-prefixed
+  with Alt, as the library prefixes its other Ctrl+Alt chords. Two
+  conditions say it asked for nothing: the active screen's Kitty keyboard
+  flags are zero (read from the terminal, `KITTY_KEYBOARD_FLAGS`, after the
+  encode), and the library's output is its fixterms form — under
+  modifyOtherKeys 2, which the C API doesn't expose, the output is
+  `CSI 27;…~` instead, so it's left as the program asked. The chord's
+  character is found as the library finds it for its other C0 chords: the
+  text when it's one byte, else, with Ctrl alone, the physical key's — so
+  German Ctrl+Ü, on the US `[` key, is ESC, and a `[` typed with AltGr isn't
+  a Ctrl chord at all. Ctrl+Shift+I and Ctrl+Shift+M stay the library's (`@`
+  takes Shift on a US layout, so Ctrl+Shift+2 is NUL).
+- **The mapping** (`to_fuz_terminal_key_input`) reads only the event's
+  fields. The key comes from `code`: the library's key names follow the UI
+  Events codes (`A` for `KeyA`, `DIGIT_1` for `Digit1`, `F12` for `F12`), so
+  the table is built from the manifest's names by that rule, plus a few
+  legacy aliases and the numpad with NumLock off, which a browser reports as
+  the digit's `code` with the navigation key's `key` (`Numpad1` + `End` →
+  `NUMPAD_END`). A unit test holds the rule to every name in the manifest,
+  and a wasm test holds the module's key enum to the fixture's, so an
+  upgrade that adds keys fails until they're mapped. The text is `key` when
+  it's a character — never a key name (`Enter`, `Dead`, `Process`,
+  `Unidentified`) or a control character — and before any Ctrl
+  transformation, as the encoder wants (`c` for Ctrl+C). Meta is the super
+  modifier, CapsLock and NumLock come from `getModifierState`, a side bit is
+  set only on a right-hand modifier's own event, and when AltGraph made the
+  text Ctrl and Alt are dropped (Windows reports AltGr as Ctrl+Alt). The
+  modifiers the text used up (`get_fuz_terminal_consumed_mods`) let the
+  encoder send the text as typed: Shift whenever it's held and the key made
+  text — Shift+A's `A`, AZERTY's Shift+`&` `1`, CapsLock with Shift's `a`
+  are plain text to the Kitty protocol — except on Space and the numpad, so
+  Shift+Space stays a shifted space. On macOS Option is the layout's level
+  for typing characters, so Option that typed a character — with neither
+  Ctrl nor Meta held — is not reported as Alt: it's dropped from the
+  modifiers, as AltGraph's Ctrl and Alt are. A German Mac's Option+5 `[` and
+  Option+L `@` are sent as `[` and `@`, not with the alt escape prefix
+  (`ESC [` would start a sequence), and under the Kitty protocol's
+  report-all flag the `[` arrives as the key's text; the price is that such
+  a program can't tell Option was held. Option+Left, which makes no text,
+  and Option with Ctrl are still Alt. The platform is
+  `FuzTerminalDeps.key_platform`, from the client hints or
+  `navigator.platform` by default (`to_fuz_terminal_key_platform`); the
+  mapping takes it as an argument, so it's tested both ways. Option as Meta
+  is still to come, as a host option.
+- **The unshifted code point** is the key's text lowercased when it's a
+  cased letter, the key's own text when nothing (Shift, Alt, AltGraph)
+  changed it, and otherwise the character a US layout has on that physical
+  key — or, for a key the US layout hasn't (`IntlBackslash`, `IntlRo`,
+  `IntlYen`, an empty `code`), the text's own character, lowercased, so the
+  key keeps its modifiers and its release. That's right for letters on any
+  layout and for unshifted keys, and wrong for a shifted digit or
+  punctuation key on a layout that puts another character there unshifted
+  (German Shift+ß, `?`, reports the US `-`); under the Kitty protocol that's
+  the key code sent, and its base-layout alternates assume US too. A
+  browser's layout map (`navigator.keyboard.getLayoutMap()`) would fix it,
+  but only Chromium has one.
+- **What the terminal doesn't take** keeps its default: a key while the
+  view isn't ready; a keydown in a composition — an IME's (`isComposing`,
+  `Process`, key code 229) or a dead key — whose text arrives later (a dead
+  key's composed character comes as the next keydown's `key`, and is sent;
+  an IME's needs a text input, still to come); any combination with Meta,
+  the OS's and the browser's shortcuts; and Ctrl+Shift+C and Ctrl+Shift+V,
+  reserved for copy and paste (`should_fuz_terminal_pass_key`, one function
+  so a host override can be added). Everything else the encoder has bytes
+  for is the program's, as in other browser terminals: Tab, Escape, the
+  function keys, Ctrl+W. A modifier alone, or a key the encoder has nothing
+  for, sends nothing and keeps its default.
+- **Errors** go the way writes' do: a library failure while encoding fails
+  the view and an escape poisons it — neither leaves the event handler —
+  and an `ondata` that throws is reported, not fatal. Key bytes and the
+  terminal's replies share `ondata`, in the order they happen.
+
+**The Kitty keyboard protocol** lets a program ask for unambiguous key
+reports — every key and modifier as an escape code, presses, repeats, and
+releases told apart, the text a key produced. It can't be left
+unadvertised: the library always takes a program's push, set, and pop of
+the flags, and answers its query (`CSI ? u`) through `write_pty`; no
+terminal option, mode, or build feature turns that off — so a program
+that asks (neovim, helix, fish) finds it and turns it on. Encoding legacy
+while the terminal told the program otherwise would have it misparse keys,
+so the encoder follows the flags as set — each screen has its own, so a
+program leaving the alternate screen leaves its flags there — and the view
+supports the protocol as far as browser events allow. A `keyup` is encoded
+as a release, which sends bytes only while the program has event reporting
+on (legacy encoding and the protocol's other flags send nothing for one),
+and only for a key whose press was taken — it reached the encoder, whether
+or not it sent anything. A taken press's release is encoded whatever the
+modifiers are by then (Meta added while the key was held, or Shift making
+a Ctrl+C into Ctrl+Shift+C), and once; a release whose press went to the
+browser, was composed, or came before the view had focus is dropped, and
+the keys held when focus leaves are forgotten. The protocol's key codes are
+the unshifted code points above, so their US-layout fallback carries over.
+
 **The DOM renderer.** `FuzTerminal` draws one terminal's screen as DOM
-text — output only. It takes no keyboard input, paste, IME, or mouse
-reporting yet, doesn't scroll into the scrollback, and has no selection or
-copy of its own: the rows are text, so the browser's selection works over
-them. Each row is a block of inline runs, so a selection copies a row as one
-line and a block of rows as one line per row — a soft-wrapped line copies
-broken at the wrap (the rows don't carry the wrap flag yet). It has no
-dependency on zzz's app — no cells, no actions.
+text, and takes its keys (above). It takes no paste, IME, focus reporting,
+or mouse reporting yet, doesn't scroll into the scrollback, and has no
+selection or copy of its own: the rows are text, so the browser's selection
+works over them. Each row is a block of inline runs, so a selection copies
+a row as one line and a block of rows as one line per row — a soft-wrapped
+line copies broken at the wrap (the rows don't carry the wrap flag yet). It
+has no dependency on zzz's app — no cells, no actions.
 
 *Ownership.* The host loads and compiles the module and passes it — or the
 promise of it, a fetch and compile in flight — as `module`; the view is
@@ -857,7 +992,8 @@ reader is cheap next to the compile the host does once; each instance
 parses its own type manifest, the larger part of that cost.
 
 *Host API.* Props: `module`; `scrollback_max_bytes`; `label`, the
-accessible name; and the callbacks `ondata` (bytes for the PTY), `onresize`
+accessible name; and the callbacks `ondata` (bytes for the PTY: the keys
+typed, and the terminal's replies), `onresize`
 (the size in cells, at creation and on each change), `ontitle`, `onbell`,
 `onstatus`, and `onerror`. `module` and `scrollback_max_bytes` are read once,
 when the view starts; the callbacks whenever they're called, and never once
@@ -1005,7 +1141,8 @@ changes costs one resize per frame. The terminal is created at the measured
 size, or `FUZ_TERMINAL_DEFAULT_SIZE` when there's nothing to measure yet.
 
 *Accessibility.* The root is focusable (`tabindex="0"`, a `group` with the
-`terminal` role description and `label` as its name); the rows are plain
+`terminal` role description and `label` as its name) and takes the keys
+typed while it has focus; the rows are plain
 text in the accessibility tree, the cursor and probe are hidden from it,
 and nothing is a live region, so a repaint announces nothing. A deliberate
 screen-reader mode is still to come.

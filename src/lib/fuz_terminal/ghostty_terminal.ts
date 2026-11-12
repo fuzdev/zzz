@@ -3,7 +3,8 @@
  * fed program output as bytes and read back as text, and telling its host
  * what the output asks for through the effects it registers.
  *
- * Nothing here draws or takes input. A query in the output (cursor position,
+ * Nothing here draws or takes input (`GhosttyKeyEncoder` turns keys into
+ * bytes for the PTY). A query in the output (cursor position,
  * device attributes) is answered only through a registered `write_pty`
  * effect — with none, it gets no reply. No clipboard effect exists.
  *
@@ -183,8 +184,8 @@ const utf8_encoder = new TextEncoder();
 
 /**
  * A handle made over a terminal that must be freed before it — a
- * `GhosttyRenderState`. `GhosttyTerminal.dispose` disposes each one still
- * registered, first, so the order can't be got wrong.
+ * `GhosttyRenderState`, a `GhosttyKeyEncoder`. `GhosttyTerminal.dispose`
+ * disposes each one still registered, first, so the order can't be got wrong.
  *
  * @internal
  */
@@ -200,7 +201,8 @@ export interface GhosttyTerminalDependent {
  * `GhosttyTerminal.dispose`, which nothing does for you: call it when the
  * terminal is done with. Any use after that throws `GhosttyDisposedError`.
  *
- * Handles made over it — a `GhosttyRenderState` — are disposed with it, first.
+ * Handles made over it — a `GhosttyRenderState`, a `GhosttyKeyEncoder` — are
+ * disposed with it, first.
  *
  * Effect handlers (`GhosttyTerminal.set_effect`) run inside `write` and
  * `resize`, while the library is mid-parse. From a handler the terminal can
@@ -491,7 +493,7 @@ export class GhosttyTerminal {
 
 	/**
 	 * The terminal handle, for a handle of the binding's own made over this
-	 * terminal (`GhosttyRenderState`) to pass to the library. Never keep it:
+	 * terminal (`GhosttyRenderState`, `GhosttyKeyEncoder`) to pass to the library. Never keep it:
 	 * it's freed with the terminal.
 	 *
 	 * @param caller - the method asking, for the errors
@@ -533,8 +535,8 @@ export class GhosttyTerminal {
 
 	/**
 	 * Free the terminal, the formatter it reads through, and its write buffer
-	 * — its dependents first: each `GhosttyRenderState` made over it is
-	 * disposed before anything of the terminal's is freed. Idempotent; any
+	 * — its dependents first: each `GhosttyRenderState` and `GhosttyKeyEncoder`
+	 * made over it is disposed before anything of the terminal's is freed. Idempotent; any
 	 * other use afterward throws `GhosttyDisposedError`.
 	 *
 	 * The terminal is detached from effect dispatch before anything is freed.

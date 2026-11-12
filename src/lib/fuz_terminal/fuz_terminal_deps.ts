@@ -10,6 +10,7 @@
 import { create_context } from '@fuzdev/fuz_ui/context_helpers.ts';
 
 import type { FuzTerminalFrameScheduler } from './fuz_terminal_frame.ts';
+import type { FuzTerminalKeyPlatform } from './fuz_terminal_keyboard.ts';
 import type { FuzTerminalMeasurement } from './fuz_terminal_layout.ts';
 import { load_ghostty_vt, type GhosttyVt } from './ghostty_vt.ts';
 
@@ -31,12 +32,33 @@ export interface FuzTerminalDeps extends FuzTerminalFrameScheduler {
 	 * terminal's font — or `null` when there's no layout to measure.
 	 */
 	measure: (root: HTMLElement, probe: HTMLElement) => FuzTerminalMeasurement | null;
+	/** Whose keyboard conventions the keys follow (`to_fuz_terminal_key_input`). */
+	key_platform: FuzTerminalKeyPlatform;
 }
+
+/** The fields of `navigator` the platform is read from. */
+export interface FuzTerminalNavigatorPlatform {
+	readonly platform?: string;
+	/** User-Agent Client Hints, where the browser has them (Chromium). */
+	readonly userAgentData?: { readonly platform?: string };
+}
+
+/**
+ * The keyboard platform a browser runs on: `mac` on macOS and iOS (where
+ * Option types characters), else `other`. Reads the client hints' platform
+ * where there are hints, else `navigator.platform`.
+ */
+export const to_fuz_terminal_key_platform = (
+	navigator: FuzTerminalNavigatorPlatform | undefined
+): FuzTerminalKeyPlatform => {
+	const platform = navigator?.userAgentData?.platform || navigator?.platform || '';
+	return /^(mac|iphone|ipad|ipod)/i.test(platform) ? 'mac' : 'other';
+};
 
 /**
  * The browser's capabilities: `load_ghostty_vt`, `requestAnimationFrame`,
  * `setTimeout`, `ResizeObserver` (nothing is observed where it doesn't
- * exist), and layout reads.
+ * exist), layout reads, and the platform from `navigator`.
  */
 export const create_fuz_terminal_deps = (): FuzTerminalDeps => ({
 	load_vt: (module) => load_ghostty_vt(module),
@@ -60,7 +82,10 @@ export const create_fuz_terminal_deps = (): FuzTerminalDeps => ({
 			cell_width: cell.width / cells,
 			cell_height: cell.height
 		};
-	}
+	},
+	key_platform: to_fuz_terminal_key_platform(
+		typeof navigator === 'undefined' ? undefined : navigator
+	)
 });
 
 /**

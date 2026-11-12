@@ -122,6 +122,7 @@ export const create_test_fuz_terminal_deps = (
 			return () => observers.delete(callback);
 		},
 		measure: () => deps.measurement,
+		key_platform: 'other',
 		fire_resize: () => {
 			for (const callback of [...observers]) callback();
 		},

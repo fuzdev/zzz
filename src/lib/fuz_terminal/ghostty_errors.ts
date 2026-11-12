@@ -15,7 +15,8 @@
  * The wasm module can't be used: its bytes don't compile, it imports
  * something, it lacks an export the binding calls, its manifest disagrees
  * with the library it came with, it was built without a feature a handle
- * needs (a `GhosttyRenderState` needs `render_state`), or it breaks a promise
+ * needs (a `GhosttyRenderState` needs `render_state`, a `GhosttyKeyEncoder`
+ * `input_encode`), or it breaks a promise
  * of the library's API (a render state's rows ending before its row count).
  */
 export class GhosttyLoadError extends Error {

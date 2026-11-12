@@ -2,6 +2,7 @@ import { test, describe, assert } from 'vitest';
 
 import { resolve_ghostty_effect_constants } from '#lib/fuz_terminal/ghostty_effects.ts';
 import { GhosttyManifestError } from '#lib/fuz_terminal/ghostty_errors.ts';
+import { resolve_ghostty_key_constants } from '#lib/fuz_terminal/ghostty_key_encoder.ts';
 import {
 	GhosttyManifest,
 	parse_ghostty_manifest,
@@ -388,6 +389,17 @@ describe('constants resolvers', () => {
 		assert.strictEqual(effects.string_size, 8);
 		assert.strictEqual(effects.string_ptr_offset, 0);
 		assert.strictEqual(effects.string_len_offset, 4);
+		const keys = resolve_ghostty_key_constants(manifest);
+		assert.strictEqual(keys.keys.get('UNIDENTIFIED'), 0);
+		assert.strictEqual(keys.keys.get('A'), 20);
+		assert.strictEqual(keys.keys.get('NUMPAD_END'), 115);
+		assert.isFalse(keys.keys.has('MAX_VALUE'));
+		assert.deepEqual(keys.actions, { press: 1, repeat: 2, release: 0 });
+		assert.strictEqual(keys.out_of_space, -3);
+		assert.strictEqual(keys.string_size, 8);
+		assert.strictEqual(keys.string_ptr_offset, 0);
+		assert.strictEqual(keys.string_len_offset, 4);
+		assert.strictEqual(keys.data_kitty_keyboard_flags, 8);
 	});
 
 	test('fail naming what a doctored manifest lacks', () => {
@@ -478,6 +490,37 @@ describe('constants resolvers', () => {
 				(types) => (types.GhosttyString.fields.len.type = 'u16'),
 				resolve_ghostty_effect_constants,
 				'GhosttyString.len is not a size_t'
+			],
+			[
+				(types) => delete types.GhosttyKey.values.UNIDENTIFIED,
+				resolve_ghostty_key_constants,
+				'no value GhosttyKey.UNIDENTIFIED'
+			],
+			[
+				(types) => delete types.GhosttyKeyAction.values.REPEAT,
+				resolve_ghostty_key_constants,
+				'no value GhosttyKeyAction.REPEAT'
+			],
+			[
+				// a wider mask would pass the side bits where the library reads others
+				(types) => (types.GhosttyMods.type = 'u32'),
+				resolve_ghostty_key_constants,
+				'GhosttyMods is "u32", not a u16'
+			],
+			[
+				(types) => (types.GhosttyKey.underlying = 'u64'),
+				resolve_ghostty_key_constants,
+				'GhosttyKey has underlying type "u64"'
+			],
+			[
+				(types) => (types.GhosttyString.fields.ptr.type = 'u32'),
+				resolve_ghostty_key_constants,
+				'GhosttyString.ptr is not a pointer'
+			],
+			[
+				(types) => (types.GhosttyKittyKeyFlags.type = 'u16'),
+				resolve_ghostty_key_constants,
+				'KITTY_KEYBOARD_FLAGS gives GhosttyKittyKeyFlags, "u16", not a u8'
 			]
 		];
 		for (const [doctor, resolve, message] of cases) {
