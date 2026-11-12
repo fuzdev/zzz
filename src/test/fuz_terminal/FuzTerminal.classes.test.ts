@@ -103,6 +103,62 @@ describe('FuzTerminal classes', () => {
 		}
 	});
 
+	// each engine rounds a box's width to its layout unit, so a run placed after
+	// the runs before it lands on the sum of their rounded widths: off its column
+	// by a pixel or more along a row of many runs. So a run takes no room in the
+	// line — its `margin-right` is its `width` negated, the same length — and is
+	// offset from the row's start by its own column, the very expression the
+	// cursor is placed by, so both round the same one value
+	test('a run sits at its own column, as the cursor does, and takes no room in the line', async () => {
+		const { css } = await load_fuz_terminal_classes();
+		const run = to_class_rule_declarations(css, 'run');
+		const cursor = to_class_rule_declarations(css, 'cursor');
+		assert.strictEqual(run.get('display'), 'inline-block');
+		assert.strictEqual(run.get('position'), 'relative');
+		const cursor_left = cursor.get('left');
+		assert.ok(cursor_left);
+		assert.strictEqual(cursor_left, 'calc(var(--cursor_x) * var(--fuz_terminal_col))');
+		assert.strictEqual(run.get('left'), cursor_left.replace('--cursor_x', '--run_x'));
+		const width = run.get('width');
+		assert.ok(width);
+		assert.strictEqual(run.get('margin-right'), `calc(-1 * ${width})`);
+		assert.isUndefined(run.get('margin-left'));
+		// its box covers its columns and overlaps the next run's by a sliver
+		assert.strictEqual(width, 'var(--run_box)');
+		assert.match(
+			run.get('--run_box') ?? '',
+			/^calc\(var\(--run_width\) \* var\(--fuz_terminal_col\) \+ 1px \/ \d+\)$/
+		);
+	});
+
+	// what a host's text styles would pass down to the rows that moves runs off
+	// their columns or changes their glyphs
+	test('the root resets the inherited text properties that would break the grid', async () => {
+		const { css } = await load_fuz_terminal_classes();
+		const root = to_class_rule_declarations(css, 'fuz-terminal');
+		const expected: Record<string, string> = {
+			direction: 'ltr',
+			'writing-mode': 'horizontal-tb',
+			'text-align': 'left',
+			'text-align-last': 'auto',
+			'text-indent': '0',
+			'text-transform': 'none',
+			'letter-spacing': 'normal',
+			'word-spacing': 'normal',
+			'font-weight': 'normal',
+			'font-style': 'normal',
+			// ligatures off, every other variant normal
+			'font-variant': 'none',
+			'font-feature-settings': 'normal',
+			'font-variation-settings': 'normal',
+			'font-kerning': 'none',
+			'user-select': 'text'
+		};
+		for (const [property, value] of Object.entries(expected)) {
+			assert.strictEqual(root.get(property), value, property);
+		}
+	});
+
 	test('the check sees a colliding name', () => {
 		for (const name of ['grid', 'row']) {
 			const { css } = generate_classes_css({

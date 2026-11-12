@@ -155,6 +155,9 @@ const run_elements = (row: HTMLElement): Array<HTMLElement> =>
 /** A run's boxed width in cells, from its `--run_width`. */
 const run_width = (run: HTMLElement): string => run.style.getPropertyValue('--run_width');
 
+/** A run's first column, from its `--run_x`: where it's drawn, whatever runs come before it. */
+const run_x = (run: HTMLElement): string => run.style.getPropertyValue('--run_x');
+
 const cursor_element = (root: HTMLElement): HTMLElement | null =>
 	root.querySelector<HTMLElement>('.cursor');
 
@@ -170,8 +173,11 @@ describe('drawing', () => {
 		const runs = run_elements(first!);
 		assert.strictEqual(runs.length, 1);
 		assert.strictEqual(run_width(runs[0]!), '5');
-		// a default-styled run carries nothing but its width
-		assert.strictEqual(runs[0]!.getAttribute('style')?.replace(/[\s;]+$/, ''), '--run_width: 5');
+		// a default-styled run carries nothing but its column and width
+		assert.strictEqual(
+			runs[0]!.getAttribute('style')?.replace(/[\s;]+$/, ''),
+			'--run_x: 0; --run_width: 5'
+		);
 	});
 
 	test('rows hold their runs and nothing else: no stray whitespace text', async () => {
@@ -184,11 +190,11 @@ describe('drawing', () => {
 			if (node.nodeType === Node.TEXT_NODE) assert.strictEqual(node.textContent, '');
 		}
 		assert.deepEqual(
-			run_elements(row!).map((run) => [run.textContent, run_width(run)]),
+			run_elements(row!).map((run) => [run.textContent, run_x(run), run_width(run)]),
 			[
-				['a', '1'],
-				['b', '1'],
-				[' c', '2']
+				['a', '0', '1'],
+				['b', '1', '1'],
+				[' c', '2', '2']
 			]
 		);
 		for (const run of run_elements(row!)) {
@@ -251,13 +257,13 @@ describe('drawing', () => {
 		t.step();
 		const runs = run_elements(row_elements(t.root)[0]!);
 		assert.deepEqual(
-			runs.map((r) => [r.textContent, run_width(r), r.classList.contains('run-cluster')]),
+			runs.map((r) => [r.textContent, run_x(r), run_width(r), r.classList.contains('run-cluster')]),
 			[
-				['a', '1', false],
-				['漢', '2', true],
-				['b', '1', false],
-				['─┼', '2', false],
-				['c', '1', false]
+				['a', '0', '1', false],
+				['漢', '1', '2', true],
+				['b', '3', '1', false],
+				['─┼', '4', '2', false],
+				['c', '6', '1', false]
 			]
 		);
 	});

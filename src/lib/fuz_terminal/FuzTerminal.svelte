@@ -170,6 +170,7 @@ nothing is a live region, so a repaint announces nothing -->
 					run.hyperlink && 'run-link'
 				]}
 				style={terminal.style_css(run.style)}
+				style:--run_x={run.x}
 				style:--run_width={run.width}
 			>
 				{run.text}
@@ -221,11 +222,31 @@ nothing is a live region, so a repaint announces nothing -->
 		background-color: var(--fuz_terminal_bg);
 		font-family: var(--fuz_terminal_font_family, var(--font_family_mono));
 		font-size: var(--fuz_terminal_font_size, var(--font_size_sm));
-		/* the host's typography would break the grid */
-		font-variant-ligatures: none;
+		line-height: var(--fuz_terminal_row);
+		/* what a host's text styles would pass down that moves the runs off
+		their columns or changes their glyphs: alignment and indent move a row's
+		runs, `rtl` starts them from the right and a vertical writing mode turns
+		them, a transform changes the text (and its copy), spacing, kerning,
+		ligatures, and font features move glyphs off their cells, and a weight or
+		style would make every run look bold or italic, which only a program's
+		style may (`font-variant: none` turns off ligatures and resets the rest of
+		the variants), and a `user-select: none` would make the rows unselectable,
+		so no selection could copy them */
+		direction: ltr;
+		writing-mode: horizontal-tb;
+		text-align: left;
+		text-align-last: auto;
+		text-indent: 0;
+		text-transform: none;
 		letter-spacing: normal;
 		word-spacing: normal;
-		line-height: var(--fuz_terminal_row);
+		font-weight: normal;
+		font-style: normal;
+		font-variant: none;
+		font-feature-settings: normal;
+		font-variation-settings: normal;
+		font-kerning: none;
+		user-select: text;
 	}
 	/* inside the root, so a host's `overflow: hidden` can't clip the ring */
 	.fuz-terminal:focus-visible {
@@ -250,11 +271,23 @@ nothing is a live region, so a repaint announces nothing -->
 		white-space: pre;
 		overflow: hidden;
 	}
-	/* inline-level boxes, so the row's runs copy as one line */
+	/* inline-level boxes, so the row's runs copy as one line. Each sits at its own
+	column, `left` of `x × col` (one rounding, the cursor's own), never after the
+	runs before it: their widths would each be rounded to the engine's layout
+	unit, drifting a run of a style-dense row (`ls --color`, htop) off its
+	column, and the cursor off the text. So a run takes no room in the line, its
+	`margin-right` cancelling its `width` exactly (the same length negated), and
+	is offset from the row's start; its box overlaps the next by a sliver, which
+	the next paints over, so the two roundings that end one run and start the
+	next can't leave a hairline of the row's background between them */
 	.run {
+		--run_box: calc(var(--run_width) * var(--fuz_terminal_col) + 1px / 16);
 		display: inline-block;
+		position: relative;
+		left: calc(var(--run_x) * var(--fuz_terminal_col));
 		vertical-align: top;
-		width: calc(var(--run_width) * var(--fuz_terminal_col));
+		width: var(--run_box);
+		margin-right: calc(-1 * var(--run_box));
 		height: var(--fuz_terminal_row);
 	}
 	.run-cluster {

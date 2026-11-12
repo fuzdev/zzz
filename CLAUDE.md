@@ -493,10 +493,15 @@ only after output, a resize, or a render hold ending — idle otherwise;
 render holds are honored for up to `FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS`.
 Rows are a keyed list over the reader's `rows` (`$state.raw`), so an
 unchanged row is skipped; each run is an inline box sized in measured
-cells. The host gives it a sized box — it fills its container, which needs
-a definite size; its own content never sizes it — and its size in cells
-follows that box (`ResizeObserver` and a probe of the font's cell; an
-unmeasurable box never resizes it). Colors are CSS custom properties: a
+cells and placed at its own column (`x` cells from the row's start, as the
+cursor is), so a row of many runs doesn't drift, and the root resets the
+inherited text properties — alignment, indent, direction, transform,
+spacing, weight, style, font variants and features, and `user-select` —
+through which a host's text styles would move or change the runs, or leave
+nothing to select. The host gives it a sized box — it fills its container,
+which needs a definite size; its own content never sizes it — and its size
+in cells follows that box (`ResizeObserver` and a probe of the font's cell;
+an unmeasurable box never resizes it). Colors are CSS custom properties: a
 host themes it by setting `--fuz_terminal_foreground`,
 `--fuz_terminal_background`, `--fuz_terminal_cursor_color`,
 `--fuz_terminal_color_0` … `--fuz_terminal_color_15`,

@@ -1264,7 +1264,21 @@ destroyed or stopped — later in the same write — does nothing.
 *Drawing a row.* The rows stack in block flow in the screen layer, so row
 `y` starts `y` rows down, where the cursor is placed; a row is a block with a
 pinned height, and each run is an inline box (`inline-block`, top-aligned) as
-wide as its columns. The layer and the rows set their own `display`, and
+wide as its columns. A run is drawn at its own column, never after the runs
+before it: an engine rounds each box's width to its layout unit, and a
+fractional cell width rounded run by run drifts a style-dense row
+(`ls --color`, htop) a pixel or more off its columns, the cursor sitting off
+the text. So a run takes no room in the line — its
+`margin-right` is its `width` negated, the same length, which rounds to the
+same magnitude — and is offset from the row's start by `position: relative`
+with `left` of its column (`--run_x`) times the cell width, the expression
+the cursor is placed by: every run and the cursor are one rounding of
+`x × cell` from the row's start, however many runs come before. A run's box
+is a sixteenth of a pixel wider than its columns, so it overlaps the next
+run's box, which paints over it, and the two roundings that end one run
+and start the next can't leave a hairline of the row's background between
+them. The runs are still inline boxes in DOM order, so a row copies as one
+line. The layer and the rows set their own `display`, and
 their classes are prefixed (`fuz-terminal-screen`, `fuz-terminal-row`): no
 class the component renders is a fuz_css utility or base-style class
 (`FuzTerminal.classes.test.ts`), since a utility of the same name would lay
@@ -1278,8 +1292,17 @@ a fallback font can't shift what follows either. A cluster run (a wide
 character, a multi-code-point grapheme) is one box of its width; a run whose
 text mixes ASCII and other code points is split where it changes between
 them (`split_fuz_terminal_runs`), so a stretch of glyphs the font lacks
-shifts at most within itself. The root turns off ligatures and resets
-letter and word spacing, so a host's typography can't break the grid.
+shifts at most within itself. The root resets the text properties a host
+would pass down that move runs off their columns or change their glyphs:
+`direction`, `writing-mode`, `text-align` and `text-align-last`,
+`text-indent`, `text-transform`, letter and word spacing, kerning,
+`font-weight` and `font-style` (so only a program's style makes text bold or
+italic), the font variants (ligatures off), font feature and variation
+settings, and `user-select` (a host's `none` would leave nothing to select).
+The font and its size are the host's through `--fuz_terminal_font_family`
+and `--fuz_terminal_font_size`, which the root reads instead of inheriting
+them; what else a host passes down — paint such as `text-shadow`, or
+`font-stretch` — is the host's to set.
 Trailing blanks make no run, so the row's background shows. Text reaches
 the DOM only as text nodes; a run's `style` attribute holds only
 declarations built from the style's flags and colors formatted from numbers
