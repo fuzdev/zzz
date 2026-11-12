@@ -4,8 +4,9 @@
  * what the output asks for through the effects it registers.
  *
  * Nothing here draws or takes input (`GhosttyKeyEncoder` turns keys into
- * bytes for the PTY). A query in the output (cursor position,
- * device attributes) is answered only through a registered `write_pty`
+ * bytes for the PTY, and `GhosttyTerminal.encode_paste` a paste). A query
+ * in the output (cursor position, device attributes) is answered only
+ * through a registered `write_pty`
  * effect — with none, it gets no reply. No clipboard effect exists.
  *
  * @module
@@ -25,6 +26,14 @@ import {
 } from './ghostty_errors.ts';
 import type { GhosttyManifest, GhosttyScalar } from './ghostty_manifest.ts';
 import { GhosttyMemory, to_ghostty_integer } from './ghostty_memory.ts';
+import {
+	encode_ghostty_paste_bytes,
+	get_ghostty_paste_hazard,
+	GHOSTTY_MODE_BRACKETED_PASTE,
+	to_ghostty_paste_length,
+	type GhosttyPasteEncoding,
+	type GhosttyPasteOptions
+} from './ghostty_paste.ts';
 import type { GhosttyVt } from './ghostty_vt.ts';
 
 /**
@@ -80,14 +89,23 @@ export interface GhosttyTerminalMode {
 /** DEC private mode 2027, grapheme clustering: a multi-code-point grapheme takes one cell. */
 export const GHOSTTY_MODE_GRAPHEME_CLUSTER = 2027;
 
-/** The manifest constants for setting a mode default, resolved once per module and only when used. */
-export interface GhosttyModeConstants {
-	/** `GHOSTTY_TERMINAL_OPT_MODE_DEFAULT`. */
-	option_mode_default: number;
-	/** `GhosttyTerminalModeConfig`'s size and its fields' offsets. */
+/** `GhosttyTerminalModeConfig`'s size and its fields' offsets: a mode and its value, set or read. */
+export interface GhosttyModeConfigLayout {
 	config_size: number;
 	mode_offset: number;
 	value_offset: number;
+}
+
+/** The manifest constants for setting a mode default, resolved once per module and only when used. */
+export interface GhosttyModeConstants extends GhosttyModeConfigLayout {
+	/** `GHOSTTY_TERMINAL_OPT_MODE_DEFAULT`. */
+	option_mode_default: number;
+}
+
+/** The manifest constants for reading a mode, resolved once per module and only when used. */
+export interface GhosttyModeQueryConstants extends GhosttyModeConfigLayout {
+	/** `GHOSTTY_TERMINAL_DATA_MODE`. */
+	data_mode: number;
 }
 
 /**
@@ -103,6 +121,35 @@ export const resolve_ghostty_mode_constants = (manifest: GhosttyManifest): Ghost
 			`the MODE_DEFAULT option takes a ${key.type}, not a GhosttyTerminalModeConfig`
 		);
 	}
+	return {
+		option_mode_default: manifest.enum_value('GhosttyTerminalOption', 'MODE_DEFAULT'),
+		...resolve_mode_config_layout(manifest)
+	};
+};
+
+/**
+ * Resolve the mode-query constants from a manifest: the `MODE` data reads a
+ * `GhosttyTerminalModeConfig` whose mode is set first.
+ *
+ * @throws GhosttyManifestError when an entry is missing or reshaped
+ */
+export const resolve_ghostty_mode_query_constants = (
+	manifest: GhosttyManifest
+): GhosttyModeQueryConstants => {
+	const key = manifest.enum_key('GhosttyTerminalData', 'MODE', 'out');
+	if (key.type !== 'GhosttyTerminalModeConfig') {
+		throw new GhosttyManifestError(
+			`the MODE data gives a ${key.type}, not a GhosttyTerminalModeConfig`
+		);
+	}
+	return {
+		data_mode: manifest.enum_value('GhosttyTerminalData', 'MODE'),
+		...resolve_mode_config_layout(manifest)
+	};
+};
+
+/** `GhosttyTerminalModeConfig`: a `GhosttyMode` (a `u16`) and a `bool`. */
+const resolve_mode_config_layout = (manifest: GhosttyManifest): GhosttyModeConfigLayout => {
 	const mode = manifest.struct_field('GhosttyTerminalModeConfig', 'mode');
 	const value = manifest.struct_field('GhosttyTerminalModeConfig', 'value');
 	const mode_scalar =
@@ -114,7 +161,6 @@ export const resolve_ghostty_mode_constants = (manifest: GhosttyManifest): Ghost
 		throw new GhosttyManifestError('GhosttyTerminalModeConfig.value is not a bool');
 	}
 	return {
-		option_mode_default: manifest.enum_value('GhosttyTerminalOption', 'MODE_DEFAULT'),
 		config_size: manifest.struct_size('GhosttyTerminalModeConfig'),
 		mode_offset: mode.offset,
 		value_offset: value.offset
@@ -516,6 +562,62 @@ export class GhosttyTerminal {
 	}
 
 	/**
+	 * Whether a mode is on now.
+	 *
+	 * @param mode - the mode's number, from 0 to 32767: a DEC private mode
+	 *   (`CSI ? n h`) unless `ansi`
+	 * @throws RangeError when the number is out of range
+	 * @throws GhosttyResultError when the library doesn't know the mode (`INVALID_VALUE`)
+	 * @throws GhosttyManifestError when the manifest lacks the mode data or reshapes its struct
+	 * @throws GhosttyPoisonedError once the instance is poisoned (`GhosttyVt.poisoned`)
+	 * @throws GhosttyDisposedError after `dispose`
+	 */
+	get_mode(mode: number, ansi = false): boolean {
+		const terminal = this.#live('get_mode');
+		return this.#get_mode(terminal, to_packed_mode({ mode, ansi, value: false }));
+	}
+
+	/**
+	 * Encode text for a paste under the terminal's modes as they are now
+	 * (see `ghostty_paste.ts`): bracketed when the program has turned on
+	 * bracketed paste (mode 2004), and refused when it could inject commands
+	 * (`get_ghostty_paste_hazard`) unless `allow_unsafe` names that hazard in
+	 * this mode. Nothing is sent — send the bytes as a key's are — and
+	 * nothing in the terminal changes.
+	 *
+	 * Like `write`, it's refused from an effect handler: the bytes would land
+	 * among the replies the running call is sending.
+	 *
+	 * @param text - the text to paste; a lone surrogate is encoded as U+FFFD
+	 * @throws GhosttyResultError when the library refuses the encoding
+	 *   (`UNSUPPORTED` for a module without the `input_encode` feature)
+	 * @throws GhosttyPoisonedError once the instance is poisoned (`GhosttyVt.poisoned`)
+	 * @throws GhosttyReentrancyError from an effect handler
+	 * @throws GhosttyDisposedError after `dispose`
+	 */
+	encode_paste(text: string, options?: GhosttyPasteOptions): GhosttyPasteEncoding {
+		const terminal = this.#idle('encode_paste');
+		// the library pastes nothing for empty text
+		if (text === '') return { kind: 'empty' };
+		const bracketed = this.#get_mode(
+			terminal,
+			to_packed_mode({ mode: GHOSTTY_MODE_BRACKETED_PASTE, value: false })
+		);
+		const length = to_ghostty_paste_length(text, bracketed);
+		const hazard = get_ghostty_paste_hazard(text, bracketed);
+		if (hazard !== null) {
+			const allowed = options?.allow_unsafe;
+			if (allowed?.hazard !== hazard || allowed.bracketed !== bracketed) {
+				return { kind: 'rejected', hazard, bracketed, length };
+			}
+		}
+		const bytes = encode_ghostty_paste_bytes(this.vt, utf8_encoder.encode(text), bracketed);
+		// never expected: the encoder replaces bytes, it doesn't drop them
+		if (bytes.length === 0) return { kind: 'empty' };
+		return { kind: 'encoded', bytes, bracketed, length };
+	}
+
+	/**
 	 * The active screen as plain text, scrollback included: each line ends in
 	 * `\n` except the last, and blank lines at the end are dropped.
 	 *
@@ -710,8 +812,8 @@ export class GhosttyTerminal {
 	 */
 	#with_effects<T>(method: string, call: () => T): T {
 		// TODO: every library call that can fire effects goes through here: the
-		// library's reset fires the render-hold effect, and paste encoding fires
-		// `write_pty`, so binding either means guarding it the same way
+		// library's reset fires the render-hold effect, and `ghostty_terminal_paste`
+		// fires `write_pty`, so binding either means guarding it the same way
 		this.#effect_failure = null;
 		this.#busy = true;
 		let value: T;
@@ -850,6 +952,21 @@ export class GhosttyTerminal {
 				exports.ghostty_formatter_set(formatter, option, ptr),
 				`ghostty_formatter_set(${name})`
 			);
+		});
+	}
+
+	/** A mode's value, by its packed `GhosttyMode`. */
+	#get_mode(terminal: number, packed: number): boolean {
+		const constants = this.vt.resolve(resolve_ghostty_mode_query_constants);
+		const { exports, memory } = this.vt;
+		return memory.with_scratch(constants.config_size, (ptr) => {
+			memory.write_scalar(ptr + constants.mode_offset, 'u16', packed);
+			memory.write_scalar(ptr + constants.value_offset, 'bool', 0);
+			this.vt.check(
+				exports.ghostty_terminal_get(terminal, constants.data_mode, ptr),
+				'ghostty_terminal_get(MODE)'
+			);
+			return memory.read_scalar(ptr + constants.value_offset, 'bool') !== 0;
 		});
 	}
 

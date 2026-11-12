@@ -106,7 +106,16 @@ export interface GhosttyVtExports extends GhosttyMemoryExports {
 	/** Takes a `GhosttyString` by value, which the wasm C ABI passes as a pointer to one. */
 	ghostty_key_event_set_utf8: (event: number, utf8: number) => number;
 	ghostty_key_event_set_unshifted_codepoint: (event: number, codepoint: number) => number;
-	// TODO: the mouse encoder, paste, and focus encoding join this list with the modules that call them
+	/** `bracketed` is a C `bool`: 0 or 1. `data` is changed in place. */
+	ghostty_paste_encode: (
+		data: number,
+		data_len: number,
+		bracketed: number,
+		buf: number,
+		buf_len: number,
+		out_written: number
+	) => number;
+	// TODO: the mouse encoder and focus encoding join this list with the modules that call them
 }
 
 const REQUIRED_FUNCTIONS = [
@@ -155,7 +164,8 @@ const REQUIRED_FUNCTIONS = [
 	'ghostty_key_event_set_consumed_mods',
 	'ghostty_key_event_set_composing',
 	'ghostty_key_event_set_utf8',
-	'ghostty_key_event_set_unshifted_codepoint'
+	'ghostty_key_event_set_unshifted_codepoint',
+	'ghostty_paste_encode'
 ] as const satisfies ReadonlyArray<
 	Exclude<keyof GhosttyVtExports, 'memory' | '__indirect_function_table'>
 >;

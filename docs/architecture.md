@@ -487,8 +487,8 @@ account that created the terminal, not to all sockets like `filer_change`
 nor to one socket like `completion_progress`.
 
 ```
-User types in a focused FuzTerminal (TerminalView.svelte)
-  → the key encoder's bytes, or the emulator's reply to a live query
+User types in a focused FuzTerminal (TerminalView.svelte), or pastes from its context menu
+  → the key encoder's bytes, a paste's encoded text, or the emulator's reply to a live query
     → ondata → TerminalViewLink.send (streaming UTF-8 decode)
       → terminal.send_input(data)  (Terminal cell's ordered queue)
     → app.api.terminal_data_send({terminal_id, data})  (one in flight per terminal)
@@ -605,7 +605,31 @@ and their output buffering, and coming back reattaches to them.
   (`is_fuz_terminal_key_target`) to the terminal, as they leave a text
   field's. The copy button and the context
   menu's "copy output" read the emulator's text (`get_text`: the scrollback
-  and screen, soft wraps joined). `TerminalViewLink` (`terminal_view_link.ts`)
+  and screen, soft wraps joined). The context menu's "paste" (enabled
+  exactly while the terminal takes input) reads the clipboard
+  (`read_clipboard_text`, `navigator.clipboard.readText`, started in the
+  entry's activation, since a browser allows the read only with a user
+  gesture — Chrome asks for permission once, Firefox shows its own paste
+  button) and hands the read to the view, which runs `paste_terminal_text`
+  (`terminal_paste.ts`) over `FuzTerminal.paste` (§ fuz_terminal, *Paste*).
+  A paste longer than the terminal's input takes now (`Terminal.input_room`:
+  what's left of `TERMINAL_INPUT_PENDING_MAX_LENGTH` after the input waiting
+  to be sent, which `send_input` would otherwise drop the whole paste past)
+  is refused whole, naming the limit — measured as `send_input` measures, the
+  bracketed frame included, and before the text's safety, so a paste that
+  can't fit is never asked about. Unsafe text (`get_ghostty_paste_hazard`)
+  is pasted only once the person confirms it (`confirm`), and the
+  confirmation covers only the hazard asked about: the second paste allows
+  that hazard in that mode, so if the program toggled bracketed paste while
+  the person was asked and the text is unsafe in the new mode (its hazard,
+  or only the mode, differs from what was asked), nothing is sent and
+  the notice says to paste again, which asks about the text as it is then
+  (text the toggle made safe is pasted). Asking again at once instead could
+  repeat for as long as a program kept toggling; the refusal is bounded. A
+  failed or empty read, a refusal, or a view that takes no input is shown
+  in the view as a notice until the next paste that doesn't fail, or it's
+  dismissed — never thrown. A paste that goes through focuses the terminal.
+  `TerminalViewLink` (`terminal_view_link.ts`)
   is the wiring between the cell and one view — attach and replay, acks,
   input decoding, resize — kept out of the component so tests drive it with
   a real `Terminal` cell.
@@ -1071,10 +1095,12 @@ the keys held when focus leaves are forgotten. The protocol's key codes are
 the unshifted code points above, so their US-layout fallback carries over.
 
 **The DOM renderer.** `FuzTerminal` draws one terminal's screen as DOM
-text, and takes its keys (above). It takes no paste, IME, focus reporting,
-or mouse reporting yet, doesn't scroll into the scrollback, and has no
-selection of its own: the rows are text, so the browser's selection works
-over them, and the copy chords (above) copy it. Each row is a block of
+text, and takes its keys (above) and the text its host pastes (*Paste*,
+below). It takes no paste events of its own (Ctrl+Shift+V, Shift+Insert, a
+middle click), IME, focus reporting, or mouse reporting yet, doesn't scroll
+into the scrollback, and has no selection of its own: the rows are text, so
+the browser's selection works over them, and the copy chords (above) copy
+it. Each row is a block of
 inline runs, so a selection copies a row as one line and a block of rows as
 one line per row — a soft-wrapped line copies broken at the wrap (the rows
 don't carry the wrap flag yet). It has no dependency on zzz's app — no
@@ -1125,6 +1151,8 @@ the view is destroyed. Through `bind:this` the host calls:
   never rings, whatever it's interleaved with. A title it sets reaches
   `ontitle`, a render hold it starts is honored, and what it does to the
   terminal's state carries forward (above).
+- `paste(text, options?)` — the text sent to `ondata` as a paste (*Paste*,
+  below), returning what happened.
 - `get_text()` — the screen as plain text through the formatter, for a
   copy-all.
 - `focus()`, `get_status()`, `get_size()`.
@@ -1139,6 +1167,52 @@ replies to those writes reach `ondata` before it. A
 callback that throws — inside a write, from a frame, or on a resize — never
 escapes: it's handed to `onerror` (or the console) and shown as a notice,
 and the view goes on; so is a failed copy (above), with its own notice.
+
+*Paste.* `paste(text, {allow_unsafe?, max_length?})` sends text as the
+person pasting it: encoded under the terminal's modes as they are now
+(`GhosttyTerminal.encode_paste`, over the library's `ghostty_paste_encode`)
+and handed to `ondata` in one call, like a key's bytes. The encoder replaces
+the control bytes xterm strips from a paste (NUL, BS, ENQ, EOT, ESC, DEL,
+and the tty's special characters such as Ctrl+C, Ctrl+Z, and Ctrl+U) with
+spaces, then frames the text in `ESC [200~` … `ESC [201~` when the program
+has turned on bracketed paste (mode 2004), or turns each newline into a
+carriage return when it hasn't. Every change is an ASCII byte for an ASCII
+byte, never a byte of a multi-byte sequence, so the encoded length is
+known before encoding (`to_ghostty_paste_length`: the text's length in
+UTF-16 code units, plus the frame's 12 when bracketed).
+
+Before encoding comes the library's terminal-aware safety rule
+(`get_ghostty_paste_hazard`, its `isSafeWith`), on the text as given:
+bracketed, text holding the end sequence `ESC [201~` is unsafe
+(`paste_end`); unbracketed, so is a newline or carriage return
+(`line_break`), since each reaches the program as Enter. Unbracketed text
+holding both is reported as `line_break` — that's what runs commands as the
+text arrives, while the end sequence's ESC is replaced anyway; whether text
+is safe is the library's call, which hazard is named the binding's. Unsafe
+text is refused (`rejected`, with the hazard and whether the paste is
+bracketed) unless `allow_unsafe` names that risk: the host asks the person,
+then pastes again passing the `rejected` result's hazard and mode
+(`GhosttyPasteRisk`). A confirmation covers only what was asked — if the
+program toggled bracketed paste in between and the text's hazard or mode
+changed, it's rejected again as it is now, and text the toggle made safe is
+sent.
+
+Nothing is sent while the view takes no input (`unavailable`: not ready,
+`accepts_input` off, or from a callback inside a write, where the bytes
+would land among its replies, a replay's included), for empty text
+(`empty`), or when the encoded text is longer than `max_length`
+(`too_large`, in UTF-16 code units of its bytes decoded as UTF-8, framing
+included). The length is checked before the text's safety, so a paste that
+can't fit is reported `too_large`, never `rejected`, and is never asked
+about: a paste goes whole or not at all. The library's own
+`ghostty_terminal_paste` makes the same bytes — a Kitty paste event (mode
+5522) needs a clipboard-read effect, which the view never registers — but
+reads its text through a callback and streams the result through
+`write_pty`; encoding in one call lets the host measure it before anything
+is sent, and needs no callback into the library's writer.
+`ghostty_paste.wasm.test.ts` checks the two against each other — the rule,
+the bytes, and the length, a rejection's too — over texts that probe the
+rule and the encoder and over seeded random ones.
 
 *Keys and the page.* While the view takes keys — ready, `accepts_input` on
 — its root carries `data-fuz-terminal-keys` (`FUZ_TERMINAL_KEYS_ATTRIBUTE`),

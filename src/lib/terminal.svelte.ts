@@ -327,6 +327,16 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	}
 
 	/**
+	 * How many characters `send_input` takes now: what's left of
+	 * `TERMINAL_INPUT_PENDING_MAX_LENGTH` after the input already waiting to
+	 * be sent. Input longer than this is dropped whole, so a caller that must
+	 * not send partway (a paste) checks it first. Not reactive.
+	 */
+	get input_room(): number {
+		return Math.max(0, TERMINAL_INPUT_PENDING_MAX_LENGTH - this.#input_pending.length);
+	}
+
+	/**
 	 * Queues `data` as input, sent in order with at most one `terminal_data_send`
 	 * in flight. Input queued while starting is sent once the process starts.
 	 *

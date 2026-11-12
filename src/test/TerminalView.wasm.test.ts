@@ -7,7 +7,8 @@ import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';
 import type { Terminal } from '#lib/terminal.svelte.ts';
-import { TERMINAL_ACK_DELAY } from '#lib/terminal_helpers.ts';
+import { TERMINAL_ACK_DELAY, TERMINAL_INPUT_PENDING_MAX_LENGTH } from '#lib/terminal_helpers.ts';
+import type { TerminalPasteOutcome } from '#lib/terminal_paste.ts';
 
 import TerminalViewHarness from './TerminalViewHarness.svelte';
 import {
@@ -73,6 +74,10 @@ interface MountedView {
 	target: HTMLElement;
 	/** The text getter the view handed its parent. */
 	get_text: () => string;
+	/** The paste the view handed its parent, with the clipboard's text already read. */
+	paste: (text: string | Promise<string>) => Promise<TerminalPasteOutcome>;
+	/** The questions the view asked before pasting, in order. */
+	readonly questions: Array<string>;
 	/** How many emulator instances the views have loaded. */
 	readonly loads: number;
 	/** Run the pending frames and flush the DOM. */
@@ -85,6 +90,8 @@ const mount_view = (
 	options: {
 		load_module?: () => Promise<WebAssembly.Module>;
 		load_vt?: (module: WebAssembly.Module) => Promise<GhosttyVt>;
+		/** The person's answer to a paste's question, or how they answer it; defaults to declining. */
+		confirm_paste?: boolean | ((message: string) => boolean);
 	} = {}
 ): MountedView => {
 	let loads = 0;
@@ -97,6 +104,8 @@ const mount_view = (
 		measurement_for(20, 4)
 	);
 	let get_text: (() => string) | null = null;
+	let paste: ((text: Promise<string>) => Promise<TerminalPasteOutcome>) | null = null;
+	const questions: Array<string> = [];
 	const target = document.createElement('div');
 	document.body.append(target);
 	const mounted = mount(TerminalViewHarness, {
@@ -105,7 +114,13 @@ const mount_view = (
 			deps,
 			terminal,
 			load_module: options.load_module ?? compile_test_ghostty_vt,
-			get_text: (fn: () => string) => (get_text = fn)
+			get_text: (fn: () => string) => (get_text = fn),
+			get_paste: (fn: (text: Promise<string>) => Promise<TerminalPasteOutcome>) => (paste = fn),
+			confirm_paste: (message: string) => {
+				questions.push(message);
+				const answer = options.confirm_paste ?? false;
+				return typeof answer === 'function' ? answer(message) : answer;
+			}
 		}
 	});
 	flushSync();
@@ -122,6 +137,13 @@ const mount_view = (
 		deps,
 		target,
 		get_text: () => get_text?.() ?? '',
+		paste: async (text) => {
+			assert.ok(paste, 'the view handed back its paste');
+			const outcome = await paste(Promise.resolve(text));
+			flushSync();
+			return outcome;
+		},
+		questions,
 		get loads() {
 			return loads;
 		},
@@ -437,6 +459,220 @@ describe('TerminalView input', () => {
 		assert.isNull(view.target.querySelector('.cursor-block'), 'the cursor is hollow');
 		assert.ok(view.target.querySelector('.cursor-block-hollow'));
 		assert.strictEqual(view.get_text(), 'done', 'it still draws and copies');
+	});
+});
+
+describe('TerminalView paste', () => {
+	const notice_text = (view: MountedView): string =>
+		view.target.querySelector('.paste-notice small')?.textContent ?? '';
+
+	test('pastes the clipboard as input, framed when the program asked, and focuses the terminal', async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal);
+		await settle(view);
+		assert.deepEqual(await view.paste('echo one'), { kind: 'pasted' });
+		assert.strictEqual(await sent_input(), 'echo one');
+		assert.strictEqual(document.activeElement, terminal_root(view), 'typing goes on there');
+		terminal.receive_output(`${ESC}[?2004h`, 8);
+		assert.deepEqual(await view.paste('a\nb'), { kind: 'pasted' });
+		assert.strictEqual(await sent_input(), `${ESC}[200~a\nb${ESC}[201~`);
+		assert.deepEqual(view.questions, [], 'bracketed, a line break is safe');
+		assert.strictEqual(notice_text(view), '');
+	});
+
+	test('a denied clipboard read is reported, and the next paste clears it', async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal);
+		await settle(view);
+		const denied = new DOMException('Clipboard read was blocked.', 'NotAllowedError');
+		const outcome = await view.paste(Promise.reject(denied));
+		assert.strictEqual(outcome.kind, 'failed');
+		assert.strictEqual(
+			notice_text(view),
+			"paste failed: the browser didn't allow reading the clipboard (Clipboard read was blocked.)"
+		);
+		assert.strictEqual(view.target.querySelector('.paste-notice')?.getAttribute('role'), 'alert');
+		assert.deepEqual(await view.paste('ok'), { kind: 'pasted' });
+		assert.strictEqual(notice_text(view), '');
+		assert.strictEqual(await sent_input(), 'ok');
+	});
+
+	test('an empty clipboard sends nothing and says so; the notice dismisses', async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal);
+		await settle(view);
+		assert.strictEqual((await view.paste('')).kind, 'failed');
+		assert.strictEqual(notice_text(view), 'paste failed: the clipboard has no text');
+		view.target.querySelector<HTMLButtonElement>('.paste-notice button')!.click();
+		flushSync();
+		assert.isNull(view.target.querySelector('.paste-notice'));
+		assert.strictEqual(await sent_input(), '');
+	});
+
+	test('a paste over the input limit is refused whole, before anything is sent or asked', async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal);
+		await settle(view);
+		const over = 'x\n'.repeat(TERMINAL_INPUT_PENDING_MAX_LENGTH / 2) + 'x';
+		assert.strictEqual((await view.paste(over)).kind, 'failed');
+		assert.strictEqual(
+			notice_text(view),
+			`paste refused: it's ${over.length} characters, and a terminal takes at most ${TERMINAL_INPUT_PENDING_MAX_LENGTH} characters of input at a time — nothing was sent`
+		);
+		assert.deepEqual(view.questions, [], 'refused without asking');
+		assert.strictEqual(await sent_input(), '');
+		assert.isNull(terminal.error_message, 'send_input never saw it');
+		// exactly the limit fits
+		const fits = 'y'.repeat(TERMINAL_INPUT_PENDING_MAX_LENGTH);
+		assert.deepEqual(await view.paste(fits), { kind: 'pasted' });
+		assert.strictEqual(await sent_input(), fits);
+	});
+
+	test('the framing counts, and so does input already waiting to be sent', async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal);
+		await settle(view);
+		terminal.receive_output(`${ESC}[?2004h`, 8);
+		// the frame's 12 characters push a text of exactly the limit over it
+		const full = 'z'.repeat(TERMINAL_INPUT_PENDING_MAX_LENGTH);
+		assert.strictEqual((await view.paste(full)).kind, 'failed');
+		assert.include(notice_text(view), `it's ${TERMINAL_INPUT_PENDING_MAX_LENGTH + 12} characters`);
+		// one send in flight, and 1000 characters queued behind it
+		terminal.send_input('a');
+		terminal.send_input('b'.repeat(1000));
+		const room = TERMINAL_INPUT_PENDING_MAX_LENGTH - 1000;
+		assert.strictEqual(terminal.input_room, room);
+		assert.strictEqual((await view.paste('c'.repeat(room - 11))).kind, 'failed');
+		assert.strictEqual(
+			notice_text(view),
+			`paste refused: it's ${room + 1} characters, and the terminal has room for ${room} more characters of input now (at most ${TERMINAL_INPUT_PENDING_MAX_LENGTH} wait to be sent at a time) — nothing was sent`
+		);
+		assert.deepEqual(await view.paste('c'.repeat(room - 12)), { kind: 'pasted' });
+		assert.strictEqual(
+			await sent_input(),
+			'a' + 'b'.repeat(1000) + `${ESC}[200~${'c'.repeat(room - 12)}${ESC}[201~`
+		);
+		assert.isNull(terminal.error_message);
+	});
+
+	test('a line break unbracketed is asked about: declined sends nothing, confirmed sends Enter', async () => {
+		const terminal = create_running();
+		const declining = mount_view(terminal);
+		await settle(declining);
+		assert.deepEqual(await declining.paste('ls\nrm -rf ~\n'), { kind: 'declined' });
+		assert.strictEqual(declining.questions.length, 1);
+		assert.include(declining.questions[0], "hasn't turned on bracketed paste");
+		assert.strictEqual(await sent_input(), '');
+		assert.strictEqual(notice_text(declining), '');
+		declining.unmount();
+
+		const confirming = mount_view(terminal, { confirm_paste: true });
+		await settle(confirming);
+		assert.deepEqual(await confirming.paste('ls\npwd'), { kind: 'pasted' });
+		assert.strictEqual(confirming.questions.length, 1);
+		assert.strictEqual(await sent_input(), 'ls\rpwd');
+	});
+
+	test("a declined paste clears an earlier failure's notice", async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal);
+		await settle(view);
+		assert.strictEqual((await view.paste('')).kind, 'failed');
+		assert.strictEqual(notice_text(view), 'paste failed: the clipboard has no text');
+		assert.deepEqual(await view.paste('a\nb'), { kind: 'declined' });
+		assert.isNull(view.target.querySelector('.paste-notice'));
+		assert.strictEqual(await sent_input(), '');
+	});
+
+	test('the end sequence is asked about even bracketed, and defused when confirmed', async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal, { confirm_paste: true });
+		await settle(view);
+		terminal.receive_output(`${ESC}[?2004h`, 8);
+		assert.deepEqual(await view.paste(`ok${ESC}[201~id\n`), { kind: 'pasted' });
+		assert.strictEqual(view.questions.length, 1);
+		assert.include(view.questions[0], 'ESC [201~');
+		assert.strictEqual(await sent_input(), `${ESC}[200~ok [201~id\n${ESC}[201~`);
+	});
+
+	test('unsafe text too large is refused as too large, never asked about', async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal);
+		await settle(view);
+		terminal.receive_output(`${ESC}[?2004h`, 8);
+		const end = `${ESC}[201~`;
+		// within the room as given, but over it once framed
+		const over = 'x'.repeat(TERMINAL_INPUT_PENDING_MAX_LENGTH - 11 - end.length) + end;
+		assert.isAtMost(over.length, TERMINAL_INPUT_PENDING_MAX_LENGTH);
+		assert.strictEqual((await view.paste(over)).kind, 'failed');
+		assert.include(notice_text(view), `it's ${TERMINAL_INPUT_PENDING_MAX_LENGTH + 1} characters`);
+		assert.deepEqual(view.questions, [], 'refused without asking');
+		// one character shorter, it fits framed, and is asked about
+		assert.deepEqual(await view.paste(over.slice(1)), { kind: 'declined' });
+		assert.strictEqual(view.questions.length, 1);
+		assert.include(view.questions[0], 'ESC [201~');
+		assert.strictEqual(await sent_input(), '');
+	});
+
+	test('a confirmation covers only what was asked, whatever the program does meanwhile', async () => {
+		const terminal = create_running();
+		const bracket = (on: boolean): void => {
+			const data = `${ESC}[?2004${on ? 'h' : 'l'}`;
+			terminal.receive_output(data, data.length);
+		};
+		let during_confirm = (): void => {};
+		const view = mount_view(terminal, {
+			confirm_paste: () => {
+				during_confirm();
+				return true;
+			}
+		});
+		await settle(view);
+		// asked about the end sequence bracketed; the program turns the mode off
+		// while the person answers, so the line break would run as Enter
+		bracket(true);
+		during_confirm = () => bracket(false);
+		const outcome = await view.paste(`ls\n${ESC}[201~`);
+		assert.strictEqual(outcome.kind, 'failed');
+		assert.strictEqual(
+			notice_text(view),
+			"paste refused: the program changed the terminal's paste mode while you were asked, so what you confirmed no longer applies — nothing was sent; paste again to be asked about the text as it is now"
+		);
+		assert.strictEqual(view.questions.length, 1);
+		assert.include(view.questions[0], 'ESC [201~');
+		assert.strictEqual(await sent_input(), '');
+		// pasted again, it's asked about as it is now
+		during_confirm = () => {};
+		assert.deepEqual(await view.paste(`ls\n${ESC}[201~`), { kind: 'pasted' });
+		assert.strictEqual(view.questions.length, 2);
+		assert.include(view.questions[1], "hasn't turned on bracketed paste");
+		assert.strictEqual(await sent_input(), 'ls\r [201~');
+		// asked about a line break, and the program turns bracketed paste on: the
+		// text is safe now, and goes framed
+		during_confirm = () => bracket(true);
+		assert.deepEqual(await view.paste('a\nb'), { kind: 'pasted' });
+		assert.strictEqual(view.questions.length, 3);
+		assert.strictEqual(await sent_input(), `${ESC}[200~a\nb${ESC}[201~`);
+	});
+
+	test('a terminal whose process ended takes no paste, and says so', async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal);
+		await settle(view);
+		terminal.receive_exited(0);
+		flushSync();
+		assert.strictEqual((await view.paste('x')).kind, 'failed');
+		assert.strictEqual(notice_text(view), 'paste failed: the terminal takes no input now');
+		assert.strictEqual(await sent_input(), '');
+	});
+
+	test('a view still loading takes no paste', async () => {
+		const terminal = create_running();
+		const view = mount_view(terminal, { load_module: () => new Promise(() => {}) });
+		flushSync();
+		assert.strictEqual((await view.paste('x')).kind, 'failed');
+		assert.strictEqual(notice_text(view), "paste failed: the terminal view isn't ready");
+		assert.strictEqual(await sent_input(), '');
 	});
 });
 

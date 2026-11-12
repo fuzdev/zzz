@@ -8,6 +8,7 @@
 
 import { GhosttyEffectError } from './ghostty_errors.ts';
 import { GhosttyKeyEncoder, type GhosttyKeyAction } from './ghostty_key_encoder.ts';
+import type { GhosttyPasteEncoding, GhosttyPasteRisk } from './ghostty_paste.ts';
 import {
 	GhosttyRenderState,
 	type GhosttyRenderColors,
@@ -157,6 +158,50 @@ export interface FuzTerminalOptions {
 	onerror?: (error: unknown) => void;
 }
 
+/** How `FuzTerminalState.paste` treats one paste. */
+export interface FuzTerminalPasteOptions {
+	/**
+	 * The risk the person pasting confirmed — a `rejected` result's hazard and
+	 * mode: text with that hazard in that mode is sent rather than refused.
+	 * Unsafe text whose hazard or mode differs now (the program toggled
+	 * bracketed paste since the person was asked) is rejected again. Defaults to `null`: unsafe text
+	 * is rejected (`GhosttyPasteOptions.allow_unsafe`).
+	 */
+	allow_unsafe?: GhosttyPasteRisk | null;
+	/**
+	 * The most the paste may send, in UTF-16 code units of its bytes decoded
+	 * as UTF-8 — the encoded text, framing included
+	 * (`to_ghostty_paste_length`). Over it, nothing is sent, and the result is
+	 * `too_large` before the text's safety is looked at, so a paste that
+	 * can't fit is never asked about. Defaults to no limit.
+	 */
+	max_length?: number;
+}
+
+/**
+ * What `FuzTerminalState.paste` did:
+ *
+ * - `pasted` - the bytes went to `ondata`; `length` is the encoded text's,
+ *   measured as `FuzTerminalPasteOptions.max_length` is
+ * - `empty` - there was no text, so nothing was sent
+ * - `rejected` - the text could inject commands
+ *   (`get_ghostty_paste_hazard`) and fits `max_length`, so nothing was sent;
+ *   ask the person about the hazard, then paste again with `allow_unsafe`
+ *   set to the hazard and mode reported here
+ * - `too_large` - the encoded text's `length` is over `max_length`, so
+ *   nothing was sent, whether or not the text is safe
+ * - `unavailable` - the view isn't taking input: not ready (`not_ready`:
+ *   loading, failed, poisoned, or destroyed), its input off (`input_off`:
+ *   `FuzTerminalOptions.accepts_input`), or called from one of its callbacks
+ *   inside a write (`busy`), where the bytes would land among its replies
+ */
+export type FuzTerminalPasteResult =
+	| { readonly kind: 'pasted'; readonly length: number }
+	| { readonly kind: 'empty' }
+	| ({ readonly kind: 'rejected' } & GhosttyPasteRisk)
+	| { readonly kind: 'too_large'; readonly length: number }
+	| { readonly kind: 'unavailable'; readonly reason: 'not_ready' | 'input_off' | 'busy' };
+
 /** A write waiting its turn: while loading, or made from a callback inside a write. */
 interface QueuedWrite {
 	data: Uint8Array | string;
@@ -177,7 +222,8 @@ interface QueuedWrite {
  * changed: `rows` when the update wasn't clean, and `cursor` and the colors
  * by reference every frame, since they change on clean updates too.
  */
-// TODO: paste and IME on the focused root; focus reporting; mouse reporting
+// TODO: paste events (Ctrl+Shift+V, Shift+Insert, a middle click) and IME on
+// the focused root, through a hidden textarea; focus reporting; mouse reporting
 // TODO: scrollback — scrolling the viewport (`ghostty_terminal_scroll_viewport`) and a scrollbar
 // TODO: set the theme's colors on the terminal, so color queries (OSC 10/11/4)
 // answer with what's drawn rather than the library's placeholders, and
@@ -423,6 +469,46 @@ export class FuzTerminalState {
 		// TODO: scroll the viewport to the bottom on input, once it scrolls
 		this.#call_host(() => this.#options().ondata?.(bytes));
 		return true;
+	}
+
+	/**
+	 * Paste text: encoded under the terminal's modes as they are now
+	 * (`GhosttyTerminal.encode_paste` — bracketed when the program asked for
+	 * bracketed paste, control bytes replaced) and sent to `ondata` in one
+	 * call, as a key's bytes are. Nothing is sent unless the view takes input
+	 * — ready, its input on, and not inside a write — nor for text that could
+	 * inject commands unless `allow_unsafe` names its hazard in the current
+	 * mode, nor past `max_length` — checked first: a paste goes whole or not
+	 * at all, and one too large is never reported as `rejected`.
+	 *
+	 * A failure of the library stops the view, as for a key; the result is
+	 * then `unavailable`.
+	 */
+	paste(text: string, options?: FuzTerminalPasteOptions): FuzTerminalPasteResult {
+		const terminal = this.#terminal;
+		if (terminal === null || !this.#usable) return { kind: 'unavailable', reason: 'not_ready' };
+		if (this.#busy) return { kind: 'unavailable', reason: 'busy' };
+		if (this.#options().accepts_input === false) {
+			return { kind: 'unavailable', reason: 'input_off' };
+		}
+		let encoding: GhosttyPasteEncoding;
+		try {
+			encoding = terminal.encode_paste(text, { allow_unsafe: options?.allow_unsafe ?? null });
+		} catch (error) {
+			this.#handle_error(error);
+			return { kind: 'unavailable', reason: 'not_ready' };
+		}
+		if (encoding.kind === 'empty') return encoding;
+		const { length } = encoding;
+		const max_length = options?.max_length;
+		if (max_length !== undefined && length > max_length) return { kind: 'too_large', length };
+		if (encoding.kind === 'rejected') {
+			return { kind: 'rejected', hazard: encoding.hazard, bracketed: encoding.bracketed };
+		}
+		const { bytes } = encoding;
+		// TODO: scroll the viewport to the bottom on input, once it scrolls
+		this.#call_host(() => this.#options().ondata?.(bytes));
+		return { kind: 'pasted', length };
 	}
 
 	/**

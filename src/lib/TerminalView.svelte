@@ -13,15 +13,26 @@
 	import type { FuzTerminalStatus } from './fuz_terminal/fuz_terminal_state.svelte.ts';
 	import { load_fuz_terminal_module } from './fuz_terminal_module.ts';
 	import type { Terminal } from './terminal.svelte.ts';
+	import { paste_terminal_text, type TerminalPasteOutcome } from './terminal_paste.ts';
 	import { TerminalViewLink } from './terminal_view_link.ts';
 
 	const {
 		terminal,
 		get_text,
+		get_paste,
+		confirm_paste = (message) => confirm(message), // eslint-disable-line no-alert
 		load_module = load_fuz_terminal_module
 	}: {
 		terminal: Terminal;
 		get_text?: (fn: () => string) => void;
+		/**
+		 * Hands the parent the view's paste: give it a clipboard read started
+		 * from the user's gesture (`read_clipboard_text`); a failure is shown
+		 * in the view, never thrown.
+		 */
+		get_paste?: (fn: (text: Promise<string>) => Promise<TerminalPasteOutcome>) => void;
+		/** Asks whether to paste text that could inject commands; defaults to `confirm`. */
+		confirm_paste?: (message: string) => boolean;
 		/** The compiled emulator module's loader; defaults to the page's shared one. */
 		load_module?: () => Promise<WebAssembly.Module>;
 	} = $props();
@@ -30,6 +41,8 @@
 	let link: TerminalViewLink | null = null;
 	let status: FuzTerminalStatus = $state.raw({ kind: 'loading' });
 	let copy_text: string = $state.raw('');
+	/** Why the last paste failed, until the next paste that doesn't fail, or it's dismissed. */
+	let paste_notice: string | null = $state.raw(null);
 	/**
 	 * Bumped to remount the emulator — a fresh instance, the cell's history
 	 * replayed into it: "reopen" for a poisoned view, "retry" for a failed one.
@@ -45,6 +58,25 @@
 	};
 
 	untrack(() => get_text)?.(get_terminal_text);
+
+	const paste = async (text: Promise<string>): Promise<TerminalPasteOutcome> => {
+		const outcome = await paste_terminal_text(text, {
+			paste: (pasted, options) =>
+				view?.paste(pasted, options) ?? { kind: 'unavailable', reason: 'not_ready' },
+			input_room: () => terminal.input_room,
+			confirm: (message) => confirm_paste(message)
+		});
+		if (outcome.kind === 'failed') {
+			paste_notice = outcome.message;
+		} else {
+			paste_notice = null;
+			// typing goes on where the text went
+			if (outcome.kind === 'pasted') view?.focus();
+		}
+		return outcome;
+	};
+
+	untrack(() => get_paste)?.(paste);
 
 	// link each emulator instance as soon as it's mounted, so its writes queue
 	// while its module loads; a remount links the new one. Only the instance is
@@ -110,6 +142,12 @@
 			</button>
 		</p>
 	{/if}
+	{#if paste_notice}
+		<p class="paste-notice" role="alert">
+			<small>{paste_notice}</small>
+			<button type="button" class="plain" onclick={() => (paste_notice = null)}>dismiss</button>
+		</p>
+	{/if}
 	<div class="terminal-screen">
 		<div class="terminal-box">
 			{#key generation}
@@ -152,7 +190,8 @@
 		gap: var(--space_xs);
 		align-items: center;
 	}
-	.output-gap {
+	.output-gap,
+	.paste-notice {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;

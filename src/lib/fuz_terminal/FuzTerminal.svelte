@@ -1,7 +1,8 @@
 <script lang="ts">
 	// A terminal view over libghostty-vt: it instantiates the compiled module it's
 	// given, owns that instance's terminal and render-state reader, and draws the
-	// screen as DOM text, and sends the keys typed into it to `ondata`. See
+	// screen as DOM text, and sends the keys typed into it — and what its host
+	// pastes (`paste`) — to `ondata`. See
 	// `FuzTerminalState` for the frame loop and the keys, and `FuzTerminalOptions`
 	// for the props.
 	//
@@ -22,6 +23,8 @@
 	import {
 		FuzTerminalState,
 		type FuzTerminalOptions,
+		type FuzTerminalPasteOptions,
+		type FuzTerminalPasteResult,
 		type FuzTerminalStatus,
 		type FuzTerminalWriteOptions
 	} from './fuz_terminal_state.svelte.ts';
@@ -54,6 +57,18 @@
 	export const write = (data: Uint8Array | string, write_options?: FuzTerminalWriteOptions): void =>
 		terminal.write(data, write_options);
 
+	/**
+	 * Paste text as the person typing it: encoded under the terminal's modes
+	 * and sent to `ondata`, whole or not at all — refused while the view takes
+	 * no input, past `max_length`, and for text that could inject commands
+	 * unless `allow_unsafe` names the hazard the person confirmed. See
+	 * `FuzTerminalState.paste`.
+	 */
+	export const paste = (
+		text: string,
+		paste_options?: FuzTerminalPasteOptions
+	): FuzTerminalPasteResult => terminal.paste(text, paste_options);
+
 	/** The screen as plain text, for a copy-all; see `FuzTerminalState.get_text`. */
 	export const get_text = (): string => terminal.get_text();
 
@@ -83,8 +98,8 @@
 	};
 </script>
 
-<!-- keys typed while the root has focus go to the program; TODO: a hidden textarea
-inside it for IME composition and paste -->
+<!-- keys typed while the root has focus go to the program, and a host's `paste`;
+TODO: a hidden textarea inside it for IME composition and the paste events -->
 <!-- TODO: a deliberate screen-reader mode, which settles the root's role (a
 `group` keeps the rows browsable as text; `application` would hand a screen
 reader's keys to the program); for now the rows are plain text in the tree, and

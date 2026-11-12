@@ -5,6 +5,7 @@
 	import TerminalView from './TerminalView.svelte';
 	import TerminalContextmenu from './TerminalContextmenu.svelte';
 	import type { Terminal } from './terminal.svelte.ts';
+	import type { TerminalPasteOutcome } from './terminal_paste.ts';
 
 	const {
 		terminal,
@@ -17,12 +18,17 @@
 	} = $props();
 
 	let text_getter: (() => string) | null = $state.raw(null);
+	let paster: ((text: Promise<string>) => Promise<TerminalPasteOutcome>) | null = $state.raw(null);
 	let stdin_input: string = $state.raw('');
 
 	const accepts_input = $derived(terminal.status === 'running' || terminal.status === 'starting');
 
 	const handle_get_text = (fn: () => string): void => {
 		text_getter = fn;
+	};
+
+	const handle_get_paste = (fn: (text: Promise<string>) => Promise<TerminalPasteOutcome>): void => {
+		paster = fn;
 	};
 
 	const send_stdin = (): void => {
@@ -38,7 +44,11 @@
 	};
 </script>
 
-<TerminalContextmenu get_terminal_text={text_getter} display_command={terminal.display_command}>
+<TerminalContextmenu
+	get_terminal_text={text_getter}
+	paste={accepts_input ? paster : null}
+	display_command={terminal.display_command}
+>
 	<div class="terminal-run-item">
 		<div class="run-header">
 			<span class="run-command">$ {terminal.display_command}</span>
@@ -90,7 +100,7 @@
 		<div class="run-output">
 			<!-- a restart spawns a new process — remount for a fresh emulator -->
 			{#key terminal.run}
-				<TerminalView {terminal} get_text={handle_get_text} />
+				<TerminalView {terminal} get_text={handle_get_text} get_paste={handle_get_paste} />
 			{/key}
 		</div>
 		<div class="stdin-input">

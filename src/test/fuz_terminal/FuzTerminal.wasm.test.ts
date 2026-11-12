@@ -1917,3 +1917,175 @@ describe('keyboard input', () => {
 		});
 	});
 });
+
+describe('pasting', () => {
+	const mount_pasting = async (
+		options: Parameters<typeof mount_terminal>[0] = {}
+	): Promise<Mounted & { sent: Array<string> }> => {
+		const sent: Array<string> = [];
+		const t = await mount_terminal({
+			...options,
+			props: { ondata: (data) => sent.push(new TextDecoder().decode(data)), ...options.props }
+		});
+		return { ...t, sent };
+	};
+
+	test('the text goes to ondata in one call, framed once the program asks for bracketed paste', async () => {
+		const t = await mount_pasting();
+		assert.deepEqual(t.view.paste('ls -la'), { kind: 'pasted', length: 6 });
+		t.view.write(`${ESC}[?2004h`);
+		assert.deepEqual(t.view.paste('a\nb'), { kind: 'pasted', length: 15 });
+		assert.deepEqual(t.sent, ['ls -la', `${ESC}[200~a\nb${ESC}[201~`]);
+		// the screen is the program's to change: a paste draws nothing itself
+		t.step();
+		assert.deepEqual(rows_text(t.root), ['', '', '', '']);
+	});
+
+	test('unsafe text is refused unless its risk is allowed, and sends nothing', async () => {
+		const t = await mount_pasting();
+		const line_break = { hazard: 'line_break', bracketed: false } as const;
+		assert.deepEqual(t.view.paste('rm -rf ~\n'), { kind: 'rejected', ...line_break });
+		assert.deepEqual(t.view.paste(`x${ESC}[201~`), {
+			kind: 'rejected',
+			hazard: 'paste_end',
+			bracketed: false
+		});
+		assert.deepEqual(t.sent, []);
+		assert.deepEqual(t.view.paste('a\nb', { allow_unsafe: line_break }), {
+			kind: 'pasted',
+			length: 3
+		});
+		assert.deepEqual(t.sent, ['a\rb']);
+		// allowing one risk allows no other
+		assert.deepEqual(t.view.paste(`x${ESC}[201~`, { allow_unsafe: line_break }), {
+			kind: 'rejected',
+			hazard: 'paste_end',
+			bracketed: false
+		});
+		t.view.write(`${ESC}[?2004h`);
+		assert.deepEqual(
+			t.view.paste(`x${ESC}[201~`, { allow_unsafe: { hazard: 'paste_end', bracketed: false } }),
+			{ kind: 'rejected', hazard: 'paste_end', bracketed: true }
+		);
+		assert.deepEqual(t.sent, ['a\rb']);
+	});
+
+	test('a paste too large is reported so before its safety, so it is never asked about', async () => {
+		const t = await mount_pasting();
+		assert.deepEqual(t.view.paste('a\nb', { max_length: 2 }), { kind: 'too_large', length: 3 });
+		assert.deepEqual(t.view.paste('a\nb', { max_length: 3 }), {
+			kind: 'rejected',
+			hazard: 'line_break',
+			bracketed: false
+		});
+		t.view.write(`${ESC}[?2004h`);
+		// bracketed, the end sequence is the hazard and the frame counts
+		const text = `ok${ESC}[201~`;
+		assert.deepEqual(t.view.paste(text, { max_length: text.length + 11 }), {
+			kind: 'too_large',
+			length: text.length + 12
+		});
+		assert.deepEqual(t.view.paste(text, { max_length: text.length + 12 }), {
+			kind: 'rejected',
+			hazard: 'paste_end',
+			bracketed: true
+		});
+		assert.deepEqual(t.sent, []);
+	});
+
+	test('empty text sends nothing', async () => {
+		const t = await mount_pasting();
+		assert.deepEqual(t.view.paste(''), { kind: 'empty' });
+		assert.deepEqual(t.sent, []);
+	});
+
+	test('past max_length nothing is sent; the framing and multi-byte text are measured as characters', async () => {
+		const t = await mount_pasting();
+		// 你 is one UTF-16 code unit and three bytes: measured as one
+		assert.deepEqual(t.view.paste('你好', { max_length: 2 }), { kind: 'pasted', length: 2 });
+		assert.deepEqual(t.view.paste('abc', { max_length: 2 }), { kind: 'too_large', length: 3 });
+		t.view.write(`${ESC}[?2004h`);
+		// the frame's 12 characters count
+		assert.deepEqual(t.view.paste('abc', { max_length: 14 }), { kind: 'too_large', length: 15 });
+		assert.deepEqual(t.view.paste('abc', { max_length: 15 }), { kind: 'pasted', length: 15 });
+		assert.deepEqual(t.sent, ['你好', `${ESC}[200~abc${ESC}[201~`]);
+	});
+
+	test('unavailable with input off, while loading, once failed, and from a callback inside a write', async () => {
+		const off = await mount_pasting({ props: { accepts_input: false } });
+		assert.deepEqual(off.view.paste('x'), { kind: 'unavailable', reason: 'input_off' });
+		assert.deepEqual(off.sent, []);
+		off.unmount();
+
+		let open!: () => void;
+		const gate = new Promise<void>((resolve) => (open = resolve));
+		const while_loading: Array<unknown> = [];
+		const loading = await mount_pasting({
+			load_vt: async () => {
+				await gate;
+				return load_test_ghostty_vt();
+			},
+			oninstance: (view) => {
+				while_loading.push(
+					view.paste('x', { allow_unsafe: { hazard: 'line_break', bracketed: false } })
+				);
+				open();
+			}
+		});
+		assert.deepEqual(while_loading, [{ kind: 'unavailable', reason: 'not_ready' }]);
+		assert.deepEqual(loading.sent, []);
+		loading.unmount();
+		assert.deepEqual(loading.view.paste('x'), { kind: 'unavailable', reason: 'not_ready' });
+
+		const failed = await mount_pasting({
+			load_vt: () => Promise.reject(new Error('no wasm here'))
+		});
+		assert.deepEqual(failed.view.paste('x'), { kind: 'unavailable', reason: 'not_ready' });
+
+		// a bell in a replay and in live output: neither callback's paste is sent
+		const from_callback: Array<unknown> = [];
+		const busy = await mount_pasting({
+			props: {
+				ontitle: () => from_callback.push(written_by_host!.paste('from title')),
+				onbell: () => from_callback.push(written_by_host!.paste('from bell'))
+			}
+		});
+		busy.view.write(`${ESC}]2;replayed${BEL}`, { replay: true });
+		busy.view.write(`${ESC}]2;live${BEL}\x07`);
+		assert.deepEqual(from_callback, [
+			{ kind: 'unavailable', reason: 'busy' },
+			{ kind: 'unavailable', reason: 'busy' },
+			{ kind: 'unavailable', reason: 'busy' }
+		]);
+		assert.deepEqual(busy.sent, []);
+	});
+
+	test('a library failure while encoding fails the view, sending nothing', async () => {
+		const t = await mount_pasting({
+			load_vt: () =>
+				load_wrapped_ghostty_vt(() => ({
+					ghostty_paste_encode: () => -2 // GHOSTTY_INVALID_VALUE
+				}))
+		});
+		assert.deepEqual(t.view.paste('x'), { kind: 'unavailable', reason: 'not_ready' });
+		flushSync();
+		assert.strictEqual(t.view.get_status().kind, 'failed');
+		assert.include(t.root.querySelector('.message')?.textContent, 'ghostty_paste_encode');
+		assert.deepEqual(t.sent, []);
+	});
+
+	test('an ondata that throws is reported; the paste still counts as sent', async () => {
+		const errors: Array<unknown> = [];
+		const t = await mount_pasting({
+			props: {
+				ondata: () => {
+					throw new Error('host broke');
+				},
+				onerror: (error) => errors.push(error)
+			}
+		});
+		assert.deepEqual(t.view.paste('x'), { kind: 'pasted', length: 1 });
+		assert.strictEqual(errors.length, 1);
+		assert.strictEqual(t.view.get_status().kind, 'ready');
+	});
+});
