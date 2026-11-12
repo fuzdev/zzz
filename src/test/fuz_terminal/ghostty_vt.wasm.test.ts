@@ -31,8 +31,9 @@ describe('load_ghostty_vt', () => {
 
 	test('has exactly the features `cargo xtask ghostty-vt` builds in', async () => {
 		const vt = await load_test_ghostty_vt();
-		const built_in = ['render_state', 'input_encode', 'selection', 'color', 'formatter'];
+		const built_in = ['render_state', 'input_encode', 'selection', 'formatter'];
 		const left_out = [
+			'color',
 			'snapshot',
 			'search',
 			'grid_introspection',

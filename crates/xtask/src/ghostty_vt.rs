@@ -98,10 +98,13 @@ const ZIG_TARGET: &str = "wasm32-freestanding";
 /// The packaging guide's recommendation for the web.
 const ZIG_OPTIMIZE: &str = "ReleaseSmall";
 /// The library's optional parts the module keeps: rendering, input
-/// encoding, selection, palette helpers, and the formatter. Everything else
-/// is compiled out — its functions stay exported and return
-/// `GHOSTTY_UNSUPPORTED`.
-const VT_FEATURES: &str = "-all,+render-state,+input-encode,+selection,+color,+formatter";
+/// encoding, selection, and the formatter. Everything else is compiled out:
+/// its functions stay exported but do nothing (most return
+/// `GHOSTTY_UNSUPPORTED`, the rest an empty value). That includes `color`,
+/// which gates only the C API's standalone color helpers (parsing color
+/// strings, X11 names, palettes, contrast); the binding never calls them,
+/// and the terminal's own color handling is always built in.
+const VT_FEATURES: &str = "-all,+render-state,+input-encode,+selection,+formatter";
 
 /// The build cache: tarballs, the unpacked trees, Zig's caches, the stamp.
 /// Under `target/`, so it's gitignored and outside Vite's watch.
@@ -684,7 +687,7 @@ mod tests {
                 "/c/deps dir",
                 "-Dtarget=wasm32-freestanding",
                 "-Doptimize=ReleaseSmall",
-                "-Dvt-features=-all,+render-state,+input-encode,+selection,+color,+formatter",
+                "-Dvt-features=-all,+render-state,+input-encode,+selection,+formatter",
                 "--prefix",
                 "/c/out",
             ]
