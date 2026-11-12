@@ -472,9 +472,11 @@ full text only when something reads it, like "copy conversation".
 
 ## Terminals
 
-PTY terminals rendered by xterm.js, spawned and managed by the Rust backend's
-`PtyManager` (`crates/zzz_server/src/pty_manager.rs`, using the native
-`fuz_pty` crate — [development.md](./development.md) covers the build story).
+PTY terminals drawn by zzz's own terminal view (`TerminalView.svelte`, a
+`FuzTerminal` over Ghostty's emulator — see [fuz_terminal](#fuz_terminal)
+below), spawned and managed by the Rust backend's `PtyManager`
+(`crates/zzz_server/src/pty_manager.rs`, using the native `fuz_pty` crate —
+[development.md](./development.md) covers the build story).
 
 Actions: `terminal_create` (→ `{terminal_id}`), `terminal_data_send` (stdin),
 `terminal_resize`, `terminal_ack` (output consumed), and `terminal_close`
@@ -485,8 +487,10 @@ account that created the terminal, not to all sockets like `filer_change`
 nor to one socket like `completion_progress`.
 
 ```
-User types in xterm.js (TerminalView.svelte)
-  → term.onData → terminal.send_input(data)  (Terminal cell's ordered queue)
+User types in a focused FuzTerminal (TerminalView.svelte)
+  → the key encoder's bytes, or the emulator's reply to a live query
+    → ondata → TerminalViewLink.send (streaming UTF-8 decode)
+      → terminal.send_input(data)  (Terminal cell's ordered queue)
     → app.api.terminal_data_send({terminal_id, data})  (one in flight per terminal)
       → handlers::terminal → PtyManager::write (enqueue on the terminal's input queue)
         → the terminal's task writes each chunk in full as the PTY accepts it
@@ -496,8 +500,9 @@ User types in xterm.js (TerminalView.svelte)
       → frontend_action_handlers.terminal_data.receive
         → frontend.terminals.receive_output(terminal_id, data, sent_bytes)
           → the Terminal cell buffers the chunk and forwards it to any
-            attached TerminalView, which writes it into its xterm buffer
-            → once xterm has parsed it: app.api.terminal_ack({terminal_id, bytes})
+            attached TerminalView's link, which writes it into the emulator
+            (parsed synchronously; drawn at the next animation frame)
+            → as soon as the write returns: app.api.terminal_ack({terminal_id, bytes})
               (batched) → PtyManager::ack, which paces the terminal's reads
 ```
 
@@ -511,20 +516,36 @@ and their output buffering, and coming back reattaches to them.
   the most recent 1M characters, oldest dropped first, trimmed at a line or
   chunk boundary) whether or not a view is mounted. `attach_output` streams
   new output and hands back the buffered history, which a (re)mounted view
-  replays into a fresh xterm — after a dim "earlier output truncated" line if
-  output was dropped — ignoring xterm's input until the replay is parsed, so
-  xterm's answers to terminal queries in the history (cursor position, device
-  attributes) aren't typed into the live process. Output for an unknown
+  replays into a fresh emulator — after a dim "earlier output truncated" line
+  if output was dropped — as a replay write (`{replay: true}`), which has no
+  reply effects registered: the queries in the history (cursor position,
+  device attributes) were answered when the output first arrived, and get no
+  second answer typed into the live process. What the history does to the
+  emulator's state carries forward, as when live output continues it — a
+  history that ends partway through a query is answered once live output
+  completes it, and one that turned on in-band size reports (mode 2048) gets
+  a report at the view's next resize. Live chunks after it are plain writes,
+  whose queries the view answers. Output for an unknown
   `terminal_id` is held (capped at 64K characters) only while a
   `terminal_create` is in flight, since a new shell's first output can arrive
   before the create response.
 - **Output pacing** — each `terminal_data` carries `sent_bytes`, the
   backend's running total of the terminal's output, and the `Terminal` acks
   the `sent_bytes` it has consumed through with `terminal_ack`. Consumed
-  means every attached view's xterm has parsed the chunk (`term.write`'s
-  callback), or, with no view attached, that the chunk is in the buffer —
-  which drops its oldest output, so it never backs up. A view that detaches
-  stops being waited on. `TerminalOutputAcker` batches the acks: one at once
+  means every attached view's emulator has parsed the chunk, or, with no
+  view attached, that the chunk is in the buffer — which drops its oldest
+  output, so it never backs up. A ready view parses a chunk before `write`
+  returns, and `TerminalViewLink` calls the listener's `consumed` right
+  after. A view still loading its module queues the chunk unparsed, so its
+  `consumed` waits until the view leaves `loading` (the view's `onstatus`):
+  at `ready` the queued writes have been parsed, and every chunk that waited
+  is consumed in order; at `failed` or `poisoned` nothing will parse them,
+  and they're consumed too, so a view that can't draw never holds the
+  process blocked. So the backend's window bounds what can queue while a
+  view loads, once this connection has acked the terminal; until its first
+  ack (a new terminal, or after a reconnect) the backend has no consumer to
+  pace against. A view that detaches stops being waited on — the cell drops
+  its listener, and what that listener hadn't consumed counts no more. `TerminalOutputAcker` batches the acks: one at once
   when 256 KiB are waiting, otherwise after a short delay so the last of a
   burst is acked too, and never more than one in flight — what's consumed
   meanwhile waits for it and goes in the next, by the same rule. The backend
@@ -544,7 +565,40 @@ and their output buffering, and coming back reattaches to them.
   backoff — nothing was enqueued, so a resend can't duplicate — and shows the
   error until a send succeeds; other failures are shown without a retry,
   since the data may have been delivered. Pending input is capped.
-  `Terminal.resize` coalesces to the latest size the same way.
+  The view's bytes arrive as `Uint8Array`s (keys typed, replies to live
+  queries) and are decoded as UTF-8 by a streaming decoder per view, since
+  input goes over the wire as text. `Terminal.resize` coalesces to the latest
+  size the same way; the view calls it with its size in cells when its
+  emulator is created and whenever its box or font changes.
+- **The view** — `TerminalView` fills the height its host gives it (the
+  terminals page gives each run a fixed height) and lays the emulator's box
+  over a stretched flex item absolutely, so the box has a definite size. It
+  hosts one `FuzTerminal`, whose module comes from `load_fuz_terminal_module`
+  (`fuz_terminal_module.ts`): `static/fuz_terminal/ghostty-vt.wasm`, fetched
+  and compiled once per page and shared by every view, a failed load dropped
+  so the next view retries. A missing module — a 404, or an HTML page in its
+  place — leaves the view `failed` with a message naming `cargo xtask
+  ghostty-vt`, and so does a load that hasn't settled within
+  `FUZ_TERMINAL_MODULE_LOAD_TIMEOUT_MS` (about 30 seconds; the fetch is
+  aborted), which is what ends a load that would never finish: the view
+  fails, the output it held is released, and its retry is offered; the process runs regardless and its output buffers, though
+  nothing answers its queries, so a shell that waits for a reply at startup
+  stalls until its own timeout. A view whose emulator is `poisoned` shows
+  "reopen", and a `failed` one "retry": either remounts it — a fresh
+  instance, replayed from the cell's buffer — and a retry loads the module
+  again, so building it and retrying recovers without a page reload. The
+  view takes keys (`accepts_input`) exactly while `send_input` takes bytes,
+  so a terminal whose process ended leaves keys — Tab included — to the
+  browser. A view taking keys marks its root (`data-fuz-terminal-keys`), and
+  the dashboard's global shortcuts (`dashboard_shortcuts.ts`: `` ` ``, `~`,
+  Escape) leave keys whose target is inside one
+  (`is_fuz_terminal_key_target`) to the terminal, as they leave a text
+  field's. The copy button and the context
+  menu's "copy output" read the emulator's text (`get_text`: the scrollback
+  and screen, soft wraps joined). `TerminalViewLink` (`terminal_view_link.ts`)
+  is the wiring between the cell and one view — attach and replay, acks,
+  input decoding, resize — kept out of the component so tests drive it with
+  a real `Terminal` cell.
 - **Status** — `starting` → `running` → `exited` (natural exit via the
   `terminal_exited` broadcast, with its code) or `closed` (the user's
   `terminal_close`, with the code from its response, or `null` if the process
@@ -610,10 +664,9 @@ clients find them `lost` when they resync.
 
 `src/lib/fuz_terminal/` binds libghostty-vt's wasm build — Ghostty's
 emulator: parsing, the screens, scrollback with reflow — and draws it with
-`FuzTerminal.svelte`, a DOM renderer of zzz's own to replace xterm.js. The
-terminal views don't use either yet: they render with xterm.js, and no page
-hosts `FuzTerminal`. The binding has no DOM or Svelte dependency, so its
-behavior is tested in Node:
+`FuzTerminal.svelte`, a DOM renderer of zzz's own, which zzz's terminal views
+host (see [Terminals](#terminals) above). The binding has no DOM or Svelte
+dependency, so its behavior is tested in Node:
 
 - `ghostty_vt.ts` — `load_ghostty_vt` and `GhosttyVt`: the instance (its
   function exports guarded against an escaping exception, below), its
@@ -627,7 +680,11 @@ behavior is tested in Node:
   `GHOSTTY_TERMINAL_MAX_SIZE` cells: the screen is allocated up front and
   wasm memory never shrinks, so an absurd size (a bad cell measurement) is
   refused before it can grow memory by gigabytes. Writes go through a
-  per-terminal buffer kept between writes.
+  per-terminal buffer kept between writes. A terminal can be created with
+  modes set, each as its reset default too (`modes`).
+- `fuz_terminal_module.ts` (beside the library, in `src/lib/`, since it knows
+  the app's asset path) — `load_fuz_terminal_module`: the page's one fetch
+  and compile of the module, for every view (see [Terminals](#terminals)).
 - `ghostty_memory.ts` — linear memory: views cached until memory grows,
   never held across an export call; scratch and opaque-slot allocations
   freed on every path. Buffers the library allocates
@@ -818,7 +875,8 @@ own joins the cell before it without marking that row changed. The update is
 `clean` and the row keeps showing the cell without the mark until anything
 else changes the row, which brings it back right. With mode 2027 on, or the
 mark in the same write as its base, it's tracked. The reader can't detect
-it.
+it, so `FuzTerminal` creates every terminal with the mode on (below); a
+program that turns it off brings the gap back for that terminal.
 
 The reader's calls only write buffers it owns, after the update itself, so
 it reads its views of memory across them, taking them again if one ever
@@ -863,8 +921,8 @@ keydown ─ FuzTerminalState.handle_key
   text), the output buffer grows once if a sequence doesn't fit, and after
   the first keys an encode allocates nothing in the module. A terminal may
   have any number; encoding reads the terminal and changes nothing. The
-  bytes are the library's encodings, Ghostty's own, which differ from
-  xterm.js's in places: Ctrl+Shift+letter is CSI u, distinct from
+  bytes are the library's encodings, Ghostty's own: Ctrl+Shift+letter is
+  CSI u, distinct from
   Ctrl+letter, and modified Enter, Tab, and Escape send the library's
   distinct sequences in every mode (Shift+Enter and Ctrl+Enter are
   `CSI 27;2;13~` and `CSI 27;5;13~`). Mode 1035 is on by default, so
@@ -991,8 +1049,20 @@ lives). Instantiating from a compiled module and creating the terminal and
 reader is cheap next to the compile the host does once; each instance
 parses its own type manifest, the larger part of that cost.
 
+*Modes.* Every view's terminal is created with `FUZ_TERMINAL_MODES`, set as
+the modes' reset defaults (`GhosttyTerminalOptions.modes`, the library's
+`GHOSTTY_TERMINAL_OPT_MODE_DEFAULT`), so a full reset (RIS) keeps them:
+grapheme clustering (mode 2027) on, so an emoji sequence or a base and its
+combining marks take one cell, and a mark in a write of its own is drawn. A
+program can still turn it off. It's the view's, not a prop: a host has no
+reason to want the stale rows that come with it off.
+
 *Host API.* Props: `module`; `scrollback_max_bytes`; `label`, the
-accessible name; and the callbacks `ondata` (bytes for the PTY: the keys
+accessible name; `accepts_input` (default on — off, a key is neither encoded
+nor prevented, so the browser's default runs, and the cursor is drawn
+hollow, as when unfocused: hollow rather than hidden, so where the program
+left it stays visible; drawing, selection, copy, resizing, and replies to
+queries go on); and the callbacks `ondata` (bytes for the PTY: the keys
 typed, and the terminal's replies), `onresize`
 (the size in cells, at creation and on each change), `ontitle`, `onbell`,
 `onstatus`, and `onerror`. `module` and `scrollback_max_bytes` are read once,
@@ -1025,6 +1095,13 @@ replies to those writes reach `ondata` before it. A
 callback that throws — inside a write, from a frame, or on a resize — never
 escapes: it's handed to `onerror` (or the console) and shown as a notice,
 and the view goes on.
+
+*Keys and the page.* While the view takes keys — ready, `accepts_input` on
+— its root carries `data-fuz-terminal-keys` (`FUZ_TERMINAL_KEYS_ATTRIBUTE`),
+and `is_fuz_terminal_key_target(target)` says whether an event target is
+inside such a view. A page's global shortcuts check it beside their check
+for a text field: the view takes keys on a focusable `div`, which isn't an
+editable element, and every key typed into it may be the program's.
 
 *What a host provides.* A sized box: the view fills its container (`width`
 and `height` 100%), and its own content never sizes it — the rows are a

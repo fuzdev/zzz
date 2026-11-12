@@ -15,7 +15,11 @@ import {
 	type GhosttyRenderRow,
 	type GhosttyRenderStyle
 } from './ghostty_render_state.ts';
-import { GhosttyTerminal } from './ghostty_terminal.ts';
+import {
+	GHOSTTY_MODE_GRAPHEME_CLUSTER,
+	GhosttyTerminal,
+	type GhosttyTerminalMode
+} from './ghostty_terminal.ts';
 import type { GhosttyVt } from './ghostty_vt.ts';
 import type { FuzTerminalDeps } from './fuz_terminal_deps.ts';
 import { FuzTerminalFrameLoop } from './fuz_terminal_frame.ts';
@@ -48,6 +52,17 @@ import {
  * view; past this, the view draws again.
  */
 export const FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS = 1000;
+
+/**
+ * The modes every view's terminal starts with, as their reset defaults too:
+ * grapheme clustering (mode 2027) on, so an emoji sequence or a base and its
+ * combining marks take one cell — and so a combining mark that arrives in a
+ * write of its own marks its row changed, which the library misses with the
+ * mode off. A program can still turn it off.
+ */
+export const FUZ_TERMINAL_MODES: ReadonlyArray<GhosttyTerminalMode> = [
+	{ mode: GHOSTTY_MODE_GRAPHEME_CLUSTER, value: true }
+];
 
 /** The size a terminal is created at when its view can't be measured yet. */
 export const FUZ_TERMINAL_DEFAULT_SIZE: FuzTerminalSize = { cols: 80, rows: 24 };
@@ -114,6 +129,13 @@ export interface FuzTerminalOptions {
 	/** The most scrollback to keep, in bytes; defaults to the library's small limit. */
 	scrollback_max_bytes?: number;
 	/**
+	 * Whether the view takes keys; defaults to `true`. Off — say, the program
+	 * has exited — a key is neither encoded nor prevented, so the browser's
+	 * default runs (Tab moves focus); the view still draws, selects, copies,
+	 * and resizes, and its cursor is drawn as when unfocused.
+	 */
+	accepts_input?: boolean;
+	/**
 	 * Bytes for the PTY, in order: the keys typed into the focused view, and
 	 * the terminal's replies to the program's queries.
 	 */
@@ -179,11 +201,23 @@ export class FuzTerminalState {
 	/** The last callback error, shown as a plain-text notice; `null` when there's none. */
 	notice: string | null = $state(null);
 
-	/** Where to draw the cursor, or `null` for nowhere. */
+	/** Whether the view takes keys now: ready, and with input on (`FuzTerminalOptions.accepts_input`). */
+	readonly takes_keys: boolean = $derived.by(
+		() => this.status.kind === 'ready' && this.#options().accepts_input !== false
+	);
+
+	/**
+	 * Where to draw the cursor, or `null` for nowhere: hollow and still unless
+	 * the view has focus and takes keys.
+	 */
 	readonly cursor_box: FuzTerminalCursorBox | null = $derived.by(() =>
 		this.cursor === null || this.status.kind === 'loading'
 			? null
-			: to_fuz_terminal_cursor_box(this.cursor, this.rows, this.focused)
+			: to_fuz_terminal_cursor_box(
+					this.cursor,
+					this.rows,
+					this.focused && this.#options().accepts_input !== false
+				)
 	);
 
 	/** The host's options, read lazily: a getter, so they're the props in effect when read. */
@@ -319,7 +353,9 @@ export class FuzTerminalState {
 	 * `keyup`'s release, encoded under the terminal's modes as they are now,
 	 * and its bytes, if any, sent to `ondata`.
 	 *
-	 * Not taken — nothing encoded or sent — while the view isn't ready, for a
+	 * Not taken — nothing encoded or sent — while the view isn't ready or its
+	 * input is off (`FuzTerminalOptions.accepts_input`; a key held as input
+	 * turned off sends no release), for a
 	 * keydown in a composition (an IME's, or a dead key's: the composed
 	 * character arrives as a later keydown) or one the browser and the OS keep
 	 * (`should_fuz_terminal_pass_key`), and for a keyup whose keydown wasn't
@@ -337,6 +373,10 @@ export class FuzTerminalState {
 		const codes = this.#key_codes;
 		// keys arrive outside writes; one dispatched from inside a callback is refused
 		if (encoder === null || codes === null || !this.#usable || this.#busy) return false;
+		if (this.#options().accepts_input === false) {
+			this.#held_keys.clear();
+			return false;
+		}
 		let action: GhosttyKeyAction;
 		if (type === 'keyup') {
 			// a taken press's release is always encoded, whatever the modifiers
@@ -423,7 +463,8 @@ export class FuzTerminalState {
 			const terminal = new GhosttyTerminal(vt, {
 				cols: size.cols,
 				rows: size.rows,
-				scrollback_max_bytes: options.scrollback_max_bytes
+				scrollback_max_bytes: options.scrollback_max_bytes,
+				modes: FUZ_TERMINAL_MODES
 			});
 			this.#terminal = terminal;
 			if (measured) {

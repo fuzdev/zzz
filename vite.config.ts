@@ -53,7 +53,11 @@ const cross_backend_projects = cross_backend_enabled
 // (CI included) runs everything else — saying so once per test run — and
 // `unit` never runs these files.
 const GHOSTTY_VT_MODULE = 'static/fuz_terminal/ghostty-vt.wasm';
-const GHOSTTY_VT_TESTS = 'src/test/fuz_terminal/**/*.wasm.test.ts';
+// the binding's and renderer's tests, and the terminal view's, which mounts them
+const GHOSTTY_VT_TESTS = [
+	'src/test/fuz_terminal/**/*.wasm.test.ts',
+	'src/test/TerminalView.wasm.test.ts'
+];
 const ghostty_vt_module_present = existsSync(new URL(`./${GHOSTTY_VT_MODULE}`, import.meta.url));
 // only under vitest, never `vite dev` or a build
 if (process.env.VITEST && !ghostty_vt_module_present) {
@@ -67,7 +71,7 @@ const ghostty_vt_projects = ghostty_vt_module_present
 				extends: true,
 				test: {
 					name: 'fuz_terminal_wasm',
-					include: [GHOSTTY_VT_TESTS],
+					include: GHOSTTY_VT_TESTS,
 					maxWorkers: max_workers,
 					sequence: { groupOrder: 1 }
 				}
@@ -150,7 +154,7 @@ export default defineConfig(({ mode }) => ({
 				test: {
 					name: 'unit',
 					include: ['src/test/**/*.test.ts'],
-					exclude: ['src/test/**/*.db.test.ts', 'src/test/**/*.cross.test.ts', GHOSTTY_VT_TESTS],
+					exclude: ['src/test/**/*.db.test.ts', 'src/test/**/*.cross.test.ts', ...GHOSTTY_VT_TESTS],
 					maxWorkers: max_workers,
 					sequence: { groupOrder: 1 }
 				}

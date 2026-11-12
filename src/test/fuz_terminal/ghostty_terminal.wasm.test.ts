@@ -1,7 +1,16 @@
 import { test, describe, assert } from 'vitest';
 
-import { GhosttyDisposedError, GhosttyResultError } from '#lib/fuz_terminal/ghostty_errors.ts';
-import { GHOSTTY_TERMINAL_MAX_SIZE, GhosttyTerminal } from '#lib/fuz_terminal/ghostty_terminal.ts';
+import {
+	GhosttyDisposedError,
+	GhosttyManifestError,
+	GhosttyResultError
+} from '#lib/fuz_terminal/ghostty_errors.ts';
+import {
+	GHOSTTY_MODE_GRAPHEME_CLUSTER,
+	GHOSTTY_TERMINAL_MAX_SIZE,
+	GhosttyTerminal,
+	type GhosttyTerminalMode
+} from '#lib/fuz_terminal/ghostty_terminal.ts';
 
 import {
 	load_doctored_ghostty_vt,
@@ -69,6 +78,86 @@ describe('writing and reading text', () => {
 		terminal.write('\r\néx');
 		assert.strictEqual(terminal.format_text(), 'a你好b\néx');
 		terminal.dispose();
+	});
+});
+
+describe('modes', () => {
+	/** The DECRPM state of DEC private mode `mode`: 1 set, 2 reset, 0 unrecognized. */
+	const query_mode = (terminal: GhosttyTerminal, mode: number): number => {
+		const replies: Array<string> = [];
+		const decoder = new TextDecoder();
+		terminal.set_effect('write_pty', (data) => void replies.push(decoder.decode(data)));
+		terminal.write(`${ESC}[?${mode}$p`);
+		terminal.set_effect('write_pty', null);
+		const match = new RegExp(`^${ESC}\\[\\?${mode};(\\d)\\$y$`).exec(replies.join(''));
+		assert.ok(match, JSON.stringify(replies));
+		return Number(match[1]);
+	};
+
+	const create = async (modes?: ReadonlyArray<GhosttyTerminalMode>): Promise<GhosttyTerminal> =>
+		new GhosttyTerminal(await load_test_ghostty_vt(), { cols: 20, rows: 4, modes });
+
+	test('grapheme clustering is off by default, and a full reset keeps it off', async () => {
+		const terminal = await create();
+		assert.strictEqual(query_mode(terminal, GHOSTTY_MODE_GRAPHEME_CLUSTER), 2);
+		terminal.write(`${ESC}[?2027h`);
+		assert.strictEqual(query_mode(terminal, GHOSTTY_MODE_GRAPHEME_CLUSTER), 1);
+		terminal.write(`${ESC}c`);
+		assert.strictEqual(query_mode(terminal, GHOSTTY_MODE_GRAPHEME_CLUSTER), 2);
+		terminal.dispose();
+	});
+
+	test('a mode it starts with is its reset default too', async () => {
+		const terminal = await create([{ mode: GHOSTTY_MODE_GRAPHEME_CLUSTER, value: true }]);
+		assert.strictEqual(query_mode(terminal, GHOSTTY_MODE_GRAPHEME_CLUSTER), 1);
+		// a program can still turn it off, and a full reset turns it back on
+		terminal.write(`${ESC}[?2027l`);
+		assert.strictEqual(query_mode(terminal, GHOSTTY_MODE_GRAPHEME_CLUSTER), 2);
+		terminal.write(`${ESC}c`);
+		assert.strictEqual(query_mode(terminal, GHOSTTY_MODE_GRAPHEME_CLUSTER), 1);
+		terminal.dispose();
+	});
+
+	test('a mode can start off, and an ANSI mode is told apart from a DEC one', async () => {
+		// DEC private mode 7 (autowrap) is on by default; ANSI mode 4 (insert) is off
+		const terminal = await create([
+			{ mode: 7, value: false },
+			{ mode: 4, ansi: true, value: true }
+		]);
+		assert.strictEqual(query_mode(terminal, 7), 2);
+		// insert mode on: text written before the cursor's cell pushes it right
+		terminal.write(`ab${ESC}[1GX`);
+		assert.strictEqual(terminal.format_text(), 'Xab');
+		terminal.dispose();
+	});
+
+	test('a mode number out of range is refused', async () => {
+		const vt = await load_test_ghostty_vt();
+		assert.throws(
+			() => new GhosttyTerminal(vt, { cols: 20, rows: 4, modes: [{ mode: 0x8000, value: true }] }),
+			RangeError
+		);
+	});
+
+	test('a reshaped mode struct fails creation only when modes are given', async () => {
+		const vt = await load_doctored_ghostty_vt((manifest) => {
+			manifest.types.GhosttyTerminalModeConfig.fields.value.type = 'u32';
+		});
+		new GhosttyTerminal(vt, { cols: 20, rows: 4 }).dispose();
+		assert.throws(
+			() => new GhosttyTerminal(vt, { cols: 20, rows: 4, modes: [{ mode: 2027, value: true }] }),
+			GhosttyManifestError,
+			/GhosttyTerminalModeConfig\.value/
+		);
+	});
+
+	test('a mode the library refuses as a reset default fails creation, naming the option', async () => {
+		const vt = await load_test_ghostty_vt();
+		// 1049 (alternate screen with cursor save) is a transition, not a configurable default
+		const error = catch_result_error(
+			() => new GhosttyTerminal(vt, { cols: 20, rows: 4, modes: [{ mode: 1049, value: true }] })
+		);
+		assert.include(error.message, 'MODE_DEFAULT');
 	});
 });
 

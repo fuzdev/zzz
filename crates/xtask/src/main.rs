@@ -1,8 +1,10 @@
 //! `cargo xtask` — dev and build automation for the zzz workspace.
 //!
 //! Subcommands:
-//! - `dev`        — build `zzz_server`, then run it alongside the Vite frontend
-//!   (the dev backend binds `4461`; Vite serves `5460` and proxies `/api` to it).
+//! - `dev`        — build the terminal emulator's module when it's missing or
+//!   stale (warning and carrying on when it can't), build `zzz_server`, then
+//!   run it alongside the Vite frontend (the dev backend binds `4461`; Vite
+//!   serves `5460` and proxies `/api` to it).
 //! - `dev-setup`  — generate `.env.development` from `.env.development.example`.
 //! - `prod-setup` — generate `.env.production` from `.env.production.example`.
 //!   Both fill `SECRET_FUZ_COOKIE_KEYS` with a freshly generated key.
@@ -182,7 +184,7 @@ fn print_usage() {
 usage: cargo xtask <command>
 
 commands:
-  dev            build zzz_server (port {DEV_BACKEND_PORT}), then run it alongside the Vite frontend
+  dev            build the terminal module if needed and zzz_server (port {DEV_BACKEND_PORT}), then run it alongside the Vite frontend
   dev-setup      create {DEV_ENV_FILE} from {DEV_ENV_FILE}.example
   prod-setup     create .env.production from .env.production.example
   check-release  audit that no production binary depends on fuz_testing / fuz_audit
@@ -278,8 +280,10 @@ fn random_hex(num_bytes: usize) -> Result<String> {
     Ok(hex)
 }
 
-/// Build `zzz_server`, run it, wait for it to listen, then run the Vite dev
-/// server. Blocks until either child exits, then stops the other.
+/// Build the terminal emulator's module when it's missing or stale
+/// ([`ensure_ghostty_vt_module`]), build `zzz_server`, run it, wait for it to
+/// listen, then run the Vite dev server. Blocks until either child exits, then
+/// stops the other.
 ///
 /// Both children are held in [`ChildGuard`]s, so every exit path — a child
 /// exiting, an error, a panic — stops the survivor with `SIGTERM` (then
@@ -371,6 +375,8 @@ fn run_dev() -> Result<()> {
         std::env::join_paths(std::iter::once(bin_dir).chain(std::env::split_paths(&path)))?;
     child_env.insert(OsString::from("PATH"), joined);
 
+    ensure_ghostty_vt_module();
+
     println!("[xtask] building zzz_server...");
     if !Command::new("cargo")
         .args(["build", "-p", "zzz_server"])
@@ -426,6 +432,55 @@ fn run_dev() -> Result<()> {
         std::thread::sleep(Duration::from_millis(200));
     }
     Ok(())
+}
+
+/// Run the `ghostty-vt` step for `dev` — a no-op when the installed module is
+/// current, a build when it's missing or stale. It never stops `dev`: without
+/// Zig (or with a failed build) the app still runs, and its terminals show
+/// that the module is missing, so a failure is a warning
+/// ([`ghostty_vt_dev_step`]).
+fn ensure_ghostty_vt_module() {
+    println!("[xtask] checking the terminal emulator module...");
+    if let Some(warning) = ghostty_vt_dev_step(ghostty_vt::run, || {
+        Path::new(ghostty_vt::MODULE_PATH).is_file()
+    }) {
+        eprintln!("{warning}");
+    }
+}
+
+/// `dev`'s handling of the module step: run `step`, and on failure return the
+/// warning to print ([`ghostty_vt_dev_warning`], told by `module_present`
+/// whether an earlier build is still installed) rather than the error — so
+/// `dev` goes on to the backend and Vite either way. `None` when the step
+/// succeeded.
+fn ghostty_vt_dev_step(
+    step: impl FnOnce() -> Result<()>,
+    module_present: impl FnOnce() -> bool,
+) -> Option<String> {
+    let error = step().err()?;
+    Some(ghostty_vt_dev_warning(&error.to_string(), module_present()))
+}
+
+/// The warning `dev` prints when the `ghostty-vt` step fails: what failed,
+/// and what the app does about it — uses the module already installed (which
+/// may be stale), or, with none, runs with terminals that say it's missing.
+fn ghostty_vt_dev_warning(error: &str, module_present: bool) -> String {
+    let consequence = if module_present {
+        format!(
+            "terminals use the installed {}, which may be stale",
+            ghostty_vt::MODULE_PATH
+        )
+    } else {
+        format!(
+            "the app runs, but its terminals show that the module is missing until \
+             `cargo xtask ghostty-vt` builds {}",
+            ghostty_vt::MODULE_PATH
+        )
+    };
+    format!(
+        "[xtask] warning: couldn't build the terminal emulator module: {error}\n\
+         [xtask] warning: {consequence}"
+    )
 }
 
 /// The frontend's port variables as `dev` forces them, whatever
@@ -767,6 +822,50 @@ fn ensure_bootstrap_token(path: &str) -> Result<()> {
 )]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dev_carries_on_past_the_module_step() {
+        // a current or fresh module: nothing to say, and presence isn't asked
+        assert_eq!(
+            ghostty_vt_dev_step(|| Ok(()), || panic!("not asked on success")),
+            None
+        );
+        // a failure becomes a warning (returned, never the error), with what the
+        // app does about it — with an earlier build installed, and without
+        for present in [true, false] {
+            let warning =
+                ghostty_vt_dev_step(|| Err("`zig` not found on PATH".into()), || present).unwrap();
+            assert_eq!(
+                warning,
+                ghostty_vt_dev_warning("`zig` not found on PATH", present)
+            );
+        }
+    }
+
+    #[test]
+    fn a_failed_module_build_warns_and_says_what_the_app_does() {
+        let error = "`zig` not found on PATH";
+        let missing = ghostty_vt_dev_warning(error, false);
+        let lines: Vec<&str> = missing.lines().collect();
+        assert_eq!(lines.len(), 2, "{missing}");
+        assert!(
+            lines.iter().all(|l| l.starts_with("[xtask] warning: ")),
+            "{missing}"
+        );
+        assert!(lines[0].ends_with(error), "{missing}");
+        assert!(lines[1].contains("the app runs"), "{missing}");
+        assert!(lines[1].contains("cargo xtask ghostty-vt"), "{missing}");
+        assert!(lines[1].contains(ghostty_vt::MODULE_PATH), "{missing}");
+
+        // an installed module, from an earlier build, is still served
+        let present = ghostty_vt_dev_warning(error, true);
+        assert!(
+            present.lines().next().unwrap().ends_with(error),
+            "{present}"
+        );
+        assert!(present.contains("may be stale"), "{present}");
+        assert!(!present.contains("is missing"), "{present}");
+    }
 
     #[test]
     fn with_cookie_key_replaces_the_placeholder_line() {

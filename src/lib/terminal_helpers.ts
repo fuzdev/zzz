@@ -92,8 +92,8 @@ export const parse_terminal_command = (
  * point, and otherwise drops that whole chunk, so a replay starts at a line or
  * chunk boundary rather than at an arbitrary character. Backend chunk
  * boundaries are arbitrary too, so a replay can still start inside an escape
- * sequence — xterm's parser starts in its ground state and prints the tail of
- * the sequence as text.
+ * sequence — a fresh emulator's parser starts in its ground state and prints
+ * the tail of the sequence as text.
  */
 export class TerminalOutputBuffer {
 	readonly max_length: number;

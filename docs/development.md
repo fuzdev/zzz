@@ -7,6 +7,9 @@ Development workflow, extension points, and common patterns.
 Requires Node (>=24.14), the Rust toolchain pinned in `rust-toolchain.toml`
 (rustup installs it automatically), PostgreSQL, and the sibling [fuz](https://github.com/fuzdev/fuz) Rust
 workspace checked out alongside this repo as `fuz/` (path deps — including `fuz_pty`).
+Terminals also need [Zig](https://ziglang.org/download/) 0.17, which builds
+the terminal emulator's module (see [Terminal emulator
+module](#terminal-emulator-module)); without it everything else runs.
 
 ```bash
 git clone https://github.com/fuzdev/fuz.git
@@ -14,10 +17,15 @@ git clone https://github.com/fuzdev/zzz.git && cd zzz
 createdb zzz          # PostgreSQL database the backend connects to
 cargo xtask dev-setup   # generate .env.development (idempotent)
 npm install           # Node dependencies
-cargo xtask dev         # build the Rust backend + run it with the Vite frontend
+cargo xtask dev         # build the terminal module if needed and the Rust backend, then run it with the Vite frontend
 ```
 
-`cargo xtask dev` rebuilds `zzz_server` (`cargo build -p zzz_server`) on every run,
+`cargo xtask dev` first runs the `cargo xtask ghostty-vt` step — a no-op when
+the module is current, a build when it's missing or stale (a couple of
+minutes the first time). When it can't (no Zig, no network, a failed build)
+it warns and carries on: the app runs, and terminals use the module already
+installed or, with none, show a message saying how to build it. It then
+rebuilds `zzz_server` (`cargo build -p zzz_server`) on every run,
 binds the backend on `4461`, and serves the Vite frontend on `5460` (proxying
 `/api` → `4461`; the WebSocket connects to `4461` directly). Browse to
 `http://localhost:5460` — by that name; see Browser access below.
@@ -148,8 +156,11 @@ headers (`libvulkan-dev`, `glslc`, and `spirv-headers` on Debian).
 
 The `fuz_terminal` library (`src/lib/fuz_terminal/`) binds
 [libghostty-vt](https://lib.ghostty.org/vt/), Ghostty's terminal emulator,
-compiled to WebAssembly. The terminal UI still renders with xterm.js, so the
-app runs without the module. Building it needs [Zig](https://ziglang.org/download/)
+compiled to WebAssembly, and draws zzz's terminals with it. The module is
+fetched from the app's static assets when a terminal first mounts, so the
+app runs without it — everything but the terminal views, which show a
+message saying how to build it (their processes still run, and their output
+buffers). Building it needs [Zig](https://ziglang.org/download/)
 0.17 (any 0.17.x release — libghostty-vt 1.0 builds with no other minor),
 plus `curl`, `tar`, and `sha256sum`:
 
@@ -162,7 +173,11 @@ It downloads the pinned release's source and dependency tarballs into
 then builds offline from them (a couple of minutes cold). A later run
 reuses the verified tarballs, and when the installed module is current for
 the pinned version, feature set, and Zig, it's a no-op. `cargo clean`
-removes the cache, not the module.
+removes the cache, not the module. `cargo xtask dev` runs this step before it
+starts (warning instead of failing when it can't). The tests that load the
+module are `src/test/fuz_terminal/**/*.wasm.test.ts` and
+`src/test/TerminalView.wasm.test.ts`, run by the `fuz_terminal_wasm` vitest
+project, which exists only when the module does.
 
 ## Commands
 
@@ -176,8 +191,9 @@ removes the cache, not the module.
 - `gro build` — Production build
 - `gro deploy` — Deploy to production
 
-`cargo xtask dev` runs the dev server (Rust backend + Vite frontend) — the
-user manages it; don't start it yourself.
+`cargo xtask dev` runs the dev server (the terminal module when it's missing
+or stale, then the Rust backend + Vite frontend) — the user manages it; don't
+start it yourself.
 
 Three task runners, by role: **`gro`** for checks, build, gen, and tests
 (`gro check` / `build` / `gen` / `test`); **`cargo xtask`** for the dev server and
@@ -202,10 +218,19 @@ There are two production targets:
   daemon, which also serves `/api`. This is the complete app, and needs **both**
   a frontend build and a backend build (`gro build` only does the SPA).
 
+The terminal emulator's module ships in `build/` only when it was built:
+`gro build` copies `static/`, and `static/fuz_terminal/ghostty-vt.wasm` is
+gitignored output of `cargo xtask ghostty-vt`. So whoever builds a release
+needs Zig 0.17 and runs that step first; a build without it works, and its
+terminals say the module is missing. `zzzd` serves it as `application/wasm`
+(so the browser compiles it as it downloads), and a missing one is a 404,
+never the SPA shell.
+
 Build and run the full self-hosted server:
 
 ```bash
 cargo xtask prod-setup                      # writes .env.production (fresh cookie key) — edit its other secrets
+cargo xtask ghostty-vt                      # the terminal emulator module → static/ (needs Zig 0.17)
 gro build                                 # frontend → build/
 cargo build -p zzz_server --release       # backend  → target/release/zzzd
 ./target/release/zzzd --static-dir build  # serve SPA + /api (port 4460; --port/ZZZ_PORT overrides)
@@ -224,7 +249,7 @@ which are the page it serves; change both with the port. `--static-dir` (or
 `ZZZ_STATIC_DIR`) points it at the built frontend; CLI flags win over env. It
 serves the exact file, then the prerendered `{path}.html`, then the `200.html`
 shell, so reloads, deep links, and dynamic routes load; `/api` and `/health`
-paths and missing `_app/` assets 404 instead. In
+paths and missing `_app/` and `fuz_terminal/` assets 404 instead. In
 production the SPA and API share one origin, so `.env.production` leaves the
 `PUBLIC_ZZZ_SERVER_*` host/port and `PUBLIC_ZZZ_WEBSOCKET_URL` empty: the UI
 derives its API and WebSocket URLs from the page's origin, so one build works
@@ -244,6 +269,7 @@ The `zzz` CLI runs the same daemon from its home, `~/.zzz/`:
 cargo build -p zzz -p zzz_server --release   # put target/release on PATH — zzz finds zzzd beside itself
 zzz init                                  # ~/.zzz/: config.json, .env (fresh cookie key), bootstrap_token
 cargo xtask prod-setup                    # .env.production, which `gro build` reads (idempotent)
+cargo xtask ghostty-vt                    # the terminal emulator module, which `gro build` copies (needs Zig 0.17)
 gro build && rm -rf ~/.zzz/static && cp -r build ~/.zzz/static   # the UI the daemon serves
 zzz                                       # start the daemon (detached) and open zzz (the browser, or a configured opener)
 ```

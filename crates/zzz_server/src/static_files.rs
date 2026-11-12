@@ -15,17 +15,24 @@
 //! Backend paths ([`BACKEND_PATH_PREFIXES`] and below) never get the shell —
 //! the router mounts every real backend route ahead of this fallback, so a
 //! request reaching here under `/api` is an unknown route and 404s. A missing
-//! `_app/` asset 404s too instead of answering a script import with HTML, so a
-//! tab left open across a rebuild fails the chunk load (which `SvelteKit` turns
-//! into a full reload) rather than executing the shell as JavaScript. Other
-//! methods get `405`.
+//! asset under [`ASSET_PATH_PREFIXES`] 404s too instead of answering with
+//! HTML: a tab left open across a rebuild fails an `_app/` chunk load (which
+//! `SvelteKit` turns into a full reload) rather than executing the shell as
+//! JavaScript, and a missing terminal emulator module
+//! (`fuz_terminal/ghostty-vt.wasm`, which `cargo xtask ghostty-vt` builds and
+//! a checkout may lack) is an honest 404 rather than a page that isn't wasm.
+//! Other methods get `405`.
+//!
+//! Media types are `ServeDir`'s, by extension — `.wasm` is
+//! `application/wasm`, which lets the browser compile the module as it
+//! downloads.
 //!
 //! Path safety: both path probes go through `ServeDir`, which percent-decodes
 //! the path and rejects `..`, root, and drive-prefix components before
 //! touching the filesystem. The `.html` / `index.html` suffix is appended to
 //! the still-encoded URI path, so it only ever extends the final segment of a
 //! path `ServeDir` then validates — a rejected path falls through to the
-//! shell (or 404s under `_app/`), never to a file outside the directory. The
+//! shell (or 404s under an asset prefix), never to a file outside the directory. The
 //! shell itself is a fixed file: `ServeFile` ignores the request path.
 //! `ServeDir` follows symlinks
 //! inside the static dir — the dir is trusted operator content (the build
@@ -57,8 +64,9 @@ pub const SPA_FALLBACK_FILE: &str = "200.html";
 /// (`/apiary`).
 pub const BACKEND_PATH_PREFIXES: [&str; 2] = ["/api", "/health"];
 
-/// Build-output assets — a miss under here 404s rather than serving the shell.
-const ASSET_PATH_PREFIX: &str = "/_app/";
+/// Asset directories — a miss under one 404s rather than serving the shell:
+/// the build's own output, and the terminal emulator's module.
+const ASSET_PATH_PREFIXES: [&str; 2] = ["/_app/", "/fuz_terminal/"];
 
 /// Content-hashed build output — safe to cache forever.
 const IMMUTABLE_PATH_PREFIX: &str = "/_app/immutable/";
@@ -108,7 +116,7 @@ async fn serve_static(State(files): State<StaticFiles>, request: Request) -> Res
     }
 
     let response = serve(files.dir.clone(), &parts, parts.uri.clone()).await;
-    if response.status() != StatusCode::NOT_FOUND || path.starts_with(ASSET_PATH_PREFIX) {
+    if response.status() != StatusCode::NOT_FOUND || is_asset_path(path) {
         return with_cache_control(path, response);
     }
 
@@ -129,6 +137,13 @@ fn is_backend_path(path: &str) -> bool {
         path.strip_prefix(prefix)
             .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
     })
+}
+
+/// Whether `path` is under one of [`ASSET_PATH_PREFIXES`].
+fn is_asset_path(path: &str) -> bool {
+    ASSET_PATH_PREFIXES
+        .iter()
+        .any(|prefix| path.starts_with(prefix))
 }
 
 /// The prerendered page a path maps to: `{path}.html`, or `{path}index.html`
@@ -191,6 +206,8 @@ mod tests {
     const APP_JS: &str = "export const x = 1;";
     const IMMUTABLE_JS: &str = "export const y = 2;";
     const SECRET: &str = "outside the static dir";
+    /// A wasm module's header — the magic number and version 1.
+    const WASM: &str = "\0asm\u{1}\0\0\0";
 
     /// A temp root holding `static/` (a miniature adapter-static build) plus
     /// sibling files outside it for the traversal cases. Removed on drop.
@@ -214,6 +231,8 @@ mod tests {
             fs::write(dir.join("docs/api.html"), DOCS_API).unwrap();
             fs::write(dir.join("_app/x.js"), APP_JS).unwrap();
             fs::write(dir.join("_app/immutable/y.js"), IMMUTABLE_JS).unwrap();
+            fs::create_dir_all(dir.join("fuz_terminal")).unwrap();
+            fs::write(dir.join("fuz_terminal/module.wasm"), WASM).unwrap();
             fs::write(root.join("secret.txt"), SECRET).unwrap();
             fs::write(root.join("secret.html"), SECRET).unwrap();
             Self { root }
@@ -367,6 +386,33 @@ mod tests {
             assert_eq!(probe.body, "", "{uri}");
             assert_eq!(probe.cache_control, None, "{uri}");
         }
+    }
+
+    #[tokio::test]
+    async fn wasm_serves_as_application_wasm() {
+        let fixture = Fixture::new();
+        let probe = get_path(&fixture, "/fuz_terminal/module.wasm").await;
+        assert_eq!(probe.status, StatusCode::OK);
+        assert_eq!(probe.body, WASM);
+        assert_eq!(probe.content_type.as_deref(), Some("application/wasm"));
+        assert_eq!(probe.cache_control.as_deref(), Some("no-cache"));
+    }
+
+    #[tokio::test]
+    async fn missing_terminal_module_404s_without_the_fallback() {
+        let fixture = Fixture::new();
+        for method in [Method::GET, Method::HEAD] {
+            let probe = request(
+                fixture.app(),
+                method.clone(),
+                "/fuz_terminal/ghostty-vt.wasm",
+            )
+            .await;
+            assert_eq!(probe.status, StatusCode::NOT_FOUND, "{method}");
+            assert_eq!(probe.body, "", "{method}");
+        }
+        // a page path beside the prefix still gets the shell
+        assert_html(&get_path(&fixture, "/fuz_terminals").await, FALLBACK);
     }
 
     #[tokio::test]

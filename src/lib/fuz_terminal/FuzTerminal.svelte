@@ -11,6 +11,10 @@
 	// Its own content never sizes it. A box with no size is unmeasurable, and the
 	// terminal keeps its size until the box has one; a view whose first frame
 	// finds no size warns once in the console.
+	//
+	// While it takes keys (ready, `accepts_input` on) its root carries
+	// `data-fuz-terminal-keys` (`FUZ_TERMINAL_KEYS_ATTRIBUTE`): a page's global
+	// shortcuts check `is_fuz_terminal_key_target` and leave those keys alone.
 	import { onMount } from 'svelte';
 
 	import { fuz_terminal_deps_context } from './fuz_terminal_deps.ts';
@@ -92,6 +96,7 @@ nothing is a live region, so a repaint announces nothing -->
 	role="group"
 	aria-roledescription="terminal"
 	aria-label={label}
+	data-fuz-terminal-keys={terminal.takes_keys ? '' : undefined}
 	tabindex="0"
 	style={terminal.theme_css}
 	style:--fuz_terminal_cursor={terminal.cursor_color}

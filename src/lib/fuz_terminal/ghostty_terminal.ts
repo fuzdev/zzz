@@ -56,7 +56,70 @@ export interface GhosttyTerminalOptions {
 	 * Defaults to no line limit.
 	 */
 	scrollback_max_lines?: number;
+	/**
+	 * Modes to start with, each set as its reset default too
+	 * (`GHOSTTY_TERMINAL_OPT_MODE_DEFAULT`), so a full reset (RIS) restores
+	 * it rather than the library's default. A program can still change one,
+	 * as any mode.
+	 */
+	modes?: ReadonlyArray<GhosttyTerminalMode>;
 }
+
+/**
+ * A terminal mode and the value it starts with: a DEC private mode
+ * (`CSI ? n h`) unless `ansi`.
+ */
+export interface GhosttyTerminalMode {
+	/** The mode's number, from 0 to 32767. */
+	mode: number;
+	/** Whether it's an ANSI mode (`CSI n h`) rather than a DEC private one. */
+	ansi?: boolean;
+	value: boolean;
+}
+
+/** DEC private mode 2027, grapheme clustering: a multi-code-point grapheme takes one cell. */
+export const GHOSTTY_MODE_GRAPHEME_CLUSTER = 2027;
+
+/** The manifest constants for setting a mode default, resolved once per module and only when used. */
+export interface GhosttyModeConstants {
+	/** `GHOSTTY_TERMINAL_OPT_MODE_DEFAULT`. */
+	option_mode_default: number;
+	/** `GhosttyTerminalModeConfig`'s size and its fields' offsets. */
+	config_size: number;
+	mode_offset: number;
+	value_offset: number;
+}
+
+/**
+ * Resolve the mode-default constants from a manifest: the option takes a
+ * `GhosttyTerminalModeConfig`, a `GhosttyMode` (a `u16`) and a `bool`.
+ *
+ * @throws GhosttyManifestError when an entry is missing or reshaped
+ */
+export const resolve_ghostty_mode_constants = (manifest: GhosttyManifest): GhosttyModeConstants => {
+	const key = manifest.enum_key('GhosttyTerminalOption', 'MODE_DEFAULT', 'in');
+	if (key.type !== 'GhosttyTerminalModeConfig') {
+		throw new GhosttyManifestError(
+			`the MODE_DEFAULT option takes a ${key.type}, not a GhosttyTerminalModeConfig`
+		);
+	}
+	const mode = manifest.struct_field('GhosttyTerminalModeConfig', 'mode');
+	const value = manifest.struct_field('GhosttyTerminalModeConfig', 'value');
+	const mode_scalar =
+		mode.type === 'GhosttyMode' ? manifest.type_entry('GhosttyMode', 'alias').type : mode.type;
+	if (mode_scalar !== 'u16' || mode.size !== 2) {
+		throw new GhosttyManifestError('GhosttyTerminalModeConfig.mode is not a u16');
+	}
+	if (manifest.scalar(value.type) !== 'bool' || value.size !== 1) {
+		throw new GhosttyManifestError('GhosttyTerminalModeConfig.value is not a bool');
+	}
+	return {
+		option_mode_default: manifest.enum_value('GhosttyTerminalOption', 'MODE_DEFAULT'),
+		config_size: manifest.struct_size('GhosttyTerminalModeConfig'),
+		mode_offset: mode.offset,
+		value_offset: value.offset
+	};
+};
 
 /** A new size for a terminal. */
 export interface GhosttyTerminalResizeOptions {
@@ -249,8 +312,10 @@ export class GhosttyTerminal {
 	/**
 	 * Create a terminal.
 	 *
-	 * @throws RangeError when a size is over `GHOSTTY_TERMINAL_MAX_SIZE` or a
-	 *   limit doesn't fit its C type
+	 * @throws RangeError when a size is over `GHOSTTY_TERMINAL_MAX_SIZE`, a
+	 *   limit doesn't fit its C type, or a mode number is out of range
+	 * @throws GhosttyManifestError when `modes` is given and the manifest
+	 *   lacks the mode option or reshapes its struct
 	 * @throws GhosttyPoisonedError once the instance is poisoned (`GhosttyVt.poisoned`)
 	 * @throws GhosttyResultError when the library refuses the options (a zero
 	 *   size is `INVALID_VALUE`)
@@ -272,6 +337,9 @@ export class GhosttyTerminal {
 			size_max,
 			'scrollback_max_lines'
 		);
+		const modes = options.modes ?? [];
+		const mode_constants = modes.length > 0 ? vt.resolve(resolve_ghostty_mode_constants) : null;
+		const packed_modes = modes.map((m) => ({ packed: to_packed_mode(m), value: m.value }));
 
 		const { exports, memory } = vt;
 		this.#ptr = memory.with_opaque((slot) => {
@@ -294,6 +362,11 @@ export class GhosttyTerminal {
 					scrollback_max_lines,
 					'SCROLLBACK_MAX_LINES'
 				);
+			}
+			if (mode_constants) {
+				for (const { packed, value } of packed_modes) {
+					this.#set_mode_default(mode_constants, packed, value);
+				}
 			}
 		} catch (error) {
 			this.dispose();
@@ -780,6 +853,18 @@ export class GhosttyTerminal {
 		});
 	}
 
+	#set_mode_default(constants: GhosttyModeConstants, packed: number, value: boolean): void {
+		const { exports, memory } = this.vt;
+		memory.with_scratch(constants.config_size, (ptr) => {
+			memory.write_scalar(ptr + constants.mode_offset, 'u16', packed);
+			memory.write_scalar(ptr + constants.value_offset, 'bool', value ? 1 : 0);
+			this.vt.check(
+				exports.ghostty_terminal_set(this.#ptr, constants.option_mode_default, ptr),
+				'ghostty_terminal_set(MODE_DEFAULT)'
+			);
+		});
+	}
+
 	#set_scalar(option: number, value: number, name: string): void {
 		const { exports, memory } = this.vt;
 		const scalar = this.#constants.scrollback_scalar;
@@ -799,6 +884,10 @@ export class GhosttyTerminal {
  */
 const to_terminal_size = (value: number, what: string): number =>
 	to_ghostty_integer(value, 0, GHOSTTY_TERMINAL_MAX_SIZE, what);
+
+/** A mode packed as `GhosttyMode`: the number in bits 0–14, the ANSI flag in bit 15 (`ghostty_mode_new`). */
+const to_packed_mode = (mode: GhosttyTerminalMode): number =>
+	to_ghostty_integer(mode.mode, 0, 0x7fff, 'a mode number') | (mode.ansi ? 0x8000 : 0);
 
 const is_high_surrogate = (code_unit: number): boolean =>
 	code_unit >= 0xd800 && code_unit <= 0xdbff;

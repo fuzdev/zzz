@@ -5,7 +5,6 @@
 	import { onNavigate } from '$app/navigation';
 	import Svg from '@fuzdev/fuz_ui/Svg.svelte';
 	import Icon from './Icon.svelte';
-	import { is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
 	import { slide } from 'svelte/transition';
 
 	import {
@@ -21,6 +20,7 @@
 	import { frontend_context } from './frontend.svelte.ts';
 	import { main_nav_items_default, to_nav_link_href } from './nav.ts';
 	import { DESK_MENU_BUTTON_FOCUS_KEY, DESK_WIDTH } from './DeskMenu.svelte';
+	import { handle_dashboard_shortcut } from './dashboard_shortcuts.ts';
 
 	// TODO dashboard should be mounted with Markdown
 
@@ -75,25 +75,7 @@
 	);
 </script>
 
-<svelte:window
-	onkeydowncapture={(e) => {
-		if (
-			e.key === 'Escape' &&
-			app.ui.show_desk_menu &&
-			!app.ui.desk_pinned &&
-			!is_editable(e.target)
-		) {
-			app.ui.toggle_desk_menu(false);
-			swallow(e);
-		} else if (e.key === '~' && !is_editable(e.target)) {
-			app.ui.toggle_desk_menu();
-			swallow(e);
-		} else if (e.key === '`' && !is_editable(e.target)) {
-			app.ui.toggle_sidebar();
-			swallow(e);
-		}
-	}}
-/>
+<svelte:window onkeydowncapture={(e) => handle_dashboard_shortcut(e, app.ui)} />
 
 <!-- TODO drive with data -->
 <div

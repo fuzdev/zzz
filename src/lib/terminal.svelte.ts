@@ -118,7 +118,7 @@ export class Terminal extends Cell<typeof TerminalJson> {
 
 	/**
 	 * Increments on each `reset` — one per spawned process, so views can key on
-	 * it to get a fresh xterm per process.
+	 * it to get a fresh emulator per process.
 	 */
 	run: number = $state.raw(0);
 
@@ -155,8 +155,9 @@ export class Terminal extends Cell<typeof TerminalJson> {
 	 * Forwards new output to `listener` until detached, and returns the output
 	 * buffered so far for the caller to replay first. Replay is left to the
 	 * caller so it can tell replayed output from live output — a replay can
-	 * contain terminal queries (cursor position, device attributes) that
-	 * xterm would answer again, and those answers must not reach the process.
+	 * contain terminal queries (cursor position, device attributes) that a
+	 * view's emulator would answer again, and those answers must not reach the
+	 * process.
 	 */
 	attach_output(listener: TerminalOutputListener): TerminalOutputAttachment {
 		// the buffered output is the caller's to replay, so it starts caught up

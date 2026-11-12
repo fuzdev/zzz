@@ -88,7 +88,7 @@
 			<p class="error-message">{terminal.error_message}</p>
 		{/if}
 		<div class="run-output">
-			<!-- a restart spawns a new process — remount for a fresh xterm -->
+			<!-- a restart spawns a new process — remount for a fresh emulator -->
 			{#key terminal.run}
 				<TerminalView {terminal} get_text={handle_get_text} />
 			{/key}

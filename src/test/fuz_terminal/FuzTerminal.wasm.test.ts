@@ -9,6 +9,7 @@ import {
 	type FuzTerminalOptions,
 	type FuzTerminalStatus
 } from '#lib/fuz_terminal/fuz_terminal_state.svelte.ts';
+import { is_fuz_terminal_key_target } from '#lib/fuz_terminal/fuz_terminal_keyboard.ts';
 import type { FuzTerminalMeasurement } from '#lib/fuz_terminal/fuz_terminal_layout.ts';
 import type { GhosttyVt } from '#lib/fuz_terminal/ghostty_vt.ts';
 
@@ -1152,6 +1153,43 @@ describe('keyboard input', () => {
 		assert.isTrue(press(t.root, 'F5', 'F5').defaultPrevented);
 		assert.isTrue(press(t.root, 'Enter', 'Enter').defaultPrevented);
 		assert.deepEqual(t.sent, ['a', 'A', '\x03', '\t', '\x17', ESC, `${ESC}[15~`, '\r']);
+	});
+
+	test('with accepts_input off, keys are neither sent nor prevented; it still draws', async () => {
+		const t = await mount_typing({ props: { accepts_input: false } });
+		t.root.focus();
+		flushSync();
+		assert.isFalse(t.root.hasAttribute('data-fuz-terminal-keys'));
+		assert.isFalse(is_fuz_terminal_key_target(t.root));
+		for (const [code, key] of [
+			['KeyA', 'a'],
+			['Tab', 'Tab'],
+			['Escape', 'Escape'],
+			['ArrowUp', 'ArrowUp'],
+			['Space', ' ']
+		] as const) {
+			assert.isFalse(press(t.root, code, key).defaultPrevented, key);
+			assert.isFalse(press(t.root, code, key, { type: 'keyup' }).defaultPrevented, key);
+		}
+		assert.deepEqual(t.sent, []);
+		t.view.write('still here');
+		t.step();
+		assert.strictEqual(rows_text(t.root)[0], 'still here');
+		assert.strictEqual(t.view.get_text(), 'still here');
+		// focused but not taking keys: drawn as when unfocused
+		assert.ok(cursor_element(t.root)?.classList.contains('cursor-block-hollow'));
+		// a query is still answered: input off is about keys, not the program's replies
+		t.view.write(`${ESC}[6n`);
+		assert.deepEqual(t.sent, [`${ESC}[1;11R`]);
+	});
+
+	test('a ready view taking keys marks its root for the page’s shortcuts', async () => {
+		const t = await mount_typing();
+		assert.isTrue(t.root.hasAttribute('data-fuz-terminal-keys'));
+		const row = row_elements(t.root)[0]!;
+		assert.isTrue(is_fuz_terminal_key_target(row), 'any element inside it');
+		assert.isFalse(is_fuz_terminal_key_target(document.body));
+		assert.isFalse(is_fuz_terminal_key_target(null));
 	});
 
 	test('Ctrl+[ is ESC to a program that asked for no keyboard protocol', async () => {
