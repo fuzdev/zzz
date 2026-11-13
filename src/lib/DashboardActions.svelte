@@ -29,11 +29,11 @@
 		{/snippet}
 		<TimeWidget value={app.time.now} />
 	</DashboardHeader>
-	<p class="width_atmost_md">
+	<p class="width_atmost_md mb_lg">
 		This page shows the actions that have happened behind the scenes. It's a work in progress and
 		not too useful yet. The idea is to make the system visible, auditable, and manipulable.
 	</p>
-	<p class="row gap_sm">
+	<p class="row gap_sm mb_lg">
 		<button
 			type="button"
 			class="sized_sm"
