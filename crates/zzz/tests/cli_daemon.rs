@@ -11,11 +11,11 @@
 //! flows, plus signals during startup, and the opener (a stand-in script
 //! recording its arguments; a stub `xdg-open` stands in for the browser).
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
-    reason = "integration test: panics are assertion failures by design"
+    reason = "test helpers outside `#[test]` fns panic on a failed setup or check"
 )]
 
 use std::fs;

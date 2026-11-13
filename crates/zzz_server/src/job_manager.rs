@@ -482,12 +482,6 @@ fn now_ms() -> u64 {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use std::time::Duration;
 

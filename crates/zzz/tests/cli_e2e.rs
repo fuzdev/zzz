@@ -19,11 +19,10 @@
 //! ZZZ_TEST_E2E=1 cargo test -p zzz --test cli_e2e -- --nocapture
 //! ```
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
-    clippy::panic,
-    reason = "integration test: panics are assertion failures by design"
+    reason = "test helpers outside `#[test]` fns panic on a failed setup or check"
 )]
 
 use std::fs;

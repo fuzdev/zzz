@@ -36,9 +36,9 @@ struct JobCancelInput {
 ///
 /// `invalid_params` for a malformed input; `not_found` (`job_not_found`) for
 /// an unknown id or another account's job.
-#[allow(
+#[expect(
     clippy::unused_async,
-    reason = "ActionHandler signature requires async"
+    reason = "kept `async` like every other handler, whose spec builder awaits it"
 )]
 pub async fn job_cancel(
     params: Value,

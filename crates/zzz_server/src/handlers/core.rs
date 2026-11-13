@@ -75,9 +75,9 @@ struct SessionLoadResult {
 /// # Errors
 ///
 /// An internal error if the result fails to serialize.
-#[allow(
+#[expect(
     clippy::unused_async,
-    reason = "ActionHandler signature requires async"
+    reason = "kept `async` like every other handler, whose spec builder awaits it"
 )]
 pub async fn ping(
     _params: Value,
@@ -168,9 +168,9 @@ pub async fn session_load(
 ///
 /// `invalid_params` for a malformed input or a `count` above 100; an internal
 /// error if the result fails to serialize.
-#[allow(
+#[expect(
     clippy::unused_async,
-    reason = "ActionHandler signature requires async"
+    reason = "kept `async` like every other handler, whose spec builder awaits it"
 )]
 pub async fn testing_emit_notifications(
     params: Value,

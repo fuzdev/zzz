@@ -128,11 +128,6 @@ fn socket_inode(target: &Path) -> Option<u64> {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use super::*;
 

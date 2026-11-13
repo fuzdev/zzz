@@ -198,11 +198,6 @@ SECRET_GOOGLE_API_KEY=
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use super::*;
     use crate::env_file;

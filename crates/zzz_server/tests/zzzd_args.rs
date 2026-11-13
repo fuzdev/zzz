@@ -4,7 +4,10 @@
 //! configuration failure (here, no `DATABASE_URL`) exits `2` with the error
 //! chain on stderr. None of these touches a database, the app dir, or a port.
 
-#![allow(clippy::expect_used)]
+#![expect(
+    clippy::expect_used,
+    reason = "test helpers outside `#[test]` fns panic on a failed setup or check"
+)]
 
 use std::process::{Command, Output};
 

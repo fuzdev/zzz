@@ -50,7 +50,7 @@ struct CompletionCreateInput {
 struct CompletionRequestInput {
     /// `DatetimeNow` — defaulted client-side; accepted and unused.
     #[serde(default, deserialize_with = "crate::handlers::present")]
-    #[allow(dead_code, reason = "decoded for input validation only")]
+    #[expect(dead_code, reason = "decoded for input validation only")]
     created: Option<String>,
     provider_name: String,
     model: String,

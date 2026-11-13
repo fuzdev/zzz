@@ -544,10 +544,6 @@ fn remove_dir_if_present(path: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use super::*;
 

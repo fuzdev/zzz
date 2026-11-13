@@ -403,10 +403,6 @@ pub fn join_system_text(
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use std::ops::ControlFlow;
 

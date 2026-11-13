@@ -284,12 +284,6 @@ pub fn create_unnamed_temp_file(dir: &Path) -> std::io::Result<std::fs::File> {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "tests panic on assertion failure by design"
-)]
 pub(crate) mod tests {
     use std::io::{Read as _, Seek as _, Write as _};
     use std::path::PathBuf;

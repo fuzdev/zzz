@@ -18,7 +18,7 @@ pub fn print_version() {
 }
 
 /// Handle `zzz version`.
-#[allow(
+#[expect(
     clippy::unnecessary_wraps,
     reason = "uniform Result signature for the argh dispatch in main.rs"
 )]

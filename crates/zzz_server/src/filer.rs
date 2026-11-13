@@ -214,7 +214,7 @@ pub struct SerializableDisknode {
     stat: Option<FileStat>,
 }
 
-#[allow(clippy::ref_option, reason = "the signature `serialize_with` calls")]
+#[expect(clippy::ref_option, reason = "the signature `serialize_with` calls")]
 fn serialize_contents<S: serde::Serializer>(
     contents: &Option<Arc<String>>,
     serializer: S,
@@ -981,6 +981,8 @@ impl DirWatches {
     }
 
     /// List `dir` (with the test seam's injected failure).
+    // `allow`, not `expect`: `self` is read only by the `#[cfg(test)]` seam,
+    // so the lint fires in the lib build and not in the test build.
     #[allow(clippy::unused_self, reason = "`self` carries the test seam")]
     fn read_dir(&self, dir: &str) -> io::Result<std::fs::ReadDir> {
         #[cfg(test)]

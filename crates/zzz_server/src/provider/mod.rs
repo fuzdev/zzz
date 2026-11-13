@@ -362,7 +362,7 @@ fn normalize_api_key(value: Option<String>) -> Option<String> {
 
 #[expect(
     clippy::cast_possible_truncation,
-    reason = "millis won't exceed u64 for centuries"
+    reason = "milliseconds since the epoch stay far below `u64::MAX`"
 )]
 fn now_millis() -> u64 {
     SystemTime::now()
@@ -371,10 +371,6 @@ fn now_millis() -> u64 {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use super::*;
 

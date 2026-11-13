@@ -123,9 +123,9 @@ impl std::fmt::Debug for App {
 }
 
 impl App {
-    #[allow(
+    #[expect(
         clippy::too_many_arguments,
-        reason = "one handle per subsystem `run_app` composes; the tests build inert ones"
+        reason = "the handles and config `run_app` composes; tests pass inert ones"
     )]
     pub fn new(
         db_pool: Pool,

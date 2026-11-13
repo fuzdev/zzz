@@ -8,11 +8,10 @@
 //! No database is needed: a refused list exits first, and the cases that get
 //! past the list are pointed at a port nothing listens on.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
-    clippy::panic,
-    reason = "tests panic on assertion failure by design"
+    reason = "test helpers outside `#[test]` fns panic on a failed setup or check"
 )]
 
 use std::path::PathBuf;

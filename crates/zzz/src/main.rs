@@ -187,10 +187,6 @@ fn rewrite_argv_for_path_as_command(mut argv: Vec<String>) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use super::*;
 

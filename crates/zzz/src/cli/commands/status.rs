@@ -121,10 +121,6 @@ fn status_json(state: &DaemonState) -> serde_json::Value {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use super::*;
     use crate::daemon_lifecycle::{DaemonInfo, ForeignKind, ForeignRecord};

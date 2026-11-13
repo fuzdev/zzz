@@ -1075,11 +1075,6 @@ mod ws_receive_timeout {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    clippy::panic,
-    reason = "tests panic on assertion failure by design"
-)]
 mod config_paths {
     //! Path config never collapses to `/`: empty values read as unset, and
     //! `resolve_dir` errors rather than falling back to an empty string.

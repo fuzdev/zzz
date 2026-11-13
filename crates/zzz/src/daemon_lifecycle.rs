@@ -800,12 +800,6 @@ pub fn tail_lines(path: &Path, max_lines: usize) -> String {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use super::*;
 

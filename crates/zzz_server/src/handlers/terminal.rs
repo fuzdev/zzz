@@ -48,7 +48,7 @@ struct TerminalCreateInput {
     cwd: Option<String>,
     /// Accepted for parity with the TS input; the backend doesn't use it.
     #[serde(default, deserialize_with = "deserialize_optional_wire_uuid")]
-    #[allow(dead_code, reason = "decoded for input validation only")]
+    #[expect(dead_code, reason = "decoded for input validation only")]
     preset_id: Option<Uuid>,
 }
 

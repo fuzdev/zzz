@@ -160,9 +160,9 @@ fn display_dir(path: &str) -> String {
 /// # Errors
 ///
 /// An internal error if the result fails to serialize.
-#[allow(
+#[expect(
     clippy::unused_async,
-    reason = "ActionHandler signature requires async"
+    reason = "kept `async` like every other handler, whose spec builder awaits it"
 )]
 pub async fn workspace_list(
     _params: Value,

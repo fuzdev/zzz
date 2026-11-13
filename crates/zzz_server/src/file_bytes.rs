@@ -258,9 +258,9 @@ struct FileBytesQuery<'a> {
 /// an `offset` that's a plain decimal `u64`. Runs after the origin check and
 /// before the credential walk, so a malformed query answers the same whatever
 /// the caller's credentials.
-#[allow(
+#[expect(
     clippy::result_large_err,
-    reason = "Err is the ready-to-return axum Response — the spine REST handler idiom"
+    reason = "Err is the ready-to-return axum Response — the spine's REST handler idiom"
 )]
 fn parse_query<'a>(
     query_pairs: &'a [(String, String)],
@@ -285,7 +285,7 @@ fn parse_query<'a>(
 /// Authenticate a request the origin check admitted and check its token
 /// scope: `401` with no valid credential, `403` for a method-scoped API token,
 /// and the credential-read fault's `500` when the credential read fails.
-#[allow(
+#[expect(
     clippy::result_large_err,
     reason = "Err is the ready-to-return axum Response — the spine's REST handler idiom"
 )]
@@ -311,7 +311,7 @@ async fn authorize(
 /// Buffer a write's body, after the gates. The stack's body-limit layer
 /// already refused a declared `Content-Length` over the cap; this catches a
 /// body that runs past it without declaring one.
-#[allow(
+#[expect(
     clippy::result_large_err,
     reason = "Err is the ready-to-return axum Response — the spine's REST handler idiom"
 )]
@@ -561,11 +561,6 @@ fn file_body(file: tokio::fs::File, start: u64, len: u64) -> Body {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use super::*;
 

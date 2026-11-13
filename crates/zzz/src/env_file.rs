@@ -115,7 +115,7 @@ fn parse_value(raw: &str) -> String {
 mod tests {
     use super::*;
 
-    #[allow(
+    #[expect(
         clippy::unnecessary_wraps,
         reason = "matches `parse_env_line`'s return type for direct comparison"
     )]

@@ -427,10 +427,6 @@ fn parse_api_error(body: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    reason = "tests panic on assertion failure by design"
-)]
 mod tests {
     use super::*;
     use crate::provider::CompletionOptions;
