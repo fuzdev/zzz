@@ -4,10 +4,10 @@
  *
  * Two Rust target backends:
  *
- * - {@link rust_backend_config} — Axum/JSON-RPC backend (spawns
+ * - `rust_backend_config` — Axum/JSON-RPC backend (spawns
  *   `testing_zzz_server`) on the `/api/*` wire shape, also serving a
  *   static fixture dir (`STATIC_FIXTURE_FILES`) as its frontend.
- * - {@link rust_proxy_backend_config} — Rust variant with
+ * - `rust_proxy_backend_config` — Rust variant with
  *   `ZZZ_TRUSTED_PROXIES=127.0.0.1` for the proxy suite. Separate
  *   project because flipping that env mid-run isn't supported (Rust
  *   parses it once at boot).
@@ -31,7 +31,7 @@
  *   `TESTING_DEFAULT_PORT`)
  * - Rust+proxy test binary → `4463`
  * - Rust dev-origins test binary → `4464`
- *   ({@link rust_dev_origins_backend_config}, spawned by its one suite
+ *   (`rust_dev_origins_backend_config`, spawned by its one suite
  *   inside the `cross_backend_rust` project)
  *
  * Vitest projects spawn one backend each, so ports only need to not
@@ -158,7 +158,7 @@ interface ZzzBackendPaths extends TestBackendPaths {
 
 /**
  * Per-backend filesystem layout — generic paths via
- * {@link build_test_backend_paths}, plus the zzz-specific `scoped_dir` for
+ * `build_test_backend_paths`, plus the zzz-specific `scoped_dir` for
  * `PUBLIC_ZZZ_SCOPED_DIRS`. The Rust daemon-token writer expects
  * `{zzz_dir}/run/daemon_token`, so the daemon-token path is anchored to a
  * `zzz` dir under `paths.root` (the generic builder's tmpdir subtree), and
