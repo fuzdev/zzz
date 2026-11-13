@@ -111,9 +111,9 @@
 	<div class="flex height:100%">
 		<div class="flex:1 width_atleast_sm height:100% column p_md gap_md overflow:auto">
 			{#if diskfile.deleted_on_disk}
-				<p class="color_c_60">deleted on disk</p>
+				<p class="color_c_60 mb_0">deleted on disk</p>
 			{:else if recording}
-				<p class="row gap_sm">
+				<p class="row gap_sm mb_0">
 					<span>recording to this file</span>
 					<span class="font_family_mono">{format_recording_duration(recorder.duration)}</span>
 					<button type="button" class="sized_sm" onclick={() => recorder.stop()}>
@@ -121,7 +121,7 @@
 					</button>
 				</p>
 			{:else if url === null}
-				<p class="color_c_60">no backend to play this file from</p>
+				<p class="color_c_60 mb_0">no backend to play this file from</p>
 			{:else}
 				<!-- remounted when the file's bytes change, so it loads them -->
 				{#key diskfile.mtime}
@@ -139,14 +139,14 @@
 					></audio>
 				{/key}
 				{#if playback_failed}
-					<p class="color_c_60">
+					<p class="color_c_60 mb_0">
 						the browser couldn't play this file — it may not be audio, or use a codec the browser
 						lacks
 					</p>
 				{/if}
 			{/if}
 			{#if finalize_error !== null}
-				<p class="color_c_60">couldn't finalize: {finalize_error}</p>
+				<p class="color_c_60 mb_0">couldn't finalize: {finalize_error}</p>
 			{/if}
 
 			{#if !recording && !diskfile.deleted_on_disk}
