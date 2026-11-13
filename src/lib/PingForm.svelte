@@ -34,7 +34,7 @@
 	</div>
 
 	<ul
-		class="unstyled column panel p_md pb_0 mb_0 shadow_inset_top_xs"
+		class="unstyled column panel p_md pb_0 shadow_inset_top_xs"
 		style:height="150px"
 		style:min-height="150px"
 	>

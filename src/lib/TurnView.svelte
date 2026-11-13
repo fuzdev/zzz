@@ -22,7 +22,7 @@
 	{#if turn.parts.length > 0}
 		{#each turn.parts as part (part.id)}
 			<div class="column gap_sm mb_md" class:dormant={!part.enabled}>
-				<div class="flex mb_0 justify-content:space-between">
+				<div class="flex justify-content:space-between">
 					<div class="font_size_lg m_0">
 						<Icon data={get_part_type_icon(part)} />&nbsp;
 						{part.name}

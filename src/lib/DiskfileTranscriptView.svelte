@@ -99,7 +99,7 @@
 						></audio>
 					{/key}
 				{:else}
-					<p class="text_50 mb_0">
+					<p class="text_50">
 						the audio this was made from, {transcript.source.name}, isn't beside it
 					</p>
 				{/if}

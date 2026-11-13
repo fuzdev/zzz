@@ -25,7 +25,7 @@
 
 <PartContextmenu {part} {owner}>
 	<div class="column gap_sm" class:dormant={!part.enabled}>
-		<div class="flex mb_0 justify-content:space-between">
+		<div class="flex justify-content:space-between">
 			<div class="font_size_lg m_0">
 				<Icon data={get_part_type_icon(part)} />&nbsp;
 				{part.name}
