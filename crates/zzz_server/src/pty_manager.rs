@@ -1052,7 +1052,7 @@ async fn pump_io(io: &mut TerminalIo, decoder: &mut Utf8StreamDecoder) -> IoOutc
                     if let Err(e) = io.master.get_ref().pty.resize(cols, rows) {
                         tracing::debug!(
                             terminal_id = %io.terminal_id,
-                            error = %e,
+                            error = %fuz_sys::cli::format_error_chain(&e),
                             "PTY resize failed"
                         );
                     }

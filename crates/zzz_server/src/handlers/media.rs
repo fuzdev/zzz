@@ -150,7 +150,10 @@ pub async fn media_finalize(
         .map_err(|e| scoped_fs_error(ACTION, &e))?;
     // a second handle on the same open file, to check for changes afterward
     let source_check = source.try_clone().map_err(|e| {
-        tracing::warn!(error = %e, "{ACTION}: clone the source handle");
+        tracing::warn!(
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "{ACTION}: clone the source handle"
+        );
         internal_error(ACTION)
     })?;
 
@@ -164,7 +167,10 @@ pub async fn media_finalize(
     .map_err(std::io::Error::other)
     .and_then(|result| result);
     let (scratch, scratch_writer) = scratch.map_err(|e| {
-        tracing::warn!(error = %e, "{ACTION}: create a scratch file");
+        tracing::warn!(
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "{ACTION}: create a scratch file"
+        );
         internal_error(ACTION)
     })?;
 
@@ -175,7 +181,10 @@ pub async fn media_finalize(
     let (now_len, scratch_len) = match (source_check.metadata(), scratch.metadata()) {
         (Ok(now), Ok(scratch)) => (now.len(), scratch.len()),
         (Err(e), _) | (_, Err(e)) => {
-            tracing::warn!(error = %e, "{ACTION}: stat after the remux");
+            tracing::warn!(
+                error = %fuz_sys::cli::format_error_chain(&e),
+                "{ACTION}: stat after the remux"
+            );
             return Err(internal_error(ACTION));
         }
     };
@@ -192,7 +201,10 @@ pub async fn media_finalize(
         .map_err(|e| scoped_fs_error(ACTION, &e))?;
 
     serde_json::to_value(MediaFinalizeOutput { size: scratch_len }).map_err(|e| {
-        tracing::warn!(error = %e, "{ACTION}: serialize the output");
+        tracing::warn!(
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "{ACTION}: serialize the output"
+        );
         internal_error(ACTION)
     })
 }
@@ -299,7 +311,10 @@ pub async fn transcription_create(
         .submit(&app, owner, JobKind::Transcription, input.path, work);
 
     serde_json::to_value(TranscriptionCreateOutput { job_id: job.job_id }).map_err(|e| {
-        tracing::warn!(error = %e, "{ACTION}: serialize the output");
+        tracing::warn!(
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "{ACTION}: serialize the output"
+        );
         internal_error(ACTION)
     })
 }

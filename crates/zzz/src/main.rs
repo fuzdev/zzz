@@ -68,7 +68,7 @@ async fn main() -> ExitCode {
     match run().await {
         Ok(code) => code,
         Err(e) => {
-            eprintln!("error: {e}");
+            eprintln!("error: {}", fuz_sys::cli::format_error_chain(&e));
             if let Some(hint) = e.hint() {
                 eprintln!("{hint}");
             }

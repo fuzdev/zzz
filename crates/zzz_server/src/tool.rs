@@ -401,7 +401,11 @@ async fn run_child(
         Err(_elapsed) => {
             // `kill_on_drop` would get it too; this reaps it as well
             if let Err(e) = child.kill().await {
-                tracing::warn!(program = %program_name, error = %e, "failed to kill a timed-out tool");
+                tracing::warn!(
+                    program = %program_name,
+                    error = %fuz_sys::cli::format_error_chain(&e),
+                    "failed to kill a timed-out tool"
+                );
             }
             Err(ToolError::TimedOut {
                 program: program_name,

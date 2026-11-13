@@ -403,7 +403,11 @@ fn set_header(response: &mut Response, name: header::HeaderName, value: &str) {
         Ok(value) => {
             response.headers_mut().insert(name, value);
         }
-        Err(e) => tracing::warn!(%name, error = %e, "file_bytes: unrepresentable header value"),
+        Err(e) => tracing::warn!(
+            %name,
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "file_bytes: unrepresentable header value"
+        ),
     }
 }
 

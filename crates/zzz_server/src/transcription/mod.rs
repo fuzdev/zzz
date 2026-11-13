@@ -388,7 +388,10 @@ async fn whisper_cpp_version(bin: &Path) -> Option<String> {
     )
     .await;
     if let Err(e) = result {
-        tracing::debug!(error = %e, "whisper.cpp did not report a version");
+        tracing::debug!(
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "whisper.cpp did not report a version"
+        );
         return None;
     }
     whisper_cpp::parse_version_line(&first_line?)
@@ -417,7 +420,11 @@ impl ScratchDir {
 impl Drop for ScratchDir {
     fn drop(&mut self) {
         if let Err(e) = std::fs::remove_dir_all(&self.path) {
-            tracing::warn!(path = %self.path.display(), error = %e, "failed to remove a scratch directory");
+            tracing::warn!(
+                path = %self.path.display(),
+                error = %fuz_sys::cli::format_error_chain(&e),
+                "failed to remove a scratch directory"
+            );
         }
     }
 }

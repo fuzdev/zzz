@@ -972,7 +972,11 @@ impl DirWatches {
                     WatchAttempt::Denied
                 }
                 _ => {
-                    tracing::debug!(path = %dir, error = %e, "failed to watch a directory");
+                    tracing::debug!(
+                        path = %dir,
+                        error = %fuz_sys::cli::format_error_chain(&e),
+                        "failed to watch a directory"
+                    );
                     self.unwatched.insert(dir.to_owned());
                     WatchAttempt::List
                 }
@@ -1178,7 +1182,11 @@ fn walk_blocking(
                     watches.note_unreadable(&dir);
                     unreadable.insert(dir.clone());
                 } else if is_transient_list_error(&e) {
-                    tracing::warn!(path = %dir, error = %e, "failed to list a directory; retrying later");
+                    tracing::warn!(
+                        path = %dir,
+                        error = %fuz_sys::cli::format_error_chain(&e),
+                        "failed to list a directory; retrying later"
+                    );
                     kept.push(dir.clone());
                 }
                 if dir == prefix {
@@ -1268,7 +1276,11 @@ fn sweep_orphaned_temp_file(entry: &std::fs::DirEntry) {
     match std::fs::remove_file(&path) {
         Ok(()) => tracing::info!(path = %path.display(), "removed an orphaned staged-write file"),
         Err(e) => {
-            tracing::debug!(path = %path.display(), error = %e, "failed to remove an orphaned staged-write file");
+            tracing::debug!(
+                path = %path.display(),
+                error = %fuz_sys::cli::format_error_chain(&e),
+                "failed to remove an orphaned staged-write file"
+            );
         }
     }
 }
@@ -1378,7 +1390,10 @@ fn watcher_factory(
                 let mut event = match res {
                     Ok(event) => event,
                     Err(e) => {
-                        tracing::warn!(error = %e, "file watcher error");
+                        tracing::warn!(
+                            error = %fuz_sys::cli::format_error_chain(&e),
+                            "file watcher error"
+                        );
                         return;
                     }
                 };
@@ -1392,9 +1407,7 @@ fn watcher_factory(
                 // Filter before the bounded channel. Ignored directories have
                 // no watches, but their own entries are reported by their
                 // parent's.
-                event
-                    .paths
-                    .retain(|p| !is_ignored(p, &root, &ignored_dirs));
+                event.paths.retain(|p| !is_ignored(p, &root, &ignored_dirs));
                 if event.paths.is_empty() {
                     return;
                 }
@@ -1407,7 +1420,11 @@ fn watcher_factory(
             notify::Config::default().with_follow_symlinks(false),
         )
         .inspect_err(|e| {
-            tracing::warn!(path, error = %e, "failed to create a file watcher; rescanning periodically instead");
+            tracing::warn!(
+                path,
+                error = %fuz_sys::cli::format_error_chain(e),
+                "failed to create a file watcher; rescanning periodically instead"
+            );
         })
         .ok()
     })

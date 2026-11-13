@@ -606,7 +606,11 @@ fn write_file_atomic_with(
     // Persist the rename itself. The new content is already durable and in
     // place, so a failure here is logged rather than failing the write.
     if let Err(e) = std::fs::File::open(dir).and_then(|d| d.sync_all()) {
-        tracing::debug!(dir = %dir.display(), error = %e, "failed to fsync directory after write");
+        tracing::debug!(
+            dir = %dir.display(),
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "failed to fsync directory after write"
+        );
     }
     Ok(())
 }
@@ -717,7 +721,11 @@ fn is_rename_refused(error: &std::io::Error) -> bool {
 
 fn remove_temp_file(temp_path: &Path) {
     if let Err(e) = std::fs::remove_file(temp_path) {
-        tracing::warn!(path = %temp_path.display(), error = %e, "failed to remove temp file");
+        tracing::warn!(
+            path = %temp_path.display(),
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "failed to remove temp file"
+        );
     }
 }
 
@@ -750,7 +758,10 @@ fn preserve_ownership(file: &std::fs::File, meta: &std::fs::Metadata) {
         return;
     }
     if let Err(e) = std::os::unix::fs::fchown(file, None, Some(meta.gid())) {
-        tracing::debug!(error = %e, "could not preserve the replaced file's group");
+        tracing::debug!(
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "could not preserve the replaced file's group"
+        );
     }
 }
 
@@ -777,14 +788,22 @@ fn create_file_exclusive(path: &Path, content: &[u8]) -> Result<(), ScopedFsErro
         drop(file);
         // ours — created just above, so nothing else is lost
         if let Err(cleanup) = std::fs::remove_file(path) {
-            tracing::warn!(path = %path.display(), error = %cleanup, "failed to remove a partly written new file");
+            tracing::warn!(
+                path = %path.display(),
+                error = %fuz_sys::cli::format_error_chain(&cleanup),
+                "failed to remove a partly written new file"
+            );
         }
         return Err(ScopedFsError::io(path, e));
     }
     if let Some(dir) = path.parent()
         && let Err(e) = std::fs::File::open(dir).and_then(|d| d.sync_all())
     {
-        tracing::debug!(dir = %dir.display(), error = %e, "failed to fsync directory after create");
+        tracing::debug!(
+            dir = %dir.display(),
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "failed to fsync directory after create"
+        );
     }
     Ok(())
 }
@@ -838,7 +857,11 @@ fn append_at(path: &Path, expected_size: u64, content: &[u8]) -> Result<u64, Sco
     if let Err(e) = file.write_all(content).and_then(|()| file.sync_data()) {
         // drop the partial chunk, so a retry at the same offset can succeed
         if let Err(cleanup) = file.set_len(expected_size) {
-            tracing::warn!(path = %path.display(), error = %cleanup, "failed to truncate a partly appended file");
+            tracing::warn!(
+                path = %path.display(),
+                error = %fuz_sys::cli::format_error_chain(&cleanup),
+                "failed to truncate a partly appended file"
+            );
         }
         return Err(ScopedFsError::io(path, e));
     }

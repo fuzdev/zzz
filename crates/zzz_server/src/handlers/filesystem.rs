@@ -99,6 +99,7 @@ pub fn scoped_fs_error(action: &str, error: &ScopedFsError) -> JsonrpcError {
             }
             ErrorKind::InvalidFilename => invalid_params(&message, Some(ERROR_INVALID_PATH)),
             _ => {
+                // not the chain: `ScopedFsError::Io`'s message already carries its cause
                 tracing::warn!(error = %error, "{action}");
                 internal_error(&message)
             }
