@@ -385,8 +385,8 @@ commands):
   subdirectory skipped while its siblings are indexed; an unreadable root
   refused with `forbidden` and nothing registered),
   not-a-directory (`invalid_params`) + nonexistent (`not_found`) errors, a
-  NUL byte / symlink loop / over-long name (`invalid_params` /
-  `invalid_path`), `.zzz` and credential directories refused
+  symlink loop / over-long name (`invalid_params` / `invalid_path`), a NUL
+  byte (`params_nul`, refused by the dispatcher before the handler), `.zzz` and credential directories refused
   (`protected_dir_not_allowed` — the directory, a subdirectory, and a
   symlink to it, while its parent opens with it skipped and its `.env`
   indexed), the root rules (`$HOME`, a symlink to it, its parent, `/`, and

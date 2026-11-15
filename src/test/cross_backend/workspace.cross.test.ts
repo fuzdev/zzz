@@ -423,15 +423,16 @@ describe('workspace cross-backend', () => {
 		try {
 			await symlink(join(tmp_dir, 'b'), join(tmp_dir, 'a'));
 			await symlink(join(tmp_dir, 'a'), join(tmp_dir, 'b'));
-			for (const path of [
-				`${tmp_dir}/nul\0byte`,
-				join(tmp_dir, 'a'),
-				join(tmp_dir, 'x'.repeat(300))
-			]) {
+			// a NUL byte never reaches the handler: the dispatcher refuses any params holding one
+			for (const [path, reason] of [
+				[`${tmp_dir}/nul\0byte`, 'params_nul'],
+				[join(tmp_dir, 'a'), 'invalid_path'],
+				[join(tmp_dir, 'x'.repeat(300)), 'invalid_path']
+			] as const) {
 				const res = await call(fixture, 'workspace_open', { path });
 				assert.ok(!res.ok, `expected ${JSON.stringify(path)} to fail`);
 				assert.equal(res.error.code, -32602, JSON.stringify(path));
-				assert.deepEqual(res.error.data, { reason: 'invalid_path' }, JSON.stringify(path));
+				assert.deepEqual(res.error.data, { reason }, JSON.stringify(path));
 			}
 		} finally {
 			await remove_dir(tmp_dir);
