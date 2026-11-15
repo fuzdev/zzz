@@ -1286,7 +1286,9 @@ the draft (`save_draft`), showing it first, even when the editor showed an
 older entry; with no draft, "overwrite with this version" saves what's
 shown. VS
 Code's AI features likewise read the dirty buffer; zzz marks it, since a
-model otherwise can't tell a draft from the file.
+model otherwise can't tell a draft from the file. Line endings aren't kept:
+a textarea reads a CRLF file's line breaks as `\n`, so its first edit saves
+it with `\n` throughout, with no indicator.
 
 **Conflicts.** A disk change under the user's content (the draft, or a
 picked older entry) keeps that content and sets `disk_conflict`. While the
