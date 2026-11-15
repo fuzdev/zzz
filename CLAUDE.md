@@ -47,8 +47,10 @@ suites against `zzz_server` over real HTTP. See ./crates/CLAUDE.md, and
 
 ## Docs
 
-- ./docs/architecture.md — actions, cells, content model, data flow, terminals and fuz_terminal, recording, filesystem and file editing, the app directory, security posture, known limitations
+- ./docs/architecture.md — actions, cells, content model, data flow, terminals, recording, filesystem and file editing, the app directory, security posture, known limitations
 - ./docs/development.md — setup, commands, production build, the `zzz` CLI, environment variables, extension points, patterns, testing
+- ./docs/fuz_terminal.md — the terminal emulator binding, renderer, and adapter
+- ./docs/backend.md — the Rust backend's internals: each crate, the auth pipeline, the cross-process suites, known issues, design decisions
 - ./docs/providers.md — AI provider integration, adding new providers
 - ./docs/reference.md — generated action-spec + cell-class tables (`gro gen`)
 - ./crates/CLAUDE.md — the Rust backend (`zzzd`), the CLI crate, xtask, the test binary, integration tests
@@ -91,7 +93,7 @@ registers are listed in ./crates/CLAUDE.md).
 three layers: the DOM-free binding (`ghostty_*.ts`), the renderer
 (`FuzTerminal.svelte`, app-free), and zzz's adapter (`TerminalView.svelte` +
 `terminal_view_link.ts`). What a change must not break — each detailed in
-./docs/architecture.md § fuz_terminal:
+./docs/fuz_terminal.md:
 
 - **The manifest, never constants** — enum values, offsets, and option types
   come from `ghostty_manifest.ts`; every `GhosttyResult` is checked.
@@ -261,7 +263,7 @@ Details: ./docs/development.md § Adding a New Action.
   `zzzd` opened); transcription is a daemon-side **job**.
 
 Detail: ./docs/architecture.md § Zzz App Directory, § Filesystem, § File
-Editing, § Recording; ./crates/CLAUDE.md § Design Decisions.
+Editing, § Recording; ./docs/backend.md § Design Decisions.
 
 ## Environment Variables
 
