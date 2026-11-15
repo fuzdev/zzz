@@ -270,15 +270,19 @@ export class Chat extends Cell<typeof ChatJson> {
 		if (!assistant_turn) return null; // skipped, e.g. unavailable model or provider
 
 		// TODO maybe make the above return a result, so we can get better error handling, or maybe do that through the error handlers for the action?
-		// don't burn the one naming attempt on a failed, cancelled, or empty reply
+		// don't burn the one naming attempt on a failed, cancelled, or empty reply,
+		// or on one from a provider the naming model may not receive it from,
+		// so another thread's reply to the same send can still name the chat
+		const provider_name = assistant_turn.request?.provider_name;
 		if (
 			!assistant_turn.error_message &&
 			!assistant_turn.cancelled &&
 			assistant_turn.content.trim() &&
-			this.#init_name_send !== send
+			this.#init_name_send !== send &&
+			!this.#autoname_crosses_provider(provider_name)
 		) {
 			this.#init_name_send = send;
-			void this.init_name_from_turns(content, assistant_turn.content);
+			void this.init_name_from_turns(content, assistant_turn.content, provider_name);
 		}
 
 		return assistant_turn;
@@ -299,12 +303,20 @@ export class Chat extends Cell<typeof ChatJson> {
 	/**
 	 * Uses an LLM to name the chat based on the user input and AI response.
 	 * Only runs while `autoname` is set, so it never replaces a name the user
-	 * chose. A failure is retried on a later send, up to
+	 * chose, and only when the naming model's provider is `provider_name`, the
+	 * one the exchange went to, unless `Chats.autoname_across_providers` opts in
+	 * to crossing providers. A failure is retried on a later send, up to
 	 * `CHAT_AUTONAME_ATTEMPTS_MAX` attempts, except one that can't change on
 	 * retry (e.g. an unknown model or an auth error), which ends it at once;
 	 * the last failure is kept in `init_name_error`.
+	 *
+	 * @param provider_name - the provider the exchange was sent to
 	 */
-	async init_name_from_turns(user_content: string, assistant_content: string): Promise<void> {
+	async init_name_from_turns(
+		user_content: string,
+		assistant_content: string,
+		provider_name: string | undefined
+	): Promise<void> {
 		// TODO better abstraction for this kind of thing including de-duping the request,
 		// returning the current promise
 		if (!this.autoname || this.init_name_status !== 'initial') return;
@@ -317,6 +329,9 @@ export class Chat extends Cell<typeof ChatJson> {
 			);
 			return; // Stay in 'initial' state for retry later
 		}
+
+		// the exchange stays with the provider it was sent to unless the user opted in
+		if (this.#autoname_crosses_provider(provider_name)) return; // stays 'initial'
 
 		const provider_status = this.app.lookup_provider_status(namerbot_model.provider_name);
 		if (provider_status && !provider_status.available) {
@@ -374,6 +389,18 @@ export class Chat extends Cell<typeof ChatJson> {
 		} catch (error) {
 			this.#fail_init_name(error instanceof Error ? error.message : String(error), false);
 		}
+	}
+
+	/**
+	 * Whether naming from an exchange sent to `provider_name` would send it to
+	 * the naming model on another provider without the opt-in,
+	 * `Chats.autoname_across_providers`. An unknown naming model doesn't count,
+	 * so `init_name_from_turns` reports it.
+	 */
+	#autoname_crosses_provider(provider_name: string | undefined): boolean {
+		if (this.app.chats.autoname_across_providers) return false;
+		const namerbot_model = this.app.models.find_by_name(this.app.bots.namerbot);
+		return !!namerbot_model && namerbot_model.provider_name !== provider_name;
 	}
 
 	/**

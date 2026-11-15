@@ -42,6 +42,21 @@
 				</label>
 			</div> -->
 		</div>
+
+		<div class="mt_lg">
+			<h3>chats</h3>
+			<div class="my_md">
+				<label class="row">
+					<input type="checkbox" bind:checked={app.chats.autoname_across_providers} /> name chats
+					across providers
+				</label>
+			</div>
+			<p>
+				New chats are named by <code>{app.bots.namerbot}</code> from their first exchange.
+				Unchecked, an exchange is sent to it only from a thread on its own provider, so a chat with
+				no such thread keeps its default name until you rename it.
+			</p>
+		</div>
 	</section>
 	<section class="mb_xl7 flex justify-content:center">
 		<Footer />

@@ -29,7 +29,13 @@ export const ChatsJson = cell_json_schema(
 		items: with_default_fn(array(ChatJson), () => []),
 		selected_id: with_default(nullable(string), null),
 		selected_id_last_non_null: with_default(nullable(string), null),
-		show_sort_controls: with_default(boolean, false)
+		show_sort_controls: with_default(boolean, false),
+		/**
+		 * Whether auto-naming may send a chat's first exchange to the naming
+		 * model when it's on a different provider than the one the exchange went
+		 * to. Off, a chat is auto-named only through its own provider.
+		 */
+		autoname_across_providers: with_default(boolean, false)
 	},
 	'Chats'
 );
@@ -75,6 +81,9 @@ export class Chats extends Cell<typeof ChatsJson> {
 
 	/** Controls visibility of sort controls in the chats list. */
 	show_sort_controls: boolean = $state.raw()!;
+
+	/** Whether auto-naming may cross providers — see `ChatsJson`. */
+	autoname_across_providers: boolean = $state.raw()!;
 
 	/** Ordered array of chats derived from the `manual_order` index. */
 	readonly ordered_items: Array<Chat> = $derived(this.items.derived_index('manual_order'));

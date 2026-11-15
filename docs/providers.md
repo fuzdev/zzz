@@ -47,6 +47,16 @@ API status of 400, 401, 403, or 404 (from the error's `data.status`). The last
 failure is logged and, while auto-naming still applies, shown as a tooltip on
 the chat's name; renaming the chat clears it.
 
+Naming stays with the provider the conversation already went to: the exchange
+is sent to `namerbot` only when `namerbot`'s provider is the one the replying thread's
+request went to. Otherwise nothing is sent, no attempt is counted, and the chat
+keeps its default name (`new chat`, numbered when taken) until a later send's
+reply comes from a thread on `namerbot`'s provider or the user renames it — in
+a multi-thread send, the first successful reply on that provider names the
+chat. `Chats.autoname_across_providers` (default off; "name chats across
+providers" in system settings) lets naming cross providers. Like the chats
+themselves, it lives in page memory.
+
 ## Provider Architecture
 
 Providers live in the Rust backend (`crates/zzz_server/src/provider/`),

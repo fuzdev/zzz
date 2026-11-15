@@ -22,6 +22,8 @@ type NamerReply =
 let app: Frontend;
 let namer_replies: Array<NamerReply>;
 let namer_calls: number;
+/** The provider of each namer request. */
+let namer_providers: Array<string>;
 /** Resolves the next namer request; set while one is held in flight. */
 let hold_namer: Promise<void> | null;
 /** Held back until resolved: replies for threads on model `m_slow`. */
@@ -41,21 +43,24 @@ beforeEach(() => {
 			models: [
 				{ name: 'm', provider_name: 'claude' },
 				{ name: 'm_slow', provider_name: 'claude' },
+				{ name: 'm_gpt', provider_name: 'chatgpt' },
 				{ name: NAMER, provider_name: 'claude' }
 			]
 		})
 	);
 	namer_replies = [];
 	namer_calls = 0;
+	namer_providers = [];
 	hold_namer = null;
 	hold_slow = null;
 	(app as unknown as { api: unknown }).api = {
 		completion_create: async (input: {
-			completion_request: { model: string };
+			completion_request: { model: string; provider_name: string };
 			_meta?: { progressToken: Uuid };
 		}) => {
 			if (input.completion_request.model === NAMER) {
 				namer_calls++;
+				namer_providers.push(input.completion_request.provider_name);
 				if (hold_namer) await hold_namer;
 				const reply = namer_replies.shift() ?? { ok: true, name: 'named' };
 				return reply.ok
@@ -73,9 +78,9 @@ beforeEach(() => {
 	};
 });
 
-const create_chat = (name?: string): Chat => {
+const create_chat = (name?: string, model_name = 'm'): Chat => {
 	const chat = app.chats.add(name === undefined ? undefined : { name });
-	chat.add_thread(app.models.find_by_name('m')!);
+	chat.add_thread(app.models.find_by_name(model_name)!);
 	return chat;
 };
 
@@ -301,5 +306,95 @@ describe('Chat auto-naming', () => {
 		namer_replies.push({ ok: true, name: 'fresh name' });
 		await send(duplicate);
 		assert.strictEqual(duplicate.name, 'fresh name');
+	});
+});
+
+describe('Chat auto-naming across providers', () => {
+	test('names through the naming model when it shares the thread provider', async () => {
+		const chat = create_chat();
+		namer_replies.push({ ok: true, name: 'same provider' });
+		await send(chat);
+		assert.deepEqual(namer_providers, ['claude']);
+		assert.strictEqual(chat.name, 'same provider');
+	});
+
+	test('sends nothing for naming when the thread is on another provider', async () => {
+		assert.ok(!app.chats.autoname_across_providers);
+		const chat = create_chat(undefined, 'm_gpt');
+		await send(chat);
+		await send(chat);
+		assert.strictEqual(namer_calls, 0);
+		assert.strictEqual(chat.name, 'new chat');
+		assert.ok(chat.autoname);
+		assert.strictEqual(chat.init_name_status, 'initial');
+		assert.strictEqual(chat.init_name_attempts, 0);
+		assert.strictEqual(chat.init_name_error, null);
+
+		// the default name stays the user's to change
+		chat.rename('by hand');
+		assert.strictEqual(chat.name, 'by hand');
+	});
+
+	test('crosses providers when the setting allows it', async () => {
+		app.chats.autoname_across_providers = true;
+		const chat = create_chat(undefined, 'm_gpt');
+		namer_replies.push({ ok: true, name: 'crossed' });
+		await send(chat);
+		assert.deepEqual(namer_providers, ['claude']);
+		assert.strictEqual(chat.name, 'crossed');
+	});
+
+	test('init_name_from_turns refuses another provider unless allowed', async () => {
+		const chat = create_chat();
+		await chat.init_name_from_turns('hello', 'reply', 'chatgpt');
+		await chat.init_name_from_turns('hello', 'reply', undefined);
+		assert.strictEqual(namer_calls, 0);
+		assert.strictEqual(chat.init_name_status, 'initial');
+
+		app.chats.autoname_across_providers = true;
+		namer_replies.push({ ok: true, name: 'allowed' });
+		await chat.init_name_from_turns('hello', 'reply', 'chatgpt');
+		assert.strictEqual(namer_calls, 1);
+		assert.strictEqual(chat.name, 'allowed');
+	});
+
+	test('a send names from the reply of a thread on the naming provider', async () => {
+		const chat = create_chat(undefined, 'm_gpt');
+		chat.add_thread(app.models.find_by_name('m_slow')!);
+		namer_replies.push({ ok: true, name: 'from claude' });
+
+		// the other provider's reply lands first and is passed over
+		let release_slow!: () => void;
+		hold_slow = new Promise((r) => (release_slow = r));
+		const sent = chat.send_to_all('hello');
+		await new Promise((r) => setTimeout(r, 0));
+		assert.strictEqual(namer_calls, 0);
+		release_slow();
+		assert.strictEqual(await sent, 2);
+		await new Promise((r) => setTimeout(r, 0));
+		assert.deepEqual(namer_providers, ['claude']);
+		assert.strictEqual(chat.name, 'from claude');
+	});
+
+	test('the setting round-trips through json and defaults to off', () => {
+		app.chats.autoname_across_providers = true;
+		assert.ok(app.chats.json.autoname_across_providers);
+		app.chats.set_json({ ...app.chats.json, autoname_across_providers: false });
+		assert.ok(!app.chats.autoname_across_providers);
+		app.chats.set_json({});
+		assert.ok(!app.chats.autoname_across_providers);
+	});
+
+	test('follows the naming model to its provider', async () => {
+		app.models.find_by_name(NAMER)!.provider_name = 'chatgpt';
+		const claude_chat = create_chat();
+		await send(claude_chat);
+		assert.strictEqual(namer_calls, 0);
+
+		const gpt_chat = create_chat(undefined, 'm_gpt');
+		namer_replies.push({ ok: true, name: 'via chatgpt' });
+		await send(gpt_chat);
+		assert.deepEqual(namer_providers, ['chatgpt']);
+		assert.strictEqual(gpt_chat.name, 'via chatgpt');
 	});
 });
