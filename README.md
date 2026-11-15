@@ -73,7 +73,9 @@ ready.
 ## Roadmap
 
 - [#7 integrate database](https://github.com/fuzdev/zzz/issues/7)
-- [#8 undo/history system](https://github.com/fuzdev/zzz/issues/8)
+- projects over a `repos.toml` registry (or any directory), with persisted
+  workspaces and a VS Code-like layout
+- a read-only reader for your local git repos
 - publish to npm
 - input welcome
 
