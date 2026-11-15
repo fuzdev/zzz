@@ -1,6 +1,6 @@
 # Architecture
 
-Core systems: actions, cells, content model, data flow, terminals, indexed collections, filesystem, file editing, spaces and workspaces, capabilities.
+Core systems: actions, cells, content model, data flow, terminals and fuz_terminal, recording, indexed collections, the app directory, filesystem, file editing, spaces and workspaces, the auth gate, security posture, capabilities, and known limitations.
 
 ## Action System
 
