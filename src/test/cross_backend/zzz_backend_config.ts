@@ -20,7 +20,7 @@
  * bootstrap block keyed off `default_test_*` secrets, the
  * `FUZ_TESTING_RESET_DB_ON_STARTUP` gate. Per-backend factories only
  * declare what genuinely differs: zzz-specific env vars (`PUBLIC_ZZZ_*`,
- * `ZZZ_PORT`), the per-port session cookie name
+ * `ZZZ_ROOTS_OUTSIDE_HOME`, `ZZZ_PORT`), the per-port session cookie name
  * (`zzz_session_cookie_name`), the Rust binary's preferred `RUST_LOG`
  * filter, and (proxy variant) `ZZZ_TRUSTED_PROXIES`.
  *
@@ -61,6 +61,7 @@
  */
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BackendConfig } from '@fuzdev/fuz_app/testing/cross_backend/backend_config.ts';
@@ -213,6 +214,12 @@ const make_zzz_rust_backend_config = ({
 		daemon_token_dir_env: 'PUBLIC_ZZZ_DIR',
 		extra_env: {
 			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
+			// the backend inherits the runner's `HOME`, and every root the
+			// suites use — the scoped dir and each test's workspaces — sits
+			// under `os.tmpdir()`, outside it when that's `/tmp`; allowlisted
+			// here rather than loosening the root rule. The suites that pin
+			// the rule open directories outside both.
+			ZZZ_ROOTS_OUTSIDE_HOME: tmpdir(),
 			// exact origins, the shape the production template and the CLI
 			// ship — the backend's own two, the page it serves — never the
 			// upstream harness's `http://localhost:*`, so the browser-gate

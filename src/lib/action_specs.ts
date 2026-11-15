@@ -470,7 +470,7 @@ export const diskfile_read_action_spec = {
 	output: DiskfileReadOutput,
 	async: true,
 	description:
-		"Read a file's contents as text, with its size and timestamps. Any regular file in scope, except in a `.zzz` directory other than the app dir (`forbidden` / `zzz_home_not_allowed`); one over the size limit or not UTF-8 has `contents: null` and an `unloaded_reason`."
+		"Read a file's contents as text, with its size and timestamps. Any regular file in scope, except in a credential directory or a `.zzz` directory other than the app dir (`forbidden` / `protected_dir_not_allowed`); one over the size limit or not UTF-8 has `contents: null` and an `unloaded_reason`."
 } satisfies RequestResponseActionSpec;
 
 export const diskfile_update_action_spec = {
@@ -735,7 +735,8 @@ export const workspace_open_action_spec = {
 	input: WorkspaceOpenInput,
 	output: WorkspaceOpenOutput,
 	async: true,
-	description: 'Open a workspace directory — registers with ScopedFs and starts file watching.'
+	description:
+		"Open a workspace directory — registers with ScopedFs and starts file watching. The directory must be strictly inside the daemon's home directory or named by `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, the home directory or an ancestor of it, a pseudo-filesystem, or a protected directory (`forbidden` / `root_not_allowed`, `root_outside_home`, `protected_dir_not_allowed`)."
 } satisfies RequestResponseActionSpec;
 
 export const workspace_close_action_spec = {

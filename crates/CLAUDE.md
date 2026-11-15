@@ -184,9 +184,25 @@ An unset or blank (empty or whitespace) `DATABASE_URL` or
   `~/.zzz` for a daemon run elsewhere makes the home the app dir and indexes
   its `.env`, so don't
 - `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (no `~`
-  expansion); an entry that resolves to, or inside, a `.zzz` directory other
-  than the app dir fails boot naming the variable and the path
-  (`check_scoped_dirs`, run with the config parse, before the DB is touched)
+  expansion); an entry the root rules refuse (`root_policy.rs`: strictly
+  inside `$HOME` or in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an
+  ancestor, or under `/proc`, `/sys`, `/dev`), or that resolves to, or
+  inside, a credential directory or a `.zzz` directory other than the app
+  dir, fails boot naming the variable, the path, and why
+  (`check_scoped_dirs`, run with the config parse, before the DB is touched).
+  An entry that doesn't exist yet is checked as spelled (`resolve_dir`: one
+  with a `..` fails boot) and again on its canonical path when its filer
+  starts (`recheck_scoped_dir`: skipped with a warning if refused, or if it
+  resolves anywhere but the path the boot checked)
+- `ZZZ_ROOTS_OUTSIDE_HOME` — Comma-separated directories outside `$HOME`
+  that roots may be at or inside (no `~` expansion; parsed like
+  `PUBLIC_ZZZ_SCOPED_DIRS`). An entry that is `/`, `$HOME` or an ancestor of
+  it, or under a pseudo-filesystem fails boot (`build_root_policy`). `$HOME`
+  is `fuz_sys::home_dir()`, canonicalized at boot (`root_policy::resolve_home`);
+  one that can't be resolved, isn't a directory, or is `/` leaves only this
+  list admitting roots, with a boot warning. The app dir (`PUBLIC_ZZZ_DIR`)
+  is exempt from the `$HOME` rule but not the floor, and may not sit in a
+  credential directory (`check_app_dir_root`)
 - `ZZZ_PORT` — Server port (default 4460, `--port` overrides); an invalid port
   (either source — anything but `1..=65535`) refuses to boot rather than
   falling back to the default
@@ -382,7 +398,8 @@ crates/zzz_server/src/
 ├── file_bytes.rs     # Byte routes for files (`/api/files/bytes`): ranged read with a response-header lockdown, exclusive create, offset-checked append — hand-written axum handlers with their own auth + scope gates
 ├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), per-directory watches from the filer's own walk (degraded polling past the watch limit), stat-reusing rescans, debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
-├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, `.zzz` directories other than the app dir refused under every root (`is_in_zzz_home`), symlink rejection, atomic writes (temp file + fsync + rename), exclusive create, offset-checked append, open-for-read
+├── root_policy.rs    # Which directories can be roots: strictly inside `$HOME` or in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor, or under `/proc` / `/sys` / `/dev` (`RootPolicy`, held by `App` and the boot checks)
+├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, protected directories (credential directories, `.zzz` directories other than the app dir) refused under every root (`protected_dir`), symlink rejection, atomic writes (temp file + fsync + rename), exclusive create, offset-checked append, open-for-read
 ├── router.rs         # The served router: the surface routers composed by `fuz_http::compose_stack` into capped route groups (rpc, file_bytes, account, health_and_audit, the static fallback), every group behind the host, origin, and simple-request gates; its tests pin each gate on every group
 ├── static_files.rs   # Built-frontend fallback router: exact file → prerendered `{path}.html` → `200.html` SPA shell; backend paths + missing `_app/` assets 404; cache headers
 ├── tool.rs           # Local tools run as subprocesses: `resolve_tool` (override env var, else absolute `$PATH` entries — never the working directory), `resolve_model_file`, `Tools` (found at boot), `run_tool` (argument array, handles for stdin/stdout, scrubbed env, cwd `/`, timeout, bounded stderr tail), `run_tool_lines` (the same, handing over output lines as they're written)
@@ -524,9 +541,10 @@ joined after the drain, before PTY teardown.
   event channel with a coalesced root rescan on overflow, per-watcher ignore
   config, in-memory file index returned by `session_load` and
   `workspace_open`, symlinks skipped; ignores
-  `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` by name globally
-  (`.zzz` keeps the CLI daemon home's `.env` / `bootstrap_token` out of a `~`
-  workspace), `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes
+  `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` and the
+  credential directories (`.ssh`/`.gnupg`/`.aws`/`.kube`/`.docker`/
+  `.password-store`) by name globally (`.zzz` keeps the CLI daemon home's
+  `.env` / `bootstrap_token` out of a root that covers it), `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes
   orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files over an hour
   old), and every non-UTF-8 path, plus `zzz_dir` by its full path for a
   workspace/scoped_dir watcher whose root contains it; startup filers on

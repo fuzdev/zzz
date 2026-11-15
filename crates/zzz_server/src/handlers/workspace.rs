@@ -22,14 +22,25 @@ use crate::filer::{
 };
 use crate::handlers::filesystem::{
     ERROR_INVALID_PATH, ERROR_NOT_A_DIRECTORY, ERROR_PATH_NOT_FOUND, ERROR_PERMISSION_DENIED,
-    ERROR_ZZZ_HOME_NOT_ALLOWED,
+    ERROR_PROTECTED_DIR_NOT_ALLOWED,
 };
 use crate::handlers::{App, WorkspaceInfo, not_found_error};
-use crate::scoped_fs::is_in_zzz_home;
+use crate::root_policy::RootRefusal;
+use crate::scoped_fs::protected_dir;
 
 /// `workspace_close` of a path that isn't an open workspace (`invalid_params`)
 /// — e.g. one a restart forgot, which a client can then drop locally.
 pub const ERROR_WORKSPACE_NOT_OPEN: &str = "workspace_not_open";
+
+/// `workspace_open` of a directory that can never be a root (`forbidden`):
+/// `/`, the daemon's home directory or an ancestor of it, or a directory
+/// under `/proc`, `/sys`, or `/dev` ([`crate::root_policy`]).
+pub const ERROR_ROOT_NOT_ALLOWED: &str = "root_not_allowed";
+
+/// `workspace_open` of a directory outside the daemon's home directory that
+/// `ZZZ_ROOTS_OUTSIDE_HOME` doesn't name (`forbidden`) — the operator can
+/// allow it there ([`crate::root_policy`]).
+pub const ERROR_ROOT_OUTSIDE_HOME: &str = "root_outside_home";
 
 // -- Inputs -----------------------------------------------------------------
 
@@ -130,6 +141,23 @@ fn open_path_error(path: &str, error: &std::io::Error) -> JsonrpcError {
     }
 }
 
+/// The `forbidden` error for a root the root rules refuse: `root_outside_home`
+/// when the allowlist would admit it, else `root_not_allowed`.
+fn root_refused(canonical: &Path, refusal: &RootRefusal) -> JsonrpcError {
+    let reason = if refusal.is_outside_home() {
+        ERROR_ROOT_OUTSIDE_HOME
+    } else {
+        ERROR_ROOT_NOT_ALLOWED
+    };
+    forbidden(
+        &format!(
+            "failed to open workspace: {refusal}: {}",
+            display_dir(&canonical.to_string_lossy())
+        ),
+        Some(reason),
+    )
+}
+
 fn invalid_path_error(dir: &str, error: &std::io::Error) -> JsonrpcError {
     invalid_params(
         &format!("failed to open workspace: invalid path ({error}): {dir}"),
@@ -190,9 +218,13 @@ pub async fn workspace_list(
 /// `invalid_params` for a malformed input, a relative path, a non-directory,
 /// or an invalid path (a NUL byte, a symlink loop, an over-long name, a
 /// non-UTF-8 name); `not_found` for a missing directory; `forbidden` for a
-/// directory the OS refuses to list, or a `.zzz` directory (or a path inside
-/// one) other than the app dir (`zzz_home_not_allowed`); an internal error for
-/// any other I/O failure or a notification that fails to serialize.
+/// directory the OS refuses to list, one the root rules refuse
+/// (`root_not_allowed`: `/`, the home directory or an ancestor of it, a
+/// pseudo-filesystem; `root_outside_home`: outside the home directory and
+/// not in `ZZZ_ROOTS_OUTSIDE_HOME`), or a protected directory or a path
+/// inside one (`protected_dir_not_allowed`: a credential directory, or a
+/// `.zzz` directory other than the app dir); an internal error for any other
+/// I/O failure or a notification that fails to serialize.
 pub async fn workspace_open(
     params: Value,
     _ctx: ActionContext<'_>,
@@ -219,16 +251,22 @@ pub async fn workspace_open(
         ));
     }
 
-    // the daemon home's `.env` and `bootstrap_token` must never be indexed
-    // and broadcast — checked on the canonical path, so no symlink or
-    // `..` spelling gets around it
-    if is_in_zzz_home(&canonical, Path::new(&app.zzz_dir)) {
+    // Both checks run on the canonical path, so no symlink or `..` spelling
+    // gets around them. The root rules keep out the whole home directory,
+    // the whole filesystem, and the kernel's pseudo-filesystems
+    // (`/proc/<pid>/environ` holds the daemon's own secrets) …
+    if let Err(refusal) = app.root_policy.admit(&canonical) {
+        return Err(root_refused(&canonical, &refusal));
+    }
+    // … and credentials and the daemon home's `.env` and `bootstrap_token`
+    // must never be indexed and broadcast
+    if let Some(dir) = protected_dir(&canonical, Path::new(&app.zzz_dir)) {
         return Err(forbidden(
             &format!(
-                "failed to open workspace: .zzz directories hold zzz's own files (secrets, tokens) and can't be opened as a workspace: {}",
+                "failed to open workspace: it's in {dir}: {}",
                 display_dir(&canonical.to_string_lossy())
             ),
-            Some(ERROR_ZZZ_HOME_NOT_ALLOWED),
+            Some(ERROR_PROTECTED_DIR_NOT_ALLOWED),
         ));
     }
 
@@ -567,5 +605,34 @@ mod tests {
         let other = std::io::Error::other("boom");
         let error = open_path_error("/x", &other);
         assert_eq!(error.code, JsonrpcErrorCode::InternalError);
+    }
+
+    #[test]
+    fn root_refusals_are_forbidden_naming_whether_the_allowlist_helps() {
+        let home = || "/home/u".to_owned();
+        for (refusal, expected) in [
+            (RootRefusal::FilesystemRoot, ERROR_ROOT_NOT_ALLOWED),
+            (
+                RootRefusal::HomeOrAncestor { home: home() },
+                ERROR_ROOT_NOT_ALLOWED,
+            ),
+            (
+                RootRefusal::PseudoFilesystem { dir: "/proc" },
+                ERROR_ROOT_NOT_ALLOWED,
+            ),
+            (
+                RootRefusal::OutsideHome { home: home() },
+                ERROR_ROOT_OUTSIDE_HOME,
+            ),
+            (RootRefusal::NoHome, ERROR_ROOT_OUTSIDE_HOME),
+        ] {
+            let error = root_refused(Path::new("/x"), &refusal);
+            assert_eq!(error.code, JsonrpcErrorCode::Forbidden, "{refusal:?}");
+            assert_eq!(reason(&error), Some(expected), "{refusal:?}");
+            assert_eq!(
+                error.message,
+                format!("failed to open workspace: {refusal}: /x/"),
+            );
+        }
     }
 }

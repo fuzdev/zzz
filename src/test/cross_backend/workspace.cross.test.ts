@@ -9,11 +9,11 @@
  * @module
  */
 
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { chmod, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { describe, test, assert } from 'vitest';
+import { describe, test, assert, onTestFinished } from 'vitest';
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
 import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
@@ -25,15 +25,21 @@ import { ERROR_WORKSPACE_NOT_OPEN } from '#lib/workspace_helpers.ts';
 const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 
-/** Create a fresh tmp directory for a workspace; caller cleans up. */
-const create_tmp_workspace = async (label: string): Promise<string> => {
-	const dir = join(tmpdir(), `zzz_cross_ws_${label}_${randomUUID()}`);
-	await mkdir(dir, { recursive: true });
-	return dir;
-};
-
 const remove_dir = async (path: string): Promise<void> => {
 	await rm(path, { recursive: true, force: true });
+};
+
+/**
+ * Create a fresh tmp directory for a workspace, inside a running test. The
+ * caller cleans up in a `finally`; the directory is also removed once the
+ * test finishes, which covers a test that times out — its body, and so its
+ * `finally`, may still be waiting on the backend when the run moves on.
+ */
+const create_tmp_workspace = async (label: string): Promise<string> => {
+	const dir = join(tmpdir(), `zzz_cross_ws_${label}_${randomUUID()}`);
+	onTestFinished(() => remove_dir(dir).catch(() => undefined));
+	await mkdir(dir, { recursive: true });
+	return dir;
 };
 
 /**
@@ -292,7 +298,7 @@ describe('workspace cross-backend', () => {
 				const res = await call(fixture, 'workspace_open', { path });
 				assert.ok(!res.ok, `expected ${path} to be refused`);
 				assert.equal(res.error.code, -32002, path);
-				assert.deepEqual(res.error.data, { reason: 'zzz_home_not_allowed' }, path);
+				assert.deepEqual(res.error.data, { reason: 'protected_dir_not_allowed' }, path);
 			}
 			const list = await call(fixture, 'workspace_list');
 			assert.ok(list.ok);
@@ -311,6 +317,103 @@ describe('workspace cross-backend', () => {
 		} finally {
 			await call(fixture, 'workspace_close', { path: tmp_dir }).catch(() => undefined);
 			await remove_dir(tmp_dir);
+		}
+	});
+
+	test('workspace_open_refuses_credential_dirs', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = await create_tmp_workspace('credentials');
+		const ssh = join(tmp_dir, '.ssh');
+		try {
+			await mkdir(join(ssh, 'sub'), { recursive: true });
+			await writeFile(join(ssh, 'id_ed25519'), 'not-for-a-workspace', 'utf-8');
+			await mkdir(join(tmp_dir, 'project', '.aws'), { recursive: true });
+			await writeFile(join(tmp_dir, 'project', '.aws', 'credentials'), 'x', 'utf-8');
+			await writeFile(join(tmp_dir, 'project', '.env'), 'X=1', 'utf-8');
+			await symlink(ssh, join(tmp_dir, 'ssh_link'));
+
+			// the directory, one inside it, a symlink to it, and another name
+			for (const path of [
+				ssh,
+				join(ssh, 'sub'),
+				join(tmp_dir, 'ssh_link'),
+				join(tmp_dir, 'project', '.aws')
+			]) {
+				const res = await call(fixture, 'workspace_open', { path });
+				assert.ok(!res.ok, `expected ${path} to be refused`);
+				assert.equal(res.error.code, -32002, path);
+				assert.deepEqual(res.error.data, { reason: 'protected_dir_not_allowed' }, path);
+			}
+
+			// its parent opens, with the credential directories skipped and
+			// `.env` files indexed
+			const open = await call(fixture, 'workspace_open', { path: tmp_dir });
+			assert.ok(open.ok, `workspace_open failed: ${JSON.stringify(open)}`);
+			const ids = ((open.result as Record<string, unknown>).files as Array<Record<string, unknown>>)
+				.map((f) => f.id as string)
+				.sort();
+			assert.deepEqual(ids, [join(tmp_dir, 'project', '.env')]);
+		} finally {
+			await call(fixture, 'workspace_close', { path: tmp_dir }).catch(() => undefined);
+			await remove_dir(tmp_dir);
+		}
+	});
+
+	// the backend inherits this process's `HOME`; its temp roots are
+	// allowlisted (`ZZZ_ROOTS_OUTSIDE_HOME`), so these probe directories
+	// outside both
+	test('workspace_open_refuses_home_its_ancestors_and_pseudo_filesystems', async () => {
+		const fixture = await setup_test();
+		const tmp_dir = await create_tmp_workspace('home');
+		const home = homedir();
+		try {
+			await symlink(home, join(tmp_dir, 'home_link'));
+			await symlink('/', join(tmp_dir, 'slash_link'));
+			for (const path of [
+				home,
+				`${home}/`,
+				`${home}/.`,
+				join(tmp_dir, 'home_link'),
+				dirname(home),
+				'/',
+				join(tmp_dir, 'slash_link'),
+				'/proc',
+				'/proc/self',
+				'/sys',
+				'/dev'
+			]) {
+				const res = await call(fixture, 'workspace_open', { path });
+				assert.ok(!res.ok, `expected ${path} to be refused`);
+				assert.equal(res.error.code, -32002, path);
+				assert.deepEqual(res.error.data, { reason: 'root_not_allowed' }, path);
+			}
+			const list = await call(fixture, 'workspace_list');
+			assert.ok(list.ok);
+			const workspaces = (list.result as Record<string, unknown>).workspaces as Array<
+				Record<string, unknown>
+			>;
+			const opened = workspaces
+				.map((w) => w.path as string)
+				.filter((p) => `${home}/`.startsWith(p) || /^\/(proc|sys|dev)\//.test(p));
+			assert.deepEqual(opened, [], 'nothing opened');
+		} finally {
+			await remove_dir(tmp_dir);
+		}
+	});
+
+	test('workspace_open_refuses_roots_outside_home_not_allowlisted', async () => {
+		const fixture = await setup_test();
+		const home = homedir();
+		const outside = ['/etc', '/usr/share'].filter(
+			(dir) => !dir.startsWith(`${home}/`) && !dir.startsWith(`${tmpdir()}/`)
+		);
+		assert.isNotEmpty(outside);
+		for (const path of outside) {
+			const res = await call(fixture, 'workspace_open', { path });
+			assert.ok(!res.ok, `expected ${path} to be refused`);
+			assert.equal(res.error.code, -32002, path);
+			assert.deepEqual(res.error.data, { reason: 'root_outside_home' }, path);
+			assert.include(res.error.message, 'ZZZ_ROOTS_OUTSIDE_HOME', path);
 		}
 	});
 

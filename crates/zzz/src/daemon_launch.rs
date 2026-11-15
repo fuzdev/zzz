@@ -4,9 +4,10 @@
 //! The daemon runs with `~/.zzz` (the daemon home) as its working directory.
 //!
 //! **Paths.** For the path-valued vars — `PUBLIC_ZZZ_DIR` (default `.zzz`,
-//! i.e. `~/.zzz/.zzz`), `PUBLIC_ZZZ_SCOPED_DIRS`, `FUZ_BOOTSTRAP_TOKEN_PATH`,
-//! `ZZZ_STATIC_DIR`, `ZZZ_FFMPEG_BIN`, `ZZZ_WHISPER_CPP_BIN`,
-//! `ZZZ_WHISPER_CPP_MODEL` — the CLI expands a leading `~`; a relative value from
+//! i.e. `~/.zzz/.zzz`), `PUBLIC_ZZZ_SCOPED_DIRS`, `ZZZ_ROOTS_OUTSIDE_HOME`,
+//! `FUZ_BOOTSTRAP_TOKEN_PATH`, `ZZZ_STATIC_DIR`, `ZZZ_FFMPEG_BIN`,
+//! `ZZZ_WHISPER_CPP_BIN`, `ZZZ_WHISPER_CPP_MODEL` — the CLI expands a leading
+//! `~` (in each entry of a list); a relative value from
 //! `~/.zzz/.env` stays relative to `~/.zzz`, and a relative value from the
 //! CLI's own environment is made absolute against the directory `zzz` runs
 //! in, where it was written.
@@ -74,6 +75,7 @@ const PATH_VARS: &[(&str, bool)] = &[
     ("ZZZ_WHISPER_CPP_BIN", false),
     ("ZZZ_WHISPER_CPP_MODEL", false),
     ("PUBLIC_ZZZ_SCOPED_DIRS", true),
+    ("ZZZ_ROOTS_OUTSIDE_HOME", true),
 ];
 
 /// Everything needed to spawn `zzzd` but the binary, which the caller
@@ -574,6 +576,10 @@ mod tests {
         let mut overlay = BTreeMap::from([
             ("PUBLIC_ZZZ_DIR".to_owned(), "data".to_owned()),
             ("FUZ_BOOTSTRAP_TOKEN_PATH".to_owned(), "~/token".to_owned()),
+            (
+                "ZZZ_ROOTS_OUTSIDE_HOME".to_owned(),
+                "/srv/w, ~/m".to_owned(),
+            ),
             ("DATABASE_URL".to_owned(), "postgres://x".to_owned()),
         ]);
         resolve_path_vars(&mut overlay, process, Some(Path::new("/work"))).unwrap();
@@ -587,6 +593,10 @@ mod tests {
         // file: relative stays relative (to ~/.zzz), `~` expanded
         assert_eq!(overlay["PUBLIC_ZZZ_DIR"], "data");
         assert_eq!(overlay["FUZ_BOOTSTRAP_TOKEN_PATH"], tilde("~/token"));
+        assert_eq!(
+            overlay["ZZZ_ROOTS_OUTSIDE_HOME"],
+            format!("/srv/w,{}", tilde("~/m"))
+        );
         // non-path vars untouched
         assert_eq!(overlay["DATABASE_URL"], "postgres://x");
     }

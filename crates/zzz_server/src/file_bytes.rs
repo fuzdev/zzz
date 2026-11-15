@@ -28,9 +28,10 @@
 //! before the credential walk, so a malformed query answers the same whatever
 //! the caller's credentials. Paths go through
 //! [`ScopedFs`](crate::scoped_fs::ScopedFs): absolute, in scope, outside any
-//! `.zzz` directory but the app dir (`403 zzz_home_not_allowed`, so the CLI
-//! daemon home's `.env` and `bootstrap_token` stay out of reach of a root
-//! that covers them), no symlinks, regular files only. A write's body is read
+//! credential directory and any `.zzz` directory but the app dir
+//! (`403 protected_dir_not_allowed`, so keys and the CLI daemon home's `.env`
+//! and `bootstrap_token` stay out of reach of a root that covers them), no
+//! symlinks, regular files only. A write's body is read
 //! only after the gates pass.
 //!
 //! These routes are outside the action system, so nothing derived from action

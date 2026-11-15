@@ -85,7 +85,7 @@ use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::handlers::App;
-use crate::scoped_fs::{ZZZ_DIR_NAME, is_in_zzz_home};
+use crate::scoped_fs::{ProtectedDir, ZZZ_DIR_NAME, protected_dir};
 
 // -- Indexing limits ----------------------------------------------------------
 
@@ -283,7 +283,9 @@ pub enum WatchStatus {
 ///
 /// `.zzz` is zzz's conventional app-dir and CLI daemon-home name — the daemon
 /// home (`~/.zzz/`) holds `.env`, `bootstrap_token`, and `run/`, which must
-/// never be indexed or broadcast from a workspace like `~`.
+/// never be indexed or broadcast from a root that covers it. The credential
+/// directories (`scoped_fs::CREDENTIAL_DIR_NAMES`) are ignored the same way,
+/// by [`is_ignored_name`].
 const DEFAULT_IGNORED_DIRS: &[&str] = &[
     ".git",
     "node_modules",
@@ -294,10 +296,13 @@ const DEFAULT_IGNORED_DIRS: &[&str] = &[
 ];
 
 /// Check if a single path component is ignored by every watcher: a name in
-/// the default directory ignore list, or a `ScopedFs::write_file` staging
-/// file (only the rename that publishes a write is indexed and broadcast).
+/// the default directory ignore list, a credential directory (which
+/// `ScopedFs` refuses too), or a `ScopedFs::write_file` staging file (only
+/// the rename that publishes a write is indexed and broadcast).
 fn is_ignored_name(name: &str) -> bool {
-    DEFAULT_IGNORED_DIRS.contains(&name) || crate::scoped_fs::is_temp_file_name(name)
+    DEFAULT_IGNORED_DIRS.contains(&name)
+        || crate::scoped_fs::is_credential_dir_name(name)
+        || crate::scoped_fs::is_temp_file_name(name)
 }
 
 /// Check if a path is ignored: not valid UTF-8, a default-ignored name among
@@ -803,10 +808,11 @@ pub struct FilerConfig {
     /// Shortest interval between degraded-mode rescans of the unwatched
     /// directories.
     pub degraded_rescan_interval: Duration,
-    /// The root is in a `.zzz` directory other than the app dir (see
-    /// [`is_in_zzz_home`]) — [`start_filer`] refuses it rather than index
-    /// the daemon home's secrets.
-    pub root_in_zzz_home: bool,
+    /// The protected directory the root is, or is inside ([`protected_dir`]:
+    /// a credential directory, or a `.zzz` directory other than the app dir)
+    /// — [`start_filer`] refuses it rather than index credentials or the
+    /// daemon home's secrets.
+    pub root_protected: Option<ProtectedDir>,
     /// Test seam: run as if no watcher could be created.
     #[cfg(test)]
     pub no_watcher: bool,
@@ -821,7 +827,7 @@ impl FilerConfig {
             ignored_dirs: vec![],
             watch_limit: None,
             degraded_rescan_interval: DEGRADED_RESCAN_INTERVAL,
-            root_in_zzz_home: false,
+            root_protected: None,
             #[cfg(test)]
             no_watcher: false,
         }
@@ -834,8 +840,8 @@ impl FilerConfig {
     /// dir named `data` vs a workspace's own `data/`) stay visible; `.zzz`
     /// directories are ignored everywhere by `DEFAULT_IGNORED_DIRS`.
     ///
-    /// A root in a `.zzz` directory other than the app dir is marked
-    /// [`Self::root_in_zzz_home`], so the filer refuses to start on it.
+    /// A root in a protected directory is marked [`Self::root_protected`], so
+    /// the filer refuses to start on it.
     ///
     /// Both paths are expected in their canonical form (as `resolve_dir` and
     /// `workspace_open` produce); a trailing `/` is ignored.
@@ -849,7 +855,7 @@ impl FilerConfig {
             } else {
                 vec![]
             },
-            root_in_zzz_home: is_in_zzz_home(root, zzz_dir),
+            root_protected: protected_dir(root, zzz_dir),
             ..Self::zzz_dir()
         }
     }
@@ -1498,8 +1504,8 @@ fn watcher_factory(
 ///
 /// Fails only when the root itself can't be listed — unreadable
 /// (`PermissionDenied`), missing (`NotFound`), or not a directory — or is
-/// refused: a root in a `.zzz` directory other than the app dir
-/// ([`FilerConfig::root_in_zzz_home`], `PermissionDenied`). Every other
+/// refused: a root in a protected directory
+/// ([`FilerConfig::root_protected`], `PermissionDenied`). Every other
 /// failure is per directory (skipped, or left unwatched in degraded mode),
 /// including failing to create the watcher at all.
 pub async fn start_filer(
@@ -1507,10 +1513,10 @@ pub async fn start_filer(
     broadcast: FilerBroadcast,
     config: FilerConfig,
 ) -> io::Result<Filer> {
-    if config.root_in_zzz_home {
+    if let Some(dir) = config.root_protected {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
-            format!("refusing to index a .zzz directory other than the app dir: {path}"),
+            format!("refusing to index {dir}: {path}"),
         ));
     }
     let (tx, rx) = mpsc::channel::<notify::Event>(EVENT_CHANNEL_CAPACITY);
@@ -3337,21 +3343,62 @@ mod tests {
     }
 
     #[test]
-    fn workspace_config_marks_a_root_in_a_zzz_home() {
+    fn workspace_config_marks_a_root_in_a_protected_dir() {
+        let zzz_home = Some(ProtectedDir::ZzzHome);
         for (root, zzz_dir, marked) in [
-            ("/home/u/.zzz/", "/home/u/.zzz/.zzz/", true),
-            ("/w/.zzz/run/", "/home/u/.zzz/.zzz/", true),
-            ("/home/u/.zzz/.zzz/", "/home/u/.zzz/.zzz/", false),
-            ("/home/u/.zzz/.zzz/state/", "/home/u/.zzz/.zzz/", false),
-            ("/home/u/", "/home/u/.zzz/.zzz/", false),
+            ("/home/u/.zzz/", "/home/u/.zzz/.zzz/", zzz_home),
+            ("/w/.zzz/run/", "/home/u/.zzz/.zzz/", zzz_home),
+            ("/home/u/.zzz/.zzz/", "/home/u/.zzz/.zzz/", None),
+            ("/home/u/.zzz/.zzz/state/", "/home/u/.zzz/.zzz/", None),
+            ("/home/u/", "/home/u/.zzz/.zzz/", None),
+            (
+                "/home/u/.ssh/",
+                "/home/u/.zzz/.zzz/",
+                Some(ProtectedDir::Credentials(".ssh")),
+            ),
+            (
+                "/w/x/.kube/cache/",
+                "/home/u/.zzz/.zzz/",
+                Some(ProtectedDir::Credentials(".kube")),
+            ),
         ] {
             assert_eq!(
-                FilerConfig::workspace(root, zzz_dir).root_in_zzz_home,
+                FilerConfig::workspace(root, zzz_dir).root_protected,
                 marked,
                 "{root} {zzz_dir}"
             );
         }
-        assert!(!FilerConfig::zzz_dir().root_in_zzz_home);
+        assert_eq!(FilerConfig::zzz_dir().root_protected, None);
+    }
+
+    #[tokio::test]
+    async fn credential_dirs_are_skipped_by_the_scan() {
+        let tmp = TempDir::new();
+        for name in crate::scoped_fs::CREDENTIAL_DIR_NAMES {
+            std::fs::create_dir_all(tmp.path(&format!("{name}/sub"))).unwrap();
+            std::fs::write(tmp.path(&format!("{name}/key")), "SECRET").unwrap();
+            std::fs::write(tmp.path(&format!("{name}/sub/key")), "SECRET").unwrap();
+            std::fs::create_dir_all(tmp.path(&format!("nested/{name}"))).unwrap();
+            std::fs::write(tmp.path(&format!("nested/{name}/key")), "SECRET").unwrap();
+        }
+        for rel in [".sshx/f", "ssh/f", "nested/.env", "notes.txt"] {
+            if let Some(parent) = Path::new(rel).parent() {
+                std::fs::create_dir_all(tmp.path(&parent.to_string_lossy())).unwrap();
+            }
+            std::fs::write(tmp.path(rel), "x").unwrap();
+        }
+        let root = tmp.root();
+        let files = scan_with(&root, &[]).await;
+        let mut keys: Vec<String> = files.keys().cloned().collect();
+        keys.sort();
+        let mut expected = vec![
+            tmp.key(".sshx/f"),
+            tmp.key("nested/.env"),
+            tmp.key("notes.txt"),
+            tmp.key("ssh/f"),
+        ];
+        expected.sort();
+        assert_eq!(keys, expected);
     }
 
     #[tokio::test]

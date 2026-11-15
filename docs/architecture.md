@@ -971,14 +971,18 @@ custom-named app dir (say `data`) doesn't hide other `data/` folders.
 
 A directory named `.zzz` other than the app dir — the CLI's daemon home, which
 holds `.env` and `bootstrap_token`, or another daemon's app dir — is off limits
-whatever root covers it (a workspace on `~` covers `~/.zzz/`). `ScopedFs`
-refuses every operation on a path in one — reads, writes, creates, appends,
-deletes, through the file actions, the media actions, and the byte routes
-alike — with `forbidden` / `zzz_home_not_allowed` (403 on the byte routes),
-whether or not the path exists. Every filer skips them, and `workspace_open`
-refuses one as a workspace (same error), so `zzz ~/.zzz/.env` (which opens
-`~/.zzz/`) can't index and broadcast those secrets. The app dir and the paths
-inside it stay openable, readable, and writable.
+whatever root covers it, and so are the credential directories (`.ssh`,
+`.gnupg`, `.aws`, `.kube`, `.docker`, `.password-store`). `ScopedFs` refuses
+every operation on a path in one of these protected directories — reads,
+writes, creates, appends, deletes, through the file actions, the media
+actions, and the byte routes alike — with `forbidden` /
+`protected_dir_not_allowed` (403 on the byte routes; the message names the
+directory), whether or not the path exists. Every filer skips them, and
+`workspace_open` refuses one as a workspace (same error), so `zzz
+~/.zzz/.env` (which opens `~/.zzz/`) can't index and broadcast those
+secrets. The app dir and the paths inside it stay openable, readable, and
+writable (the boot refuses an app dir inside a credential directory).
+`.env` files elsewhere are ordinary files.
 
 The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 `bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
@@ -1029,15 +1033,40 @@ Two separate concerns:
 - App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files: `cache/` holds scratch for tool runs, `recordings/` what the recordings page records, and `state/` and `run/` are reserved
 - Scoped dirs (`PUBLIC_ZZZ_SCOPED_DIRS`) — User file access (comma-separated paths)
 
+### Workspace scope
+
+Which directories can be roots at all — an open workspace or a scoped dir —
+is one rule (Rust: `crates/zzz_server/src/root_policy.rs`), checked on the
+canonical path, so no symlink or `..` spelling changes the answer:
+
+- **Never** `/`, the home directory (`$HOME`, the daemon's, canonicalized at
+  boot) or any ancestor of it, or anything under `/proc`, `/sys`, or `/dev`.
+- **Otherwise strictly inside `$HOME`**, or at or inside a directory
+  `ZZZ_ROOTS_OUTSIDE_HOME` names (comma-separated; an entry the first rule
+  refuses fails the boot).
+
+`workspace_open` (and so `zzz <path>`) answers a refused directory with
+`forbidden` / `root_outside_home` when the allowlist would admit it and
+`root_not_allowed` when nothing would; a scoped dir it refuses fails the
+boot. A scoped dir that doesn't exist at boot is checked as spelled — a `..`
+in the spelling fails the boot — and again on its canonical path when its
+filer starts, which skips it (with a warning) if that path is refused or
+isn't the one the boot checked. A `$HOME` that can't be resolved, isn't a
+directory, or is `/` admits nothing but the allowlist (with a boot warning). The app dir is the
+operator's own and exempt from the `$HOME` rule, not from the first. So a
+workspace can't take in the whole home directory with its dotfiles, the
+whole filesystem, or `/proc/<pid>/environ`; credential directories inside
+an admitted root stay refused by `ScopedFs` (§ Zzz App Directory).
+
 ### ScopedFs
 
-All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, `.zzz` directories other than the app dir refused under every root (see § Zzz App Directory), symlinks rejected, absolute paths required, parent directories checked recursively.
+All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, protected directories (credential directories, and `.zzz` directories other than the app dir) refused under every root (see § Zzz App Directory), symlinks rejected, absolute paths required, parent directories checked recursively.
 
 The allowed roots are the permanent boot-time set (the app directory + scoped dirs) plus one runtime root per open workspace. A path is allowed when any root covers it, and removing a workspace's root never touches a permanent root — so closing a workspace opened on, nested in, or containing the app directory or a scoped dir leaves the access those roots grant intact.
 
 ### Reading Files
 
-`diskfile_read` reads one file as text: `{contents, unloaded_reason, size, ctime, mtime}`. Any regular file in scope can be read, whether the filer indexes it or not — except a file in a `.zzz` directory other than the app dir (`forbidden` / `zzz_home_not_allowed`, refused whether or not the file exists). It shares the index's limits: a file over 4 MiB or not valid UTF-8 comes back with `contents: null` and an `unloaded_reason` (`too_large`, `not_utf8`), and its `size`. The timestamps come from the handle the contents were read from, taken before the read, so a write racing the read leaves them older than the contents, never newer; `size` is the contents' length when they're loaded. Errors carry the file actions' reasons (`path_not_found`, `path_not_allowed`, `symlink_not_allowed`, `is_a_directory`, `not_a_regular_file`, …). Larger files and bytes go over the byte routes below.
+`diskfile_read` reads one file as text: `{contents, unloaded_reason, size, ctime, mtime}`. Any regular file in scope can be read, whether the filer indexes it or not — except a file in a protected directory — a credential directory, or a `.zzz` directory other than the app dir (`forbidden` / `protected_dir_not_allowed`, refused whether or not the file exists). It shares the index's limits: a file over 4 MiB or not valid UTF-8 comes back with `contents: null` and an `unloaded_reason` (`too_large`, `not_utf8`), and its `size`. The timestamps come from the handle the contents were read from, taken before the read, so a write racing the read leaves them older than the contents, never newer; `size` is the contents' length when they're loaded. Errors carry the file actions' reasons (`path_not_found`, `path_not_allowed`, `symlink_not_allowed`, `is_a_directory`, `not_a_regular_file`, …). Larger files and bytes go over the byte routes below.
 
 ### File Bytes
 
@@ -1047,7 +1076,7 @@ The file actions (`diskfile_update`, `diskfile_create`) carry contents as UTF-8 
 - **Create** — `POST` creates the file exclusively from the request body, like `diskfile_create`.
 - **Append** — `PATCH` with `&offset=` appends the body only if the file is exactly `offset` bytes long, and otherwise answers 409 `offset_mismatch` with the file's current `size`, having written nothing. A writer that streams a file as chunks sends each at the offset it expects: a retried chunk can't land twice, and the reply's size tells it whether the first attempt landed.
 
-Paths go through `ScopedFs`, and errors carry the same reasons as the file actions' (`path_not_allowed`, `zzz_home_not_allowed`, `already_exists`, …) in a flat `{error}` body. The routes need a session or a full-scope API token.
+Paths go through `ScopedFs`, and errors carry the same reasons as the file actions' (`path_not_allowed`, `protected_dir_not_allowed`, `already_exists`, …) in a flat `{error}` body. The routes need a session or a full-scope API token.
 
 A file in a workspace is untrusted content, so a read never hands the browser something to run: only allowlisted raster image, audio, and video extensions are served with their media type, and everything else — HTML, SVG, XML, scripts, text — is an `application/octet-stream` download. Every response that serves or describes a file — a read, a write's reply, a file error — carries `X-Content-Type-Options: nosniff`, a sandboxing `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`, and is never cached (`no-store`); a refusal at a gate (a bad query, no credential, an oversized body, a foreign origin) is a plain JSON error without them.
 
@@ -1341,8 +1370,10 @@ separate concerns":
 
 - **Workspace** (backend-tracked) — an open directory the server watches and
   serves. `workspace_open` validates and canonicalizes the path — refusing
-  (`forbidden`, `zzz_home_not_allowed`) a directory named `.zzz`, or one
-  inside it, other than the app directory: that's the CLI's daemon home, whose
+  (`forbidden`) a directory the root rules refuse (`root_not_allowed`,
+  `root_outside_home`; § Workspace scope) and one in a protected directory
+  (`protected_dir_not_allowed`): a credential directory, or a `.zzz`
+  directory other than the app directory, like the CLI's daemon home, whose
   `.env` and `bootstrap_token` must never be indexed and broadcast — starts (or
   finds) its workspace-lifetime `Filer` — the initial scan runs before the
   workspace lifecycle lock is taken, and concurrent opens of one path share
@@ -1402,12 +1433,19 @@ accounts from each other.
 
 - Every session and every full-scope API token effectively has the daemon OS
   user's powers (a method-scoped token is limited to its listed methods):
-  terminals (a shell as that user), `workspace_open` of any directory
-  including `/` (which makes it writable and scans it) — except `.zzz`
-  directories other than the app dir (see § Zzz App Directory) — and file
-  reads and writes anywhere in scope but those `.zzz` directories (the file
-  actions, and the byte routes at `/api/files/bytes`, which a method-scoped
-  token can't use at all).
+  terminals (a shell as that user), `workspace_open` of any directory the
+  root rules admit — strictly inside `$HOME`, or allowlisted in
+  `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, `$HOME` or an ancestor of it, or
+  `/proc`, `/sys`, `/dev` (see § Workspace scope) — which makes it writable
+  and scans it, and file reads and writes anywhere in scope but the
+  protected directories (credential directories and `.zzz` directories other
+  than the app dir; the file actions, and the byte routes at
+  `/api/files/bytes`, which a method-scoped token can't use at all). So the
+  file API can't reach `~/.ssh` and the other credential directories, the
+  daemon's own `/proc/<pid>/environ`, or a root over the whole home or
+  filesystem unless the operator allowlists a directory for it — a smaller
+  reach and a guard against mistakes, not a boundary: a terminal is still a
+  shell that can read all of them.
 - Terminal output and control — and jobs — are scoped to the account that
   created them, and a deleted or purged account's terminals are closed and
   its jobs cancelled — but that
@@ -1655,10 +1693,11 @@ Population, per capability:
   been still for 2 seconds
 - **Workspace scope** — opening a workspace makes its directory a writable
   `ScopedFs` root with its own filer until it's closed; closing never revokes
-  the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). Any
-  absolute directory can be opened — `/` makes the whole filesystem writable
-  and scans it — except a `.zzz` directory (or a path inside one) other than
-  the app dir, which no root makes readable or writable. A workspace opened
+  the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). A
+  directory strictly inside `$HOME`, or in `ZZZ_ROOTS_OUTSIDE_HOME`, can be
+  opened — never `/`, `$HOME` or an ancestor of it, or a pseudo-filesystem
+  (§ Workspace scope) — and no root makes a credential directory or a `.zzz`
+  directory other than the app dir readable or writable. A workspace opened
   in another tab (or by `zzz <dir>`) appears here unactivated, and its files
   arrive with a session resync
 - **Terminals** — any authenticated account can create a terminal, which runs

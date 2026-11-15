@@ -54,19 +54,22 @@ pub const ERROR_NOT_A_DIRECTORY: &str = "not_a_directory";
 /// A FIFO, socket, or device node where a regular file was expected
 /// (`invalid_params`).
 pub const ERROR_NOT_A_REGULAR_FILE: &str = "not_a_regular_file";
-/// A `.zzz` directory other than the app dir, or a path inside one
-/// (`forbidden`): every `ScopedFs` operation on one
-/// ([`ScopedFsError::ZzzHomeNotAllowed`]), and `workspace_open` of one.
+/// A protected directory, or a path inside one (`forbidden`): every
+/// `ScopedFs` operation on one ([`ScopedFsError::ProtectedDirNotAllowed`]),
+/// and `workspace_open` of one.
 ///
-/// That's the CLI's daemon home (`~/.zzz/`, with `.env` and
-/// `bootstrap_token`) or another daemon's app dir.
-pub const ERROR_ZZZ_HOME_NOT_ALLOWED: &str = "zzz_home_not_allowed";
+/// That's a credential directory (`.ssh`, `.gnupg`, `.aws`, `.kube`,
+/// `.docker`, `.password-store` — `scoped_fs::CREDENTIAL_DIR_NAMES`) or a
+/// `.zzz` directory other than the app dir (the CLI's daemon home `~/.zzz/`,
+/// with `.env` and `bootstrap_token`, or another daemon's app dir). The
+/// message names which.
+pub const ERROR_PROTECTED_DIR_NOT_ALLOWED: &str = "protected_dir_not_allowed";
 
 /// Map a [`ScopedFsError`] to its JSON-RPC error, prefixing the message with
 /// `action` (e.g. `failed to write file`).
 ///
 /// - malformed paths and wrong file kinds → `invalid_params` (-32602)
-/// - out-of-scope paths, `.zzz` directories, symlinks, OS permission
+/// - out-of-scope paths, protected directories, symlinks, OS permission
 ///   refusals, and a non-writable directory for a new file or directory →
 ///   `forbidden` (-32002)
 /// - a missing path → `not_found` (-32003)
@@ -84,8 +87,8 @@ pub fn scoped_fs_error(action: &str, error: &ScopedFsError) -> JsonrpcError {
     match error {
         ScopedFsError::InvalidPath(_) => invalid_params(&message, Some(ERROR_INVALID_PATH)),
         ScopedFsError::PathNotAllowed(_) => forbidden(&message, Some(ERROR_PATH_NOT_ALLOWED)),
-        ScopedFsError::ZzzHomeNotAllowed(_) => {
-            forbidden(&message, Some(ERROR_ZZZ_HOME_NOT_ALLOWED))
+        ScopedFsError::ProtectedDirNotAllowed { .. } => {
+            forbidden(&message, Some(ERROR_PROTECTED_DIR_NOT_ALLOWED))
         }
         ScopedFsError::SymlinkNotAllowed(_) => forbidden(&message, Some(ERROR_SYMLINK_NOT_ALLOWED)),
         ScopedFsError::IsADirectory(_) => invalid_params(&message, Some(ERROR_IS_A_DIRECTORY)),
@@ -167,10 +170,11 @@ struct DiskfileReadOutput {
 /// `diskfile_read` — a file's contents as text, with its size and
 /// timestamps.
 ///
-/// Any regular file in scope, indexed or not — except one in a `.zzz`
-/// directory other than the app dir, which `ScopedFs` refuses
-/// (`zzz_home_not_allowed`) before anything is opened, so the refusal says
-/// nothing about whether the file exists.
+/// Any regular file in scope, indexed or not — except one in a protected
+/// directory (a credential directory, or a `.zzz` directory other than the
+/// app dir), which `ScopedFs` refuses (`protected_dir_not_allowed`) before
+/// anything is opened, so the refusal says nothing about whether the file
+/// exists.
 ///
 /// One handle serves the whole answer: `ScopedFs::open_file` opens it
 /// `O_NOFOLLOW | O_NONBLOCK` and `fstat`s it (regular files only), and the
@@ -188,7 +192,7 @@ struct DiskfileReadOutput {
 /// # Errors
 ///
 /// `invalid_params` for a malformed input; otherwise [`scoped_fs_error`]
-/// (`path_not_found`, `path_not_allowed`, `zzz_home_not_allowed`,
+/// (`path_not_found`, `path_not_allowed`, `protected_dir_not_allowed`,
 /// `symlink_not_allowed`, `is_a_directory`, `not_a_regular_file`, …).
 pub async fn diskfile_read(
     params: Value,
@@ -364,9 +368,12 @@ mod tests {
                 Some(ERROR_PATH_NOT_ALLOWED),
             ),
             (
-                ScopedFsError::ZzzHomeNotAllowed("/x".to_owned()),
+                ScopedFsError::ProtectedDirNotAllowed {
+                    path: "/x".to_owned(),
+                    dir: crate::scoped_fs::ProtectedDir::Credentials(".ssh"),
+                },
                 JsonrpcErrorCode::Forbidden,
-                Some(ERROR_ZZZ_HOME_NOT_ALLOWED),
+                Some(ERROR_PROTECTED_DIR_NOT_ALLOWED),
             ),
             (
                 ScopedFsError::SymlinkNotAllowed("/x".to_owned()),

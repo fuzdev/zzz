@@ -386,9 +386,13 @@ commands):
   refused with `forbidden` and nothing registered),
   not-a-directory (`invalid_params`) + nonexistent (`not_found`) errors, a
   NUL byte / symlink loop / over-long name (`invalid_params` /
-  `invalid_path`), `.zzz` directories refused (`zzz_home_not_allowed` — the
-  directory, a subdirectory, and a symlink to it, while its parent opens with
-  it skipped), and `workspace_changed` broadcast on
+  `invalid_path`), `.zzz` and credential directories refused
+  (`protected_dir_not_allowed` — the directory, a subdirectory, and a
+  symlink to it, while its parent opens with it skipped and its `.env`
+  indexed), the root rules (`$HOME`, a symlink to it, its parent, `/`, and
+  `/proc`, `/sys`, `/dev` → `root_not_allowed`; a directory outside `$HOME`
+  and the harness's allowlisted `os.tmpdir()` → `root_outside_home`), and
+  `workspace_changed` broadcast on
   open/close (no broadcast on an idempotent open).
 - **`filesystem.cross.test.ts`** — `diskfile_read` (a text file whole with
   its size and `mtime`, a file in the app dir, over the size limit →
@@ -426,8 +430,8 @@ commands):
   409 `offset_mismatch` carrying the current size; never creates; a FIFO
   with no reader refused, 400 `not_a_regular_file`), path refusals with the
   file actions' reasons (a FIFO read refused too), a `.zzz` home refused on
-  every method (403 `zzz_home_not_allowed`, whether or not the file exists,
-  nothing written), the body cap (built from the
+  every method (403 `protected_dir_not_allowed`, whether or not the file
+  exists, nothing written), the body cap (built from the
   frontend's `FILE_BYTES_MAX_BODY_BYTES`, pinning it to the backend's), and
   the gates — a malformed query refused before auth, 401 without a
   credential on every method, 403 for an origin off the allowlist, a session
@@ -641,21 +645,33 @@ commands):
   the same way (missing → `not_found`; not a directory → `invalid_params` /
   `not_a_directory`; a NUL byte, a symlink loop, or an over-long name →
   `invalid_params` / `invalid_path`; a directory whose listing is refused →
-  `forbidden` / `permission_denied`), and refuses a path that is, or is
-  inside, a directory named `.zzz` other than the app dir — checked on the
-  canonical path, so no symlink gets around it — with `forbidden` /
-  `zzz_home_not_allowed` (`handlers::filesystem::ERROR_ZZZ_HOME_NOT_ALLOWED`,
-  `scoped_fs::is_in_zzz_home`): the CLI's daemon home holds `.env` and
-  `bootstrap_token`. Every `ScopedFs` operation refuses a path in one the
-  same way, whatever root covers it (`ScopedFsError::ZzzHomeNotAllowed` —
-  the file actions, the media actions, and the byte routes, where it's a
-  403): its path validation checks the lexically normalized path (`.` and
-  `..` resolved — the symlink checks after it make that the path acted on)
-  before the roots and before anything touches the filesystem, so the
-  refusal doesn't say whether the path exists. The app dir and its contents
-  pass. A filer started on such a root refuses too
-  (`FilerConfig::root_in_zzz_home`); a scoped dir there fails boot before
-  any filer starts (`PUBLIC_ZZZ_SCOPED_DIRS` below).
+  `forbidden` / `permission_denied`). On the canonical path, so no symlink
+  or `..` spelling gets around either, it then holds the directory to the
+  root rules (`root_policy::RootPolicy::admit`: strictly inside `$HOME` or
+  in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor of it, or
+  under `/proc`, `/sys`, `/dev`) — `forbidden` / `root_outside_home`
+  (`handlers::workspace::ERROR_ROOT_OUTSIDE_HOME`) where the allowlist would
+  admit it, else `root_not_allowed` (`ERROR_ROOT_NOT_ALLOWED`) — and refuses
+  a path that is, or is inside, a protected directory
+  (`scoped_fs::protected_dir`): a credential directory (`.ssh`, `.gnupg`,
+  `.aws`, `.kube`, `.docker`, `.password-store` —
+  `scoped_fs::CREDENTIAL_DIR_NAMES`) or a directory named `.zzz` other than
+  the app dir (the CLI's daemon home holds `.env` and `bootstrap_token`),
+  with `forbidden` / `protected_dir_not_allowed`
+  (`handlers::filesystem::ERROR_PROTECTED_DIR_NOT_ALLOWED`; the message
+  names which directory). Every `ScopedFs` operation refuses a path in one
+  the same way, whatever root covers it
+  (`ScopedFsError::ProtectedDirNotAllowed` — the file actions, the media
+  actions, and the byte routes, where it's a 403): its path validation
+  checks the lexically normalized path (`.` and `..` resolved — the symlink
+  checks after it make that the path acted on) before the roots and before
+  anything touches the filesystem, so the refusal doesn't say whether the
+  path exists. The app dir and its contents pass the `.zzz` rule (a
+  credential directory has no exception; the boot refuses an app dir in
+  one). A filer started on such a root refuses too
+  (`FilerConfig::root_protected`); a scoped dir there, or one the root rules
+  refuse, fails boot before any filer starts (`PUBLIC_ZZZ_SCOPED_DIRS`
+  below).
   `workspace_close` of a path that isn't open → `invalid_params` /
   `workspace_not_open` (`handlers::workspace::ERROR_WORKSPACE_NOT_OPEN`).
 - **Atomic writes**: `ScopedFs::write_file` stages content in a hidden
@@ -762,10 +778,11 @@ commands):
     validators are sent). A refusal at a gate does not: the 400 for a bad
     query, the 401, the scope 403, the 413, and the Origin layer's 403 are the
     spine's plain JSON errors, returned as they come.
-  - **`.zzz` directories**: a path inside a `.zzz` directory other than the
-    app dir is refused on every method (403 `zzz_home_not_allowed`), even
-    when an open root covers it (a workspace on `~` covers `~/.zzz/.env`) —
-    `ScopedFs` refuses it for every operation (Filesystem errors above).
+  - **Protected directories**: a path inside a credential directory or a
+    `.zzz` directory other than the app dir is refused on every method (403
+    `protected_dir_not_allowed`), even when an open root covers it (a scoped
+    dir `~/dev` covers `~/dev/x/.ssh/`) — `ScopedFs` refuses it for every
+    operation (Filesystem errors above).
   - **Create** (`POST`) is `ScopedFs::create_file` — the `diskfile_create`
     path, taking bytes: exclusive, parents created, 201 `{"size"}`.
   - **Append** (`PATCH`, `ScopedFs::append_file`) writes only when the file

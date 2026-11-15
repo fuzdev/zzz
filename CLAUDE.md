@@ -248,13 +248,25 @@ Details: ./docs/development.md § Adding a New Action.
 - **All filesystem access goes through `ScopedFs`** — path validation, no
   symlinks, absolute paths only. Roots: the app directory, `PUBLIC_ZZZ_SCOPED_DIRS`,
   and each open workspace.
+- **Roots are strictly inside `$HOME`** (the daemon's, canonicalized at
+  boot) unless `ZZZ_ROOTS_OUTSIDE_HOME` names them, and never `/`, `$HOME`
+  or an ancestor of it, or under `/proc`, `/sys`, or `/dev`, allowlisted or
+  not (`root_policy.rs`). `workspace_open` (and so `zzz <path>`) refuses
+  one (`root_not_allowed`, or `root_outside_home` where the allowlist would
+  admit it); a `PUBLIC_ZZZ_SCOPED_DIRS` entry refuses to boot. An unusable
+  `$HOME` admits only the allowlist. The app dir is exempt from the `$HOME`
+  rule, not from the rest.
 - **The app directory** (`PUBLIC_ZZZ_DIR`, default `.zzz` under the
   daemon's working directory) holds `cache/`, `recordings/`, `run/`, and a
   reserved `state/`. The CLI's daemon home `~/.zzz/` holds `.env` and
-  `bootstrap_token`, so a `.zzz` directory other than the app dir is off
-  limits under every root: `ScopedFs` refuses every operation on a path in
-  one (`zzz_home_not_allowed` — the file actions and the byte routes alike),
-  every filer skips such directories, and `workspace_open` refuses one.
+  `bootstrap_token`.
+- **Protected directories are off limits under every root**: credential
+  directories (`.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`,
+  `.password-store`) and `.zzz` directories other than the app dir.
+  `ScopedFs` refuses every operation on a path in one, lexically, before
+  touching the filesystem (`protected_dir_not_allowed` — the file actions
+  and the byte routes alike), every filer skips them, and `workspace_open`
+  refuses one. `.env` files are ordinary files.
 - **Saves are atomic** (staged beside the target, fsynced, renamed),
   falling back to a non-atomic in-place write only when the rename can't
   happen; new files and folders are created exclusively.
@@ -277,8 +289,9 @@ Editing, § Recording; ./docs/backend.md § Design Decisions.
   (exact origins; wildcards refuse to boot unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true`)
 - Server: `ZZZ_PORT` (default 4460; dev 4461; loopback bind, no `HOST`),
   `ZZZ_STATIC_DIR`, `ZZZ_TRUSTED_PROXIES`, `PUBLIC_ZZZ_DIR`,
-  `PUBLIC_ZZZ_SCOPED_DIRS`, `FUZ_BOOTSTRAP_TOKEN_PATH`,
-  `FUZ_DB_CHECKOUT_TIMEOUT_MS`, `FUZ_DB_AUDIT_CHECKOUT_TIMEOUT_MS`
+  `PUBLIC_ZZZ_SCOPED_DIRS`, `ZZZ_ROOTS_OUTSIDE_HOME`,
+  `FUZ_BOOTSTRAP_TOKEN_PATH`, `FUZ_DB_CHECKOUT_TIMEOUT_MS`,
+  `FUZ_DB_AUDIT_CHECKOUT_TIMEOUT_MS`
 - Tools: `ZZZ_FFMPEG_BIN`, `ZZZ_WHISPER_CPP_BIN`, `ZZZ_WHISPER_CPP_MODEL`
 - Providers: `SECRET_ANTHROPIC_API_KEY`, `SECRET_OPENAI_API_KEY`, `SECRET_GOOGLE_API_KEY`
 - Tests only: `ZZZ_ENABLE_TEST_ACTIONS` (never in prod; the CLI never passes it)
@@ -315,8 +328,12 @@ rules (discovery, env, port, exit codes, `daemon.json`, the opener):
 zzz is a single-operator local app: one person, their own machine, the
 daemon running as their OS user on loopback. **Every session and every
 full-scope API token has the daemon user's powers** — terminals, opening
-any directory as a workspace (except a `.zzz` directory other than the app
-dir), file reads and writes in scope. Accounts keep
+a workspace on any directory the root rules admit (strictly inside `$HOME`,
+or allowlisted), file reads and writes in scope outside the protected
+directories. Those rules keep the file actions and the index off `~/.ssh`,
+the whole home or filesystem, and `/proc/<pid>/environ` — a guard against
+mistakes and a smaller reach for the file API, not a sandbox: a terminal is
+a shell as the same user. Accounts keep
 other OS users' processes and other browser origins out, not same-user
 processes, and don't separate accounts from each other.
 

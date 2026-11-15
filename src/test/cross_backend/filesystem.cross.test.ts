@@ -170,8 +170,25 @@ describe('filesystem cross-backend', () => {
 				join(home, 'run', 'missing'),
 				`${dir}/sub/../.zzz/./.env`
 			]) {
-				await read_refused(path, JSONRPC_ERROR_CODES.forbidden, 'zzz_home_not_allowed');
+				await read_refused(path, JSONRPC_ERROR_CODES.forbidden, 'protected_dir_not_allowed');
 			}
+
+			// a credential directory, the same way
+			const ssh = join(dir, '.ssh');
+			await mkdir(ssh);
+			await writeFile(join(ssh, 'id_ed25519'), 'not-for-reading', 'utf-8');
+			for (const path of [
+				join(ssh, 'id_ed25519'),
+				join(ssh, 'missing'),
+				`${dir}/sub/../.ssh/./id_ed25519`,
+				join(dir, 'deep', '.gnupg', 'x'),
+				join(dir, '.password-store', 'x.gpg')
+			]) {
+				await read_refused(path, JSONRPC_ERROR_CODES.forbidden, 'protected_dir_not_allowed');
+			}
+			// `.env` files stay readable
+			await writeFile(join(dir, '.env'), 'X=1', 'utf-8');
+			assert.equal((await read_ok(join(dir, '.env'))).contents, 'X=1');
 
 			// a symlink, to a file or along the path
 			await symlink(text_path, join(dir, 'link.txt'));
@@ -463,6 +480,53 @@ describe('filesystem cross-backend', () => {
 		}
 	});
 
+	// `ScopedFs` refuses a credential directory under every root, so no file
+	// action reaches keys a workspace or scoped dir covers
+	test('file_actions_refuse_credential_dirs', async () => {
+		const fixture = await setup_test();
+		const dir = join(scoped_dir, `credentials_${randomUUID()}`);
+		const ssh = join(dir, '.ssh');
+		const key_path = join(ssh, 'id_ed25519');
+		const key_content = 'not-for-writing';
+		await mkdir(ssh, { recursive: true });
+		await writeFile(key_path, key_content, 'utf-8');
+		try {
+			const cases: Array<[string, Record<string, unknown>, string]> = [
+				['diskfile_update', { path: key_path, content: 'overwritten' }, 'failed to write file'],
+				['diskfile_create', { path: join(ssh, 'new'), content: 'x' }, 'failed to create file'],
+				[
+					'diskfile_create',
+					{ path: join(dir, 'x', '.aws', 'credentials'), content: 'x' },
+					'failed to create file'
+				],
+				['diskfile_delete', { path: key_path }, 'failed to delete file'],
+				['directory_create', { path: join(dir, '.kube') }, 'failed to create directory'],
+				['directory_create', { path: join(dir, '.docker', 'x') }, 'failed to create directory'],
+				// taken, which would otherwise be `already_exists`
+				['directory_create', { path: `${ssh}/` }, 'failed to create directory']
+			];
+			for (const [method, params, action] of cases) {
+				const res = await rpc_call({
+					app: fixture.transport,
+					path: handle.config.rpc_path,
+					method,
+					params,
+					headers: fixture.create_session_headers()
+				});
+				const label = `${method} ${JSON.stringify(params)}`;
+				assert.ok(!res.ok, `${label} should fail`);
+				assert.equal(res.error.code, JSONRPC_ERROR_CODES.forbidden, label);
+				assert.deepEqual(res.error.data, { reason: 'protected_dir_not_allowed' }, label);
+				assert.ok(res.error.message.startsWith(`${action}: `), `${label}: ${res.error.message}`);
+			}
+			assert.equal(await readFile(key_path, 'utf-8'), key_content, 'untouched');
+			assert.deepEqual((await readdir(dir)).sort(), ['.ssh'], 'nothing created');
+			assert.deepEqual(await readdir(ssh), ['id_ed25519'], 'nothing created');
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	// `ScopedFs` refuses a `.zzz` directory other than the app dir under every
 	// root, so no file action reaches the CLI daemon home's `.env` and
 	// `bootstrap_token` through a workspace or scoped dir that covers it
@@ -507,7 +571,7 @@ describe('filesystem cross-backend', () => {
 				const label = `${method} ${JSON.stringify(params)}`;
 				assert.ok(!res.ok, `${label} should fail`);
 				assert.equal(res.error.code, JSONRPC_ERROR_CODES.forbidden, label);
-				assert.deepEqual(res.error.data, { reason: 'zzz_home_not_allowed' }, label);
+				assert.deepEqual(res.error.data, { reason: 'protected_dir_not_allowed' }, label);
 				assert.ok(res.error.message.startsWith(`${action}: `), `${label}: ${res.error.message}`);
 			}
 			assert.equal(await readFile(env_path, 'utf-8'), env_content, 'untouched');

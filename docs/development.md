@@ -342,7 +342,8 @@ When the CLI starts `zzzd` it:
   `ZZZ_ENABLE_TEST_ACTIONS` is never passed on, from either source (a
   warning says so when it's set).
 - **cwd** — runs it in `~/.zzz`. For the path-valued vars (`PUBLIC_ZZZ_DIR`,
-  `PUBLIC_ZZZ_SCOPED_DIRS`, `FUZ_BOOTSTRAP_TOKEN_PATH`, `ZZZ_STATIC_DIR`,
+  `PUBLIC_ZZZ_SCOPED_DIRS`, `ZZZ_ROOTS_OUTSIDE_HOME`,
+  `FUZ_BOOTSTRAP_TOKEN_PATH`, `ZZZ_STATIC_DIR`,
   `ZZZ_FFMPEG_BIN`, `ZZZ_WHISPER_CPP_BIN`, `ZZZ_WHISPER_CPP_MODEL`) the
   CLI expands `~`; a relative value from `~/.zzz/.env` resolves against
   `~/.zzz`, and one from the CLI's own environment against the directory
@@ -387,7 +388,11 @@ exits 2 before anything runs; `--help` exits 0.
 `zzz <path>` expands `~`, resolves the path against the current directory,
 and canonicalizes it (the form the daemon stores for workspaces) before
 building the `?workspace=` URL; a missing path is an error, and a file opens
-its parent directory.
+its parent directory. The daemon then holds that directory to its root rules
+(§ Environment Variables → `ZZZ_ROOTS_OUTSIDE_HOME`): `zzz ~`, a file
+directly in `~`, `/`, an ancestor of `$HOME`, or anything under `/proc`,
+`/sys`, or `/dev` is refused (`root_not_allowed`), and any other directory
+outside `$HOME` needs that list (`root_outside_home` without it).
 
 `zzz` opens that URL in the browser (`xdg-open` / `open` / `start`) unless an
 **opener** — an open command to run instead — is configured:
@@ -440,8 +445,9 @@ JSON object is an error (exit 2) even when a daemon is already running.
 - `FUZ_ALLOWED_ORIGINS` — the origins the UI is served from, checked against every browser request's `Origin` (required — `zzzd` refuses to boot on an absent or empty list, since an empty allowlist would allow every origin; the CLI defaults it to `http://localhost:<port>,http://127.0.0.1:<port>`). List exact ports: the session cookie reaches every port on `localhost`, so a wildcard (`http://localhost:*`) admits any page served on any local port to the WebSocket. Each entry is `scheme://host[:port]`, http or https; a malformed one (a trailing slash, a missing scheme, a stray comma, a scheme's default port written out, …) refuses to boot, naming the entry, and a wildcard port or host label refuses to boot, saying what it admits, unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true` (exactly `true` or `false`), which boots it with that warning on every boot. The hosts it names are also the non-loopback `Host`s `zzzd` answers to (see ./architecture.md § Security posture)
 - `FUZ_BOOTSTRAP_TOKEN_PATH` — One-shot admin bootstrap token path
 - `FUZ_DB_CHECKOUT_TIMEOUT_MS` — bound on the pool checkouts a request makes, in ms (default 5000, `1..=600000`; anything else refuses to boot); a failed checkout answers 503 `service_unavailable`, a failed query keeps its 500. `FUZ_DB_AUDIT_CHECKOUT_TIMEOUT_MS` (default 30000, same range) bounds the checkout behind each audit pool write instead — the failed-login row a request waits on included
-- `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`, a subdirectory of the daemon's working directory); must not be the working directory itself (under the CLI that's the daemon home, with `.env` and `bootstrap_token`) — `zzzd` refuses to boot on that. The check catches the daemon home only as the working directory: an explicit `PUBLIC_ZZZ_DIR` naming the absolute path of `~/.zzz` for a daemon run elsewhere (say `cargo xtask dev`) makes the home the app dir, whose filer indexes and broadcasts its `.env` — don't
-- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd` doesn't expand `~`; the CLI does); an entry that is, or is inside, a `.zzz` directory other than the app dir refuses to boot
+- `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`, a subdirectory of the daemon's working directory); must not be the working directory itself (under the CLI that's the daemon home, with `.env` and `bootstrap_token`) — `zzzd` refuses to boot on that. The check catches the daemon home only as the working directory: an explicit `PUBLIC_ZZZ_DIR` naming the absolute path of `~/.zzz` for a daemon run elsewhere (say `cargo xtask dev`) makes the home the app dir, whose filer indexes and broadcasts its `.env` — don't. It may sit outside `$HOME` without being allowlisted, but `/`, `$HOME` or an ancestor of it, a directory under `/proc`, `/sys`, or `/dev`, or one in a credential directory refuses to boot
+- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd` doesn't expand `~`; the CLI does); each must pass the root rules (below `ZZZ_ROOTS_OUTSIDE_HOME`), and an entry that is, or is inside, a credential directory or a `.zzz` directory other than the app dir refuses to boot, naming the variable, the entry, and why. An entry that doesn't exist yet is checked as spelled, and refuses to boot if it has a `..`; it's checked again on its canonical path when its filer starts, and isn't indexed (with a warning) if that's refused or isn't the path the boot checked
+- `ZZZ_ROOTS_OUTSIDE_HOME` — Comma-separated directories outside the home directory that roots (workspaces, scoped dirs) may be at or inside, read like `PUBLIC_ZZZ_SCOPED_DIRS` (each resolved, blank entries skipped; `zzzd` doesn't expand `~`, the CLI does). Every root must otherwise be strictly inside `$HOME` — the daemon's `HOME` (or, unset, the password database's home), canonicalized at boot — and is never `/`, `$HOME` or an ancestor of it, or under `/proc`, `/sys`, or `/dev`, whatever this names: an entry naming one of those refuses to boot. A `$HOME` that can't be resolved, isn't a directory, or is `/` is no home — `zzzd` logs a warning and admits only what this names. `workspace_open` of a directory the rules refuse is `forbidden` with `root_outside_home` (this would admit it) or `root_not_allowed` (nothing would)
 - `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod; blank reads as unset, and the `zzz` CLI never passes it to a daemon it starts)
 - `SECRET_ANTHROPIC_API_KEY` — Claude API key
 - `SECRET_OPENAI_API_KEY` — OpenAI API key

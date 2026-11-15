@@ -174,8 +174,9 @@ export interface MarkdownLinkIndex {
 /**
  * Directory names the file index never enters, wherever they appear under a
  * root — the backend filer's default ignores (`DEFAULT_IGNORED_DIRS` in
- * `crates/zzz_server/src/filer.rs`, which a test holds this to). A link into
- * one is `skipped`, not `broken`.
+ * `crates/zzz_server/src/filer.rs`) and the credential directories it skips
+ * too (`CREDENTIAL_DIR_NAMES` in `crates/zzz_server/src/scoped_fs.rs`), which
+ * a test holds this to. A link into one is `skipped`, not `broken`.
  */
 export const FILE_INDEX_IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
 	'.git',
@@ -183,7 +184,13 @@ export const FILE_INDEX_IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
 	'.svelte-kit',
 	'target',
 	'dist',
-	'.zzz'
+	'.zzz',
+	'.ssh',
+	'.gnupg',
+	'.aws',
+	'.kube',
+	'.docker',
+	'.password-store'
 ]);
 
 /**

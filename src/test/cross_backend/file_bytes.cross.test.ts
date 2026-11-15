@@ -385,7 +385,7 @@ describe('file bytes cross-backend', () => {
 			await writeFile(env_path, env_content);
 			const expect_refused = async (res: Response, label: string): Promise<void> => {
 				assert.equal(res.status, 403, label);
-				assert.deepEqual(await res.json(), { error: 'zzz_home_not_allowed' }, label);
+				assert.deepEqual(await res.json(), { error: 'protected_dir_not_allowed' }, label);
 				assert_locked_down(res);
 			};
 			try {

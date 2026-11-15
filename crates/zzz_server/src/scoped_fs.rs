@@ -52,21 +52,93 @@ fn to_normalized_string(path: &Path) -> String {
 /// zzz's conventional app-dir and CLI daemon-home name.
 pub const ZZZ_DIR_NAME: &str = ".zzz";
 
-/// Whether `path` is, or is inside, a `.zzz` directory other than the app dir.
+/// Names of the directories that hold a user's credentials.
 ///
-/// That's the CLI's daemon home (`~/.zzz/`, holding `.env` and
-/// `bootstrap_token`) or another daemon's app dir — any `.zzz` component
-/// that isn't part of `zzz_dir`'s own path.
+/// SSH keys, `GnuPG` keyrings, AWS and Kubernetes credentials, Docker registry
+/// logins, and the `pass` store. Refused under every root ([`protected_dir`])
+/// and never indexed by a filer.
+pub const CREDENTIAL_DIR_NAMES: &[&str] = &[
+    ".ssh",
+    ".gnupg",
+    ".aws",
+    ".kube",
+    ".docker",
+    ".password-store",
+];
+
+/// Whether `name` (a single path component) is one of
+/// [`CREDENTIAL_DIR_NAMES`].
+pub fn is_credential_dir_name(name: &str) -> bool {
+    CREDENTIAL_DIR_NAMES.contains(&name)
+}
+
+/// A directory zzz refuses whatever root covers it ([`protected_dir`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProtectedDir {
+    /// A `.zzz` directory other than the app dir — the CLI's daemon home
+    /// (`~/.zzz/`, with `.env` and `bootstrap_token`) or another daemon's
+    /// app dir.
+    ZzzHome,
+    /// A credential directory, named by its entry in
+    /// [`CREDENTIAL_DIR_NAMES`].
+    Credentials(&'static str),
+}
+
+impl ProtectedDir {
+    /// The directory's name, as it appears in the path.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::ZzzHome => ZZZ_DIR_NAME,
+            Self::Credentials(name) => name,
+        }
+    }
+
+    /// What the directory holds, which is why it's refused.
+    pub const fn holds(self) -> &'static str {
+        match self {
+            Self::ZzzHome => "zzz's own files (secrets, tokens)",
+            Self::Credentials(_) => "credentials (keys, tokens)",
+        }
+    }
+}
+
+impl std::fmt::Display for ProtectedDir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "a {} directory, which holds {}",
+            self.name(),
+            self.holds()
+        )
+    }
+}
+
+/// The protected directory `path` is, or is inside, if any.
 ///
-/// The app dir and everything inside it pass, unless a `.zzz` sits below the
-/// app dir too. Both paths must name what they spell — canonical, or
-/// lexically normalized with symlinks refused along them, as [`ScopedFs`]
-/// does — so a symlink can't spell its way around the check.
-pub fn is_in_zzz_home(path: &Path, zzz_dir: &Path) -> bool {
+/// - **Credential directories**: any component of `path` named in
+///   [`CREDENTIAL_DIR_NAMES`], with no exception — the app dir included.
+/// - **`.zzz` directories other than the app dir**: any `.zzz` component that
+///   isn't part of `zzz_dir`'s own path. The app dir and everything inside it
+///   pass, unless a `.zzz` sits below the app dir too.
+///
+/// Lexical: both paths must name what they spell — canonical, or lexically
+/// normalized with symlinks refused along them, as [`ScopedFs`] does — so a
+/// symlink can't spell its way around the check.
+pub fn protected_dir(path: &Path, zzz_dir: &Path) -> Option<ProtectedDir> {
+    let credentials = path.components().find_map(|c| {
+        CREDENTIAL_DIR_NAMES
+            .iter()
+            .copied()
+            .find(|name| c.as_os_str() == *name)
+    });
+    if let Some(name) = credentials {
+        return Some(ProtectedDir::Credentials(name));
+    }
     path.strip_prefix(zzz_dir)
         .unwrap_or(path)
         .components()
         .any(|c| c.as_os_str() == ZZZ_DIR_NAME)
+        .then_some(ProtectedDir::ZzzHome)
 }
 
 // -- Errors -------------------------------------------------------------------
@@ -84,11 +156,11 @@ pub enum ScopedFsError {
     /// Outside every allowed root.
     #[error("Path is not allowed: {0}")]
     PathNotAllowed(String),
-    /// In a `.zzz` directory other than the app dir ([`is_in_zzz_home`]) —
-    /// the CLI's daemon home, with `.env` and `bootstrap_token`, or another
-    /// daemon's app dir — whatever root covers it.
-    #[error("Path is in a .zzz directory, which holds zzz's own files (secrets, tokens): {0}")]
-    ZzzHomeNotAllowed(String),
+    /// In a protected directory ([`protected_dir`]) — a credential directory,
+    /// or a `.zzz` directory other than the app dir — whatever root covers
+    /// it.
+    #[error("Path is in {dir}: {path}")]
+    ProtectedDirNotAllowed { path: String, dir: ProtectedDir },
     #[error("Path is a symlink which is not allowed: {0}")]
     SymlinkNotAllowed(String),
     /// A directory where a file was expected.
@@ -141,33 +213,39 @@ impl ScopedFsError {
 /// Scoping wrapper around filesystem operations.
 ///
 /// Restricts all operations to the currently-allowed directories. Rejects
-/// relative paths, path traversal, symlinks, and `.zzz` directories other
-/// than the app dir.
+/// relative paths, path traversal, symlinks, credential directories, and
+/// `.zzz` directories other than the app dir.
 ///
-/// **`.zzz` directories are refused under every root.** A path that is, or is
-/// inside, a `.zzz` directory other than `zzz_dir` ([`is_in_zzz_home`]) fails
-/// every operation with [`ScopedFsError::ZzzHomeNotAllowed`] — reads, writes,
-/// appends, creates, deletes, and opens alike — even when a root covers it (a
-/// workspace on `~` covers the CLI's daemon home `~/.zzz/`, with its `.env`
-/// and `bootstrap_token`). The check runs on the lexically normalized path
-/// the operation acts on, before anything touches the filesystem, so the
-/// refusal says nothing about whether the path exists; the symlink checks
+/// **Protected directories are refused under every root.** A path that is, or
+/// is inside, a credential directory ([`CREDENTIAL_DIR_NAMES`]) or a `.zzz`
+/// directory other than `zzz_dir` ([`protected_dir`]) fails every operation
+/// with [`ScopedFsError::ProtectedDirNotAllowed`] — reads, writes, appends,
+/// creates, deletes, and opens alike — even when a root covers it (a root
+/// `~/dev` with a `~/dev/x/.ssh` in it, or the CLI's daemon home `~/.zzz/`
+/// under a root that covers it). The check runs on the lexically normalized
+/// path the operation acts on, before anything touches the filesystem, so
+/// the refusal says nothing about whether the path exists; the symlink checks
 /// that follow make that path the one the operation reaches. The app dir and
-/// the paths inside it stay usable.
+/// the paths inside it stay usable (unless they're in a credential
+/// directory, which the boot refuses).
 ///
 /// The allowed set is a fixed set of permanent roots (`zzz_dir` +
 /// `scoped_dirs`, from [`Self::new`]) plus runtime roots for open workspaces
 /// ([`Self::add_path`] / [`Self::remove_path`]). A path is allowed when any
 /// root covers it, so overlapping roots compose: removing a runtime root never
 /// revokes access a permanent root or another runtime root still grants.
+/// Which directories can be roots at all is [`crate::root_policy`]'s rule,
+/// checked by the boot and by `workspace_open` before a root is added.
 ///
 /// **Not a confinement boundary against an authenticated caller.** The allowed
 /// set is *mutable at runtime* via [`Self::add_path`], and `workspace_open`
 /// (gated only at `AuthSpec::authenticated(CredentialGate::Any)` — any
 /// credential, no role) calls it with a caller-supplied
-/// directory without consulting the existing allowlist. So any authenticated
-/// caller can widen the scope to an arbitrary existing directory and then write
-/// beneath it. Read this type as a guard against accidental or buggy writes
+/// directory, checked only against the root rules
+/// ([`crate::root_policy::RootPolicy`]), not the existing allowlist. So any
+/// authenticated caller can widen the scope to any existing directory those
+/// rules admit (strictly inside `$HOME`, or in `ZZZ_ROOTS_OUTSIDE_HOME`) and
+/// then write beneath it. Read this type as a guard against accidental or buggy writes
 /// outside the open workspaces — not as a sandbox. That is consistent with zzz's
 /// posture (an authenticated zzz credential carries local-user authority
 /// regardless — see the `terminal_*` actions), but don't mistake the type for a
@@ -178,7 +256,7 @@ impl ScopedFsError {
 /// created after validation.
 #[derive(Debug)]
 pub struct ScopedFs {
-    /// The app dir, exempt from the `.zzz` refusal ([`is_in_zzz_home`]).
+    /// The app dir, exempt from the `.zzz` refusal ([`protected_dir`]).
     /// Also the first permanent root.
     zzz_dir: PathBuf,
     /// Roots fixed at construction (`zzz_dir` + `scoped_dirs`), each
@@ -293,8 +371,9 @@ impl ScopedFs {
     ///
     /// - Rejects relative paths and null bytes
     /// - Normalizes path components (resolves `.` and `..`)
-    /// - Rejects `.zzz` directories other than the app dir
-    ///   ([`is_in_zzz_home`]), before anything touches the filesystem
+    /// - Rejects protected directories — credential directories and `.zzz`
+    ///   directories other than the app dir ([`protected_dir`]) — before
+    ///   anything touches the filesystem
     /// - Checks against allowed directories
     /// - Rejects symlinks (target and all parent directories)
     ///
@@ -315,14 +394,16 @@ impl ScopedFs {
         // Normalize path (resolve . and .. without touching the filesystem)
         let normalized = normalize_path(raw);
 
-        // `.zzz` directories hold zzz's own files (the CLI's `.env` and
-        // `bootstrap_token`) whatever root covers them. Lexical and first, so
-        // the refusal is the same whether or not the path exists; the symlink
-        // checks below make the normalized path the one acted on.
-        if is_in_zzz_home(&normalized, &self.zzz_dir) {
-            return Err(ScopedFsError::ZzzHomeNotAllowed(
-                normalized.to_string_lossy().into_owned(),
-            ));
+        // Credential directories and `.zzz` directories (the CLI's `.env`
+        // and `bootstrap_token`) are refused whatever root covers them.
+        // Lexical and first, so the refusal is the same whether or not the
+        // path exists; the symlink checks below make the normalized path the
+        // one acted on.
+        if let Some(dir) = protected_dir(&normalized, &self.zzz_dir) {
+            return Err(ScopedFsError::ProtectedDirNotAllowed {
+                path: normalized.to_string_lossy().into_owned(),
+                dir,
+            });
         }
 
         // Check against allowed paths
@@ -1095,7 +1176,11 @@ mod tests {
             "/home/u/.zzz/.zzz/sub/.zzz",
             "/home/u/.zzz/other",
         ] {
-            assert!(is_in_zzz_home(Path::new(path), app), "{path}");
+            assert_eq!(
+                protected_dir(Path::new(path), app),
+                Some(ProtectedDir::ZzzHome),
+                "{path}"
+            );
         }
         for path in [
             "/home/u/.zzz/.zzz",
@@ -1105,11 +1190,79 @@ mod tests {
             "/w/zzz",
             "/",
         ] {
-            assert!(!is_in_zzz_home(Path::new(path), app), "{path}");
+            assert_eq!(protected_dir(Path::new(path), app), None, "{path}");
         }
         // an app dir with no `.zzz` in its path exempts nothing else
-        assert!(is_in_zzz_home(Path::new("/w/.zzz"), Path::new("/w/data")));
-        assert!(!is_in_zzz_home(Path::new("/w/data"), Path::new("/w/data")));
+        assert_eq!(
+            protected_dir(Path::new("/w/.zzz"), Path::new("/w/data")),
+            Some(ProtectedDir::ZzzHome)
+        );
+        assert_eq!(
+            protected_dir(Path::new("/w/data"), Path::new("/w/data")),
+            None
+        );
+    }
+
+    #[test]
+    fn credential_dirs_are_protected_everywhere() {
+        let app = Path::new("/home/u/.zzz/.zzz");
+        for name in CREDENTIAL_DIR_NAMES {
+            for path in [
+                format!("/home/u/{name}"),
+                format!("/home/u/{name}/id_ed25519"),
+                format!("/w/project/{name}/config"),
+                format!("/{name}"),
+                // no exception for the app dir
+                format!("/home/u/.zzz/.zzz/{name}/x"),
+            ] {
+                assert_eq!(
+                    protected_dir(Path::new(&path), app),
+                    Some(ProtectedDir::Credentials(name)),
+                    "{path}"
+                );
+            }
+        }
+        // whole components only
+        for path in [
+            "/home/u/.sshx",
+            "/home/u/ssh",
+            "/home/u/x.ssh",
+            "/home/u/.ssh.bak/key",
+            "/home/u/.aws-notes",
+            "/home/u/docker",
+            "/home/u/project/.env",
+        ] {
+            assert_eq!(protected_dir(Path::new(path), app), None, "{path}");
+        }
+        // a credential directory wins over a `.zzz` one, wherever it sits
+        assert_eq!(
+            protected_dir(Path::new("/w/.zzz/.ssh"), app),
+            Some(ProtectedDir::Credentials(".ssh"))
+        );
+        assert_eq!(
+            protected_dir(Path::new("/w/.gnupg/.zzz"), app),
+            Some(ProtectedDir::Credentials(".gnupg"))
+        );
+    }
+
+    #[test]
+    fn protected_dirs_name_what_they_hold() {
+        let error = ScopedFsError::ProtectedDirNotAllowed {
+            path: "/h/.ssh/id".to_owned(),
+            dir: ProtectedDir::Credentials(".ssh"),
+        };
+        assert_eq!(
+            error.to_string(),
+            "Path is in a .ssh directory, which holds credentials (keys, tokens): /h/.ssh/id"
+        );
+        let error = ScopedFsError::ProtectedDirNotAllowed {
+            path: "/h/.zzz/.env".to_owned(),
+            dir: ProtectedDir::ZzzHome,
+        };
+        assert_eq!(
+            error.to_string(),
+            "Path is in a .zzz directory, which holds zzz's own files (secrets, tokens): /h/.zzz/.env"
+        );
     }
 
     #[test]
@@ -1806,7 +1959,7 @@ mod tests {
         }
     }
 
-    // -- `.zzz` directories --
+    // -- protected directories --
 
     /// The CLI's layout under a temp dir: the temp dir is a scoped root that
     /// covers `home/.zzz/` (a daemon home, holding `.env`), and the app dir is
@@ -1820,46 +1973,40 @@ mod tests {
         (tmp, fs)
     }
 
-    fn assert_zzz_home_refused<T: std::fmt::Debug>(
+    fn assert_protected_refused<T: std::fmt::Debug>(
         result: &Result<T, ScopedFsError>,
+        expected: ProtectedDir,
         op: &str,
         path: &str,
     ) {
         assert!(
-            matches!(result, Err(ScopedFsError::ZzzHomeNotAllowed(_))),
+            matches!(result, Err(ScopedFsError::ProtectedDirNotAllowed { dir, .. }) if *dir == expected),
             "{op} {path}: {result:?}"
         );
     }
 
-    /// Run every public operation on `path`, each expected to be refused. An
-    /// append is sent at the file's current size, so only the refusal can
-    /// stop it.
-    async fn assert_every_op_refused(fs: &ScopedFs, path: &str) {
+    /// Run every public operation on `path`, each expected to be refused for
+    /// the `expected` protected directory. An append is sent at the file's
+    /// current size, so only the refusal can stop it.
+    async fn assert_every_op_refused_for(fs: &ScopedFs, path: &str, expected: ProtectedDir) {
         let size = std::fs::symlink_metadata(path).map_or(0, |m| m.len());
         let source = std::fs::File::open("/dev/null").unwrap();
-        assert_zzz_home_refused(&fs.open_file(path).await, "open_file", path);
-        assert_zzz_home_refused(
-            &fs.write_file(path, "new".to_owned()).await,
-            "write_file",
-            path,
-        );
-        assert_zzz_home_refused(
-            &fs.write_file_from(path, source).await,
-            "write_file_from",
-            path,
-        );
-        assert_zzz_home_refused(
-            &fs.create_file(path, b"new".to_vec()).await,
-            "create_file",
-            path,
-        );
-        assert_zzz_home_refused(
-            &fs.append_file(path, size, b"new".to_vec()).await,
-            "append_file",
-            path,
-        );
-        assert_zzz_home_refused(&fs.create_dir(path).await, "create_dir", path);
-        assert_zzz_home_refused(&fs.rm(path).await, "rm", path);
+        let p = path;
+        assert_protected_refused(&fs.open_file(p).await, expected, "open_file", p);
+        let result = fs.write_file(p, "new".to_owned()).await;
+        assert_protected_refused(&result, expected, "write_file", p);
+        let result = fs.write_file_from(p, source).await;
+        assert_protected_refused(&result, expected, "write_file_from", p);
+        let result = fs.create_file(p, b"new".to_vec()).await;
+        assert_protected_refused(&result, expected, "create_file", p);
+        let result = fs.append_file(p, size, b"new".to_vec()).await;
+        assert_protected_refused(&result, expected, "append_file", p);
+        assert_protected_refused(&fs.create_dir(p).await, expected, "create_dir", p);
+        assert_protected_refused(&fs.rm(p).await, expected, "rm", p);
+    }
+
+    async fn assert_every_op_refused(fs: &ScopedFs, path: &str) {
+        assert_every_op_refused_for(fs, path, ProtectedDir::ZzzHome).await;
     }
 
     /// Every entry under `dir`, recursively, as paths relative to it.
@@ -1923,7 +2070,7 @@ mod tests {
         ] {
             let result = fs.open_file(&path).await;
             assert!(
-                matches!(&result, Err(ScopedFsError::ZzzHomeNotAllowed(p))
+                matches!(&result, Err(ScopedFsError::ProtectedDirNotAllowed { path: p, dir: ProtectedDir::ZzzHome })
                     if *p == tmp.path(named).to_string_lossy()),
                 "{path}: {result:?}"
             );
@@ -1977,6 +2124,93 @@ mod tests {
             matches!(again, Err(ScopedFsError::AlreadyExists(_))),
             "{again:?}"
         );
+    }
+
+    /// A root holding a credential directory of each name, each with a key
+    /// file in it, and the app dir beside them.
+    fn credential_dirs() -> (TempDir, ScopedFs) {
+        let tmp = TempDir::new();
+        let app_dir = tmp.path("app");
+        std::fs::create_dir_all(&app_dir).unwrap();
+        for name in CREDENTIAL_DIR_NAMES {
+            std::fs::create_dir_all(tmp.path(&format!("home/{name}"))).unwrap();
+            std::fs::write(tmp.path(&format!("home/{name}/key")), "SECRET").unwrap();
+        }
+        let fs = ScopedFs::new(app_dir, std::slice::from_ref(&tmp.0));
+        (tmp, fs)
+    }
+
+    #[tokio::test]
+    async fn every_operation_refuses_a_credential_dir_under_a_root() {
+        let (tmp, fs) = credential_dirs();
+        let root = tmp.0.to_str().unwrap();
+        std::fs::write(tmp.path("file.txt"), "f").unwrap();
+        std::os::unix::fs::symlink(tmp.path("home"), tmp.path("home_link")).unwrap();
+        let before = tree(&tmp.0);
+        for name in CREDENTIAL_DIR_NAMES {
+            let expected = ProtectedDir::Credentials(name);
+            for path in [
+                // the directory, its files, existing or not
+                format!("{root}/home/{name}"),
+                format!("{root}/home/{name}/"),
+                format!("{root}/home/{name}/key"),
+                format!("{root}/home/{name}/missing/new.txt"),
+                // however it's spelled
+                format!("{root}/x/../home/{name}/key"),
+                format!("{root}/home/./{name}/./key"),
+                format!("{root}/home/{name}/sub/../key"),
+                // one that doesn't exist, under the app dir and nested deep
+                format!("{root}/app/{name}"),
+                format!("{root}/a/b/{name}/c"),
+                // where an `lstat` would fail or a symlink would be refused,
+                // or no root covers it, the refusal comes first
+                format!("{root}/file.txt/{name}/x"),
+                format!("{root}/home_link/{name}/key"),
+                format!("/zzz_scoped_fs_test_no_such_root/{name}/x"),
+            ] {
+                assert_every_op_refused_for(&fs, &path, expected).await;
+            }
+        }
+        assert_eq!(tree(&tmp.0), before, "nothing created or removed");
+        for name in CREDENTIAL_DIR_NAMES {
+            assert_eq!(
+                std::fs::read_to_string(tmp.path(&format!("home/{name}/key"))).unwrap(),
+                "SECRET",
+                "untouched"
+            );
+        }
+
+        // an existing file and a missing one answer alike, naming the
+        // normalized path
+        for (path, named) in [
+            (format!("{root}/home/.ssh/key"), "home/.ssh/key"),
+            (format!("{root}/home/.ssh/missing"), "home/.ssh/missing"),
+            (format!("{root}/x/../home/.ssh/key"), "home/.ssh/key"),
+        ] {
+            let result = fs.open_file(&path).await;
+            assert!(
+                matches!(&result, Err(ScopedFsError::ProtectedDirNotAllowed { path: p, dir: ProtectedDir::Credentials(".ssh") })
+                    if *p == tmp.path(named).to_string_lossy()),
+                "{path}: {result:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn names_like_a_credential_dir_stay_usable() {
+        let (tmp, fs) = credential_dirs();
+        let root = tmp.0.to_str().unwrap();
+        for dir in [".sshx", "ssh", "x.ssh", "docker", ".aws-notes"] {
+            fs.create_dir(&format!("{root}/{dir}")).await.unwrap();
+            let file = format!("{root}/{dir}/a.txt");
+            fs.create_file(&file, b"a".to_vec()).await.unwrap();
+            fs.write_file(&file, "b".to_owned()).await.unwrap();
+            fs.open_file(&file).await.unwrap();
+            fs.rm(&file).await.unwrap();
+        }
+        // `.env` files stay readable
+        std::fs::write(tmp.path(".env"), "X=1").unwrap();
+        fs.open_file(&format!("{root}/.env")).await.unwrap();
     }
 
     // -- open errors --

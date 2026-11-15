@@ -38,6 +38,7 @@ use crate::filer::FilerManager;
 use crate::job_manager::JobManager;
 use crate::provider::{CompletionOptions, ProviderManager};
 use crate::pty_manager::PtyManager;
+use crate::root_policy::RootPolicy;
 use crate::scoped_fs::ScopedFs;
 use crate::tool::Tools;
 
@@ -104,6 +105,10 @@ pub struct App {
     /// [`Self::new`] starts with
     /// none; `run_app` sets them from the config.
     pub tools: Tools,
+    /// Which directories `workspace_open` admits as roots
+    /// ([`crate::root_policy`]). [`Self::new`] starts with the default, which
+    /// admits nothing; `run_app` sets it from the config.
+    pub root_policy: RootPolicy,
     /// The spine audit emitter every audit row goes through — the one
     /// `run_app` hands the route states and the action registry. Held here so
     /// the test binary's specs factory can build `_testing_drain_effects`
@@ -154,6 +159,7 @@ impl App {
             realtime,
             action_registry: std::sync::OnceLock::new(),
             tools: Tools::default(),
+            root_policy: RootPolicy::default(),
             audit_emitter,
         }
     }

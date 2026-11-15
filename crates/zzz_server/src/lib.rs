@@ -27,6 +27,7 @@ pub mod media;
 mod origin_allowlist;
 pub mod provider;
 pub mod pty_manager;
+pub mod root_policy;
 mod router;
 pub mod scoped_fs;
 pub mod static_files;
@@ -365,6 +366,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         Arc::clone(&backend.audit_emitter),
     );
     app.tools = config.tools;
+    app.root_policy = config.root_policy;
     let app_state = Arc::new(app);
 
     // A deleted or purged account's terminals end with its sockets.
@@ -428,51 +430,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         ));
     }
 
-    // Start the permanent file watchers at startup: zzz_dir, then each of
-    // scoped_dirs. zzz_dir uses FilerConfig::zzz_dir() (no ignored dirs);
-    // scoped_dirs use workspace config (ignoring zzz_dir when nested inside).
-    match app_state
-        .filer_manager
-        .start_filer(
-            &app_state.zzz_dir,
-            Arc::clone(&app_state),
-            filer::FilerConfig::zzz_dir(),
-            filer::FilerLifetime::Permanent,
-        )
-        .await
-    {
-        Ok(_) => tracing::info!(path = %app_state.zzz_dir, "started zzz_dir filer"),
-        Err(e) => {
-            tracing::warn!(
-                path = %app_state.zzz_dir,
-                error = %fuz_sys::cli::format_error_chain(&e),
-                "failed to start zzz_dir filer"
-            );
-        }
-    }
-
-    for dir in &app_state.scoped_dirs {
-        if *dir == app_state.zzz_dir {
-            continue;
-        }
-        match app_state
-            .filer_manager
-            .start_filer(
-                dir,
-                Arc::clone(&app_state),
-                filer::FilerConfig::workspace(dir, &app_state.zzz_dir),
-                filer::FilerLifetime::Permanent,
-            )
-            .await
-        {
-            Ok(_) => tracing::info!(path = %dir, "started scoped_dir filer"),
-            Err(e) => tracing::warn!(
-                path = %dir,
-                error = %fuz_sys::cli::format_error_chain(&e),
-                "failed to start scoped_dir filer"
-            ),
-        }
-    }
+    start_permanent_filers(&app_state).await;
 
     // -- Routes -----------------------------------------------------------
     //
@@ -572,6 +530,68 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     served
 }
 
+/// Start the permanent filers: the app dir's, then each scoped dir's (but
+/// one that is the app dir) that still passes its rules
+/// ([`recheck_scoped_dir`]). A filer that can't start is logged and skipped
+/// — the daemon serves without it.
+async fn start_permanent_filers(app_state: &Arc<handlers::App>) {
+    // zzz_dir uses FilerConfig::zzz_dir() (no ignored dirs); scoped_dirs use
+    // workspace config (ignoring zzz_dir when nested inside)
+    match app_state
+        .filer_manager
+        .start_filer(
+            &app_state.zzz_dir,
+            Arc::clone(app_state),
+            filer::FilerConfig::zzz_dir(),
+            filer::FilerLifetime::Permanent,
+        )
+        .await
+    {
+        Ok(_) => tracing::info!(path = %app_state.zzz_dir, "started zzz_dir filer"),
+        Err(e) => {
+            tracing::warn!(
+                path = %app_state.zzz_dir,
+                error = %fuz_sys::cli::format_error_chain(&e),
+                "failed to start zzz_dir filer"
+            );
+        }
+    }
+
+    for dir in &app_state.scoped_dirs {
+        if *dir == app_state.zzz_dir {
+            continue;
+        }
+        // the boot checked a scoped dir missing then as spelled: hold it to
+        // the rules again on what it resolves to now, before indexing it
+        if let Err(why) = recheck_scoped_dir(
+            dir,
+            tokio::fs::canonicalize(dir).await,
+            &app_state.zzz_dir,
+            &app_state.root_policy,
+        ) {
+            tracing::warn!(path = %dir, "not indexing a scoped dir: {why}");
+            continue;
+        }
+        match app_state
+            .filer_manager
+            .start_filer(
+                dir,
+                Arc::clone(app_state),
+                filer::FilerConfig::workspace(dir, &app_state.zzz_dir),
+                filer::FilerLifetime::Permanent,
+            )
+            .await
+        {
+            Ok(_) => tracing::info!(path = %dir, "started scoped_dir filer"),
+            Err(e) => tracing::warn!(
+                path = %dir,
+                error = %fuz_sys::cli::format_error_chain(&e),
+                "failed to start scoped_dir filer"
+            ),
+        }
+    }
+}
+
 // -- Config -------------------------------------------------------------------
 
 /// Validated config built from CLI args + env vars.
@@ -592,6 +612,11 @@ pub struct Config {
     /// checked by [`check_scoped_dirs`].
     pub scoped_dirs: Vec<String>,
     pub zzz_dir: String,
+    /// Which directories can be roots: strictly inside the daemon's home
+    /// directory, or in `ZZZ_ROOTS_OUTSIDE_HOME` ([`root_policy`]). The boot
+    /// holds the app dir and `scoped_dirs` to it; `workspace_open` every
+    /// workspace.
+    pub root_policy: root_policy::RootPolicy,
     /// Register `_testing_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave unset.
     pub enable_test_actions: bool,
@@ -627,6 +652,7 @@ impl std::fmt::Debug for Config {
             .field("allow_origin_wildcards", &self.allow_origin_wildcards)
             .field("scoped_dirs", &self.scoped_dirs)
             .field("zzz_dir", &self.zzz_dir)
+            .field("root_policy", &self.root_policy)
             .field("enable_test_actions", &self.enable_test_actions)
             .field("trusted_proxies", &self.trusted_proxies)
             .field("tools", &self.tools)
@@ -689,29 +715,52 @@ fn non_empty(value: Option<String>) -> Option<String> {
 
 /// Resolve a path to an absolute, canonical, normalized directory string
 /// with trailing `/`. Tries `canonicalize` (resolves symlinks, requires path
-/// to exist), falls back to `absolute` (no I/O). Used for the scoped dirs and,
-/// through [`ensure_app_dir`], the app directory.
+/// to exist), falls back to `absolute` (no I/O) for a path that doesn't
+/// exist yet. Used for the scoped dirs, the root allowlist, and, through
+/// [`ensure_app_dir`], the app directory.
+///
+/// The fallback drops `.` components but keeps `..`, which the root rules
+/// would check lexically while the OS reads it through whatever the
+/// directory before it becomes once it exists — `~/missing/..` is `~` then —
+/// so a path that falls back with a `..` in it is refused. A fallback path
+/// is otherwise as spelled, symlinks included; a scoped dir is checked again
+/// on its canonical path when its filer starts ([`recheck_scoped_dir`]).
 ///
 /// # Errors
 ///
-/// Returns [`StartupError::Config`] for an empty path or one that can't be
-/// made absolute — never a silent fallback, which would collapse to `/` (a
-/// permanent scoped root, and a filer, over the whole filesystem).
-fn resolve_dir(path: &Path) -> Result<String, StartupError> {
+/// A message for an empty path, one that can't be made absolute — never a
+/// silent fallback, which would collapse to `/` (a permanent scoped root,
+/// and a filer, over the whole filesystem) — or a missing one spelled with
+/// `..`.
+fn resolve_dir(path: &Path) -> Result<String, String> {
     if path.as_os_str().is_empty() {
-        return Err(StartupError::Config("empty directory path".to_owned()));
+        return Err("empty directory path".to_owned());
     }
-    let resolved = std::fs::canonicalize(path)
-        .or_else(|_| std::path::absolute(path))
-        .map_err(|e| StartupError::Config(format!("can't resolve {}: {e}", path.display())))?;
+    let resolved = match std::fs::canonicalize(path) {
+        Ok(canonical) => canonical,
+        Err(canonicalize_error) => {
+            let absolute = std::path::absolute(path)
+                .map_err(|e| format!("can't resolve {}: {e}", path.display()))?;
+            if absolute
+                .components()
+                .any(|c| c == std::path::Component::ParentDir)
+            {
+                return Err(format!(
+                    "{} can't be resolved ({canonicalize_error}), and a `..` in an unresolved path would be read through whatever the directory before it becomes, so it can't be checked: name the directory without `..`",
+                    path.display()
+                ));
+            }
+            absolute
+        }
+    };
     let mut s = resolved
         .to_str()
         .ok_or_else(|| {
-            StartupError::Config(format!(
+            format!(
                 "{} resolves to a path that isn't valid UTF-8: {}",
                 path.display(),
                 resolved.display()
-            ))
+            )
         })?
         .to_owned();
     if !s.ends_with('/') {
@@ -764,26 +813,161 @@ fn check_app_dir_is_not_cwd(zzz_dir: &str, cwd: &Path) -> Result<(), StartupErro
     Ok(())
 }
 
-/// Refuse a scoped dir that is, or is inside, a `.zzz` directory other than
-/// the app dir ([`scoped_fs::is_in_zzz_home`]) — its filer would refuse to start
-/// (so nothing would be indexed) while it stayed a writable `ScopedFs` root,
-/// and `.zzz` directories hold zzz's own files (the CLI's `.env` and
-/// `bootstrap_token`). Paths are the resolved forms.
+/// The env var `var`'s comma-separated list of directories
+/// (`PUBLIC_ZZZ_SCOPED_DIRS`, `ZZZ_ROOTS_OUTSIDE_HOME`), its raw value `raw`,
+/// each entry trimmed and [`resolve_dir`]ed, blank entries skipped; unset is
+/// empty.
 ///
 /// # Errors
 ///
-/// [`StartupError::Config`] naming `PUBLIC_ZZZ_SCOPED_DIRS` and the first
-/// such dir.
-fn check_scoped_dirs(scoped_dirs: &[String], zzz_dir: &str) -> Result<(), StartupError> {
-    let app_dir = Path::new(zzz_dir);
-    scoped_dirs
-        .iter()
-        .find(|dir| scoped_fs::is_in_zzz_home(Path::new(dir), app_dir))
-        .map_or(Ok(()), |dir| {
-            Err(StartupError::Config(format!(
-                "PUBLIC_ZZZ_SCOPED_DIRS entry {dir} is in a .zzz directory other than the app dir {zzz_dir}: .zzz directories hold zzz's own files (secrets, tokens) and can't be scoped"
-            )))
+/// [`StartupError::Config`] naming `var`, the first entry that can't be
+/// resolved, and [`resolve_dir`]'s reason.
+fn resolve_dir_list(var: &str, raw: Option<&str>) -> Result<Vec<String>, StartupError> {
+    raw.unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|dir| {
+            resolve_dir(Path::new(dir))
+                .map_err(|e| StartupError::Config(format!("{var} entry {dir}: {e}")))
         })
+        .collect()
+}
+
+/// The root rule over the canonical home directory `home` (`None` when it
+/// couldn't be resolved) and `ZZZ_ROOTS_OUTSIDE_HOME`'s raw value.
+///
+/// # Errors
+///
+/// [`StartupError::Config`] naming `ZZZ_ROOTS_OUTSIDE_HOME` and the entry
+/// for one that can't be resolved, or that names `/`, the home directory or
+/// an ancestor of it, or a pseudo-filesystem
+/// ([`root_policy::RootPolicy::check_floor`]).
+fn build_root_policy(
+    home: Option<PathBuf>,
+    raw_outside_home: Option<&str>,
+) -> Result<root_policy::RootPolicy, StartupError> {
+    let var = root_policy::ROOTS_OUTSIDE_HOME_VAR;
+    let outside_home = resolve_dir_list(var, raw_outside_home)?;
+    root_policy::RootPolicy::new(home, outside_home.iter().map(PathBuf::from).collect()).map_err(
+        |(dir, refusal)| {
+            StartupError::Config(format!(
+                "{var} entry {} can't be allowed: {refusal}",
+                dir.display()
+            ))
+        },
+    )
+}
+
+/// Refuse an app dir that is `/`, the home directory or an ancestor of it,
+/// under a pseudo-filesystem ([`root_policy::RootPolicy::check_floor`]), or
+/// in a credential directory ([`scoped_fs::protected_dir`]). It's exempt
+/// from the rest of the root rule: an operator-configured directory, zzz's
+/// own, may sit outside the home directory without being allowlisted.
+///
+/// # Errors
+///
+/// [`StartupError::Config`] naming `PUBLIC_ZZZ_DIR`, the dir, and why.
+fn check_app_dir_root(zzz_dir: &str, policy: &root_policy::RootPolicy) -> Result<(), StartupError> {
+    let dir = Path::new(zzz_dir);
+    policy.check_floor(dir).map_err(|refusal| {
+        StartupError::Config(format!(
+            "PUBLIC_ZZZ_DIR {zzz_dir} can't be the app dir: {refusal}"
+        ))
+    })?;
+    scoped_fs::protected_dir(dir, dir).map_or(Ok(()), |protected| {
+        Err(StartupError::Config(format!(
+            "PUBLIC_ZZZ_DIR {zzz_dir} can't be the app dir: it's in {protected}"
+        )))
+    })
+}
+
+/// Refuse a scoped dir that the root rule refuses
+/// ([`root_policy::RootPolicy::admit`]: strictly inside the home directory,
+/// or in `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, the home directory or an
+/// ancestor of it, or a pseudo-filesystem), or that is, or is inside, a
+/// protected directory ([`scoped_fs::protected_dir`]): a credential
+/// directory, or a `.zzz` directory other than the app dir — its filer would
+/// refuse to start (so nothing would be indexed) while it stayed a writable
+/// `ScopedFs` root, and those directories hold credentials or zzz's own
+/// files (the CLI's `.env` and `bootstrap_token`). Paths are the resolved
+/// forms.
+///
+/// # Errors
+///
+/// [`StartupError::Config`] naming `PUBLIC_ZZZ_SCOPED_DIRS`, the first such
+/// dir, and why.
+fn check_scoped_dirs(
+    scoped_dirs: &[String],
+    zzz_dir: &str,
+    policy: &root_policy::RootPolicy,
+) -> Result<(), StartupError> {
+    for dir in scoped_dirs {
+        if let Err(why) = check_scoped_dir(Path::new(dir), zzz_dir, policy) {
+            return Err(StartupError::Config(format!(
+                "PUBLIC_ZZZ_SCOPED_DIRS entry {dir} can't be scoped: {why}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Whether `path` can be a scoped dir ([`check_scoped_dirs`]'s rule for one
+/// entry), with the app dir `zzz_dir`.
+///
+/// # Errors
+///
+/// Why not: the root rules' refusal, or the protected directory it's in.
+fn check_scoped_dir(
+    path: &Path,
+    zzz_dir: &str,
+    policy: &root_policy::RootPolicy,
+) -> Result<(), String> {
+    policy.admit(path).map_err(|refusal| refusal.to_string())?;
+    scoped_fs::protected_dir(path, Path::new(zzz_dir)).map_or(Ok(()), |protected| {
+        Err(format!("it's in {protected} (the app dir is {zzz_dir})"))
+    })
+}
+
+/// Hold the scoped dir `dir` — as the boot resolved and checked it — to its
+/// rules again as its filer starts, on `canonical`, the directory's
+/// canonical path now (or why it has none).
+///
+/// The boot checks an entry that didn't exist yet as spelled
+/// ([`resolve_dir`]); if it appeared since, the spelling may name another
+/// directory than it reads — through a symlinked ancestor (`~/link/x` with
+/// `link -> /`), the directory the walk would index and `session_load` would
+/// ship. So the canonical path is checked again ([`check_scoped_dir`]), and
+/// must be `dir` itself: a scoped dir that resolves elsewhere isn't indexed
+/// until a restart resolves it. Its `ScopedFs` root stays, and reaches
+/// nothing: a path differs from its canonical form only through a symlink,
+/// which `ScopedFs` refuses along every path it's given (or a leading `//`,
+/// which no normalized path matches).
+///
+/// # Errors
+///
+/// Why the filer mustn't start: `dir` can't be resolved (missing, as before
+/// any filer could list it), its canonical path is refused, or it isn't
+/// `dir`.
+fn recheck_scoped_dir(
+    dir: &str,
+    canonical: std::io::Result<PathBuf>,
+    zzz_dir: &str,
+    policy: &root_policy::RootPolicy,
+) -> Result<(), String> {
+    let canonical = canonical.map_err(|e| format!("it can't be resolved: {e}"))?;
+    let mut canonical_dir = canonical.to_string_lossy().into_owned();
+    if !canonical_dir.ends_with('/') {
+        canonical_dir.push('/');
+    }
+    check_scoped_dir(&canonical, zzz_dir, policy)
+        .map_err(|why| format!("it resolves to {canonical_dir}, which can't be scoped: {why}"))?;
+    if canonical_dir != dir {
+        return Err(format!(
+            "it resolves to {canonical_dir}, not the path the boot checked (which didn't exist then): restart the daemon to scope it"
+        ));
+    }
+    Ok(())
 }
 
 /// Create the app directory `path` if it doesn't exist, then
@@ -807,7 +991,7 @@ fn ensure_app_dir(path: &Path) -> Result<String, StartupError> {
             path.display()
         ))
     })?;
-    resolve_dir(path)
+    resolve_dir(path).map_err(StartupError::Config)
 }
 
 /// The daemon's options, printed after the binary's name for `-h` /
@@ -1000,14 +1184,26 @@ fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, Start
 
     // resolved and checked here, before anything touches the DB, so a bad
     // entry is reported without one
-    let scoped_dirs: Vec<String> = env_var_utf8("PUBLIC_ZZZ_SCOPED_DIRS")?
-        .unwrap_or_default()
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|dir| resolve_dir(Path::new(dir)))
-        .collect::<Result<_, _>>()?;
-    check_scoped_dirs(&scoped_dirs, &zzz_dir)?;
+    let home = match root_policy::resolve_home(fuz_sys::home_dir()) {
+        Ok(home) => Some(home),
+        Err(reason) => {
+            tracing::warn!(
+                "{reason}: only directories {} names can be roots",
+                root_policy::ROOTS_OUTSIDE_HOME_VAR
+            );
+            None
+        }
+    };
+    let root_policy = build_root_policy(
+        home,
+        env_var_utf8(root_policy::ROOTS_OUTSIDE_HOME_VAR)?.as_deref(),
+    )?;
+    check_app_dir_root(&zzz_dir, &root_policy)?;
+    let scoped_dirs = resolve_dir_list(
+        "PUBLIC_ZZZ_SCOPED_DIRS",
+        env_var_utf8("PUBLIC_ZZZ_SCOPED_DIRS")?.as_deref(),
+    )?;
+    check_scoped_dirs(&scoped_dirs, &zzz_dir, &root_policy)?;
 
     let enable_test_actions =
         parse_test_actions_flag(env_var_utf8("ZZZ_ENABLE_TEST_ACTIONS")?.as_deref())?;
@@ -1058,6 +1254,7 @@ fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, Start
         allow_origin_wildcards,
         scoped_dirs,
         zzz_dir,
+        root_policy,
         enable_test_actions,
         trusted_proxies,
         tools,
@@ -1247,10 +1444,58 @@ mod config_paths {
 
     #[test]
     fn resolve_dir_rejects_an_empty_path() {
-        assert!(matches!(
-            resolve_dir(Path::new("")),
-            Err(StartupError::Config(_))
-        ));
+        assert!(resolve_dir(Path::new("")).is_err());
+    }
+
+    #[test]
+    fn resolve_dir_refuses_a_missing_path_spelled_with_dotdot() {
+        let tmp = TempDir::new();
+        let home = &tmp.0;
+        std::fs::create_dir(home.join("sub")).unwrap();
+        let resolve = |rel: &str| resolve_dir(&home.join(rel));
+        // `missing` would read as the home or its parent once it exists; and
+        // any `..` in a path that doesn't resolve is refused, wherever it is
+        for rel in [
+            "missing/..",
+            "missing/../..",
+            "missing/../x",
+            "sub/../missing",
+            "sub/../missing/..",
+        ] {
+            let message = resolve(rel).expect_err(rel);
+            assert!(message.contains("`..`"), "{rel}: {message}");
+            assert!(message.contains(rel), "{rel}: {message}");
+        }
+        // an existing path resolves its `..`, and `.` is dropped
+        let dir = |rel: &str| format!("{}/", home.join(rel).display());
+        assert_eq!(resolve("sub/..").unwrap(), format!("{}/", home.display()));
+        assert_eq!(resolve("missing/.").unwrap(), dir("missing"));
+        assert_eq!(resolve("./missing/./x").unwrap(), dir("missing/x"));
+    }
+
+    #[test]
+    fn dir_lists_name_the_var_and_entry_they_refuse() {
+        let entry = "/zzz_no_such_dir_for_resolve_dir/x/..";
+        let Err(StartupError::Config(message)) =
+            resolve_dir_list("PUBLIC_ZZZ_SCOPED_DIRS", Some(&format!("/w, {entry}")))
+        else {
+            panic!("expected {entry} to be refused");
+        };
+        assert!(
+            message.starts_with(&format!("PUBLIC_ZZZ_SCOPED_DIRS entry {entry}: ")),
+            "{message}"
+        );
+        assert!(message.contains("`..`"), "{message}");
+        // the allowlist is read the same way
+        let Err(StartupError::Config(message)) =
+            build_root_policy(Some(PathBuf::from("/home/u")), Some(entry))
+        else {
+            panic!("expected the allowlist entry {entry} to be refused");
+        };
+        assert!(
+            message.starts_with(&format!("ZZZ_ROOTS_OUTSIDE_HOME entry {entry}: ")),
+            "{message}"
+        );
     }
 
     #[test]
@@ -1326,24 +1571,228 @@ mod config_paths {
         assert!(check_app_dir_is_not_cwd(&app, &tmp.0).is_ok());
     }
 
+    /// The root rule for a home of `/home/u`, with `/w` allowlisted.
+    fn test_policy() -> root_policy::RootPolicy {
+        build_root_policy(Some(PathBuf::from("/home/u")), Some("/w")).unwrap()
+    }
+
+    fn config_message(result: Result<(), StartupError>, label: &str) -> String {
+        let Err(StartupError::Config(message)) = result else {
+            panic!("expected {label} to be refused");
+        };
+        message
+    }
+
     #[test]
-    fn scoped_dirs_in_a_zzz_home_refuse_to_boot() {
+    fn scoped_dirs_in_a_protected_dir_refuse_to_boot() {
         let app = "/home/u/.zzz/.zzz/";
-        for dir in ["/home/u/.zzz/", "/home/u/.zzz/run/", "/w/.zzz/"] {
-            let Err(StartupError::Config(message)) =
-                check_scoped_dirs(&["/w/ok/".to_owned(), dir.to_owned()], app)
-            else {
-                panic!("expected {dir} to be refused");
-            };
+        for (dir, named) in [
+            ("/home/u/.zzz/", ".zzz"),
+            ("/home/u/.zzz/run/", ".zzz"),
+            ("/w/.zzz/", ".zzz"),
+            ("/home/u/.ssh/", ".ssh"),
+            ("/home/u/.gnupg/x/", ".gnupg"),
+            ("/w/project/.aws/", ".aws"),
+            ("/home/u/.password-store/", ".password-store"),
+        ] {
+            let message = config_message(
+                check_scoped_dirs(&["/w/ok/".to_owned(), dir.to_owned()], app, &test_policy()),
+                dir,
+            );
             assert!(message.contains("PUBLIC_ZZZ_SCOPED_DIRS"), "{message}");
             assert!(message.contains(dir), "{message}");
+            assert!(
+                message.contains(&format!("a {named} directory")),
+                "{message}"
+            );
         }
         let fine = [
-            "/home/u/".to_owned(),
+            "/home/u/dev/".to_owned(),
             "/home/u/.zzz/.zzz/".to_owned(),
             "/home/u/.zzz/.zzz/state/".to_owned(),
+            "/w/".to_owned(),
         ];
-        assert!(check_scoped_dirs(&fine, app).is_ok());
+        assert!(check_scoped_dirs(&fine, app, &test_policy()).is_ok());
+    }
+
+    #[test]
+    fn scoped_dirs_the_root_rule_refuses_refuse_to_boot() {
+        let app = "/home/u/.zzz/.zzz/";
+        for (dir, why) in [
+            ("/", "the filesystem root"),
+            ("/home/u/", "the home directory /home/u"),
+            ("/home/", "the home directory /home/u"),
+            ("/proc/1/", "pseudo-filesystem"),
+            ("/sys/", "pseudo-filesystem"),
+            ("/dev/shm/", "pseudo-filesystem"),
+            ("/tmp/x/", "ZZZ_ROOTS_OUTSIDE_HOME"),
+            ("/home/other/", "ZZZ_ROOTS_OUTSIDE_HOME"),
+        ] {
+            let message = config_message(
+                check_scoped_dirs(&[dir.to_owned()], app, &test_policy()),
+                dir,
+            );
+            assert!(message.contains("PUBLIC_ZZZ_SCOPED_DIRS"), "{message}");
+            assert!(message.contains(dir), "{message}");
+            assert!(message.contains(why), "{dir}: {message}");
+        }
+        // without a home, only the allowlist admits
+        let no_home = build_root_policy(None, Some("/w")).unwrap();
+        assert!(check_scoped_dirs(&["/w/x/".to_owned()], app, &no_home).is_ok());
+        let message = config_message(
+            check_scoped_dirs(&["/home/u/dev/".to_owned()], app, &no_home),
+            "no home",
+        );
+        assert!(
+            message.contains("home directory couldn't be resolved"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn scoped_dirs_are_rechecked_on_their_canonical_path_as_their_filers_start() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = TempDir::new();
+        let home = tmp.0.join("home");
+        for dir in ["home/dev", "home/real/x", "home/.ssh", "outside/x", "app"] {
+            std::fs::create_dir_all(tmp.0.join(dir)).unwrap();
+        }
+        symlink(&tmp.0, home.join("tmp_link")).unwrap();
+        symlink(&home, home.join("home_link")).unwrap();
+        symlink(home.join("real"), home.join("real_link")).unwrap();
+        symlink(home.join(".ssh"), home.join("ssh_link")).unwrap();
+        let policy = build_root_policy(Some(home.clone()), None).unwrap();
+        let zzz_dir = format!("{}/", tmp.0.join("app").display());
+        let dir = |rel: &str| format!("{}/", home.join(rel).display());
+        let recheck = |rel: &str| {
+            let dir = dir(rel);
+            recheck_scoped_dir(&dir, std::fs::canonicalize(&dir), &zzz_dir, &policy)
+        };
+
+        // a directory that exists as the boot spelled it starts
+        assert_eq!(recheck("dev"), Ok(()));
+        assert_eq!(recheck("real/x"), Ok(()));
+        // one still missing doesn't, as before any filer could list it
+        let message = recheck("missing").unwrap_err();
+        assert!(message.contains("can't be resolved"), "{message}");
+
+        // spellings the boot couldn't resolve (missing then, or a `..` the
+        // boot now refuses) that resolve where the rules refuse
+        for (rel, resolves_to, why) in [
+            ("missing_then/..", "", "the home directory"),
+            ("tmp_link/home", "", "the home directory"),
+            ("home_link", "", "the home directory"),
+            ("tmp_link", "..", "the home directory"),
+            (
+                "tmp_link/outside/x",
+                "../outside/x",
+                "must be inside the home directory",
+            ),
+            ("ssh_link", ".ssh", "a .ssh directory"),
+        ] {
+            if rel.starts_with("missing_then") {
+                std::fs::create_dir_all(home.join("missing_then")).unwrap();
+            }
+            let message = recheck(rel).unwrap_err();
+            let canonical = home.join(resolves_to).canonicalize().unwrap();
+            assert!(
+                message.contains(&format!("it resolves to {}/,", canonical.display())),
+                "{rel}: {message}"
+            );
+            assert!(message.contains(why), "{rel}: {message}");
+        }
+        // and one admitted, but not where the boot checked it
+        let message = recheck("real_link/x").unwrap_err();
+        assert!(
+            message.contains(&format!("it resolves to {}, not", dir("real/x"))),
+            "{message}"
+        );
+        assert!(message.contains("restart"), "{message}");
+    }
+
+    #[tokio::test]
+    async fn permanent_filers_start_only_on_scoped_dirs_that_pass_again() {
+        let tmp = TempDir::new();
+        let home = tmp.0.join("home");
+        for dir in ["home/dev", "home/real/x", "home/appeared", "app"] {
+            std::fs::create_dir_all(tmp.0.join(dir)).unwrap();
+        }
+        std::fs::write(home.join("dev/a.txt"), "a").unwrap();
+        std::fs::write(home.join("secret.txt"), "not for a scoped dir").unwrap();
+        std::os::unix::fs::symlink(home.join("real"), home.join("real_link")).unwrap();
+        let dir = |rel: &str| format!("{}/", home.join(rel).display());
+        let zzz_dir = format!("{}/", tmp.0.join("app").display());
+
+        let pool = fuz_db::create_pool(
+            "postgres://localhost:1/filers_unused",
+            &fuz_db::PoolOptions::default(),
+        )
+        .expect("a lazy pool builds without connecting");
+        let mut app = handlers::App::new(
+            pool.clone(),
+            scoped_fs::ScopedFs::without_roots(),
+            zzz_dir.clone(),
+            // as the boot left them: one that exists, and three that didn't
+            // then (the `..` one the boot now refuses) but do now
+            vec![
+                dir("dev"),
+                dir("appeared/.."),
+                dir("real_link/x"),
+                dir("missing"),
+            ],
+            provider::ProviderManager::new(),
+            false,
+            Arc::new(fuz_realtime::ConnectionRegistry::new()),
+            Arc::new(fuz_auth::AuditEmitter::new(pool)),
+        );
+        app.root_policy = build_root_policy(Some(home.clone()), None).unwrap();
+        let app = Arc::new(app);
+
+        start_permanent_filers(&app).await;
+        let snapshot = app.filer_manager.snapshot().await;
+        assert_eq!(snapshot.roots, vec![zzz_dir, dir("dev")]);
+        let ids: Vec<&str> = snapshot.files.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, vec![home.join("dev/a.txt").to_str().unwrap()]);
+    }
+
+    #[test]
+    fn allowlist_entries_the_floor_refuses_refuse_to_boot() {
+        let home = || Some(PathBuf::from("/home/u"));
+        for raw in ["/", "/home/u", "/home", "/proc", "/sys/x", "/w,/dev"] {
+            let Err(StartupError::Config(message)) = build_root_policy(home(), Some(raw)) else {
+                panic!("expected {raw} to be refused");
+            };
+            assert!(
+                message.contains("ZZZ_ROOTS_OUTSIDE_HOME entry"),
+                "{message}"
+            );
+        }
+        // blank entries are skipped, unset is empty
+        assert!(build_root_policy(home(), Some(" , /w ,")).is_ok());
+        assert!(build_root_policy(home(), None).is_ok());
+        assert!(build_root_policy(None, Some("/")).is_err());
+    }
+
+    #[test]
+    fn the_app_dir_is_held_to_the_floor_but_not_to_home() {
+        let policy = test_policy();
+        // outside home and not allowlisted, the app dir is still fine
+        for dir in ["/var/lib/zzz/", "/home/u/.zzz/.zzz/", "/w/.zzz/"] {
+            assert!(check_app_dir_root(dir, &policy).is_ok(), "{dir}");
+        }
+        for (dir, why) in [
+            ("/", "the filesystem root"),
+            ("/home/u/", "the home directory"),
+            ("/home/", "the home directory"),
+            ("/proc/1/", "pseudo-filesystem"),
+            ("/home/u/.ssh/zzz/", "a .ssh directory"),
+            ("/home/u/.docker/", "a .docker directory"),
+        ] {
+            let message = config_message(check_app_dir_root(dir, &policy), dir);
+            assert!(message.contains("PUBLIC_ZZZ_DIR"), "{message}");
+            assert!(message.contains(why), "{dir}: {message}");
+        }
     }
 
     #[test]

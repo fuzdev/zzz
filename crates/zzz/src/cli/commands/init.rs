@@ -183,6 +183,11 @@ FUZ_BOOTSTRAP_TOKEN_PATH=bootstrap_token
 # Comma-separated directories zzz may read and write
 # PUBLIC_ZZZ_SCOPED_DIRS=
 
+# Comma-separated directories outside your home directory that workspaces
+# and scoped dirs may be in (`~` expands). Never /, your home directory or
+# above it, or anything under /proc, /sys, or /dev
+# ZZZ_ROOTS_OUTSIDE_HOME=
+
 # Built UI to serve (default: ~/.zzz/static)
 # ZZZ_STATIC_DIR=
 
@@ -240,5 +245,10 @@ mod tests {
         // commented-out defaults stay unset
         assert_eq!(get("FUZ_ALLOWED_ORIGINS"), None);
         assert_eq!(get("ZZZ_STATIC_DIR"), None);
+        assert_eq!(get("ZZZ_ROOTS_OUTSIDE_HOME"), None);
+        assert!(
+            env_template("k").contains("\n# ZZZ_ROOTS_OUTSIDE_HOME=\n"),
+            "the template offers the root allowlist"
+        );
     }
 }

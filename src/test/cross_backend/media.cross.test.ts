@@ -218,7 +218,7 @@ describe('media cross-backend', () => {
 				await expect(
 					join(await new_path('zzz_home'), '.zzz', 'clip.webm'),
 					JSONRPC_ERROR_CODES.forbidden,
-					'zzz_home_not_allowed'
+					'protected_dir_not_allowed'
 				);
 			}
 			assert.equal(await readFile(outside, 'utf-8'), 'outside');

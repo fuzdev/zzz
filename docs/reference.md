@@ -16,7 +16,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `directory_create` — Create a new directory on disk, and any missing parents, failing with `conflict` (`already_exists`) if the path is taken — never reuses an existing one. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_create` — Create a new file on disk, failing with `conflict` (`already_exists`) if the path is taken — never overwrites. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_delete` — Delete a file from disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
-- `diskfile_read` — Read a file's contents as text, with its size and timestamps. Any regular file in scope, except in a `.zzz` directory other than the app dir (`forbidden` / `zzz_home_not_allowed`); one over the size limit or not UTF-8 has `contents: null` and an `unloaded_reason`. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `diskfile_read` — Read a file's contents as text, with its size and timestamps. Any regular file in scope, except in a credential directory or a `.zzz` directory other than the app dir (`forbidden` / `protected_dir_not_allowed`); one over the size limit or not UTF-8 has `contents: null` and an `unloaded_reason`. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_update` — Write new content to a file on disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `filer_change` — Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless the ones the backend holds for it are unchanged (a `touch`). Kind: remote_notification. Initiator: backend. Auth: public
 - `job_cancel` — Cancel a job: a queued one never starts, the running one is stopped. A job that is already over is left as it is. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
@@ -38,7 +38,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `workspace_changed` — Notifies frontends when a workspace is opened or closed. Kind: remote_notification. Initiator: backend. Auth: public
 - `workspace_close` — Close a workspace directory — stops file watching and removes from ScopedFs. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `workspace_list` — List all open workspaces. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
-- `workspace_open` — Open a workspace directory — registers with ScopedFs and starts file watching. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `workspace_open` — Open a workspace directory — registers with ScopedFs and starts file watching. The directory must be strictly inside the daemon's home directory or named by `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, the home directory or an ancestor of it, a pseudo-filesystem, or a protected directory (`forbidden` / `root_not_allowed`, `root_outside_home`, `protected_dir_not_allowed`). Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 
 ## Cell classes (36)
 

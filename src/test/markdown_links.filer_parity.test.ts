@@ -21,24 +21,48 @@ const parse_str_const = (source: string, name: string): string => {
 	return match[1]!;
 };
 
+/**
+ * The entries of `const NAME: &[&str] = &[…];` in `source`, each a string
+ * literal or a `&str` constant of `source`, failing loudly when it's not found.
+ */
+const parse_str_list_const = (source: string, name: string): Array<string> => {
+	const match = new RegExp(String.raw`\bconst\s+${name}\s*:[^=]*=\s*&\[([^\]]*)\]\s*;`).exec(
+		source
+	);
+	assert.ok(match, `found \`const ${name}: &[&str] = &[…];\``);
+	const body = match[1]!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+	const entries = body
+		.split(',')
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+	assert.isNotEmpty(entries);
+	return entries.map((entry) => {
+		const literal = /^"([^"]*)"$/.exec(entry);
+		if (literal) return literal[1]!;
+		assert.match(entry, /^[A-Z_][A-Z0-9_]*$/, `an entry is a string or a constant: ${entry}`);
+		return parse_str_const(source, entry);
+	});
+};
+
 describe('the file index ignores what the backend filer ignores', () => {
-	test('ignored directory names match `DEFAULT_IGNORED_DIRS` in filer.rs', () => {
-		const source = read_crate_source('filer.rs');
-		const match = /\bconst\s+DEFAULT_IGNORED_DIRS\s*:[^=]*=\s*&\[([^\]]*)\]\s*;/.exec(source);
-		assert.ok(match, 'found `const DEFAULT_IGNORED_DIRS: &[&str] = &[…];` in filer.rs');
-		const body = match[1]!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-		const entries = body
-			.split(',')
-			.map((entry) => entry.trim())
-			.filter(Boolean);
-		assert.isNotEmpty(entries);
-		const names = entries.map((entry) => {
-			const literal = /^"([^"]*)"$/.exec(entry);
-			if (literal) return literal[1]!;
-			assert.match(entry, /^[A-Z_][A-Z0-9_]*$/, `an entry is a string or a constant: ${entry}`);
-			// a constant is the filer's own or one it imports from `scoped_fs.rs`
-			return parse_str_const(`${source}\n${read_crate_source('scoped_fs.rs')}`, entry);
-		});
+	test('ignored directory names match the names the filer ignores', () => {
+		const filer = read_crate_source('filer.rs');
+		const scoped_fs = read_crate_source('scoped_fs.rs');
+		// a constant is the filer's own or one it imports from `scoped_fs.rs`
+		const names = [
+			...parse_str_list_const(`${filer}\n${scoped_fs}`, 'DEFAULT_IGNORED_DIRS'),
+			...parse_str_list_const(scoped_fs, 'CREDENTIAL_DIR_NAMES')
+		];
+		assert.match(
+			scoped_fs,
+			/fn\s+is_credential_dir_name\s*\([^)]*\)\s*->\s*bool\s*\{\s*CREDENTIAL_DIR_NAMES\.contains\(&name\)\s*\}/,
+			'`is_credential_dir_name` is a plain membership check, as the TS side assumes'
+		);
+		assert.include(
+			filer,
+			'crate::scoped_fs::is_credential_dir_name(name)',
+			'the filer ignores credential directories by that check'
+		);
 		assert.deepEqual([...FILE_INDEX_IGNORED_DIR_NAMES].sort(), names.sort());
 	});
 
