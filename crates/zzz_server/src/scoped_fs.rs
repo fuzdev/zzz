@@ -66,11 +66,12 @@ pub enum ScopedFsError {
     PathNotAllowed(String),
     #[error("Path is a symlink which is not allowed: {0}")]
     SymlinkNotAllowed(String),
-    /// A write targeted an existing directory.
+    /// A directory where a file was expected.
     #[error("Path is a directory: {0}")]
     IsADirectory(String),
-    /// A write targeted an existing FIFO, socket, or device node — never
-    /// opened (a FIFO would block the write forever) and never replaced.
+    /// A FIFO, socket, or device node where a regular file was expected —
+    /// never written (a FIFO would block the write forever) and never
+    /// replaced.
     #[error("Path is not a regular file: {0}")]
     NotARegularFile(String),
     /// A new file or directory can't be created because its parent directory
@@ -811,7 +812,11 @@ fn create_file_exclusive(path: &Path, content: &[u8]) -> Result<(), ScopedFsErro
 /// Open an existing regular file `O_NOFOLLOW | O_NONBLOCK` — for reading, or
 /// for appending when `append` — and `fstat` it. A directory, FIFO, socket,
 /// or device node is refused; `O_NONBLOCK` keeps a FIFO from blocking the
-/// open, and has no effect on a regular file.
+/// open, and has no effect on a regular file. `open(2)` itself fails with
+/// `ENXIO` for a socket, a FIFO opened for writing with no reader, and a
+/// device node with no device behind it — none of them a regular file, so
+/// `ENXIO` reads as one (a filesystem's own open, e.g. FUSE, could return it
+/// for a regular file, and would be misnamed here).
 fn open_regular_file(
     path: &Path,
     append: bool,
@@ -825,12 +830,10 @@ fn open_regular_file(
     let file = options
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)
-        .map_err(|e| {
-            if e.raw_os_error() == Some(libc::ELOOP) {
-                ScopedFsError::SymlinkNotAllowed(ScopedFsError::display(path))
-            } else {
-                ScopedFsError::io(path, e)
-            }
+        .map_err(|e| match e.raw_os_error() {
+            Some(libc::ELOOP) => ScopedFsError::SymlinkNotAllowed(ScopedFsError::display(path)),
+            Some(libc::ENXIO) => ScopedFsError::NotARegularFile(ScopedFsError::display(path)),
+            _ => ScopedFsError::io(path, e),
         })?;
     let meta = file.metadata().map_err(|e| ScopedFsError::io(path, e))?;
     if meta.is_dir() {
@@ -880,8 +883,9 @@ fn is_under_root(path: &str, root: &str) -> bool {
             .is_some_and(|trimmed| path == trimmed)
 }
 
-/// Normalize a path by resolving `.` and `..` components without filesystem access.
-fn normalize_path(path: &Path) -> PathBuf {
+/// Normalize a path by resolving `.` and `..` components without filesystem
+/// access — the path every `ScopedFs` operation checks and acts on.
+pub(crate) fn normalize_path(path: &Path) -> PathBuf {
     let mut components = Vec::new();
     for component in path.components() {
         match component {
@@ -1153,7 +1157,14 @@ mod tests {
         );
 
         let socket = tmp.path("socket");
-        let _listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let dir = std::fs::File::open(socket.parent().unwrap()).unwrap();
+        // bind through the dir's fd: a socket's path must fit in `sun_path`,
+        // which a long `TMPDIR` overflows
+        let _listener = std::os::unix::net::UnixListener::bind(format!(
+            "/proc/self/fd/{}/socket",
+            std::os::fd::AsRawFd::as_raw_fd(&dir)
+        ))
+        .unwrap();
         let result = fs
             .write_file(socket.to_str().unwrap(), "x".to_owned())
             .await;
@@ -1505,7 +1516,10 @@ mod tests {
         let result = fs
             .append_file(fifo.to_str().unwrap(), 0, b"x".to_vec())
             .await;
-        assert!(result.is_err(), "{result:?}");
+        assert!(
+            matches!(result, Err(ScopedFsError::NotARegularFile(_))),
+            "{result:?}"
+        );
 
         let target = tmp.path("target.bin");
         std::fs::write(&target, b"keep").unwrap();
@@ -1585,6 +1599,22 @@ mod tests {
         let fifo = tmp.path("fifo");
         make_fifo(&fifo);
         let result = fs.open_file(fifo.to_str().unwrap()).await;
+        assert!(
+            matches!(result, Err(ScopedFsError::NotARegularFile(_))),
+            "{result:?}"
+        );
+
+        // `open(2)` refuses a socket outright (`ENXIO`), before any `fstat`
+        let socket = tmp.path("socket");
+        let dir = std::fs::File::open(socket.parent().unwrap()).unwrap();
+        // bind through the dir's fd: a socket's path must fit in `sun_path`,
+        // which a long `TMPDIR` overflows
+        let _listener = std::os::unix::net::UnixListener::bind(format!(
+            "/proc/self/fd/{}/socket",
+            std::os::fd::AsRawFd::as_raw_fd(&dir)
+        ))
+        .unwrap();
+        let result = fs.open_file(socket.to_str().unwrap()).await;
         assert!(
             matches!(result, Err(ScopedFsError::NotARegularFile(_))),
             "{result:?}"

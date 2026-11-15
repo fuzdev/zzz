@@ -156,6 +156,7 @@ Defined in `src/lib/action_specs.ts`. A representative subset below — the `ter
 - `ping` — Health check. Kind: `request_response`. Initiator: `both`
 - `session_load` — Load the session snapshot, at boot and after each reconnect. Kind: `request_response`. Initiator: `frontend`
 - `filer_change` — File system change notification. Kind: `remote_notification`. Initiator: `backend`
+- `diskfile_read` — Read a file's contents as text, with its size and timestamps. Kind: `request_response`. Initiator: `frontend`
 - `diskfile_update` — Write file content. Kind: `request_response`. Initiator: `frontend`
 - `diskfile_delete` — Delete a file. Kind: `request_response`. Initiator: `frontend`
 - `directory_create` — Create a new directory (and missing parents); a taken name is `conflict`. Kind: `request_response`. Initiator: `frontend`
@@ -971,8 +972,9 @@ filer also skips any directory named `.zzz` — the conventional app dir and the
 CLI's daemon home, which holds `.env` and `bootstrap_token` — and
 `workspace_open` refuses a `.zzz` directory, or a path inside one, other than
 the app dir itself (`forbidden` / `zzz_home_not_allowed`), so `zzz ~/.zzz/.env`
-(which opens `~/.zzz/`) can't index and broadcast those secrets. The app dir
-and the paths inside it stay openable.
+(which opens `~/.zzz/`) can't index and broadcast those secrets, and
+`diskfile_read` refuses a file in one the same way. The app dir and the paths
+inside it stay openable and readable.
 
 The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 `bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
@@ -1028,6 +1030,10 @@ Two separate concerns:
 All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, symlinks rejected, absolute paths required, parent directories checked recursively.
 
 The allowed roots are the permanent boot-time set (the app directory + scoped dirs) plus one runtime root per open workspace. A path is allowed when any root covers it, and removing a workspace's root never touches a permanent root — so closing a workspace opened on, nested in, or containing the app directory or a scoped dir leaves the access those roots grant intact.
+
+### Reading Files
+
+`diskfile_read` reads one file as text: `{contents, unloaded_reason, size, ctime, mtime}`. Any regular file in scope can be read, whether the filer indexes it or not — except a file in a `.zzz` directory other than the app dir (`forbidden` / `zzz_home_not_allowed`, refused whether or not the file exists). It shares the index's limits: a file over 4 MiB or not valid UTF-8 comes back with `contents: null` and an `unloaded_reason` (`too_large`, `not_utf8`), and its `size`. The timestamps come from the handle the contents were read from, taken before the read, so a write racing the read leaves them older than the contents, never newer; `size` is the contents' length when they're loaded. Errors carry the file actions' reasons (`path_not_found`, `path_not_allowed`, `symlink_not_allowed`, `is_a_directory`, `not_a_regular_file`, …). Larger files and bytes go over the byte routes below.
 
 ### File Bytes
 
@@ -1396,7 +1402,9 @@ accounts from each other.
   including `/` (which makes it writable and scans it) — except `.zzz`
   directories other than the app dir (see § Zzz App Directory) — and file
   reads and writes anywhere in scope (the file actions, and the byte routes
-  at `/api/files/bytes`, which a method-scoped token can't use at all).
+  at `/api/files/bytes`, which a method-scoped token can't use at all; the
+  byte routes alone read inside such a `.zzz` directory when a root covers
+  it).
 - Terminal output and control — and jobs — are scoped to the account that
   created them, and a deleted or purged account's terminals are closed and
   its jobs cancelled — but that

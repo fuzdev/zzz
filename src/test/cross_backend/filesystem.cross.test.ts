@@ -1,7 +1,7 @@
 /**
  * Cross-backend integration tests for filesystem actions
- * (`diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`) plus the
- * `filer_change` notification path.
+ * (`diskfile_read`, `diskfile_update`, `diskfile_create`, `diskfile_delete`,
+ * `directory_create`) plus the `filer_change` notification path.
  *
  * @module
  */
@@ -14,15 +14,18 @@ import {
 	chmod,
 	lstat,
 	mkdir,
+	open,
 	readdir,
 	readFile,
 	rename,
 	rm,
 	stat,
+	symlink,
 	utimes,
 	writeFile
 } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { createServer } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { describe, test, assert } from 'vitest';
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
@@ -33,7 +36,7 @@ import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import { raw_http_send_head } from '@fuzdev/fuz_app/testing/transports/raw_http.ts';
 import { TEST_ORIGIN } from '@fuzdev/fuz_app/testing/test_origin.ts';
 
-import { FilerChangeInput } from '#lib/action_specs.ts';
+import { DiskfileReadOutput, FilerChangeInput } from '#lib/action_specs.ts';
 import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
 const handle = inject_backend_handle();
@@ -72,6 +75,158 @@ describe('filesystem cross-backend', () => {
 			assert.equal(actual, content);
 		} finally {
 			await rm(file_path, { force: true });
+		}
+	});
+
+	test('diskfile_read', async () => {
+		const fixture = await setup_test();
+		const dir = join(scoped_dir, `read_${randomUUID()}`);
+		await mkdir(dir, { recursive: true });
+		const read = (path: string) =>
+			rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'diskfile_read',
+				params: { path },
+				headers: fixture.create_session_headers()
+			});
+		/** Read `path`, expecting success, parsed against the spec's output. */
+		const read_ok = async (path: string): Promise<DiskfileReadOutput> => {
+			const res = await read(path);
+			assert.ok(res.ok, `${path}: ${JSON.stringify(res).slice(0, 500)}`);
+			return parse_or_throw(DiskfileReadOutput, res.result);
+		};
+		/** Read `path`, expecting a refusal with `code` and `reason`. */
+		const read_refused = async (path: string, code: number, reason: string): Promise<void> => {
+			const res = await read(path);
+			assert.ok(!res.ok, `${path} should fail`);
+			assert.equal(res.error.code, code, path);
+			assert.deepEqual(res.error.data, { reason }, path);
+			assert.ok(
+				res.error.message.startsWith('failed to read file: '),
+				`unexpected message: ${res.error.message}`
+			);
+		};
+		const app_dir_file = join(zzz_dir, `read_${randomUUID()}.txt`);
+		try {
+			// a text file, whole, with the stats of the handle it was read from
+			const text_path = join(dir, 'text.txt');
+			await writeFile(text_path, 'héllo', 'utf-8');
+			const text = await read_ok(text_path);
+			assert.equal(text.contents, 'héllo');
+			assert.isNull(text.unloaded_reason);
+			assert.equal(text.size, Buffer.byteLength('héllo'));
+			const text_stat = await stat(text_path);
+			assert.ok(text.mtime !== null && Math.abs(text.mtime - text_stat.mtimeMs) < 1, 'mtime');
+
+			await writeFile(join(dir, 'empty.txt'), '', 'utf-8');
+			const empty = await read_ok(join(dir, 'empty.txt'));
+			assert.equal(empty.contents, '');
+			assert.equal(empty.size, 0);
+
+			// a file the index doesn't hold, in the app dir: readable
+			await mkdir(zzz_dir, { recursive: true });
+			await writeFile(app_dir_file, 'app dir', 'utf-8');
+			assert.equal((await read_ok(app_dir_file)).contents, 'app dir');
+
+			// over the size limit, or not UTF-8: no contents, and why
+			const limit = 4 * 1024 * 1024;
+			const big_path = join(dir, 'big.txt');
+			await writeFile(big_path, Buffer.alloc(limit + 1, 'x'));
+			const big = await read_ok(big_path);
+			assert.isNull(big.contents);
+			assert.equal(big.unloaded_reason, 'too_large');
+			assert.equal(big.size, limit + 1);
+			const bin_path = join(dir, 'bin');
+			await writeFile(bin_path, Buffer.from([0xff, 0xfe]));
+			const bin = await read_ok(bin_path);
+			assert.isNull(bin.contents);
+			assert.equal(bin.unloaded_reason, 'not_utf8');
+			assert.equal(bin.size, 2);
+
+			// not found, out of scope, relative
+			await read_refused(join(dir, 'missing.txt'), JSONRPC_ERROR_CODES.not_found, 'path_not_found');
+			await read_refused(
+				'/tmp/zzz_outside_scope/x.txt',
+				JSONRPC_ERROR_CODES.forbidden,
+				'path_not_allowed'
+			);
+			await read_refused(
+				`${dir}/../../../../etc/passwd`,
+				JSONRPC_ERROR_CODES.forbidden,
+				'path_not_allowed'
+			);
+			const relative = await read('relative/x.txt');
+			assert.ok(!relative.ok);
+			assert.equal(relative.error.code, JSONRPC_ERROR_CODES.invalid_params);
+
+			// a `.zzz` directory other than the app dir — however it's spelled, and
+			// whether or not the file exists, so the refusal says nothing about it
+			const home = join(dir, '.zzz');
+			await mkdir(join(home, 'run'), { recursive: true });
+			await writeFile(join(home, '.env'), 'SECRET_FUZ_COOKIE_KEYS=not-for-reading', 'utf-8');
+			for (const path of [
+				join(home, '.env'),
+				join(home, 'run', 'missing'),
+				`${dir}/sub/../.zzz/./.env`
+			]) {
+				await read_refused(path, JSONRPC_ERROR_CODES.forbidden, 'zzz_home_not_allowed');
+			}
+
+			// a symlink, to a file or along the path
+			await symlink(text_path, join(dir, 'link.txt'));
+			await read_refused(
+				join(dir, 'link.txt'),
+				JSONRPC_ERROR_CODES.forbidden,
+				'symlink_not_allowed'
+			);
+			await mkdir(join(dir, 'real'));
+			await writeFile(join(dir, 'real', 'f.txt'), 'f', 'utf-8');
+			await symlink(join(dir, 'real'), join(dir, 'dir_link'));
+			await read_refused(
+				join(dir, 'dir_link', 'f.txt'),
+				JSONRPC_ERROR_CODES.forbidden,
+				'symlink_not_allowed'
+			);
+
+			// not a regular file — a FIFO is refused, not opened, so it can't block
+			await read_refused(dir, JSONRPC_ERROR_CODES.invalid_params, 'is_a_directory');
+			const fifo_path = join(dir, 'fifo');
+			execFileSync('mkfifo', [fifo_path]);
+			await read_refused(fifo_path, JSONRPC_ERROR_CODES.invalid_params, 'not_a_regular_file');
+			// a socket, which `open(2)` itself refuses — bound through the dir's fd,
+			// since a socket's path must fit in `sun_path` (108 bytes), which a long
+			// `TMPDIR` overflows
+			const socket_path = join(dir, 'socket');
+			const dir_handle = await open(dir, 'r');
+			const server = createServer();
+			try {
+				await new Promise<void>((resolve, reject) => {
+					server.once('error', reject);
+					server.listen(`/proc/self/fd/${dir_handle.fd}/socket`, resolve);
+				});
+				await read_refused(socket_path, JSONRPC_ERROR_CODES.invalid_params, 'not_a_regular_file');
+			} finally {
+				await new Promise<void>((resolve) => server.close(() => resolve()));
+				await dir_handle.close();
+				await rm(socket_path, { force: true });
+			}
+
+			// strict input
+			for (const params of [{ path: text_path, extra: 1 }, { path: null }, {}]) {
+				const res = await rpc_call({
+					app: fixture.transport,
+					path: handle.config.rpc_path,
+					method: 'diskfile_read',
+					params,
+					headers: fixture.create_session_headers()
+				});
+				assert.ok(!res.ok, `${JSON.stringify(params)} should fail`);
+				assert.equal(res.error.code, JSONRPC_ERROR_CODES.invalid_params);
+			}
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+			await rm(app_dir_file, { force: true });
 		}
 	});
 

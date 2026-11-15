@@ -20,6 +20,7 @@ export const ActionSpecs: ActionSpecs = {
 	ping: specs.ping_action_spec,
 	session_load: specs.session_load_action_spec,
 	filer_change: specs.filer_change_action_spec,
+	diskfile_read: specs.diskfile_read_action_spec,
 	diskfile_update: specs.diskfile_update_action_spec,
 	diskfile_create: specs.diskfile_create_action_spec,
 	diskfile_delete: specs.diskfile_delete_action_spec,
@@ -52,6 +53,7 @@ export type ActionSpecs = {
 	readonly ping: typeof specs.ping_action_spec;
 	readonly session_load: typeof specs.session_load_action_spec;
 	readonly filer_change: typeof specs.filer_change_action_spec;
+	readonly diskfile_read: typeof specs.diskfile_read_action_spec;
 	readonly diskfile_update: typeof specs.diskfile_update_action_spec;
 	readonly diskfile_create: typeof specs.diskfile_create_action_spec;
 	readonly diskfile_delete: typeof specs.diskfile_delete_action_spec;
@@ -91,6 +93,7 @@ export interface ActionInputs {
 	ping: Infer<typeof specs.ping_action_spec.input>;
 	session_load: Infer<typeof specs.session_load_action_spec.input>;
 	filer_change: Infer<typeof specs.filer_change_action_spec.input>;
+	diskfile_read: Infer<typeof specs.diskfile_read_action_spec.input>;
 	diskfile_update: Infer<typeof specs.diskfile_update_action_spec.input>;
 	diskfile_create: Infer<typeof specs.diskfile_create_action_spec.input>;
 	diskfile_delete: Infer<typeof specs.diskfile_delete_action_spec.input>;
@@ -128,6 +131,7 @@ export interface ActionCallInputs {
 	ping: InferInput<typeof specs.ping_action_spec.input>;
 	session_load: InferInput<typeof specs.session_load_action_spec.input>;
 	filer_change: InferInput<typeof specs.filer_change_action_spec.input>;
+	diskfile_read: InferInput<typeof specs.diskfile_read_action_spec.input>;
 	diskfile_update: InferInput<typeof specs.diskfile_update_action_spec.input>;
 	diskfile_create: InferInput<typeof specs.diskfile_create_action_spec.input>;
 	diskfile_delete: InferInput<typeof specs.diskfile_delete_action_spec.input>;
@@ -165,6 +169,7 @@ export interface ActionOutputs {
 	ping: Infer<typeof specs.ping_action_spec.output>;
 	session_load: Infer<typeof specs.session_load_action_spec.output>;
 	filer_change: Infer<typeof specs.filer_change_action_spec.output>;
+	diskfile_read: Infer<typeof specs.diskfile_read_action_spec.output>;
 	diskfile_update: Infer<typeof specs.diskfile_update_action_spec.output>;
 	diskfile_create: Infer<typeof specs.diskfile_create_action_spec.output>;
 	diskfile_delete: Infer<typeof specs.diskfile_delete_action_spec.output>;
@@ -215,6 +220,11 @@ export interface ActionEventDatas {
 		ActionOutputs['session_load']
 	>;
 	filer_change: ActionEventRemoteNotificationData<'filer_change', ActionInputs['filer_change']>;
+	diskfile_read: ActionEventRequestResponseData<
+		'diskfile_read',
+		ActionInputs['diskfile_read'],
+		ActionOutputs['diskfile_read']
+	>;
 	diskfile_update: ActionEventRequestResponseData<
 		'diskfile_update',
 		ActionInputs['diskfile_update'],

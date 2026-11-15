@@ -58,6 +58,13 @@ export const DiskfileChange = object({
 });
 export type DiskfileChange = Infer<typeof DiskfileChange>;
 
+/**
+ * Why a file's contents aren't loaded as text: over the backend's size
+ * limit (4 MiB), or not valid UTF-8.
+ */
+export const DiskfileUnloadedReason = one_of(['too_large', 'not_utf8']);
+export type DiskfileUnloadedReason = Infer<typeof DiskfileUnloadedReason>;
+
 // TODO hacky, uses the serializable form of the Gro `Disknode` (which uses maps)
 export const SerializableDisknode = object({
 	id: DiskfilePath,

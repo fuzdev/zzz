@@ -49,6 +49,7 @@ import {
 	DiskfileChange,
 	DiskfileDirectoryPath,
 	DiskfilePath,
+	DiskfileUnloadedReason,
 	DisknodeMetadata,
 	SerializableDisknode
 } from './diskfile_types.ts';
@@ -144,6 +145,31 @@ export const FilerChangeInput = union([
 	})
 ]);
 export type FilerChangeInput = Infer<typeof FilerChangeInput>;
+
+/** Input for `diskfile_read`. */
+export const DiskfileReadInput = object({
+	path: DiskfilePath
+});
+export type DiskfileReadInput = Infer<typeof DiskfileReadInput>;
+
+/**
+ * Output for `diskfile_read`. `contents` is `null` exactly when
+ * `unloaded_reason` says why. `size` is in bytes: the contents' length when
+ * they're loaded, the bytes read when they aren't UTF-8, and for a file too
+ * large, its size when opened — or the limit plus one byte, a lower bound,
+ * for one that grew past the limit during the read. `ctime` /
+ * `mtime` are a disknode's (milliseconds since the epoch, `null` when the
+ * backend couldn't say), taken before the read, so a write racing it leaves
+ * them older than the contents, never newer.
+ */
+export const DiskfileReadOutput = object({
+	contents: nullable(string),
+	unloaded_reason: nullable(DiskfileUnloadedReason),
+	size: number,
+	ctime: nullable(number),
+	mtime: nullable(number)
+});
+export type DiskfileReadOutput = Infer<typeof DiskfileReadOutput>;
 
 /** Input for `diskfile_update`. */
 export const DiskfileUpdateInput = object({
@@ -433,6 +459,19 @@ export const filer_change_action_spec = {
 	description:
 		"Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless the ones the backend holds for it are unchanged (a `touch`)."
 } satisfies RemoteNotificationActionSpec;
+
+export const diskfile_read_action_spec = {
+	method: 'diskfile_read',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: false,
+	input: DiskfileReadInput,
+	output: DiskfileReadOutput,
+	async: true,
+	description:
+		"Read a file's contents as text, with its size and timestamps. Any regular file in scope, except in a `.zzz` directory other than the app dir (`forbidden` / `zzz_home_not_allowed`); one over the size limit or not UTF-8 has `contents: null` and an `unloaded_reason`."
+} satisfies RequestResponseActionSpec;
 
 export const diskfile_update_action_spec = {
 	method: 'diskfile_update',
@@ -753,6 +792,7 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	ping_action_spec,
 	session_load_action_spec,
 	filer_change_action_spec,
+	diskfile_read_action_spec,
 	diskfile_update_action_spec,
 	diskfile_create_action_spec,
 	diskfile_delete_action_spec,

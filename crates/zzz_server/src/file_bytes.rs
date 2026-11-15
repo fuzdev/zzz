@@ -51,7 +51,7 @@
 //!
 //! `ScopedFs` is the only path check, and it knows roots, not `.zzz`
 //! directories: a file inside one that an open root covers is readable here,
-//! though the filer never indexes it.
+//! though the filer never indexes it and `diskfile_read` refuses it.
 
 use std::fmt::Write as _;
 use std::sync::Arc;

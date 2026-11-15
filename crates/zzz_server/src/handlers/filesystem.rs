@@ -8,17 +8,22 @@
 //! `src/lib/action_specs.ts`. Failures map to distinct JSON-RPC codes by
 //! cause — see [`scoped_fs_error`].
 
+use std::path::Path;
 use std::sync::Arc;
 
-use fuz_actions::ActionContext;
+use fuz_actions::{ActionContext, ActionOutput};
 use fuz_http::{
-    JsonrpcError, conflict, forbidden, internal_error, invalid_params, parse_strict_params,
+    JsonrpcError, conflict, forbidden, internal_error, internal_error_with_source, invalid_params,
+    parse_strict_params,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::filer::{
+    TextContents, UnloadedReason, is_in_zzz_home, read_text_contents, system_time_to_ms,
+};
 use crate::handlers::{App, not_found_error};
-use crate::scoped_fs::ScopedFsError;
+use crate::scoped_fs::{ScopedFsError, normalize_path};
 
 // -- Error reasons (`error.data.reason`) --------------------------------------
 
@@ -51,6 +56,12 @@ pub const ERROR_NOT_A_DIRECTORY: &str = "not_a_directory";
 /// A FIFO, socket, or device node where a regular file was expected
 /// (`invalid_params`).
 pub const ERROR_NOT_A_REGULAR_FILE: &str = "not_a_regular_file";
+/// A `.zzz` directory other than the app dir, or a path inside one
+/// (`forbidden`): `workspace_open` of one, `diskfile_read` of a file in one.
+///
+/// That's the CLI's daemon home (`~/.zzz/`, with `.env` and
+/// `bootstrap_token`) or another daemon's app dir.
+pub const ERROR_ZZZ_HOME_NOT_ALLOWED: &str = "zzz_home_not_allowed";
 
 /// Map a [`ScopedFsError`] to its JSON-RPC error, prefixing the message with
 /// `action` (e.g. `failed to write file`).
@@ -116,8 +127,8 @@ struct DiskfileWriteInput {
     content: String,
 }
 
-/// Input for `diskfile_delete` / `directory_create` — twin of
-/// `DiskfileDeleteInput` / `DirectoryCreateInput`.
+/// Input for `diskfile_read` / `diskfile_delete` / `directory_create` — twin
+/// of `DiskfileReadInput` / `DiskfileDeleteInput` / `DirectoryCreateInput`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PathInput {
@@ -134,6 +145,110 @@ fn require_absolute(path: &str) -> Result<(), JsonrpcError> {
             Some(ERROR_INVALID_PATH),
         ))
     }
+}
+
+/// Output of `diskfile_read` — twin of `DiskfileReadOutput`.
+///
+/// `contents` is `null` exactly when `unloaded_reason` isn't. `ctime` and
+/// `mtime` are a disknode's: milliseconds since the epoch, `null` when the
+/// OS can't say.
+#[derive(Serialize, Debug)]
+struct DiskfileReadOutput {
+    contents: Option<String>,
+    unloaded_reason: Option<UnloadedReason>,
+    size: u64,
+    ctime: Option<f64>,
+    mtime: Option<f64>,
+}
+
+/// `diskfile_read` — a file's contents as text, with its size and
+/// timestamps.
+///
+/// Any regular file in scope, indexed or not — except one in a `.zzz`
+/// directory other than the app dir ([`is_in_zzz_home`]), refused before
+/// anything is opened, so the refusal says nothing about whether the file
+/// exists. The check runs on the path `ScopedFs` resolves (`.` and `..`
+/// resolved lexically), which names the file itself since `ScopedFs` then
+/// refuses a symlink anywhere along it.
+///
+/// One handle serves the whole answer: `ScopedFs::open_file` opens it
+/// `O_NOFOLLOW | O_NONBLOCK` and `fstat`s it (regular files only), and the
+/// text is read from it by the filer's bounded read
+/// ([`read_text_contents`]: at most [`crate::filer::MAX_INDEXED_FILE_SIZE`]
+/// bytes, valid UTF-8, else `contents: null` with the reason). The
+/// timestamps come from that `fstat`, taken before the read, so a write
+/// racing the read leaves them older than the contents, never newer. `size`
+/// is the contents' length when they're loaded, so the two always agree.
+///
+/// Returned as an [`ActionOutput`], so the contents (up to 4 MiB) are
+/// serialized once, straight into the response, rather than copied into a
+/// `serde_json::Value` first.
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed input; `forbidden`
+/// (`zzz_home_not_allowed`) for a path in a `.zzz` home; otherwise
+/// [`scoped_fs_error`] (`path_not_found`, `path_not_allowed`,
+/// `symlink_not_allowed`, `is_a_directory`, `not_a_regular_file`, …).
+pub async fn diskfile_read(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
+) -> Result<ActionOutput, JsonrpcError> {
+    /// The keys, punctuation, and numbers around the contents.
+    const OUTPUT_OVERHEAD: usize = 128;
+    const ACTION: &str = "failed to read file";
+
+    let PathInput { path } = parse_strict_params(params)?;
+    require_absolute(&path)?;
+
+    let normalized = normalize_path(Path::new(&path));
+    if is_in_zzz_home(&normalized, Path::new(&app.zzz_dir)) {
+        return Err(forbidden(
+            &format!(
+                "{ACTION}: .zzz directories hold zzz's own files (secrets, tokens) and can't be read: {}",
+                normalized.display()
+            ),
+            Some(ERROR_ZZZ_HOME_NOT_ALLOWED),
+        ));
+    }
+
+    let (file, meta) = app
+        .scoped_fs
+        .open_file(&path)
+        .await
+        .map_err(|e| scoped_fs_error(ACTION, &e))?;
+    let opened_size = meta.len();
+    let read = tokio::task::spawn_blocking(move || read_text_contents(file, opened_size))
+        .await
+        .map_err(|e| internal_error_with_source("diskfile_read", &e))?
+        .map_err(|source| {
+            scoped_fs_error(
+                ACTION,
+                &ScopedFsError::Io {
+                    path: normalized.to_string_lossy().into_owned(),
+                    source,
+                },
+            )
+        })?;
+
+    let size = read.size();
+    let size_hint = match &read {
+        TextContents::Loaded(text) => text.len(),
+        TextContents::Unloaded { .. } => 0,
+    } + OUTPUT_OVERHEAD;
+    let (contents, unloaded_reason) = match read {
+        TextContents::Loaded(text) => (Some(text), None),
+        TextContents::Unloaded { reason, .. } => (None, Some(reason)),
+    };
+    let output = DiskfileReadOutput {
+        contents,
+        unloaded_reason,
+        size,
+        ctime: meta.created().ok().and_then(system_time_to_ms),
+        mtime: meta.modified().ok().and_then(system_time_to_ms),
+    };
+    Ok(ActionOutput::serialize(output).with_size_hint(size_hint))
 }
 
 /// `diskfile_update` — atomically replace (or create) a file.

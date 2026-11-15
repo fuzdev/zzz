@@ -23,18 +23,13 @@ use crate::filer::{
 };
 use crate::handlers::filesystem::{
     ERROR_INVALID_PATH, ERROR_NOT_A_DIRECTORY, ERROR_PATH_NOT_FOUND, ERROR_PERMISSION_DENIED,
+    ERROR_ZZZ_HOME_NOT_ALLOWED,
 };
 use crate::handlers::{App, WorkspaceInfo, not_found_error};
 
 /// `workspace_close` of a path that isn't an open workspace (`invalid_params`)
 /// — e.g. one a restart forgot, which a client can then drop locally.
 pub const ERROR_WORKSPACE_NOT_OPEN: &str = "workspace_not_open";
-
-/// `workspace_open` of a `.zzz` directory other than the app dir (`forbidden`).
-///
-/// Covers the directory and every path inside it — the CLI's daemon home
-/// (`~/.zzz/`, with `.env` and `bootstrap_token`) or another daemon's app dir.
-pub const ERROR_ZZZ_HOME_NOT_ALLOWED: &str = "zzz_home_not_allowed";
 
 // -- Inputs -----------------------------------------------------------------
 

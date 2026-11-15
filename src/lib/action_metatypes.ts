@@ -16,6 +16,7 @@ export const ActionMethod = one_of([
 	'ping',
 	'session_load',
 	'filer_change',
+	'diskfile_read',
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
@@ -51,6 +52,7 @@ export const RequestResponseActionMethod = one_of([
 	'peer/ping',
 	'ping',
 	'session_load',
+	'diskfile_read',
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
@@ -102,6 +104,7 @@ export const FrontendActionMethod = one_of([
 	'ping',
 	'session_load',
 	'filer_change',
+	'diskfile_read',
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
@@ -139,6 +142,7 @@ export const BackendActionMethod = one_of([
 	'ping',
 	'session_load',
 	'filer_change',
+	'diskfile_read',
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
@@ -177,6 +181,7 @@ export type FrontendRequestResponseMethod = Infer<typeof FrontendRequestResponse
 export const BackendRequestResponseMethod = one_of([
 	'ping',
 	'session_load',
+	'diskfile_read',
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
@@ -243,6 +248,10 @@ export interface FrontendActionsApi {
 		input: ActionCallInputs['filer_change'],
 		options?: RpcClientCallOptions
 	) => Promise<Result<{ value: ActionOutputs['filer_change'] }, { error: JsonrpcErrorObject }>>;
+	diskfile_read: (
+		input: ActionCallInputs['diskfile_read'],
+		options?: RpcClientCallOptions
+	) => Promise<Result<{ value: ActionOutputs['diskfile_read'] }, { error: JsonrpcErrorObject }>>;
 	diskfile_update: (
 		input: ActionCallInputs['diskfile_update'],
 		options?: RpcClientCallOptions

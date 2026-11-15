@@ -21,6 +21,7 @@ export const get_icon_for_action_method = (method: ActionMethod): SvgData => {
 			return icon_response;
 		case 'session_load':
 			return icon_session;
+		case 'diskfile_read':
 		case 'diskfile_update':
 		case 'diskfile_delete':
 		case 'filer_change':

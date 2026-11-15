@@ -5,7 +5,7 @@
 Generated from `action_specs.ts` and `cell_classes.ts` by `reference.gen.ts`.
 Run `gro gen` to refresh it; `gro check` fails if it drifts. Don't edit by hand.
 
-## Action specs (27)
+## Action specs (28)
 
 The fuz_app protocol actions `heartbeat` (WS-only) and `peer/ping` are
 registered too but omitted here — they belong to the shared runtime, not zzz
@@ -16,6 +16,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `directory_create` — Create a new directory on disk, and any missing parents, failing with `conflict` (`already_exists`) if the path is taken — never reuses an existing one. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_create` — Create a new file on disk, failing with `conflict` (`already_exists`) if the path is taken — never overwrites. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_delete` — Delete a file from disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `diskfile_read` — Read a file's contents as text, with its size and timestamps. Any regular file in scope, except in a `.zzz` directory other than the app dir (`forbidden` / `zzz_home_not_allowed`); one over the size limit or not UTF-8 has `contents: null` and an `unloaded_reason`. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_update` — Write new content to a file on disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `filer_change` — Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless the ones the backend holds for it are unchanged (a `touch`). Kind: remote_notification. Initiator: backend. Auth: public
 - `job_cancel` — Cancel a job: a queued one never starts, the running one is stopped. A job that is already over is left as it is. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none

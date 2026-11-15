@@ -378,7 +378,7 @@ fn retain_under(set: &mut BTreeSet<String>, prefix: &str, keep: impl Fn(&str) ->
 // -- File metadata helpers ----------------------------------------------------
 
 /// Convert a `SystemTime` to milliseconds since epoch (matching JS `Date` format).
-fn system_time_to_ms(t: SystemTime) -> Option<f64> {
+pub(crate) fn system_time_to_ms(t: SystemTime) -> Option<f64> {
     t.duration_since(std::time::UNIX_EPOCH)
         .ok()
         .map(|d| d.as_secs_f64() * 1000.0)
@@ -468,16 +468,99 @@ fn deleted_disknode(node: SerializableDisknode) -> SerializableDisknode {
     make_disknode(node.id, &node.source_dir, None, None, None, None)
 }
 
+/// Why a regular file's contents aren't held or served as text — twin of
+/// `DiskfileUnloadedReason` in `diskfile_types.ts`.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UnloadedReason {
+    /// Over [`MAX_INDEXED_FILE_SIZE`] bytes.
+    TooLarge,
+    /// Not valid UTF-8.
+    NotUtf8,
+}
+
+/// An open regular file's contents read as text by [`read_text_contents`].
+#[derive(Debug, PartialEq, Eq)]
+pub enum TextContents {
+    /// The whole file, valid UTF-8, of at most [`MAX_INDEXED_FILE_SIZE`]
+    /// bytes.
+    Loaded(String),
+    /// Not read as text, and why. `size` is the file's size in bytes as far
+    /// as the read saw it: the bytes read for one that isn't UTF-8, and for
+    /// one too large the larger of its size when opened and the bytes read
+    /// (it may have grown past the limit since).
+    Unloaded { reason: UnloadedReason, size: u64 },
+}
+
+impl TextContents {
+    /// The file's size in bytes: the length of the loaded text, or the size
+    /// the unloaded file was read at.
+    #[must_use]
+    pub const fn size(&self) -> u64 {
+        match self {
+            Self::Loaded(text) => text.len() as u64,
+            Self::Unloaded { size, .. } => *size,
+        }
+    }
+}
+
+/// Read an open regular file's contents as text, bounded by
+/// [`MAX_INDEXED_FILE_SIZE`] — the one text read behind the index and
+/// `diskfile_read`.
+///
+/// `opened_size` is the handle's size when it was opened (`fstat`): one over
+/// the limit isn't read at all. Otherwise the read is sized from it (one past
+/// it, to see the end, so the buffer doesn't grow by doubling) and bounded
+/// regardless of it, so a file that grew past the limit since is
+/// [`UnloadedReason::TooLarge`] after reading at most one byte over.
+///
+/// The caller opens `file` and checks it's a regular file: `O_NOFOLLOW`, so
+/// a symlink swapped in after an `lstat` is refused, and `O_NONBLOCK`, so a
+/// FIFO swapped in can't block the open. Blocking — call it on a blocking
+/// thread.
+///
+/// # Errors
+///
+/// The read's I/O error.
+pub fn read_text_contents(file: std::fs::File, opened_size: u64) -> io::Result<TextContents> {
+    use std::io::Read;
+
+    if opened_size > MAX_INDEXED_FILE_SIZE {
+        return Ok(TextContents::Unloaded {
+            reason: UnloadedReason::TooLarge,
+            size: opened_size,
+        });
+    }
+    let expected = usize::try_from(opened_size).map_err(io::Error::other)?;
+    let mut bytes = Vec::with_capacity(expected + 1);
+    file.take(MAX_INDEXED_FILE_SIZE + 1)
+        .read_to_end(&mut bytes)?;
+    let read = bytes.len() as u64;
+    if read > MAX_INDEXED_FILE_SIZE {
+        return Ok(TextContents::Unloaded {
+            reason: UnloadedReason::TooLarge,
+            size: read.max(opened_size),
+        });
+    }
+    Ok(String::from_utf8(bytes).map_or(
+        TextContents::Unloaded {
+            reason: UnloadedReason::NotUtf8,
+            size: read,
+        },
+        TextContents::Loaded,
+    ))
+}
+
 /// Read a file's contents for the index, or `None` if it's not an indexable
 /// UTF-8 regular file of at most [`MAX_INDEXED_FILE_SIZE`] bytes.
 ///
 /// The path was `lstat`ed before this is called, but it can be swapped in
 /// between, so the open itself refuses to follow a symlink (`O_NOFOLLOW`) or
 /// block on a FIFO (`O_NONBLOCK`), the opened handle is re-checked to be a
-/// regular file, and the read is bounded regardless of the earlier size.
+/// regular file, and the read is bounded regardless of the earlier size
+/// ([`read_text_contents`]).
 async fn read_indexable_contents(path: PathBuf) -> Option<Arc<String>> {
     tokio::task::spawn_blocking(move || {
-        use std::io::Read;
         use std::os::unix::fs::OpenOptionsExt;
 
         let file = std::fs::OpenOptions::new()
@@ -489,18 +572,10 @@ async fn read_indexable_contents(path: PathBuf) -> Option<Arc<String>> {
         if !meta.is_file() {
             return None;
         }
-        // sized from the metadata (one past it, to see the end) so the read
-        // doesn't grow the buffer by doubling; the bound below still holds
-        // if the file grew
-        let expected = usize::try_from(meta.len().min(MAX_INDEXED_FILE_SIZE)).ok()?;
-        let mut bytes = Vec::with_capacity(expected + 1);
-        file.take(MAX_INDEXED_FILE_SIZE + 1)
-            .read_to_end(&mut bytes)
-            .ok()?;
-        if bytes.len() as u64 > MAX_INDEXED_FILE_SIZE {
-            return None;
+        match read_text_contents(file, meta.len()).ok()? {
+            TextContents::Loaded(text) => Some(Arc::new(text)),
+            TextContents::Unloaded { .. } => None,
         }
-        String::from_utf8(bytes).ok().map(Arc::new)
     })
     .await
     .ok()
@@ -3653,6 +3728,65 @@ mod tests {
         if fifo {
             assert_eq!(read("fifo").await.expect("must not block"), None);
         }
+    }
+
+    #[test]
+    fn text_reads_say_why_they_declined() {
+        use std::io::Write as _;
+
+        let tmp = TempDir::new();
+        let max = usize::try_from(MAX_INDEXED_FILE_SIZE).unwrap();
+        std::fs::write(tmp.path("ok.txt"), "ok").unwrap();
+        std::fs::write(tmp.path("empty"), "").unwrap();
+        std::fs::write(tmp.path("at_limit.txt"), vec![b'x'; max]).unwrap();
+        std::fs::write(tmp.path("big.txt"), vec![b'x'; max + 10]).unwrap();
+        std::fs::write(tmp.path("bin"), [0xff, 0xfe]).unwrap();
+
+        let read = |rel: &str| {
+            let file = std::fs::File::open(tmp.path(rel)).unwrap();
+            let size = file.metadata().unwrap().len();
+            read_text_contents(file, size).unwrap()
+        };
+        assert_eq!(read("ok.txt"), TextContents::Loaded("ok".to_owned()));
+        assert_eq!(read("empty"), TextContents::Loaded(String::new()));
+        let at_limit = read("at_limit.txt");
+        assert!(matches!(at_limit, TextContents::Loaded(_)));
+        assert_eq!(at_limit.size(), MAX_INDEXED_FILE_SIZE);
+        // over the limit when opened: not read, its size as opened
+        assert_eq!(
+            read("big.txt"),
+            TextContents::Unloaded {
+                reason: UnloadedReason::TooLarge,
+                size: MAX_INDEXED_FILE_SIZE + 10,
+            }
+        );
+        assert_eq!(
+            read("bin"),
+            TextContents::Unloaded {
+                reason: UnloadedReason::NotUtf8,
+                size: 2,
+            }
+        );
+
+        // grown past the limit after the open's size was taken: the read
+        // stops one byte over and says so
+        let mut grown = std::fs::File::create(tmp.path("grown.txt")).unwrap();
+        grown.write_all(b"x").unwrap();
+        let file = std::fs::File::open(tmp.path("grown.txt")).unwrap();
+        grown.write_all(&vec![b'x'; max + 10]).unwrap();
+        assert_eq!(
+            read_text_contents(file, 1).unwrap(),
+            TextContents::Unloaded {
+                reason: UnloadedReason::TooLarge,
+                size: MAX_INDEXED_FILE_SIZE + 1,
+            }
+        );
+
+        // the wire names
+        assert_eq!(
+            serde_json::to_value([UnloadedReason::TooLarge, UnloadedReason::NotUtf8]).unwrap(),
+            serde_json::json!(["too_large", "not_utf8"])
+        );
     }
 
     #[tokio::test]

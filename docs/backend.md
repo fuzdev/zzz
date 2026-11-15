@@ -390,7 +390,12 @@ commands):
   directory, a subdirectory, and a symlink to it, while its parent opens with
   it skipped), and `workspace_changed` broadcast on
   open/close (no broadcast on an idempotent open).
-- **`filesystem.cross.test.ts`** — scoped `diskfile_update` / `diskfile_delete`,
+- **`filesystem.cross.test.ts`** — `diskfile_read` (a text file whole with
+  its size and `mtime`, a file in the app dir, over the size limit →
+  `too_large` and not UTF-8 → `not_utf8` with `contents: null`, not found,
+  out of scope, a `.zzz` home refused however it's spelled and whether or not
+  the file exists, a symlink to the file or along its path, a directory, a
+  FIFO, a socket, strict inputs), scoped `diskfile_update` / `diskfile_delete`,
   `directory_create` (missing parents created, a taken name `conflict` /
   `already_exists`), writes into `zzz_dir` + nested subdirs,
   path-traversal / out-of-scope / relative-path rejection and the error codes
@@ -633,9 +638,12 @@ commands):
   `forbidden` / `permission_denied`), and refuses a path that is, or is
   inside, a directory named `.zzz` other than the app dir — checked on the
   canonical path, so no symlink gets around it — with `forbidden` /
-  `zzz_home_not_allowed` (`handlers::workspace::ERROR_ZZZ_HOME_NOT_ALLOWED`,
+  `zzz_home_not_allowed` (`handlers::filesystem::ERROR_ZZZ_HOME_NOT_ALLOWED`,
   `filer::is_in_zzz_home`): the CLI's daemon home holds `.env` and
-  `bootstrap_token`. A filer started on such a root refuses too
+  `bootstrap_token`. `diskfile_read` refuses a file in one the same way, on
+  the path `ScopedFs` resolves (`.` and `..` resolved lexically — `ScopedFs`
+  then refuses a symlink anywhere along it) and before anything is opened, so
+  the refusal doesn't say whether the file exists. A filer started on such a root refuses too
   (`FilerConfig::root_in_zzz_home`); a scoped dir there fails boot before
   any filer starts (`PUBLIC_ZZZ_SCOPED_DIRS` below).
   `workspace_close` of a path that isn't open → `invalid_params` /
@@ -684,6 +692,19 @@ commands):
   is `symlink_not_allowed` (path validation refuses it first), and a missing
   parent under a read-only ancestor is `permission_denied`. `rm` and `create_dir` stay
   plain `tokio::fs` calls (unlinking a FIFO doesn't open it).
+- **Text reads**: `diskfile_read` answers from one handle.
+  `ScopedFs::open_file` opens it `O_NOFOLLOW | O_NONBLOCK` and `fstat`s it
+  (a directory, FIFO, socket, or device node is refused without blocking),
+  and `filer::read_text_contents` — the same bounded read the index uses —
+  reads it: a file over `filer::MAX_INDEXED_FILE_SIZE` (4 MiB) when opened
+  isn't read, the read stops one byte past the limit for one that grew
+  since, and bytes that aren't UTF-8 are dropped; either way `contents` is
+  `null` and `unloaded_reason` says which (`too_large`, `not_utf8`). The
+  timestamps come from the `fstat` taken before the read, so a write racing
+  the read leaves them older than the contents, never newer, and `size` is
+  the contents' length when they're loaded, so the two agree.
+  Any regular file in scope is readable, indexed or not, except one in a
+  `.zzz` home (Filesystem errors above).
 - **File byte routes**: `file_bytes.rs` mounts `GET` / `HEAD` / `POST` /
   `PATCH` on `/api/files/bytes` (`file_bytes::FILE_BYTES_PATH`), taking the
   file as an absolute `?path=`. They exist because the file actions carry
@@ -733,9 +754,10 @@ commands):
     spine's plain JSON errors, returned as they come.
   - **`.zzz` directories**: `ScopedFs` checks roots only, so a path inside a
     `.zzz` directory that an open root covers (a workspace on `~` covers
-    `~/.zzz/.env`) is readable here, though the filer never indexes it and
-    `workspace_open` refuses such a directory as a root. The file actions
-    could already write there; this is the one read path.
+    `~/.zzz/.env`) is readable here, though the filer never indexes it,
+    `workspace_open` refuses such a directory as a root, and `diskfile_read`
+    refuses a file in one. The file actions could already write there; this
+    is the one read path.
   - **Create** (`POST`) is `ScopedFs::create_file` — the `diskfile_create`
     path, taking bytes: exclusive, parents created, 201 `{"size"}`.
   - **Append** (`PATCH`, `ScopedFs::append_file`) writes only when the file
@@ -876,8 +898,8 @@ commands):
   - **Nothing runs automatically**: no probe, decode, or transcription
     happens because a file appeared. Each is a caller's explicit action.
 - **Dispatch is async**: filesystem handlers (`diskfile_update`, etc.) use
-  `tokio::fs` async I/O (the atomic write's blocking I/O runs on
-  `spawn_blocking`). `workspace_open` / `workspace_close` canonicalize
+  `tokio::fs` async I/O (the atomic write's blocking I/O, and
+  `diskfile_read`'s open and read, run on `spawn_blocking`). `workspace_open` / `workspace_close` canonicalize
   asynchronously and serialize on `App::workspace_lifecycle` (a
   `tokio::sync::Mutex`), since each spans the workspaces map, `ScopedFs`, and
   the workspace filer across await points. `workspace_open` runs in its own

@@ -351,10 +351,10 @@ into zzz's cross-backend projects.
 crates/zzz_server/src/
 ├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle over `fuz_actions::server`: config (command line + env), the spine core (`create_app_backend`: keyring, READ COMMITTED guard, migrations, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry` compile, file watchers, route composition, `serve_until_shutdown` (the auth cleanup beside the server, the 1001 close of every live WebSocket and the end of every audit stream before the drain), then jobs and PTYs torn down
 ├── main.rs           # Thin production entry — parses the command line, constructs `Argon2idHasher`, calls `run_app`
-├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load` and `workspace_open` return a `fuz_actions::ActionOutput` — see Large responses below)
+├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `workspace_open`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
 │   ├── mod.rs        # `App` long-lived state (workspaces, `workspace_lifecycle`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
-│   ├── filesystem.rs # diskfile_update, diskfile_create, diskfile_delete, directory_create
+│   ├── filesystem.rs # diskfile_read, diskfile_update, diskfile_create, diskfile_delete, directory_create
 │   ├── job.rs        # job_cancel
 │   ├── media.rs      # media_finalize, transcription_create (+ `tool_error`, the `ToolError` → JSON-RPC mapping)
 │   ├── provider.rs   # provider_load_status, completion_create
@@ -411,7 +411,8 @@ twice that (tungstenite copies each outgoing frame into its write buffer).
 Keys come out in struct declaration order rather than the sorted order of a
 `Value` rendering — the same JSON, which no client may depend on the key
 order of. Responses aren't capped: a workspace of many large files is a large
-response.
+response. `diskfile_read` returns its one file's contents (≤ 4 MiB) the same
+way, moved into its typed output rather than copied into a `Value`.
 
 **App + dispatch**: `App` (in `handlers/mod.rs`) holds zzz's long-lived,
 non-spine state — `instance_id` (a UUID minted at boot, returned by
@@ -494,8 +495,9 @@ joined after the drain, before PTY teardown.
 
 ## Known Limitations
 
-- RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_update`,
-  `diskfile_create`, `diskfile_delete`, `directory_create`, `media_finalize`,
+- RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_read`,
+  `diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`,
+  `media_finalize`,
   `transcription_create`, `job_cancel`, `terminal_*`, `provider_load_status`,
   `completion_create`, `account_verify`, `account_session_list`,
   `account_session_revoke`, `account_session_revoke_all`,

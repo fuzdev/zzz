@@ -41,6 +41,7 @@ import {
 	directory_create_action_spec,
 	diskfile_create_action_spec,
 	diskfile_delete_action_spec,
+	diskfile_read_action_spec,
 	diskfile_update_action_spec,
 	filer_change_action_spec,
 	heartbeat_action_spec,
@@ -223,6 +224,9 @@ describe('zzz spec schemas cross-backend', () => {
 				filer_change_action_spec,
 				(p) => (p.change as Record<string, unknown> | undefined)?.path === file_path
 			);
+			await call_and_check(fixture, diskfile_read_action_spec, { path: file_path });
+			await writeFile(join(dir, 'bin'), Buffer.from([0xff]));
+			await call_and_check(fixture, diskfile_read_action_spec, { path: join(dir, 'bin') });
 			await call_and_check(fixture, directory_create_action_spec, { path: join(dir, 'sub') });
 			await call_and_check(fixture, diskfile_delete_action_spec, { path: file_path });
 			await call_and_check(fixture, diskfile_create_action_spec, {

@@ -252,7 +252,8 @@ Details: ./docs/development.md § Adding a New Action.
   daemon's working directory) holds `cache/`, `recordings/`, `run/`, and a
   reserved `state/`. The CLI's daemon home `~/.zzz/` holds `.env` and
   `bootstrap_token`: every filer skips `.zzz` directories, and
-  `workspace_open` refuses one other than the app dir.
+  `workspace_open` refuses one other than the app dir, as `diskfile_read`
+  does a file in one.
 - **Saves are atomic** (staged beside the target, fsynced, renamed),
   falling back to a non-atomic in-place write only when the rename can't
   happen; new files and folders are created exclusively.
