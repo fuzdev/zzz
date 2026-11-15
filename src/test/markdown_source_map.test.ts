@@ -8,6 +8,7 @@ import {
 	find_markdown_caret_block,
 	query_markdown_blocks,
 	read_mdz_source_range,
+	to_markdown_leaf_blocks,
 	to_markdown_scroll_anchors,
 	to_textarea_value,
 	type MarkdownBlock,
@@ -154,6 +155,19 @@ describe('query_markdown_blocks', () => {
 		const i = find_markdown_caret_block(blocks, caret);
 		assert.strictEqual(blocks[i]?.element.textContent, 'more');
 		assert.strictEqual(blocks[i]?.start, caret);
+		destroy();
+	});
+});
+
+describe('to_markdown_leaf_blocks', () => {
+	test('the blocks holding no other, table rows rather than their cells, in source order', () => {
+		const content = '# h\n\n- a\n- b\n  - c\n\n| x |\n| - |\n| 1 |\n\np';
+		const { container, destroy } = render_mdz(content);
+		const leaves = to_markdown_leaf_blocks(query_markdown_blocks(container, content.length));
+		assert.deepEqual(
+			leaves.map((b) => `${b.element.tagName}:${content.slice(b.start, b.end).trim()}`),
+			['H1:# h', 'LI:- a', 'LI:- c', 'TR:| x |', 'TR:| 1 |', 'P:p']
+		);
 		destroy();
 	});
 });

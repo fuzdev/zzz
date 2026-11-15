@@ -20,6 +20,7 @@
 		find_markdown_caret_block,
 		query_markdown_blocks,
 		read_mdz_source_range,
+		to_markdown_leaf_blocks,
 		to_markdown_scroll_anchors,
 		type MarkdownBlock,
 		type MarkdownScrollAnchor
@@ -44,8 +45,9 @@
 	 * source: the block holding the editor's caret is marked
 	 * (`caret_offset`), a click on a block reports where its source starts
 	 * (`onsourceclick`), and scroll sync reads the blocks
-	 * (`get_scroll_anchors`, see `markdown_scroll_sync.ts`). The offsets index
-	 * the string parsed, `content` or the one `nodes` came from.
+	 * (`get_scroll_anchors`, see `markdown_scroll_sync.ts`), as does an
+	 * outline's highlight (`get_leaf_blocks`, `get_heading_elements`). The
+	 * offsets index the string parsed, `content` or the one `nodes` came from.
 	 *
 	 * @module
 	 */
@@ -123,6 +125,8 @@
 
 	const CARET_BLOCK_CLASS = 'markdown-caret-block';
 
+	const HEADING_TAGS: ReadonlySet<string> = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+
 	// a click on these acts on its own, so it never jumps to the source
 	const SOURCE_CLICK_IGNORED_SELECTOR =
 		'a[href], button, input, select, textarea, label, summary, [contenteditable]';
@@ -176,10 +180,14 @@
 		}
 	});
 
-	// the rendered blocks, queried once per render - the caret mark and scroll sync read these, so
-	// a caret move or a scroll never queries the preview
+	// the rendered blocks, queried once per render - the caret mark, scroll sync, and an outline
+	// read these, so a caret move or a scroll never queries the preview
 	let blocks: Array<MarkdownBlock> = $state.raw([]);
 	const scroll_anchors: Array<MarkdownScrollAnchor> = $derived(to_markdown_scroll_anchors(blocks));
+	const leaf_blocks: Array<MarkdownBlock> = $derived(to_markdown_leaf_blocks(blocks));
+	const heading_elements: Array<Element> = $derived(
+		blocks.filter((block) => HEADING_TAGS.has(block.element.localName)).map((b) => b.element)
+	);
 
 	$effect(() => {
 		const container = container_el;
@@ -201,6 +209,18 @@
 
 	/** The scroll-sync anchors of the current render - exposed for parent components. */
 	export const get_scroll_anchors = (): ReadonlyArray<MarkdownScrollAnchor> => scroll_anchors;
+
+	/**
+	 * The leaf blocks of the current render (`to_markdown_leaf_blocks`), in
+	 * source order down the preview - exposed for parent components.
+	 */
+	export const get_leaf_blocks = (): ReadonlyArray<MarkdownBlock> => leaf_blocks;
+
+	/**
+	 * The heading elements of the current render, in `to_markdown_headings`
+	 * order - exposed for parent components.
+	 */
+	export const get_heading_elements = (): ReadonlyArray<Element> => heading_elements;
 
 	/** The scroll container - exposed for parent components. */
 	export const get_scroll_element = (): HTMLDivElement | undefined => container_el;

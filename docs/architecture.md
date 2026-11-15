@@ -1116,6 +1116,25 @@ in whichever panes are shown. The view parses the source once with
 `mdz_parse` and hands the nodes to the preview, the outline, and the link
 list.
 
+The outline lights where the reader is, as a docs page's links do
+(`markdown_outline.ts`). A heading's section runs to the next heading at
+its level or above, or to the document's end, so sections nest. Every
+section overlapping the source range the pane being read shows — the
+preview, or the editor alone — is dimly lit, a parent with any child; the
+section the reader is at is brighter, with `aria-current="location"`.
+Wherever the editor shows, it's the innermost section holding the caret,
+however the panes are scrolled; placing a caret ends any heading followed
+before it. With no caret — the preview alone, or before the editor has
+one — it's the topmost heading fully in the pane: going down,
+the next takes over as soon as the current one starts to leave the top;
+going up, the previous only once its heading is back in view; with no
+heading in view, the current holds while its section shows. The view
+re-reads the pane on scroll sync's frame (`onframe`) after a scroll, a
+resize, a re-render, a mode switch, or the drawer opening, measuring by
+binary search a few of the preview's cached leaf blocks or the editor's
+characters, each on its line on the backdrop, and nothing while the drawer
+is closed, whose lights clear as it closes.
+
 The preview renders with mdz's source offsets (`source_offsets`: each
 element carries its node's `data-mdz-start` / `data-mdz-end`), which map it
 back to the source (`markdown_source_map.ts`). The editor holds and mdz

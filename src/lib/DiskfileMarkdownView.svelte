@@ -21,12 +21,25 @@
 	import MarkdownOutline from './MarkdownOutline.svelte';
 	import MarkdownBrokenLinks from './MarkdownBrokenLinks.svelte';
 	import { to_markdown_headings, to_markdown_links } from './markdown_links.ts';
-	import { to_textarea_value, type MarkdownScrollAnchor } from './markdown_source_map.ts';
+	import {
+		find_markdown_caret_block,
+		to_textarea_value,
+		type MarkdownBlock,
+		type MarkdownScrollAnchor,
+		type MarkdownSourceRange
+	} from './markdown_source_map.ts';
 	import {
 		MarkdownScrollSync,
 		measure_element_anchor,
+		measure_element_extent,
 		type MarkdownScrollPane
 	} from './markdown_scroll_sync.ts';
+	import {
+		to_followed_heading,
+		to_markdown_sections,
+		to_onscreen_sections,
+		to_visible_source_range
+	} from './markdown_outline.ts';
 	import DiskfileActions from './DiskfileActions.svelte';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import { format_placeholder } from './helpers.ts';
@@ -60,6 +73,10 @@
 	holding the editor's caret, a click on a preview block puts the caret at its source, and the
 	panes scroll in lockstep (`MarkdownScrollSync`). The editor holds, and mdz parses, the source as
 	the textarea reads it (`to_textarea_value`), so a caret and an offset index the same string.
+
+	With the drawer open, the outline lights the sections the pane being read shows - the preview,
+	or the editor alone - and brighter the one holding the caret, or with no caret the one the
+	pane's scroll is at (`markdown_outline.ts`), re-read on scroll sync's frames.
 
 	*/
 
@@ -101,6 +118,8 @@
 				reveal_heading: (index: number) => boolean;
 				reveal_link: (index: number, options?: { focus?: boolean }) => boolean;
 				get_scroll_anchors: () => ReadonlyArray<MarkdownScrollAnchor>;
+				get_leaf_blocks: () => ReadonlyArray<MarkdownBlock>;
+				get_heading_elements: () => ReadonlyArray<Element>;
 				get_scroll_element: () => HTMLDivElement | undefined;
 		  }
 		| undefined = $state.raw();
@@ -190,8 +209,130 @@
 		await editor_state.save_changes();
 	};
 
-	// where the editor's caret is, for the preview's mark
+	// where the editor's caret is, for the preview's mark and the outline
 	let caret_offset: number | null = $state.raw(null);
+
+	// the outline's highlight: each heading's section, the ones the pane being read shows (dim), and
+	// the one the reader is at (bright) - the caret's, else the one the pane's scroll follows
+	const sections = $derived(to_markdown_sections(headings, source.length));
+	let onscreen_sections: ReadonlySet<number> = $state.raw(new Set());
+	let followed_heading = $state.raw(-1);
+	const has_caret = $derived(mode !== 'preview' && caret_offset !== null);
+	const current_section = $derived.by(() => {
+		// the innermost section holding the caret, as the preview marks the innermost block
+		const index =
+			mode === 'preview' || caret_offset === null
+				? followed_heading
+				: find_markdown_caret_block(sections, caret_offset);
+		return index === -1 ? null : index;
+	});
+
+	/** The pane being read, measured: what source range it shows, and where its headings are. */
+	interface ReadingPane {
+		element: HTMLElement;
+		measure_visible: (view_top: number, view_bottom: number) => MarkdownSourceRange | null;
+		heading_top: (index: number) => number | null;
+	}
+
+	const get_reading_pane = (): ReadingPane | null => {
+		if (mode === 'source') {
+			const editor = source_editor;
+			const element = editor?.get_scroll_element();
+			if (!editor || !element) return null;
+			return {
+				element,
+				// each character, measured on its line - the textarea's lines are its only geometry
+				measure_visible: (view_top, view_bottom) =>
+					to_visible_source_range(
+						source.length,
+						(i) => {
+							const line = editor.measure_offset(i);
+							return line && { start: i, end: i + 1, top: line.top, bottom: line.bottom };
+						},
+						view_top,
+						view_bottom
+					),
+				heading_top: (i) => {
+					const heading = headings[i];
+					return heading ? (editor.measure_offset(heading.start)?.top ?? null) : null;
+				}
+			};
+		}
+		const pane = preview;
+		const element = pane?.get_scroll_element();
+		if (!pane || !element) return null;
+		return {
+			element,
+			measure_visible: (view_top, view_bottom) => {
+				const leaves = pane.get_leaf_blocks();
+				return to_visible_source_range(
+					leaves.length,
+					(i) => {
+						const leaf = leaves[i]!;
+						return {
+							start: leaf.start,
+							end: leaf.end,
+							...measure_element_extent(element, leaf.element)
+						};
+					},
+					view_top,
+					view_bottom
+				);
+			},
+			heading_top: (i) => {
+				const heading = pane.get_heading_elements()[i];
+				return heading ? measure_element_extent(element, heading).top : null;
+			}
+		};
+	};
+
+	/** Re-reads the outline's highlight from the pane being read - once per frame, drawer open. */
+	const update_outline = (): void => {
+		if (!drawer_open) return;
+		const pane = get_reading_pane();
+		const view_top = pane?.element.scrollTop ?? 0;
+		const view_bottom = view_top + (pane?.element.clientHeight ?? 0);
+		const onscreen = to_onscreen_sections(
+			sections,
+			pane?.measure_visible(view_top, view_bottom) ?? null
+		);
+		if (!same_set(onscreen, onscreen_sections)) onscreen_sections = onscreen;
+		// followed only while no caret says, so a stale one never holds when the caret goes
+		followed_heading =
+			pane && !has_caret
+				? to_followed_heading(
+						headings.length,
+						pane.heading_top,
+						view_top,
+						view_bottom,
+						followed_heading,
+						onscreen
+					)
+				: -1;
+	};
+
+	// a caret ends the followed heading at once, not on the next frame, which a caret placed with no
+	// scroll never asks for - else the editor's last word as the preview replaces it would leave it held
+	const handle_caret = (offset: number | null): void => {
+		caret_offset = offset;
+		followed_heading = -1;
+	};
+
+	const toggle_drawer = (): void => {
+		drawer_open = !drawer_open;
+		// closed, nothing re-reads the lights, so they clear rather than show stale for the frame
+		// before the reopened drawer's re-read
+		if (!drawer_open) {
+			onscreen_sections = new Set();
+			followed_heading = -1;
+		}
+	};
+
+	const same_set = (a: ReadonlySet<number>, b: ReadonlySet<number>): boolean => {
+		if (a.size !== b.size) return false;
+		for (const n of a) if (!b.has(n)) return false;
+		return true;
+	};
 
 	const scroll_sync = new MarkdownScrollSync({
 		get_editor: (): MarkdownScrollPane | null => {
@@ -211,7 +352,8 @@
 			if (!element) return null;
 			return { element, measure: (anchor) => measure_element_anchor(element, anchor) };
 		},
-		get_anchors: () => preview?.get_scroll_anchors() ?? []
+		get_anchors: () => preview?.get_scroll_anchors() ?? [],
+		onframe: update_outline
 	});
 	onDestroy(() => scroll_sync.destroy());
 
@@ -227,9 +369,20 @@
 	};
 
 	// a re-render moves the preview's blocks, so the follower realigns (on the next frame, once the
-	// preview has queried its blocks) - split only, so the source alone still parses nothing
+	// preview has queried its blocks) - split only, so the source alone parses nothing
 	$effect(() => {
 		if (mode !== 'split' || nodes.length === 0) return;
+		scroll_sync.refresh();
+	});
+
+	// with the drawer open, the outline re-reads the pane being read on the next frame: when it
+	// opens, after a re-render or an edit, which moves what the pane shows, and after a mode switch,
+	// which shows another pane without resizing the panes' container - closed, it tracks and
+	// measures nothing
+	$effect(() => {
+		if (!drawer_open) return;
+		mode;
+		nodes;
 		scroll_sync.refresh();
 	});
 
@@ -266,9 +419,7 @@
 					class:selected={drawer_open}
 					aria-expanded={drawer_open}
 					title={drawer_open ? 'hide the file details' : 'show the file details'}
-					onclick={() => {
-						drawer_open = !drawer_open;
-					}}
+					onclick={toggle_drawer}
 				>
 					<Icon data={drawer_open ? icon_double_chevron_right : icon_double_chevron_left} />
 					<span class="ml_xs">details</span>
@@ -327,7 +478,7 @@
 							attrs={{ class: 'height:100% border-radius:0 resize:none' }}
 							save_shortcut="page"
 							onsave={save}
-							oncaret={(offset) => (caret_offset = offset)}
+							oncaret={handle_caret}
 						/>
 					</div>
 				{/if}
@@ -358,7 +509,12 @@
 				</div>
 
 				<div class="px_md mb_lg">
-					<MarkdownOutline {headings} onselect={reveal_heading} />
+					<MarkdownOutline
+						{headings}
+						onscreen={onscreen_sections}
+						current={current_section}
+						onselect={reveal_heading}
+					/>
 				</div>
 
 				<MarkdownBrokenLinks {links} onselect={reveal_link} attrs={{ class: 'px_md mb_lg' }} />

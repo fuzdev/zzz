@@ -142,7 +142,7 @@ describe('MarkdownScrollSync', () => {
 		element: document.createElement('p')
 	}));
 
-	const setup = () => {
+	const setup = (onframe?: () => void) => {
 		const editor = create_pane(1, 100);
 		const preview = create_pane(3, 300);
 		const root = document.createElement('div');
@@ -156,7 +156,8 @@ describe('MarkdownScrollSync', () => {
 		const scroll_sync = new MarkdownScrollSync({
 			get_editor: () => editor,
 			get_preview: () => preview,
-			get_anchors: () => ANCHORS
+			get_anchors: () => ANCHORS,
+			onframe
 		});
 		const detach = scroll_sync.attach(root) as () => void;
 		const run_frames = (): void => {
@@ -249,5 +250,30 @@ describe('MarkdownScrollSync', () => {
 		detach();
 		scroll(editor, 30);
 		assert.strictEqual(frames.length, 0);
+	});
+
+	test('onframe runs once per frame, after the sync, for any scroll inside or a refresh', () => {
+		const tops: Array<number> = [];
+		const { editor, preview, frames, scroll_sync, run_frames, scroll } = setup(() =>
+			tops.push(preview.element.scrollTop)
+		);
+		scroll(preview, 30);
+		assert.strictEqual(frames.length, 1, 'a frame with no leader');
+		run_frames();
+		assert.deepEqual(tops, [30]);
+		assert.strictEqual(editor.element.scrollTop, 0, 'no sync without a leader');
+
+		editor.element.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+		scroll(editor, 20);
+		const inner = document.createElement('pre');
+		editor.element.append(inner);
+		inner.dispatchEvent(new Event('scroll'));
+		assert.strictEqual(frames.length, 1, 'one frame, however many scrolls');
+		run_frames();
+		assert.deepEqual(tops, [30, 60], 'after the sync moved the follower');
+
+		scroll_sync.refresh();
+		run_frames();
+		assert.deepEqual(tops, [30, 60, 60]);
 	});
 });

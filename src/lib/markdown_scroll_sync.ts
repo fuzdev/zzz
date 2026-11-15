@@ -115,6 +115,20 @@ export interface MarkdownScrollPane {
 }
 
 /**
+ * The content ys of an element's top and bottom inside `container`, the
+ * element scrolling it — where a `scrollTop` of `top` puts the element at
+ * the container's top edge.
+ */
+export const measure_element_extent = (
+	container: HTMLElement,
+	element: Element
+): { top: number; bottom: number } => {
+	const rect = element.getBoundingClientRect();
+	const base = container.getBoundingClientRect().top + container.clientTop - container.scrollTop;
+	return { top: rect.top - base, bottom: rect.bottom - base };
+};
+
+/**
  * The content y of an element's top or bottom inside `container`, the
  * element scrolling it — how the preview measures its anchors.
  */
@@ -122,9 +136,8 @@ export const measure_element_anchor = (
 	container: HTMLElement,
 	anchor: MarkdownScrollAnchor
 ): number => {
-	const rect = anchor.element.getBoundingClientRect();
-	const base = container.getBoundingClientRect().top + container.clientTop - container.scrollTop;
-	return (anchor.edge === 'top' ? rect.top : rect.bottom) - base;
+	const extent = measure_element_extent(container, anchor.element);
+	return anchor.edge === 'top' ? extent.top : extent.bottom;
 };
 
 export interface MarkdownScrollSyncOptions {
@@ -134,6 +147,13 @@ export interface MarkdownScrollSyncOptions {
 	get_preview: () => MarkdownScrollPane | null;
 	/** The anchors of the preview's current render, from `to_markdown_scroll_anchors`. */
 	get_anchors: () => ReadonlyArray<MarkdownScrollAnchor>;
+	/**
+	 * Called once per frame in which anything inside the attached element
+	 * scrolled, it resized, or `refresh` asked — after that frame's sync, in
+	 * any layout, panes not synced included. For what reads where the panes
+	 * are, like the outline's highlight, so it shares the sync's frame.
+	 */
+	onframe?: (() => void) | undefined;
 }
 
 /**
@@ -146,6 +166,7 @@ export class MarkdownScrollSync {
 	readonly #options: MarkdownScrollSyncOptions;
 	#leader: MarkdownScrollSide | null = null;
 	#frame: number | null = null;
+	#sync_due = false;
 
 	constructor(options: MarkdownScrollSyncOptions) {
 		this.#options = options;
@@ -161,14 +182,22 @@ export class MarkdownScrollSync {
 		this.#leader = side;
 	}
 
-	/** A pane scrolled: the leader's scroll moves the other, a follower's moves nothing. */
+	/**
+	 * A pane scrolled: the leader's scroll moves the other, a follower's moves
+	 * nothing, and either runs `onframe`.
+	 */
 	handle_scroll(side: MarkdownScrollSide): void {
-		if (side === this.#leader) this.#schedule();
+		if (side === this.#leader) this.#sync_due = true;
+		this.#schedule();
 	}
 
-	/** The layout changed — the preview re-rendered, a pane resized — so realign the follower. */
+	/**
+	 * The layout changed — the preview re-rendered, a pane resized — so
+	 * realign the follower, and run `onframe`.
+	 */
 	refresh(): void {
-		if (this.#leader) this.#schedule();
+		if (this.#leader) this.#sync_due = true;
+		this.#schedule();
 	}
 
 	/**
@@ -196,18 +225,24 @@ export class MarkdownScrollSync {
 		return true;
 	}
 
-	/** Cancels a pending sync. */
+	/** Cancels a pending frame. */
 	destroy(): void {
 		if (this.#frame !== null) cancelAnimationFrame(this.#frame);
 		this.#frame = null;
+		this.#sync_due = false;
 	}
 
-	/** One sync per frame, however many scrolls and renders asked. */
+	/** One frame, however many scrolls and renders asked - none when it has nothing to do. */
 	#schedule(): void {
+		if (!this.#sync_due && !this.#options.onframe) return;
 		if (this.#frame !== null || typeof requestAnimationFrame !== 'function') return;
 		this.#frame = requestAnimationFrame(() => {
 			this.#frame = null;
-			this.sync();
+			if (this.#sync_due) {
+				this.#sync_due = false;
+				this.sync();
+			}
+			this.#options.onframe?.();
 		});
 	}
 
@@ -229,10 +264,12 @@ export class MarkdownScrollSync {
 			if (side) this.lead(side);
 		};
 		const handle_scroll = (event: Event): void => {
-			// only a pane's own scrolls - the editor's highlight backdrop scrolls along with it
+			// only a pane's own scrolls sync - the editor's highlight backdrop scrolls along with it -
+			// but any scroll can move what `onframe` reads, like a pane shown alone, which isn't synced
 			const { target } = event;
 			if (target === this.#options.get_editor()?.element) this.handle_scroll('editor');
 			else if (target === this.#options.get_preview()?.element) this.handle_scroll('preview');
+			else this.#schedule();
 		};
 		const input_events = ['wheel', 'pointerdown', 'touchstart', 'keydown', 'focusin'] as const;
 		const listener_options = { capture: true, passive: true };

@@ -1,7 +1,8 @@
 /**
  * Mapping a rendered markdown preview back to its source, for the markdown
- * view's split: which preview block holds the editor's caret, where a click
- * in the preview lands in the source, and the blocks scroll sync anchors on.
+ * view: which preview block holds the editor's caret, where a click in the
+ * preview lands in the source, and the blocks scroll sync anchors on and the
+ * outline measures (`to_markdown_leaf_blocks`).
  * Built on the offsets mdz puts on what it renders (`Mdz`'s
  * `source_offsets`): `data-mdz-start` and `data-mdz-end`, UTF-16 indices
  * into the parsed string, end exclusive.
@@ -140,24 +141,40 @@ export interface MarkdownScrollAnchor {
 }
 
 /**
- * The scroll-sync anchors of `blocks`: the top and bottom of each block that
- * holds no other, table cells aside — a row's cells sit side by side, so
- * their tops and bottoms zigzag in y, and the row is the leaf instead. Leaves
- * never nest or share a line, so their anchors run in source order down both
- * panes.
+ * The leaves of `blocks`: each block that holds no other, table cells aside —
+ * a row's cells sit side by side, so their tops and bottoms zigzag in y, and
+ * the row is the leaf instead. Leaves never nest or share a line, so they run
+ * in source order down the preview, their tops and bottoms each
+ * non-decreasing.
+ *
+ * @param blocks - the rendered blocks in document order, as `query_markdown_blocks` returns
+ */
+export const to_markdown_leaf_blocks = (
+	blocks: ReadonlyArray<MarkdownBlock>
+): Array<MarkdownBlock> => {
+	const stacked = blocks.filter((block) => !is_table_cell(block.element));
+	const leaves: Array<MarkdownBlock> = [];
+	for (let i = 0; i < stacked.length; i++) {
+		const block = stacked[i]!;
+		const next = stacked[i + 1];
+		// a block inside this one comes next in document order
+		if (next && block.element.contains(next.element)) continue;
+		leaves.push(block);
+	}
+	return leaves;
+};
+
+/**
+ * The scroll-sync anchors of `blocks`: the top and bottom of each leaf
+ * (`to_markdown_leaf_blocks`), so they run in source order down both panes.
  *
  * @param blocks - the rendered blocks in document order, as `query_markdown_blocks` returns
  */
 export const to_markdown_scroll_anchors = (
 	blocks: ReadonlyArray<MarkdownBlock>
 ): Array<MarkdownScrollAnchor> => {
-	const stacked = blocks.filter((block) => !is_table_cell(block.element));
 	const anchors: Array<MarkdownScrollAnchor> = [];
-	for (let i = 0; i < stacked.length; i++) {
-		const block = stacked[i]!;
-		const next = stacked[i + 1];
-		// a block inside this one comes next in document order
-		if (next && block.element.contains(next.element)) continue;
+	for (const block of to_markdown_leaf_blocks(blocks)) {
 		anchors.push({ offset: block.start, edge: 'top', element: block.element });
 		anchors.push({ offset: block.end, edge: 'bottom', element: block.element });
 	}

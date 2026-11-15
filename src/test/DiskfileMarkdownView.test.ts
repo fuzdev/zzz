@@ -733,3 +733,260 @@ describe('DiskfileMarkdownView showing the disk version', () => {
 		assert.isFalse(editor_state.has_unsaved_edits);
 	});
 });
+
+describe('DiskfileMarkdownView outline highlight', () => {
+	// A holds B, then a sibling C; laid out at one pixel per source character
+	const DOC = '# A\n\nintro\n\n## B\n\nbee\n\n# C\n\nsee\n';
+
+	let frames: Array<() => void> = [];
+	beforeEach(() => {
+		frames = [];
+		vi.stubGlobal('requestAnimationFrame', (cb: () => void) => frames.push(cb));
+		vi.stubGlobal('cancelAnimationFrame', () => {
+			frames.length = 0;
+		});
+	});
+	afterEach(() => {
+		// last first, so layouts stubbed twice unwind to the original, and unmounted before the frame
+		// stubs go, since unmounting cancels a pending frame
+		for (const cleanup of cleanups.splice(0).reverse()) cleanup();
+		vi.unstubAllGlobals();
+	});
+
+	const run_frames = (): void => {
+		for (const frame of frames.splice(0)) frame();
+		flushSync();
+	};
+
+	/** Each outline item's text, `*` for highlighted and `!` for current with `aria-current`. */
+	const lit = (target: HTMLElement): Array<string> =>
+		Array.from(target.querySelectorAll('.outline-item')).map((item) => {
+			let s = item.textContent.trim();
+			if (item.classList.contains('highlighted')) s += '*';
+			if (item.classList.contains('current')) {
+				assert.strictEqual(item.getAttribute('aria-current'), 'location');
+				s += '!';
+			} else {
+				assert.isFalse(item.hasAttribute('aria-current'));
+			}
+			return s;
+		});
+
+	/**
+	 * Lays the preview out at one pixel per source character, `height` tall,
+	 * returning a scroll that runs the frame it schedules, and a count of the
+	 * blocks measured.
+	 */
+	const lay_out_preview = (target: HTMLElement, height: number) => {
+		const pane = target.querySelector<HTMLElement>('.markdown-preview');
+		assert.ok(pane);
+		let scroll_top = 0;
+		let measured = 0;
+		Object.defineProperties(pane, {
+			scrollTop: {
+				configurable: true,
+				get: () => scroll_top,
+				set: (v: number) => {
+					scroll_top = v;
+				}
+			},
+			clientHeight: { configurable: true, get: () => height }
+		});
+		const original = Element.prototype.getBoundingClientRect;
+		Element.prototype.getBoundingClientRect = function (this: Element) {
+			let top = 0;
+			let bottom = 0;
+			if (this !== pane && pane.contains(this) && this.hasAttribute('data-mdz-start')) {
+				measured++;
+				top = Number(this.getAttribute('data-mdz-start')) - scroll_top;
+				bottom = Number(this.getAttribute('data-mdz-end')) - scroll_top;
+			}
+			return { top, bottom, left: 0, right: 0, width: 0, height: bottom - top } as DOMRect;
+		};
+		cleanups.push(() => {
+			Element.prototype.getBoundingClientRect = original;
+		});
+		return {
+			scroll: (top: number): void => {
+				scroll_top = top;
+				pane.dispatchEvent(new Event('scroll'));
+				run_frames();
+			},
+			measured: () => measured
+		};
+	};
+
+	const move_caret = (textarea: HTMLTextAreaElement, offset: number): void => {
+		textarea.focus();
+		textarea.setSelectionRange(offset, offset);
+		textarea.dispatchEvent(new Event('keyup', { bubbles: true }));
+		flushSync();
+	};
+
+	test('in the preview alone, sections on screen are lit, and the topmost heading in view is current', () => {
+		const a = write_externally(PATH_A, DOC);
+		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		const preview = lay_out_preview(view.target, 6);
+
+		preview.scroll(DOC.indexOf('## B') + 1);
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C'], 'B, inside A');
+		preview.scroll(DOC.indexOf('# C') + 1);
+		assert.deepEqual(lit(view.target), ['A', 'B', 'C*!']);
+		preview.scroll(DOC.indexOf('intro'));
+		assert.deepEqual(
+			lit(view.target),
+			['A*!', 'B', 'C'],
+			'no heading in view: the section showing'
+		);
+	});
+
+	test('a re-render re-reads the preview on the next frame', () => {
+		const a = write_externally(PATH_A, DOC);
+		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		const preview = lay_out_preview(view.target, 6);
+		preview.scroll(DOC.indexOf('## B') + 1);
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
+
+		// the content shifts down under a still scroll, so the view now shows A's intro
+		write_externally(PATH_A, '# A\n\nmore intro\n\nintro\n\n## B\n\nbee\n\n# C\n\nsee\n');
+		flushSync();
+		run_frames();
+		assert.deepEqual(lit(view.target), ['A*!', 'B', 'C']);
+	});
+
+	test("beside the editor, the caret's innermost section is current, wherever the preview is", () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		const preview = lay_out_preview(view.target, 6);
+		preview.scroll(DOC.indexOf('## B') + 1);
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C'], 'no caret yet: as the preview alone');
+
+		const textarea = view.textarea()!;
+		move_caret(textarea, DOC.indexOf('see'));
+		assert.deepEqual(lit(view.target), ['A*', 'B*', 'C!'], 'the caret, off screen');
+		move_caret(textarea, DOC.indexOf('bee'));
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C'], 'B, not A around it');
+		move_caret(textarea, DOC.indexOf('intro'));
+		assert.deepEqual(lit(view.target), ['A*!', 'B*', 'C']);
+	});
+
+	test('a caret ends the followed heading, so the preview alone follows afresh', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		const preview = lay_out_preview(view.target, 6);
+		preview.scroll(0);
+		assert.deepEqual(lit(view.target), ['A*!', 'B', 'C'], 'no caret: A, followed');
+
+		move_caret(view.textarea()!, DOC.indexOf('see'));
+		// inside B's body, no heading in view
+		preview.scroll(DOC.indexOf('bee') - 1);
+		assert.deepEqual(lit(view.target), ['A*', 'B*', 'C!']);
+
+		click_button(view.target, 'preview');
+		run_frames();
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C'], 'the innermost showing, not A held');
+	});
+
+	test('a caret placed with no frame since still ends the followed heading', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		const preview = lay_out_preview(view.target, 6);
+		preview.scroll(0);
+		preview.scroll(DOC.indexOf('bee') - 1);
+		assert.deepEqual(lit(view.target), ['A*!', 'B*', 'C'], 'no caret: A held, inside its body');
+
+		move_caret(view.textarea()!, DOC.indexOf('see'));
+		click_button(view.target, 'preview');
+		run_frames();
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C'], 'the innermost showing, not A held');
+	});
+
+	/**
+	 * Lays the editor's text out at one pixel per source character, `height`
+	 * tall and scrolled to `scroll_top`, with no scroll event.
+	 */
+	const lay_out_editor = (textarea: HTMLTextAreaElement, scroll_top: number, height: number) => {
+		Object.defineProperties(textarea, {
+			scrollTop: { configurable: true, get: () => scroll_top },
+			clientHeight: { configurable: true, get: () => height }
+		});
+		const original = Object.getOwnPropertyDescriptor(Range.prototype, 'getClientRects');
+		Range.prototype.getClientRects = function (this: Range) {
+			const top = this.startOffset;
+			return [{ top, bottom: top + 1 }] as unknown as DOMRectList;
+		};
+		cleanups.push(() => {
+			if (original) Object.defineProperty(Range.prototype, 'getClientRects', original);
+			else delete (Range.prototype as Partial<Range>).getClientRects;
+		});
+	};
+
+	test('a mode switch re-reads the pane now being read on the next frame, with no scroll', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		const preview = lay_out_preview(view.target, 6);
+		preview.scroll(DOC.indexOf('## B') + 1);
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C'], 'split: the preview');
+
+		const textarea = view.textarea()!;
+		lay_out_editor(textarea, DOC.indexOf('# C'), 6);
+		click_button(view.target, 'source');
+		run_frames();
+		assert.deepEqual(lit(view.target), ['A', 'B', 'C*!'], "the editor's C, not the preview's B");
+
+		move_caret(textarea, DOC.indexOf('see'));
+		click_button(view.target, 'preview');
+		lay_out_preview(view.target, 6);
+		run_frames();
+		assert.deepEqual(lit(view.target), ['A*!', 'B', 'C'], 'the caret gone, A followed at once');
+	});
+
+	test('in the source alone the caret says too', () => {
+		const a = write_externally(PATH_A, DOC);
+		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'source';
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		move_caret(view.textarea()!, DOC.indexOf('see'));
+		run_frames();
+		assert.deepEqual(lit(view.target), ['A', 'B', 'C!'], 'jsdom lays out no lines, so none lit');
+	});
+
+	test('with the drawer closed, a scroll measures nothing', () => {
+		const a = write_externally(PATH_A, DOC);
+		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		const preview = lay_out_preview(view.target, 6);
+		preview.scroll(DOC.indexOf('## B') + 1);
+		assert.strictEqual(preview.measured(), 0);
+
+		click_button(view.target, 'details');
+		run_frames();
+		assert.isAbove(preview.measured(), 0, 'opening it reads the preview');
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
+	});
+
+	test('closing the drawer clears its lights, so it reopens with none stale', () => {
+		const a = write_externally(PATH_A, DOC);
+		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		const preview = lay_out_preview(view.target, 6);
+		preview.scroll(DOC.indexOf('## B') + 1);
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
+
+		click_button(view.target, 'details');
+		preview.scroll(DOC.indexOf('# C') + 1);
+		click_button(view.target, 'details');
+		assert.deepEqual(lit(view.target), ['A', 'B', 'C'], 'none, until the frame');
+		run_frames();
+		assert.deepEqual(lit(view.target), ['A', 'B', 'C*!']);
+	});
+});
