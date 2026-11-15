@@ -21,6 +21,7 @@
 		focus_key,
 		pending_element_to_focus_key = $bindable(),
 		onsave,
+		oncaret,
 		save_shortcut = 'focused',
 		attrs,
 		wrapper_attrs
@@ -40,6 +41,12 @@
 		pending_element_to_focus_key?: string | number | null | undefined;
 		/** Called with the value on Ctrl+S / Cmd+S — see `save_shortcut`. */
 		onsave?: ((value: string) => void) | undefined;
+		/**
+		 * Called with the caret's offset into `value` as it moves — typing,
+		 * clicks, keys, selecting (the moving end of a selection) — and with
+		 * `null` when the textarea goes away.
+		 */
+		oncaret?: ((offset: number | null) => void) | undefined;
 		/** Where Ctrl+S / Cmd+S triggers `onsave` — see `SaveShortcutScope`. */
 		save_shortcut?: SaveShortcutScope | undefined;
 		/** Attributes for the `<textarea>`. */
@@ -72,6 +79,84 @@
 		el.setSelectionRange(clamped, clamped);
 		el.scrollTop = el.scrollHeight;
 		el.focus();
+		emit_caret(el);
+	};
+
+	/** The textarea, the element that scrolls - exposed for parent components. */
+	export const get_scroll_element = (): HTMLTextAreaElement | undefined => textarea_el;
+
+	let measure_range: Range | undefined;
+
+	/**
+	 * The content y of the line holding the character at `offset` (clamped to
+	 * the source) — its top and bottom, where a `scrollTop` of `top` puts the
+	 * line at the textarea's top edge — or `null` when it can't be measured
+	 * (no layout) - exposed for parent components, like scroll sync.
+	 */
+	export const measure_offset = (offset: number): { top: number; bottom: number } | null => {
+		const el = textarea_el;
+		// the textarea has no geometry for its text, but `CodeTextarea`'s highlight backdrop - the
+		// `pre` before it, holding the same text plus a newline in one text node, with the same box
+		// metrics and kept at the same scroll - does
+		// TODO this relies on fuz_code internals (the backdrop's class and place); a measuring API on
+		// `CodeTextarea` would remove the coupling - until then a change there returns `null`, and
+		// scroll sync stops rather than misaligns
+		const backdrop = el?.previousElementSibling;
+		if (
+			!(backdrop instanceof HTMLElement) ||
+			!backdrop.classList.contains('code_textarea_backdrop')
+		) {
+			return null;
+		}
+		const text = backdrop.firstChild;
+		if (!(text instanceof Text) || text.length === 0) return null;
+		measure_range ??= document.createRange();
+		if (typeof measure_range.getClientRects !== 'function') return null;
+		const index = Math.max(0, Math.min(Math.floor(offset), text.length - 1));
+		measure_range.setStart(text, index);
+		measure_range.setEnd(text, index + 1);
+		const rect = measure_range.getClientRects()[0];
+		if (!rect || (rect.top === 0 && rect.bottom === 0)) return null;
+		const base = backdrop.getBoundingClientRect().top + backdrop.clientTop - backdrop.scrollTop;
+		return { top: rect.top - base, bottom: rect.bottom - base };
+	};
+
+	let last_caret: number | null = null;
+
+	const emit_caret = (el: HTMLTextAreaElement): void => {
+		if (!oncaret) return;
+		const caret = el.selectionDirection === 'backward' ? el.selectionStart : el.selectionEnd;
+		if (caret === last_caret) return;
+		last_caret = caret;
+		oncaret(caret);
+	};
+
+	// browsers differ on where a textarea's `selectionchange` fires - the textarea or the document -
+	// so these listen to both, and to the events that move the caret; `emit_caret` drops repeats
+	const CARET_EVENTS = [
+		'selectionchange',
+		'select',
+		'input',
+		'keyup',
+		'pointerup',
+		'focus'
+	] as const;
+
+	const attach_caret = (el: HTMLTextAreaElement): (() => void) => {
+		const handle = (): void => emit_caret(el);
+		const handle_document = (): void => {
+			if (document.activeElement === el) emit_caret(el);
+		};
+		for (const type of CARET_EVENTS) el.addEventListener(type, handle);
+		document.addEventListener('selectionchange', handle_document);
+		return () => {
+			for (const type of CARET_EVENTS) el.removeEventListener(type, handle);
+			document.removeEventListener('selectionchange', handle_document);
+			if (last_caret !== null) {
+				last_caret = null;
+				oncaret?.(null);
+			}
+		};
 	};
 
 	// the textarea's own handler runs first and swallows the event, so a page-level listener never
@@ -103,6 +188,7 @@
 			textarea_el = undefined;
 		};
 	}}
+	{@attach oncaret ? attach_caret : null}
 	{@attach focus_key == null
 		? null
 		: (el: HTMLTextAreaElement) => {

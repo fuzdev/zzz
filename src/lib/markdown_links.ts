@@ -1,7 +1,8 @@
 /**
  * Links and headings in rendered markdown, for `MarkdownPreview` and the
  * markdown view's drawer — pure functions over mdz's parsed nodes, with no
- * app state, plus the one DOM query matching links to their rendered anchors.
+ * app state, plus the one DOM query matching links to their rendered anchors
+ * by their source offsets.
  *
  * A link in a file resolves against the file's path, the way a repository
  * host reads it: `./x.md`, `../y/z.md`, and `x.md` against the file's
@@ -370,6 +371,8 @@ export interface MarkdownLink {
 	text: string;
 	/** Where its source starts, a UTF-16 offset into the document. */
 	start: number;
+	/** Where its source ends (exclusive) — with `start`, how its rendered anchor is found. */
+	end: number;
 	target: MarkdownLinkTarget;
 	/** For a path link checked against an index, how it stands; else `null`. */
 	status: MarkdownLinkStatus | null;
@@ -408,6 +411,7 @@ export const to_markdown_links = (
 			reference: node.reference,
 			text: to_mdz_plain_text(node.children).trim(),
 			start: node.start,
+			end: node.end,
 			target,
 			status: target.kind === 'path' && index ? to_markdown_link_status(target, index) : null
 		});
@@ -416,29 +420,53 @@ export const to_markdown_links = (
 };
 
 /**
- * The rendered `<a>` of each of `links` inside `container`, matched by
- * document order — the `i`th anchor with an `href` is the `i`th link — or
- * `null` when the counts disagree, so no link is paired with another's
- * anchor. Order, not `href`, because the `href` isn't always the reference:
- * mdz renders a root-relative one through SvelteKit's `resolve`, collapsing
- * its leading run of `/` and `\` to one `/` (`//a/b.md` renders `/a/b.md`),
- * so an anchor that reads as a path can stand for a reference this module
- * reads as protocol-relative or backslashed, and inert. Assumes
- * mdz renders every anchor in `container`, which holds while no mdz context
- * injects components that render their own.
+ * The rendered `<a>` of each of `links` inside `container`, or `null` for a
+ * link with none — the `i`th entry is the `i`th link's. An anchor is paired
+ * by the source offsets mdz puts on it (`Mdz`'s `source_offsets`, which must
+ * be on), matching the link node's `start` and `end` exactly, so an anchor
+ * mdz didn't render for a link node — one an injected component renders,
+ * which carries another node's offsets or none — pairs with nothing. Offsets,
+ * not `href`, because the `href` isn't always the reference: mdz renders a
+ * root-relative one through SvelteKit's `resolve`, collapsing its leading run
+ * of `/` and `\` to one `/` (`//a/b.md` renders `/a/b.md`), so an anchor that
+ * reads as a path can stand for a reference this module reads as
+ * protocol-relative or backslashed, and inert.
  *
- * @param container - the element mdz rendered the document into
+ * @param container - the element mdz rendered the document into, with `source_offsets` on
  * @param links - the document's links, from `to_markdown_links`
  */
 export const query_markdown_link_anchors = (
 	container: ParentNode,
 	links: ReadonlyArray<MarkdownLink>
-): Array<HTMLAnchorElement> | null => {
-	const anchors: Array<HTMLAnchorElement> = [];
-	for (const anchor of container.querySelectorAll('a[href]')) {
-		if (anchor instanceof HTMLAnchorElement) anchors.push(anchor);
+): Array<HTMLAnchorElement | null> => {
+	const by_offsets: Map<string, HTMLAnchorElement> = new Map();
+	for (const anchor of container.querySelectorAll('a[href][data-mdz-start][data-mdz-end]')) {
+		if (!(anchor instanceof HTMLAnchorElement)) continue;
+		const key = to_markdown_anchor_key(anchor);
+		// the first wins - mdz renders one anchor per link node
+		if (key !== null && !by_offsets.has(key)) by_offsets.set(key, anchor);
 	}
-	return anchors.length === links.length ? anchors : null;
+	return links.map((link) => by_offsets.get(`${link.start}:${link.end}`) ?? null);
+};
+
+/**
+ * The index in `links` of the link `anchor` was rendered for, by the source
+ * offsets mdz put on it, or `-1` when it matches none (see
+ * `query_markdown_link_anchors`).
+ */
+export const find_markdown_link_index = (
+	anchor: Element,
+	links: ReadonlyArray<MarkdownLink>
+): number => {
+	const key = to_markdown_anchor_key(anchor);
+	if (key === null) return -1;
+	return links.findIndex((link) => `${link.start}:${link.end}` === key);
+};
+
+const to_markdown_anchor_key = (anchor: Element): string | null => {
+	const start = anchor.getAttribute('data-mdz-start');
+	const end = anchor.getAttribute('data-mdz-end');
+	return start === null || end === null ? null : `${start}:${end}`;
 };
 
 /**

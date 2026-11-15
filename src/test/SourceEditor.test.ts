@@ -93,3 +93,51 @@ describe('SourceEditor', () => {
 		assert.strictEqual(document.activeElement, textarea);
 	});
 });
+
+describe('SourceEditor caret', () => {
+	test('reports the caret as it moves, once per position, and null when it goes away', () => {
+		const carets: Array<number | null> = [];
+		const { textarea, mounted } = render({
+			value: 'abc\ndef',
+			oncaret: (offset: number | null) => carets.push(offset)
+		});
+		textarea.focus();
+		assert.deepEqual(carets, [7], 'on focus, where the caret is - after the value set it');
+		textarea.setSelectionRange(2, 2);
+		textarea.dispatchEvent(new Event('keyup'));
+		textarea.dispatchEvent(new Event('pointerup'));
+		document.dispatchEvent(new Event('selectionchange'));
+		assert.deepEqual(carets, [7, 2], 'repeats dropped');
+
+		// a selection reports its moving end
+		textarea.setSelectionRange(1, 5, 'forward');
+		textarea.dispatchEvent(new Event('select'));
+		textarea.setSelectionRange(1, 5, 'backward');
+		textarea.dispatchEvent(new Event('select'));
+		assert.deepEqual(carets, [7, 2, 5, 1]);
+
+		void unmount(mounted);
+		flushSync();
+		assert.deepEqual(carets, [7, 2, 5, 1, null]);
+	});
+
+	test('place_caret reports where it put the caret', () => {
+		const carets: Array<number | null> = [];
+		const { mounted } = render({
+			value: 'abc\ndef',
+			oncaret: (offset: number | null) => carets.push(offset)
+		});
+		(mounted as unknown as { place_caret: (offset: number) => void }).place_caret(99);
+		assert.deepEqual(carets, [7], 'clamped to the source');
+	});
+
+	test('measures nothing without layout', () => {
+		const { mounted } = render({ value: 'abc' });
+		const editor = mounted as unknown as {
+			measure_offset: (offset: number) => unknown;
+			get_scroll_element: () => unknown;
+		};
+		assert.isNull(editor.measure_offset(1));
+		assert.instanceOf(editor.get_scroll_element(), HTMLTextAreaElement);
+	});
+});

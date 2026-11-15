@@ -1116,6 +1116,44 @@ in whichever panes are shown. The view parses the source once with
 `mdz_parse` and hands the nodes to the preview, the outline, and the link
 list.
 
+The preview renders with mdz's source offsets (`source_offsets`: each
+element carries its node's `data-mdz-start` / `data-mdz-end`), which map it
+back to the source (`markdown_source_map.ts`). The editor holds and mdz
+parses the source as a textarea reads it — a CRLF file's line breaks as
+`\n` (`to_textarea_value`) — so the caret, the offsets, and the outline's
+positions index one string; the draft is untouched until an edit. In the
+split, three things track the editor:
+
+- **The caret's block** — the innermost block whose range holds the caret
+  (its end included, so typing at a line's end stays in its block) gets
+  the `markdown-caret-block` class, a sliver in the gutter. The preview
+  queries its blocks once per render, so a caret move reads no DOM.
+- **Click-to-source** — a plain click in the preview puts the caret at the
+  source start of the innermost element under it, inline marks included,
+  and focuses the editor, which scrolls to match the preview, so nothing
+  moves under the pointer. A link, a control, a multi-click, a modified
+  click, or the end of a selection drag acts as it would anywhere, and a
+  touch tap jumps nowhere, since focusing the editor would open the
+  on-screen keyboard. In the preview alone a click does nothing more: that
+  mode is for reading, and a click there switching layouts would be a jump
+  the reader didn't ask for.
+- **Scroll sync, in lockstep** (`MarkdownScrollSync`) — the pane the user
+  last touched (wheel, pointer, touch, key, or focus) leads, and the other
+  follows its scroll on the next frame, aligned on the tops and bottoms of
+  the innermost blocks (a table's rows, not their cells) and interpolated
+  between them, so it moves smoothly through a long block; over the
+  leader's last screenful the follower eases to its own bottom. A
+  follower's scroll never syncs back, so there's no feedback loop, and a
+  re-render or a resize realigns the follower. The editor measures its
+  lines on `CodeTextarea`'s highlight backdrop. Lockstep rather than the
+  preview following only the caret's block, so reading the source by
+  scrolling it reads the preview too; the mapping is one pure function
+  (`to_synced_scroll_top`), so another policy is another caller.
+
+mdz gives a paragraph interrupted by a block inside a blockquote an `end`
+that runs into the next line's `> ` prefix, so a caret on that prefix
+marks the paragraph above.
+
 `MarkdownPreview`'s links never navigate the app (`markdown_links.ts` resolves
 them; the preview only acts). An external link opens in a new tab; a
 `#fragment` scrolls the preview; and with the file's `path`, a relative link
@@ -1140,8 +1178,10 @@ indexes reads as missing — an empty folder, a symlink, a file in an
 unreadable subdirectory, or a path that isn't UTF-8 is marked broken. A test
 holds `FILE_INDEX_IGNORED_DIR_NAMES` and the staging-file prefix to the
 filer's Rust source. The preview pairs each link with its rendered anchor by
-document order, since mdz can rewrite a root-relative `href` (SvelteKit's
-`resolve`), and follows a click from the link's reference.
+their source offsets, not the `href`, since mdz can rewrite a root-relative
+`href` (SvelteKit's `resolve`) — an anchor matching no link node, like one an
+injected component renders, is left alone — and follows a click from the
+link's reference.
 
 The frontend file pipeline is six Cells plus a per-file editing-state class:
 

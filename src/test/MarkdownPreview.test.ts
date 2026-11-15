@@ -10,9 +10,15 @@ import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import { mdz_parse } from '@fuzdev/mdz/mdz.ts';
 
-import { query_markdown_link_anchors, to_markdown_links } from '#lib/markdown_links.ts';
+import {
+	find_markdown_link_index,
+	query_markdown_link_anchors,
+	to_markdown_links
+} from '#lib/markdown_links.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
+import MdzCodeLinkHarness from './MdzCodeLinkHarness.svelte';
+import { create_reactive_props } from './reactive_test_helpers.svelte.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 const cleanups: Array<() => void> = [];
@@ -362,12 +368,221 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.strictEqual(anchor.title, 'from elsewhere');
 	});
 
+	test('an anchor an injected component renders is left alone, and the links keep their marks', () => {
+		add_file(GUIDE);
+		app.diskfiles.select(null);
+		const target = document.createElement('div');
+		document.body.append(target);
+		const mounted = mount(FrontendContextHarness, {
+			target,
+			props: {
+				app,
+				component: MdzCodeLinkHarness,
+				props: {
+					component: MarkdownPreview,
+					props: {
+						path: GUIDE,
+						content: '[gone](./gone.md) `x` [lost](./lost.md) [ok](guide.md)'
+					}
+				}
+			}
+		});
+		flushSync();
+		cleanups.push(() => {
+			void unmount(mounted);
+			target.remove();
+		});
+		// the injected anchor sits between the links, and would shift a pairing by order
+		const code_anchor = find_link(target, 'x');
+		assert.strictEqual(code_anchor.getAttribute('href'), './x.md');
+		assert.strictEqual(code_anchor.dataset.mdzStart, '18', "the `Code` node's offsets");
+		assert.isUndefined(code_anchor.dataset.linkStatus, 'not marked, though ./x.md is missing');
+		assert.isNull(code_anchor.getAttribute('title'));
+		assert.strictEqual(status_of(target, 'gone'), 'broken');
+		assert.strictEqual(status_of(target, 'lost'), 'broken', 'paired past the injected anchor');
+		assert.strictEqual(find_link(target, 'lost').title, 'not found: /w/docs/lost.md');
+		assert.isUndefined(status_of(target, 'ok'));
+		// a click on it follows nothing, as for any relative anchor the links don't account for
+		assert.isTrue(click_link(target, 'x'));
+		assert.isNull(app.diskfiles.selected_file_id);
+		assert.isTrue(click_link(target, 'ok'));
+		assert.strictEqual(app.diskfiles.selected_file?.path, GUIDE);
+	});
+
 	test('without a path, nothing is marked or opened', () => {
 		add_file('/w/docs/x.md');
 		const target = render_in_app({ content: '[x](/w/docs/x.md) [gone](./gone.md)' });
 		assert.isUndefined(status_of(target, 'gone'));
 		assert.isTrue(click_link(target, 'x'));
 		assert.isNull(app.diskfiles.selected_file_id);
+	});
+});
+
+describe('MarkdownPreview source offsets', () => {
+	const CARET_CLASS = 'markdown-caret-block';
+
+	const marked = (target: HTMLElement): Array<string> =>
+		Array.from(target.querySelectorAll(`.${CARET_CLASS}`), (el) => el.tagName);
+
+	test('mdz renders its offsets, so every link anchor carries its node range', () => {
+		const target = render({ content: 'a [b](./b.md)' });
+		const anchor = find_link(target, 'b');
+		assert.strictEqual(anchor.dataset.mdzStart, '2');
+		assert.strictEqual(anchor.dataset.mdzEnd, '13');
+	});
+
+	test('marks the innermost block holding the caret, and moves the mark as it moves', () => {
+		const content = '# head\n\n- one\n- two\n\npara';
+		const props = create_reactive_props<Record<string, unknown>>({ content, caret_offset: null });
+		const target = render(props);
+		assert.deepEqual(marked(target), [], 'no caret, no mark');
+
+		props.caret_offset = content.indexOf('two') + 1;
+		flushSync();
+		assert.deepEqual(marked(target), ['LI']);
+		assert.strictEqual(target.querySelector(`.${CARET_CLASS}`)?.textContent.trim(), 'two');
+
+		// at the end of a block, as when typing there
+		props.caret_offset = content.indexOf('head') + 4;
+		flushSync();
+		assert.deepEqual(marked(target), ['H1']);
+
+		// a blank line between blocks is in none
+		props.caret_offset = content.indexOf('para') - 1;
+		flushSync();
+		assert.deepEqual(marked(target), []);
+
+		props.caret_offset = content.length;
+		flushSync();
+		assert.deepEqual(marked(target), ['P']);
+
+		props.caret_offset = null;
+		flushSync();
+		assert.deepEqual(marked(target), []);
+	});
+
+	test('the mark follows a re-render that moves the blocks', () => {
+		const props = create_reactive_props<Record<string, unknown>>({
+			content: 'para',
+			caret_offset: 2
+		});
+		const target = render(props);
+		assert.deepEqual(marked(target), ['P']);
+		props.content = '# head\n\npara';
+		flushSync();
+		assert.deepEqual(marked(target), ['H1'], 'offset 2 is in the heading now');
+		props.content = '';
+		flushSync();
+		assert.deepEqual(marked(target), []);
+	});
+
+	const click = (el: Element, init: MouseEventInit = {}): MouseEvent => {
+		const event = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ...init });
+		el.dispatchEvent(event);
+		return event;
+	};
+
+	test('a click reports the source start of the innermost element under it', () => {
+		const offsets: Array<number> = [];
+		const content = 'intro\n\n- one **bold** text\n- two';
+		const target = render({ content, onsourceclick: (o: number) => offsets.push(o) });
+		const strong = target.querySelector('strong');
+		assert.ok(strong);
+		click(strong);
+		const li = target.querySelectorAll('li')[1];
+		assert.ok(li);
+		click(li);
+		click(target.querySelector('p')!);
+		assert.deepEqual(offsets, [content.indexOf('**bold**'), content.indexOf('- two'), 0]);
+	});
+
+	test('a link, a multi-click, a modified click, or a selection drag reports nothing', () => {
+		const offsets: Array<number> = [];
+		const target = render({
+			content: 'text [jump](#x) more',
+			onsourceclick: (o: number) => offsets.push(o)
+		});
+		const p = target.querySelector('p')!;
+		click(find_link(target, 'jump'));
+		click(p, { detail: 2 });
+		click(p, { shiftKey: true });
+		click(p, { button: 1 });
+
+		const selection = window.getSelection()!;
+		selection.selectAllChildren(p);
+		click(p);
+		selection.removeAllRanges();
+		assert.deepEqual(offsets, []);
+
+		click(p, { detail: 1 });
+		assert.deepEqual(offsets, [0], 'a plain click still reports');
+	});
+
+	test('a touch tap reports nothing, a mouse or pen click as usual', () => {
+		const offsets: Array<number> = [];
+		const target = render({ content: 'text', onsourceclick: (o: number) => offsets.push(o) });
+		const p = target.querySelector('p')!;
+		const tap = (pointerType: string): void => {
+			p.dispatchEvent(
+				new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, pointerType })
+			);
+		};
+		tap('touch');
+		assert.deepEqual(offsets, []);
+		tap('mouse');
+		// deliberate: a pen points as precisely as a mouse
+		tap('pen');
+		// a keyboard activation or `el.click()`, no pointer at all
+		tap('');
+		assert.deepEqual(offsets, [0, 0, 0]);
+	});
+
+	test("a click sent as a plain `MouseEvent` goes by its press's `pointerType`", () => {
+		const offsets: Array<number> = [];
+		const target = render({ content: 'text', onsourceclick: (o: number) => offsets.push(o) });
+		const p = target.querySelector('p')!;
+		const press = (pointerType: string): void => {
+			p.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType }));
+		};
+		press('touch');
+		click(p);
+		assert.deepEqual(offsets, [], 'a touch press makes its click a tap');
+		press('mouse');
+		click(p);
+		press('pen');
+		click(p);
+		assert.deepEqual(offsets, [0, 0]);
+
+		press('touch');
+		click(p);
+		click(p);
+		assert.deepEqual(offsets, [0, 0, 0], 'a press is read by one click only');
+
+		// a touch that scrolled sends no click, so its press is stale - a click's own type wins
+		press('touch');
+		p.dispatchEvent(
+			new PointerEvent('click', { bubbles: true, cancelable: true, button: 0, pointerType: '' })
+		);
+		assert.deepEqual(offsets, [0, 0, 0, 0]);
+		click(p);
+		assert.deepEqual(offsets, [0, 0, 0, 0, 0], 'and that click took the press with it');
+	});
+
+	test('without `onsourceclick`, a click reports nothing and throws nothing', () => {
+		const target = render({ content: 'text' });
+		const event = click(target.querySelector('p')!);
+		assert.isFalse(event.defaultPrevented);
+	});
+
+	test('offsets past the parse are clamped', () => {
+		const offsets: Array<number> = [];
+		const content = 'one\n\ntwo';
+		const target = render({ content, onsourceclick: (o: number) => offsets.push(o) });
+		const p = target.querySelectorAll('p')[1]!;
+		// as content authoring the attributes on a registered element could
+		p.setAttribute('data-mdz-start', '9999');
+		click(p);
+		assert.deepEqual(offsets, [content.length]);
 	});
 });
 
@@ -378,25 +593,72 @@ describe('query_markdown_link_anchors', () => {
 		return container;
 	};
 
-	test('pairs links and anchors by document order, duplicates included', () => {
-		const links = to_markdown_links(mdz_parse('[one](x.md) [two](x.md) [three](y.md)'));
+	test('pairs links and anchors by source offsets, duplicate references included', () => {
+		const content = '[one](x.md) [two](x.md) [three](y.md)';
+		const links = to_markdown_links(mdz_parse(content));
+		assert.deepEqual(
+			links.map((l) => [l.start, l.end]),
+			[
+				[0, 11],
+				[12, 23],
+				[24, 37]
+			]
+		);
+		// out of document order, so only offsets can pair them
 		const container = container_for(
-			'<a href="x.md">one</a><a name="no-href">named</a><a href="x.md">two</a><a href="/y.md">three</a>'
+			'<a href="/y.md" data-mdz-start="24" data-mdz-end="37">three</a>' +
+				'<a name="no-href" data-mdz-start="0" data-mdz-end="11">named</a>' +
+				'<a href="x.md" data-mdz-start="12" data-mdz-end="23">two</a>' +
+				'<a href="x.md" data-mdz-start="0" data-mdz-end="11">one</a>'
 		);
 		const anchors = query_markdown_link_anchors(container, links);
-		assert.ok(anchors);
 		assert.deepEqual(
-			anchors.map((a) => a.textContent),
+			anchors.map((a) => a?.textContent),
 			['one', 'two', 'three'],
 			'an anchor without an href is not a link, and the hrefs are not compared'
 		);
 	});
 
-	test('pairs nothing when an unrelated anchor makes the counts disagree', () => {
+	test('an anchor whose offsets match no link pairs with nothing, and leaves the rest paired', () => {
+		const links = to_markdown_links(mdz_parse('[one](x.md) `code` [two](x.md)'));
+		const container = container_for(
+			'<a href="x.md" data-mdz-start="0" data-mdz-end="11">one</a>' +
+				// an injected `code` component rendering a link, with the `Code` node's offsets
+				'<a href="/elsewhere" data-mdz-start="12" data-mdz-end="18">code</a>' +
+				'<a href="/no-offsets">bare</a>' +
+				'<a href="x.md" data-mdz-start="19" data-mdz-end="30">two</a>'
+		);
+		const anchors = query_markdown_link_anchors(container, links);
+		assert.deepEqual(
+			anchors.map((a) => a?.textContent),
+			['one', 'two']
+		);
+		assert.strictEqual(find_markdown_link_index(container.querySelectorAll('a')[1]!, links), -1);
+		assert.strictEqual(find_markdown_link_index(container.querySelectorAll('a')[2]!, links), -1);
+		assert.strictEqual(find_markdown_link_index(container.querySelectorAll('a')[3]!, links), 1);
+	});
+
+	test("an anchor carrying a link's exact offsets before the link's own takes it - the first wins", () => {
+		const links = to_markdown_links(mdz_parse('[one](x.md)'));
+		const container = container_for(
+			'<a href="/elsewhere" data-mdz-start="0" data-mdz-end="11">first</a>' +
+				'<a href="x.md" data-mdz-start="0" data-mdz-end="11">one</a>'
+		);
+		assert.deepEqual(
+			query_markdown_link_anchors(container, links).map((a) => a?.textContent),
+			['first']
+		);
+	});
+
+	test('a link with no rendered anchor pairs with null, matching only both offsets', () => {
 		const links = to_markdown_links(mdz_parse('[one](x.md) [two](x.md)'));
 		const container = container_for(
-			'<a href="x.md">one</a><a href="/elsewhere">unrelated</a><a href="x.md">two</a>'
+			'<a href="x.md" data-mdz-start="0" data-mdz-end="12">start matches, end does not</a>' +
+				'<a href="x.md" data-mdz-start="12" data-mdz-end="23">two</a>'
 		);
-		assert.isNull(query_markdown_link_anchors(container, links));
+		assert.deepEqual(
+			query_markdown_link_anchors(container, links).map((a) => a?.textContent ?? null),
+			[null, 'two']
+		);
 	});
 });

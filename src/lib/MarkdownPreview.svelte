@@ -13,8 +13,17 @@
 		to_markdown_link_title,
 		to_markdown_links,
 		query_markdown_link_anchors,
+		find_markdown_link_index,
 		type MarkdownLink
 	} from './markdown_links.ts';
+	import {
+		find_markdown_caret_block,
+		query_markdown_blocks,
+		read_mdz_source_range,
+		to_markdown_scroll_anchors,
+		type MarkdownBlock,
+		type MarkdownScrollAnchor
+	} from './markdown_source_map.ts';
 
 	/**
 	 * Rendered markdown, read-only — a file's content, or any markdown
@@ -30,12 +39,20 @@
 	 * see marked unknown, each with a title saying why. Anything else —
 	 * without a `path`, any relative link — does nothing.
 	 *
+	 * mdz renders with its source offsets (`source_offsets`), which pair each
+	 * link with its anchor and, beside an editor, map the preview back to the
+	 * source: the block holding the editor's caret is marked
+	 * (`caret_offset`), a click on a block reports where its source starts
+	 * (`onsourceclick`), and scroll sync reads the blocks
+	 * (`get_scroll_anchors`, see `markdown_scroll_sync.ts`). The offsets index
+	 * the string parsed, `content` or the one `nodes` came from.
+	 *
 	 * @module
 	 */
 
-	// TODO highlighted codeblocks and offset hooks plug in here, as mdz contexts set around `Mdz` -
-	// link marks and clicks pair links with anchors by order, assuming every anchor in the
-	// container is mdz's, so a context component that renders its own anchors breaks the pairing
+	// TODO highlighted codeblocks plug in here, as an mdz codeblock context set around `Mdz` - its
+	// component must spread the offset props (`MdzSourceOffsetProps`) onto its root, or the caret
+	// mark, click-to-source, and scroll sync lose the block
 	// TODO the repos reader renders files at a revision, which needs its own index and opener -
 	// maybe a prop taking a `MarkdownLinkIndex` and an `onopen`
 
@@ -46,6 +63,8 @@
 		path,
 		focus_key,
 		pending_element_to_focus_key = $bindable(),
+		caret_offset = null,
+		onsourceclick,
 		attrs
 	}: {
 		/** The absolute path of the file rendered — without it, relative links are inert. */
@@ -53,6 +72,18 @@
 		/** Focuses the preview when `pending_element_to_focus_key` equals it, then clears that. */
 		focus_key?: string | number | null | undefined;
 		pending_element_to_focus_key?: string | number | null | undefined;
+		/**
+		 * The caret of an editor over the same source, an offset into the parsed
+		 * string — marks the innermost block holding it (`find_markdown_caret_block`).
+		 */
+		caret_offset?: number | null | undefined;
+		/**
+		 * Called on a plain click on rendered content — not a link, a control, a
+		 * multi-click, the end of a selection drag, or a touch tap — with the
+		 * source offset where the innermost element under it starts. Without it,
+		 * a click only focuses the preview.
+		 */
+		onsourceclick?: ((offset: number) => void) | undefined;
 		/** Attributes for the scroll container. */
 		attrs?: SvelteHTMLElements['div'] | undefined;
 	} & (
@@ -78,6 +109,9 @@
 
 	const parsed: Array<MdzNode> = $derived(nodes ?? mdz_parse(content ?? ''));
 
+	// how far the parse reaches - where offsets from the DOM are clamped to (`read_mdz_source_range`)
+	const source_length = $derived(parsed.at(-1)?.end ?? 0);
+
 	// a file in the app's index - links resolve and are checked only then
 	const index = $derived(path && app ? app.diskfiles.link_index : null);
 
@@ -86,6 +120,12 @@
 	);
 
 	let container_el: HTMLDivElement | undefined = $state.raw();
+
+	const CARET_BLOCK_CLASS = 'markdown-caret-block';
+
+	// a click on these acts on its own, so it never jumps to the source
+	const SOURCE_CLICK_IGNORED_SELECTOR =
+		'a[href], button, input, select, textarea, label, summary, [contenteditable]';
 
 	// the titles the marking set, by anchor - mdz sets none, but only these are ours to remove
 	const titles_set: WeakMap<HTMLAnchorElement, string> = new WeakMap();
@@ -97,23 +137,23 @@
 		const container = container_el;
 		if (!container) return;
 		const anchors = query_markdown_link_anchors(container, links);
-		if (DEV && !anchors && links.length > 0) {
-			console.warn('[MarkdownPreview] links and rendered anchors disagree, so no link is marked');
+		if (DEV && anchors.includes(null)) {
+			console.warn('[MarkdownPreview] a link has no rendered anchor - are `links` from `nodes`?');
 		}
 		const wanted: WeakMap<HTMLAnchorElement, { mark: string | null; title: string | null }> =
 			new WeakMap();
-		if (anchors) {
-			for (let i = 0; i < links.length; i++) {
-				const link = links[i]!;
-				const readme_path =
-					link.status === 'directory' && index && link.target.kind === 'path'
-						? to_directory_readme_path(link.target.path, index)
-						: null;
-				wanted.set(anchors[i]!, {
-					mark: to_markdown_link_mark(link.status),
-					title: to_markdown_link_title(link, readme_path)
-				});
-			}
+		for (let i = 0; i < links.length; i++) {
+			const anchor = anchors[i];
+			if (!anchor) continue;
+			const link = links[i]!;
+			const readme_path =
+				link.status === 'directory' && index && link.target.kind === 'path'
+					? to_directory_readme_path(link.target.path, index)
+					: null;
+			wanted.set(anchor, {
+				mark: to_markdown_link_mark(link.status),
+				title: to_markdown_link_title(link, readme_path)
+			});
 		}
 		for (const anchor of container.querySelectorAll('a')) {
 			const { mark = null, title = null } = wanted.get(anchor) ?? {};
@@ -135,6 +175,35 @@
 			}
 		}
 	});
+
+	// the rendered blocks, queried once per render - the caret mark and scroll sync read these, so
+	// a caret move or a scroll never queries the preview
+	let blocks: Array<MarkdownBlock> = $state.raw([]);
+	const scroll_anchors: Array<MarkdownScrollAnchor> = $derived(to_markdown_scroll_anchors(blocks));
+
+	$effect(() => {
+		const container = container_el;
+		// after each render (reading `parsed`) - mdz patches its elements in place, offsets included
+		blocks = container && parsed.length > 0 ? query_markdown_blocks(container, source_length) : [];
+	});
+
+	// the block marked as holding the caret - a class on an element mdz owns, which it never sets
+	// a class on, so a render patching the element keeps the mark
+	let caret_block_el: Element | null = null;
+
+	$effect(() => {
+		const i = caret_offset == null ? -1 : find_markdown_caret_block(blocks, caret_offset);
+		const next = i === -1 ? null : blocks[i]!.element;
+		if (caret_block_el !== next) caret_block_el?.classList.remove(CARET_BLOCK_CLASS);
+		next?.classList.add(CARET_BLOCK_CLASS);
+		caret_block_el = next;
+	});
+
+	/** The scroll-sync anchors of the current render - exposed for parent components. */
+	export const get_scroll_anchors = (): ReadonlyArray<MarkdownScrollAnchor> => scroll_anchors;
+
+	/** The scroll container - exposed for parent components. */
+	export const get_scroll_element = (): HTMLDivElement | undefined => container_el;
 
 	/**
 	 * Scroll the preview to its `index`th heading (`to_markdown_headings`
@@ -158,7 +227,7 @@
 	 */
 	export const reveal_link = (index: number, options?: { focus?: boolean }): boolean => {
 		if (!container_el) return false;
-		const anchor = query_markdown_link_anchors(container_el, links)?.[index];
+		const anchor = query_markdown_link_anchors(container_el, links)[index];
 		if (!anchor) return false;
 		anchor.scrollIntoView?.({ block: 'center' });
 		if (options?.focus !== false) anchor.focus({ preventScroll: true });
@@ -190,7 +259,7 @@
 
 		// the link's own target, resolved from its reference - the rendered `href` can differ
 		// (see `query_markdown_link_anchors`)
-		const link_index = query_markdown_link_anchors(container, links)?.indexOf(anchor) ?? -1;
+		const link_index = find_markdown_link_index(anchor, links);
 		// an anchor the links don't account for is followed only when it's external
 		const target =
 			link_index === -1
@@ -243,6 +312,37 @@
 			if (readme_path) app.diskfiles.open_path(readme_path, options);
 		}
 	};
+
+	// the `pointerType` of the last `pointerdown`, for a click some browsers send as a plain
+	// `MouseEvent` without one - read and cleared by the click; a press with no click (a
+	// touch that scrolled) stays until the next click, which at worst skips one jump
+	let pressed_pointer_type: string | null = null;
+
+	/** Reports a click's source, unless it's a link's, a control's, a selection's, or a tap's. */
+	const handle_source_click = (event: MouseEvent): void => {
+		// the click's own type is the browser's word when it has one, `''` for no pointer -
+		// the press's can be stale, left by a touch that scrolled rather than clicked
+		const pointer_type = event instanceof PointerEvent ? event.pointerType : pressed_pointer_type;
+		pressed_pointer_type = null;
+		if (!onsourceclick || event.defaultPrevented || event.button !== 0) return;
+		// a tap is for reading - a jump to the source focuses an editor, opening the on-screen
+		// keyboard; a pen's tap reports, pointing as precisely as a mouse
+		if (pointer_type === 'touch') return;
+		// a multi-click selects a word or a line, and a modified click extends a selection
+		if (event.detail > 1 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) {
+			return;
+		}
+		const container = event.currentTarget;
+		if (!(container instanceof HTMLElement) || !(event.target instanceof Element)) return;
+		if (event.target.closest(SOURCE_CLICK_IGNORED_SELECTOR)) return;
+		// a drag that selected text ends in a click - leave the selection to be copied
+		const selection = window.getSelection();
+		if (selection && !selection.isCollapsed && container.contains(selection.anchorNode)) return;
+		const el = event.target.closest('[data-mdz-start][data-mdz-end]');
+		if (!el || !container.contains(el)) return;
+		const range = read_mdz_source_range(el, source_length);
+		if (range) onsourceclick(range.start);
+	};
 </script>
 
 <div
@@ -252,10 +352,15 @@
 	onclick={(event) => {
 		attrs?.onclick?.(event);
 		handle_link_event(event);
+		handle_source_click(event);
 	}}
 	onauxclick={(event) => {
 		attrs?.onauxclick?.(event);
 		handle_link_event(event);
+	}}
+	onpointerdown={(event) => {
+		attrs?.onpointerdown?.(event);
+		pressed_pointer_type = event.pointerType;
 	}}
 	{@attach (el: HTMLDivElement) => {
 		container_el = el;
@@ -276,7 +381,7 @@
 		{#if parsed.length === 0}
 			<p class="text_50">nothing to preview</p>
 		{:else}
-			<Mdz nodes={parsed} />
+			<Mdz nodes={parsed} source_offsets />
 		{/if}
 	</div>
 </div>
@@ -294,5 +399,9 @@
 	}
 	.markdown-preview :global(a[data-link-status]) {
 		cursor: help;
+	}
+	/* a sliver in the gutter, drawn outside the box so nothing reflows as the caret moves */
+	.markdown-preview :global(.markdown-caret-block) {
+		box-shadow: calc(-1 * var(--space_xs)) 0 0 0 var(--shade_20);
 	}
 </style>

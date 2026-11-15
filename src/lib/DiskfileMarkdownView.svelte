@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import { inside_editable, is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
 	import { mdz_parse } from '@fuzdev/mdz/mdz.ts';
@@ -20,6 +21,12 @@
 	import MarkdownOutline from './MarkdownOutline.svelte';
 	import MarkdownBrokenLinks from './MarkdownBrokenLinks.svelte';
 	import { to_markdown_headings, to_markdown_links } from './markdown_links.ts';
+	import { to_textarea_value, type MarkdownScrollAnchor } from './markdown_source_map.ts';
+	import {
+		MarkdownScrollSync,
+		measure_element_anchor,
+		type MarkdownScrollPane
+	} from './markdown_scroll_sync.ts';
 	import DiskfileActions from './DiskfileActions.svelte';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import { format_placeholder } from './helpers.ts';
@@ -49,6 +56,11 @@
 	document's outline and broken links, which reveal their place in the preview and the source.
 	Ctrl+Shift+1/2/3 switch the mode from anywhere on the page (`MARKDOWN_VIEW_MODE_SHORTCUTS`).
 
+	Split, the panes track each other through mdz's source offsets: the preview marks the block
+	holding the editor's caret, a click on a preview block puts the caret at its source, and the
+	panes scroll in lockstep (`MarkdownScrollSync`). The editor holds, and mdz parses, the source as
+	the textarea reads it (`to_textarea_value`), so a caret and an offset index the same string.
+
 	*/
 
 	const {
@@ -76,20 +88,32 @@
 	// TODO maybe remember this app-wide, it's a layout preference rather than a per-file one
 	let drawer_open = $state(false);
 
-	let source_editor: { focus: () => void; place_caret: (offset: number) => void } | undefined =
-		$state.raw();
+	let source_editor:
+		| {
+				focus: () => void;
+				place_caret: (offset: number) => void;
+				get_scroll_element: () => HTMLTextAreaElement | undefined;
+				measure_offset: (offset: number) => { top: number; bottom: number } | null;
+		  }
+		| undefined = $state.raw();
 	let preview:
 		| {
 				reveal_heading: (index: number) => boolean;
 				reveal_link: (index: number, options?: { focus?: boolean }) => boolean;
+				get_scroll_anchors: () => ReadonlyArray<MarkdownScrollAnchor>;
+				get_scroll_element: () => HTMLDivElement | undefined;
 		  }
 		| undefined = $state.raw();
 	let root_el: HTMLElement | undefined = $state.raw();
 	let conflict_notice: { focus: () => boolean } | undefined = $state.raw();
 
+	// the text the editor holds - a CRLF file's line breaks read as the textarea reads them, so its
+	// caret and mdz's offsets agree; typing writes the textarea's text to the draft, as it always has
+	const source = $derived(to_textarea_value(editor_state.current_content));
+
 	// one parse for the preview, the outline, and the link list - lazy, so the source alone with the
 	// drawer closed parses nothing
-	const nodes = $derived(mdz_parse(editor_state.current_content));
+	const nodes = $derived(mdz_parse(source));
 	const headings = $derived(to_markdown_headings(nodes));
 	const links = $derived(
 		to_markdown_links(nodes, { file_path: diskfile.path, index: app.diskfiles.link_index })
@@ -163,6 +187,49 @@
 		if (editor_state.has_conflict && conflict_notice?.focus()) return;
 		await editor_state.save_changes();
 	};
+
+	// where the editor's caret is, for the preview's mark
+	let caret_offset: number | null = $state.raw(null);
+
+	const scroll_sync = new MarkdownScrollSync({
+		get_editor: (): MarkdownScrollPane | null => {
+			const element = mode === 'split' ? source_editor?.get_scroll_element() : undefined;
+			const editor = source_editor;
+			if (!element || !editor) return null;
+			return {
+				element,
+				measure: (anchor) =>
+					anchor.edge === 'top'
+						? (editor.measure_offset(anchor.offset)?.top ?? null)
+						: (editor.measure_offset(anchor.offset - 1)?.bottom ?? null)
+			};
+		},
+		get_preview: (): MarkdownScrollPane | null => {
+			const element = mode === 'split' ? preview?.get_scroll_element() : undefined;
+			if (!element) return null;
+			return { element, measure: (anchor) => measure_element_anchor(element, anchor) };
+		},
+		get_anchors: () => preview?.get_scroll_anchors() ?? []
+	});
+	onDestroy(() => scroll_sync.destroy());
+
+	/**
+	 * A click in the preview puts the caret at `offset`, and the editor scrolls to match the preview
+	 * rather than the other way round, so nothing moves under the pointer.
+	 */
+	const handle_source_click = (offset: number): void => {
+		source_editor?.place_caret(offset);
+		// the editor's focus made it the leader, but the preview is where the user is looking
+		scroll_sync.lead('preview');
+		scroll_sync.sync();
+	};
+
+	// a re-render moves the preview's blocks, so the follower realigns (on the next frame, once the
+	// preview has queried its blocks) - split only, so the source alone still parses nothing
+	$effect(() => {
+		if (mode !== 'split' || nodes.length === 0) return;
+		scroll_sync.refresh();
+	});
 
 	// TODO refactor, try to remove
 	$effect(() => {
@@ -240,13 +307,13 @@
 					</ErrorMessage>
 				</div>
 			{/if}
-			<div class="flex flex:1 min-height:0">
+			<div class="flex flex:1 min-height:0" {@attach scroll_sync.attach}>
 				{#if mode !== 'preview'}
 					<!-- a wrapper keeps the editor its last child, so `CodeTextarea` adds no flow margin below -->
 					<div class="flex:1 min-width:0 column">
 						<SourceEditor
 							bind:this={source_editor}
-							bind:value={editor_state.current_content}
+							bind:value={() => source, (value) => (editor_state.current_content = value)}
 							{lang}
 							focus_key={diskfile.id}
 							bind:pending_element_to_focus_key={app.ui.pending_element_to_focus_key}
@@ -258,6 +325,7 @@
 							attrs={{ class: 'height:100% border-radius:0 resize:none' }}
 							save_shortcut="page"
 							onsave={save}
+							oncaret={(offset) => (caret_offset = offset)}
 						/>
 					</div>
 				{/if}
@@ -270,6 +338,8 @@
 						path={diskfile.path}
 						focus_key={mode === 'preview' ? diskfile.id : null}
 						bind:pending_element_to_focus_key={app.ui.pending_element_to_focus_key}
+						caret_offset={mode === 'split' ? caret_offset : null}
+						onsourceclick={mode === 'split' ? handle_source_click : undefined}
 						attrs={{ class: 'flex:1 min-width:0' }}
 					/>
 				{/if}

@@ -515,3 +515,132 @@ describe('DiskfileMarkdownView outline and links', () => {
 		assert.strictEqual(textarea.selectionStart, DOC.indexOf('## Part Two'));
 	});
 });
+
+describe('DiskfileMarkdownView source sync', () => {
+	const DOC = '# Top\n\nintro [ok](./a.md)\n\n## Part Two\n\n- one\n- two **bold**\n';
+	const CRLF_DOC = DOC.replaceAll('\n', '\r\n');
+
+	const marked = (target: HTMLElement): string | null =>
+		target.querySelector('.markdown-caret-block')?.textContent.trim() ?? null;
+
+	const move_caret = (textarea: HTMLTextAreaElement, offset: number): void => {
+		textarea.focus();
+		textarea.setSelectionRange(offset, offset);
+		textarea.dispatchEvent(new Event('keyup', { bubbles: true }));
+		flushSync();
+	};
+
+	const click = (el: Element): void => {
+		el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+		flushSync();
+	};
+
+	const find_by_text = (target: HTMLElement, selector: string, text: string): Element => {
+		const el = Array.from(target.querySelectorAll(selector)).find(
+			(e) => e.textContent.trim() === text
+		);
+		assert.ok(el, `a ${selector} "${text}"`);
+		return el;
+	};
+
+	test('the preview marks the block holding the caret, following it and typing', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		const textarea = view.textarea()!;
+		assert.isNull(marked(view.target), 'no mark before the caret moves');
+
+		move_caret(textarea, DOC.indexOf('two'));
+		assert.strictEqual(marked(view.target), 'two bold');
+		move_caret(textarea, DOC.indexOf('Part'));
+		assert.strictEqual(marked(view.target), 'Part Two');
+
+		// typing at the end of the heading keeps it marked as the preview re-renders
+		const at = DOC.indexOf('Part Two') + 'Part Two'.length;
+		textarea.value = DOC.slice(0, at) + '!' + DOC.slice(at);
+		textarea.setSelectionRange(at + 1, at + 1);
+		textarea.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		assert.strictEqual(marked(view.target), 'Part Two!');
+		assert.strictEqual(view.target.querySelectorAll('.markdown-caret-block').length, 1);
+	});
+
+	test('clicking a preview block puts the caret at its source', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		const textarea = view.textarea()!;
+
+		click(find_by_text(view.target, 'h2', 'Part Two'));
+		assert.strictEqual(document.activeElement, textarea);
+		assert.strictEqual(textarea.selectionStart, DOC.indexOf('## Part Two'));
+		assert.strictEqual(textarea.selectionEnd, DOC.indexOf('## Part Two'));
+		assert.strictEqual(marked(view.target), 'Part Two');
+
+		click(find_by_text(view.target, 'strong', 'bold'));
+		assert.strictEqual(textarea.selectionStart, DOC.indexOf('**bold**'), 'the innermost element');
+		assert.strictEqual(marked(view.target), 'two bold');
+
+		// a link acts as a link, and leaves the caret
+		click(find_by_text(view.target, 'a', 'ok'));
+		assert.strictEqual(textarea.selectionStart, DOC.indexOf('**bold**'));
+	});
+
+	test('in preview mode a click is only a click, and nothing is marked', () => {
+		const a = write_externally(PATH_A, DOC);
+		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		const h2 = find_by_text(view.target, 'h2', 'Part Two');
+		click(h2);
+		assert.isNull(view.textarea());
+		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'preview');
+		assert.isNull(marked(view.target));
+	});
+
+	test('the mark goes when the editor does', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		move_caret(view.textarea()!, DOC.indexOf('intro'));
+		assert.strictEqual(marked(view.target), 'intro ok');
+		click_button(view.target, 'preview');
+		assert.isNull(marked(view.target));
+		click_button(view.target, 'split view');
+		assert.isNull(marked(view.target), 'no stale caret from before');
+	});
+
+	test('a CRLF file: the caret, the clicks, and the outline agree with the textarea', () => {
+		const a = write_externally(PATH_A, CRLF_DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		const textarea = view.textarea()!;
+		assert.strictEqual(textarea.value, DOC, 'the textarea reads LF');
+
+		move_caret(textarea, DOC.indexOf('one'));
+		assert.strictEqual(marked(view.target), 'one');
+		move_caret(textarea, DOC.indexOf('Part'));
+		assert.strictEqual(marked(view.target), 'Part Two');
+
+		click(find_by_text(view.target, 'li', 'two bold'));
+		assert.strictEqual(textarea.selectionStart, DOC.indexOf('- two'));
+
+		click_button(view.target, 'details');
+		click_button(view.target, 'Part Two');
+		assert.strictEqual(textarea.selectionStart, DOC.indexOf('## Part Two'));
+
+		// a mode round trip remounts the editor, still writing nothing
+		click_button(view.target, 'preview');
+		click_button(view.target, 'split view');
+
+		// shown as LF but not edited, so the draft and the disk content are untouched
+		const editor_state = app.diskfiles.get_editor_state(a);
+		assert.strictEqual(editor_state.current_content, CRLF_DOC);
+		assert.isFalse(editor_state.has_unsaved_edits);
+		assert.isFalse(editor_state.dirty);
+
+		// a disk change shows in the editor, LF, and leaves it clean
+		const CHANGED = CRLF_DOC.replace('one', 'uno');
+		write_externally(PATH_A, CHANGED);
+		flushSync();
+		assert.strictEqual(view.textarea()!.value, DOC.replace('one', 'uno'));
+		assert.strictEqual(editor_state.current_content, CHANGED);
+		assert.isFalse(editor_state.dirty);
+		assert.isFalse(editor_state.disk_conflict);
+	});
+});
