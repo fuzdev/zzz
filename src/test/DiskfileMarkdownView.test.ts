@@ -195,7 +195,7 @@ describe('DiskfileMarkdownView', () => {
 		assert.strictEqual(document.activeElement, alert);
 		assert.strictEqual(a.content, 'theirs');
 
-		click_button(view.target, 'reload from disk');
+		click_button(view.target, 'keep the disk version');
 		assert.strictEqual(document.activeElement, view.textarea());
 	});
 
@@ -642,5 +642,94 @@ describe('DiskfileMarkdownView source sync', () => {
 		assert.strictEqual(editor_state.current_content, CHANGED);
 		assert.isFalse(editor_state.dirty);
 		assert.isFalse(editor_state.disk_conflict);
+	});
+});
+
+describe('DiskfileMarkdownView showing the disk version', () => {
+	const DISK = '# Theirs\n\n## Disk Part\n\ntheir text\n';
+	const DRAFT = '# Mine\n\nmy text\n';
+
+	const marked = (target: HTMLElement): string | null =>
+		target.querySelector('.markdown-caret-block')?.textContent.trim() ?? null;
+
+	/** A split view of a draft `DRAFT` under a disk change to `DISK`, showing the disk. */
+	const setup = () => {
+		const a = write_externally(PATH_A, '# v1');
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		type_into(view.textarea()!, DRAFT);
+		write_externally(PATH_A, DISK);
+		flushSync();
+		const editor_state = app.diskfiles.get_editor_state(a);
+		assert.isTrue(editor_state.has_conflict);
+		click_button(view.target, 'show disk version');
+		return { a, view, editor_state };
+	};
+
+	test('the editor and the preview show the disk version, read-only, then the draft again', () => {
+		const { view, editor_state } = setup();
+
+		assert.strictEqual(view.textarea()!.value, DISK);
+		assert.isTrue(view.textarea()!.readOnly);
+		assert.strictEqual(view.heading(), 'Theirs');
+		assert.strictEqual(editor_state.current_content, DRAFT);
+		assert.isTrue(editor_state.has_unsaved_edits);
+
+		click_button(view.target, 'show your draft');
+
+		assert.strictEqual(view.textarea()!.value, DRAFT);
+		assert.isFalse(view.textarea()!.readOnly);
+		assert.strictEqual(view.heading(), 'Mine');
+	});
+
+	test('preview mode shows the disk version too', () => {
+		const { view } = setup();
+		click_button(view.target, 'preview');
+		assert.isNull(view.textarea());
+		assert.strictEqual(view.heading(), 'Theirs');
+	});
+
+	test('a click on the preview only moves the caret in the read-only editor', () => {
+		const { view, editor_state } = setup();
+		const h2 = Array.from(view.target.querySelectorAll('h2')).find(
+			(el) => el.textContent.trim() === 'Disk Part'
+		);
+		assert.ok(h2);
+		const history_before = editor_state.history.entries.map((entry) => entry.content);
+
+		h2.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+		flushSync();
+
+		const textarea = view.textarea()!;
+		assert.strictEqual(textarea.selectionStart, DISK.indexOf('## Disk Part'));
+		assert.strictEqual(marked(view.target), 'Disk Part');
+		assert.strictEqual(editor_state.current_content, DRAFT);
+		assert.deepEqual(
+			editor_state.history.entries.map((entry) => entry.content),
+			history_before
+		);
+		assert.isTrue(editor_state.showing_disk);
+	});
+
+	test('Ctrl+S while showing it stays blocked, and focuses the notice', async () => {
+		const { a, view } = setup();
+
+		press_save(view.textarea()!);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		flushSync();
+
+		assert.strictEqual(document.activeElement, view.alert());
+		assert.strictEqual(a.content, DISK);
+	});
+
+	test('keeping the disk version ends it, editable', () => {
+		const { view, editor_state } = setup();
+
+		click_button(view.target, 'keep the disk version');
+
+		assert.isNull(view.alert());
+		assert.strictEqual(view.textarea()!.value, DISK);
+		assert.isFalse(view.textarea()!.readOnly);
+		assert.isFalse(editor_state.showing_disk);
+		assert.isFalse(editor_state.has_unsaved_edits);
 	});
 });

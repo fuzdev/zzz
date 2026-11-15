@@ -13,8 +13,8 @@ import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 /**
  * A change on disk under the user's edit is kept apart from it: the edit
- * stays, and saving waits for an explicit overwrite or reload — while our own
- * save's broadcast never counts as such a change.
+ * stays, and saving waits for an explicit overwrite or keeping the disk
+ * version — while our own save's broadcast never counts as such a change.
  */
 
 const PATH = parse_or_throw(DiskfilePath, '/w/a.txt');

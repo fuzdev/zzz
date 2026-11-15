@@ -225,14 +225,14 @@ describe('DiskfileEditorView', () => {
 		assert.include(view.target.textContent, 'overwrite with your draft');
 	});
 
-	test('the conflict notice reloads from disk, keeping the draft in the history', () => {
+	test('the conflict notice keeps the disk version, keeping the draft in the history', () => {
 		const a = write_externally(PATH_A, 'v1');
 		const view = render(DiskfileEditorView, { diskfile: a });
 		type_into(view.textarea(), 'mine');
 		write_externally(PATH_A, 'theirs');
 		flushSync();
 
-		click_button(view.target, 'reload from disk');
+		click_button(view.target, 'keep the disk version');
 
 		assert.strictEqual(view.textarea().value, 'theirs');
 		assert.isNull(view.alert());
@@ -285,8 +285,228 @@ describe('DiskfileEditorView', () => {
 		flushSync();
 		assert.strictEqual(document.activeElement, alert);
 
-		click_button(view.target, 'reload from disk');
+		click_button(view.target, 'keep the disk version');
 		assert.strictEqual(document.activeElement, view.textarea());
+	});
+});
+
+describe('the conflict notice showing the disk version', () => {
+	const find_button = (target: HTMLElement, text: string): HTMLButtonElement => {
+		const button = Array.from(target.querySelectorAll('button')).find(
+			(b) => b.textContent.trim() === text
+		);
+		assert.ok(button, `a "${text}" button`);
+		return button;
+	};
+
+	/** A view of a draft `mine` under a disk change to `theirs`. */
+	const setup = (component: Component<any> = DiskfileEditorView) => {
+		const a = write_externally(PATH_A, 'v1');
+		const part = new DiskfilePart({ app, json: { path: PATH_A } });
+		const view = render(
+			component,
+			component === PartEditorForDiskfile ? { diskfile_part: part } : { diskfile: a }
+		);
+		type_into(view.textarea(), 'mine');
+		write_externally(PATH_A, 'theirs');
+		flushSync();
+		const editor_state = app.diskfiles.get_editor_state(a);
+		assert.isTrue(editor_state.has_conflict);
+		return { a, part, view, editor_state };
+	};
+
+	test('toggles the editor between the draft and the disk version, read-only', () => {
+		const { view, editor_state } = setup();
+		const toggle = find_button(view.target, 'show disk version');
+		assert.isFalse(view.textarea().readOnly);
+
+		toggle.click();
+		flushSync();
+
+		assert.strictEqual(view.textarea().value, 'theirs');
+		assert.isTrue(view.textarea().readOnly);
+		const toggle_back = find_button(view.target, 'show your draft');
+		assert.include(view.alert()?.textContent, 'showing the file on disk, read-only');
+		assert.include(view.alert()?.textContent, 'your draft is kept as it is');
+		assert.strictEqual(editor_state.current_content, 'mine');
+
+		toggle_back.click();
+		flushSync();
+
+		assert.strictEqual(view.textarea().value, 'mine');
+		assert.isFalse(view.textarea().readOnly);
+		assert.ok(find_button(view.target, 'show disk version'));
+		assert.include(view.alert()?.textContent, 'changed on disk since you edited it');
+	});
+
+	test('typing into the disk version changes nothing', () => {
+		const { view, editor_state } = setup();
+		click_button(view.target, 'show disk version');
+
+		// a read-only textarea fires no input, but a stray one must not land either
+		type_into(view.textarea(), 'typed');
+
+		assert.strictEqual(editor_state.current_content, 'mine');
+		assert.strictEqual(editor_state.shown_content, 'theirs');
+		assert.isTrue(editor_state.has_conflict);
+	});
+
+	test('Ctrl+S while showing it stays blocked, and focuses the notice', async () => {
+		const { a, view } = setup();
+		click_button(view.target, 'show disk version');
+
+		view
+			.textarea()
+			.dispatchEvent(
+				new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true })
+			);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		flushSync();
+
+		assert.strictEqual(document.activeElement, view.alert());
+		assert.strictEqual(a.content, 'theirs');
+	});
+
+	test('the actions leave the disk version alone: paste and clear are hidden', () => {
+		const { view } = setup();
+		const titled = (title: string): number =>
+			view.target.querySelectorAll(`button[title="${title}"]`).length;
+		assert.strictEqual(titled('paste from clipboard'), 1);
+		assert.strictEqual(titled('clear'), 1);
+
+		click_button(view.target, 'show disk version');
+
+		assert.strictEqual(titled('paste from clipboard'), 0);
+		assert.strictEqual(titled('clear'), 0);
+		assert.strictEqual(titled('copy to clipboard'), 1);
+	});
+
+	test('copy copies the text shown, the disk version included', async () => {
+		const { view } = setup();
+		const written: Array<string> = [];
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: {
+				writeText: (text: string) => {
+					written.push(text);
+					return Promise.resolve();
+				}
+			}
+		});
+		const copy = () => view.target.querySelector<HTMLButtonElement>('[title="copy to clipboard"]');
+		try {
+			copy()?.click();
+			click_button(view.target, 'show disk version');
+			copy()?.click();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		} finally {
+			Reflect.deleteProperty(navigator, 'clipboard');
+		}
+
+		assert.deepEqual(written, ['mine', 'theirs']);
+	});
+
+	test('overwrite with your draft writes the draft and shows it', async () => {
+		const { a, view } = setup();
+		click_button(view.target, 'show disk version');
+
+		click_button(view.target, 'overwrite with your draft');
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		flushSync();
+
+		assert.strictEqual(a.content, 'mine');
+		assert.isNull(view.alert());
+		assert.strictEqual(view.textarea().value, 'mine');
+		assert.isFalse(view.textarea().readOnly);
+	});
+
+	test('the toggle waits while an overwrite is in flight', async () => {
+		const { view, editor_state } = setup();
+		const deferred = create_deferred<Awaited<ReturnType<Frontend['diskfiles']['update']>>>();
+		app.diskfiles.update = () => deferred.promise;
+
+		click_button(view.target, 'overwrite with your draft');
+		assert.isTrue(editor_state.saving);
+		assert.isTrue(find_button(view.target, 'show disk version').disabled);
+
+		deferred.resolve({ ok: false, error: { code: -32603, message: 'disk full' } });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		flushSync();
+		assert.isFalse(find_button(view.target, 'show disk version').disabled);
+	});
+
+	test('keep the disk version discards the draft into the history and ends the preview', () => {
+		const { a, view, editor_state } = setup();
+		click_button(view.target, 'show disk version');
+
+		const keep = find_button(view.target, 'keep the disk version');
+		assert.include(keep.title, 'setting your edit aside in the history');
+		keep.click();
+		flushSync();
+
+		assert.isNull(view.alert());
+		assert.strictEqual(view.textarea().value, 'theirs');
+		assert.isFalse(view.textarea().readOnly);
+		assert.isFalse(editor_state.showing_disk);
+		assert.strictEqual(a.content, 'theirs', 'nothing written');
+	});
+
+	test('a newer disk change shows as it lands', () => {
+		const { view } = setup();
+		click_button(view.target, 'show disk version');
+
+		write_externally(PATH_A, 'theirs again');
+		flushSync();
+
+		assert.strictEqual(view.textarea().value, 'theirs again');
+		assert.isTrue(view.textarea().readOnly);
+	});
+
+	test('a file part editor shows it too, while the part sends the draft', () => {
+		const { view, part } = setup(PartEditorForDiskfile);
+
+		click_button(view.target, 'show disk version');
+
+		assert.strictEqual(view.textarea().value, 'theirs');
+		assert.isTrue(view.textarea().readOnly);
+		assert.strictEqual(part.content, 'mine');
+
+		click_button(view.target, 'show your draft');
+		assert.strictEqual(view.textarea().value, 'mine');
+		assert.isFalse(view.textarea().readOnly);
+	});
+
+	test('a picked older version is named as yours', () => {
+		const a = write_externally(PATH_A, 'v1');
+		const view = render(DiskfileEditorView, { diskfile: a });
+		const editor_state = app.diskfiles.get_editor_state(a);
+		const older = editor_state.history.add_entry('older', { created: 1 });
+		editor_state.set_content_from_history(older.id);
+		write_externally(PATH_A, 'theirs');
+		flushSync();
+
+		click_button(view.target, 'show disk version');
+
+		assert.include(view.alert()?.textContent, 'your version is kept as it is');
+		assert.ok(find_button(view.target, 'overwrite with your version'));
+		click_button(view.target, 'show your version');
+		assert.strictEqual(view.textarea().value, 'older');
+	});
+
+	test('a file deleted on disk offers no disk version', () => {
+		const { view } = setup();
+		click_button(view.target, 'show disk version');
+
+		app.diskfiles.remove_by_path(PATH_A);
+		flushSync();
+
+		assert.strictEqual(view.textarea().value, 'mine');
+		assert.isFalse(view.textarea().readOnly);
+		const labels = Array.from(view.target.querySelectorAll('button')).map((b) =>
+			b.textContent.trim()
+		);
+		assert.notInclude(labels, 'show disk version');
+		assert.notInclude(labels, 'show your draft');
 	});
 });
 

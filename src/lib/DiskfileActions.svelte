@@ -31,10 +31,11 @@
 <!-- Content modification actions (copy, paste, clear) -->
 <div class="flex gap_xs">
 	{#if editor_state.content_loaded}
-		<CopyToClipboard text={editor_state.current_content} class="plain" />
+		<!-- what the editor shows, the disk version included -->
+		<CopyToClipboard text={editor_state.shown_content} class="plain" />
 	{/if}
 
-	{#if !readonly}
+	{#if !readonly && editor_state.can_edit}
 		<PasteFromClipboard
 			onclipboardtext={(text) => {
 				editor_state.current_content += text;
@@ -64,7 +65,7 @@
 			type="button"
 			disabled={!editor_state.can_save || editor_state.saving || editor_state.has_conflict}
 			title={editor_state.has_conflict
-				? 'changed on disk since you edited it — overwrite or reload above'
+				? 'changed on disk since you edited it — overwrite or keep the disk version above'
 				: undefined}
 			onclick={() => editor_state.save_changes()}
 		>

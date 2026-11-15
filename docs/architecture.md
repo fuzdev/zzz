@@ -1295,12 +1295,24 @@ picked older entry) keeps that content and sets `disk_conflict`. While the
 editor shows content that differs from the disk (`has_conflict`), saving is
 paused: Ctrl+S (which moves focus to the notice) and the save button write
 nothing, and a notice offers **overwrite with your draft**
-(`save_draft({overwrite: true})`) or **reload from disk**
-(`discard_draft`); either returns focus to the editor, and both versions
-are in the history to compare. A disk change equal to the draft settles it,
-the content of our own save in flight landing on disk (our broadcast, with
-typing continuing past it) resolves rather than raises a conflict, and a
-new draft typed on the new disk content starts clean. VS Code keeps a dirty
+(`save_draft({overwrite: true})`) or **keep the disk version**
+(`discard_draft`, the draft set aside in the history); either returns
+focus to the editor, and both versions are in the history to compare. Its
+**show disk version** toggle (while it shows, it reads **show your draft**,
+or **show your version** for a picked entry) shows the file on disk in
+place of the draft — in the editor, the markdown preview, and file-part
+editors alike, read-only (`showing_disk`, `shown_content`): a look, not a
+choice. It never changes the draft, the history, what's marked ●, what a
+save writes, or what a file part sends — only the views read
+`shown_content`; a newer disk change shows as it lands, and in the markdown
+view a click on the preview only moves the read-only editor's caret. It
+ends with the conflict — however that resolves — when an entry is picked
+from the history, or when the file is deleted on disk (so its return shows
+the draft), and isn't offered while the file is gone. A disk change equal
+to the draft settles the conflict, the content of our own save in flight
+landing on disk (our broadcast, with typing continuing past it) resolves
+rather than raises a conflict, and a new draft typed on the new disk
+content starts clean. VS Code keeps a dirty
 buffer on an external change too, but only reports the conflict when saving
 ("the content of the file is newer", with Compare / Overwrite); zzz shows it
 as soon as it lands, since agents and tools write files while you edit, and
@@ -1709,7 +1721,7 @@ Population, per capability:
   changes are recorded with no editor open, a draft survives tab switches and
   keeps a file deleted on disk, closing a draft's last tab asks save / don't
   save / cancel, and a disk change under a draft pauses saving until you
-  overwrite or reload (see § File Editing). The conflict check is
+  overwrite or keep the disk version (see § File Editing). The conflict check is
   frontend-only: an external write landing between the backend receiving a
   save and its broadcast arriving is overwritten silently. Histories of files
   you've opened stay in memory for the session (each capped by entries and

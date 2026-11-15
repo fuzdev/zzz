@@ -560,11 +560,14 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Marks `diskfile` gone from disk, or back — the one writer of
 	 * `Diskfile.deleted_on_disk` besides `upsert`, so `directory_paths` stays
-	 * in step.
+	 * in step. A delete also ends any showing of the disk version
+	 * (`DiskfileEditorState.showing_disk`), so the file reappearing shows the
+	 * draft, not the disk.
 	 */
 	set_deleted_on_disk(diskfile: Diskfile, deleted_on_disk: boolean): void {
 		if (diskfile.deleted_on_disk === deleted_on_disk) return;
 		diskfile.deleted_on_disk = deleted_on_disk;
+		if (deleted_on_disk) this.#editor_states.get(diskfile.id)?.set_showing_disk(false);
 		this.#sync_directories(diskfile);
 	}
 

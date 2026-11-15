@@ -79,14 +79,17 @@
 			/>
 			<ContentEditor
 				bind:this={content_editor}
-				bind:content={editor_state.current_content}
+				bind:content={
+					() => editor_state.shown_content,
+					(content) => (editor_state.current_content = content)
+				}
 				focus_key={diskfile.id}
 				bind:pending_element_to_focus_key={app.ui.pending_element_to_focus_key}
 				token_count={editor_state.current_token_count}
 				placeholder={editor_state.content_loaded
 					? format_placeholder(diskfile.path_relative)
 					: '[content not loaded]'}
-				readonly={!editor_state.content_loaded}
+				readonly={!editor_state.can_edit}
 				attrs={{ class: 'height:100% border-radius:0' }}
 				save_shortcut="page"
 				onsave={save}

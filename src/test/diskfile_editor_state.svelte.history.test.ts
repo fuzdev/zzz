@@ -383,7 +383,7 @@ describe('history clearing', () => {
 	test('saving a picked discarded edit records a saved state that clear_history keeps', async () => {
 		editor_state.current_content = 'mine';
 		const draft_id = editor_state.unsaved_edit_entry_id!;
-		editor_state.discard_draft(); // "reload from disk"
+		editor_state.discard_draft(); // "keep the disk version"
 		editor_state.set_content_from_history(draft_id); // pick the discarded text back
 		assert.ok(await editor_state.save_changes());
 		assert.strictEqual(test_diskfile.content, 'mine');

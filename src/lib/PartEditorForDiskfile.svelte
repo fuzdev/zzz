@@ -94,7 +94,7 @@
 			<ContentEditor
 				bind:this={content_editor}
 				bind:content={
-					() => editor_state?.current_content ?? '',
+					() => editor_state?.shown_content ?? '',
 					(content) => {
 						if (editor_state) editor_state.current_content = content;
 					}
@@ -104,7 +104,7 @@
 					? format_placeholder(diskfile.path_relative)
 					: '[content not loaded]'}
 				show_stats={false}
-				readonly={!editor_state.content_loaded}
+				readonly={!editor_state.can_edit}
 				onsave={save}
 			/>
 

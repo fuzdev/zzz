@@ -52,7 +52,7 @@
 		failure = {
 			tab_id,
 			message: editor_state.has_conflict
-				? 'changed on disk since you edited it — overwrite or reload it in the editor first'
+				? 'changed on disk since you edited it — overwrite or keep the disk version in the editor first'
 				: (editor_state.save_error ?? 'not saved')
 		};
 	};

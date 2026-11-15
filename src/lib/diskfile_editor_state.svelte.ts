@@ -87,11 +87,13 @@ export interface DiskfileSaveOptions {
  *   aside as a discarded-edit entry, so its text stays restorable.
  * - When the disk changes under a draft, or under a picked entry, the edit is
  *   kept and `has_conflict` is set: saving stops until the user chooses to
- *   overwrite (`save_changes({overwrite: true})`) or reload from disk
+ *   overwrite (`save_changes({overwrite: true})`) or keep the disk version
  *   (`discard_draft`). Our own save's broadcast never counts — the disk
  *   then holds the edit, which settles it. The check is frontend-only: an
  *   external write landing after the backend received our save but before
  *   its broadcast reached us isn't seen as a conflict.
+ * - During a conflict the views can show the disk content instead, read-only
+ *   (`showing_disk`, `shown_content`), without touching the edit.
  */
 export class DiskfileEditorState {
 	readonly app: Frontend;
@@ -116,6 +118,15 @@ export class DiskfileEditorState {
 	 * or the editor settling on the disk content.
 	 */
 	disk_conflict: boolean = $state.raw(false);
+
+	/**
+	 * The user asked to see the disk content during a conflict — see
+	 * `showing_disk`. Lapses with the conflict, and is cleared by anything that
+	 * puts the user's content in the editor (an edit, a history pick, an
+	 * overwrite, a view reset, a delete on disk), so a later conflict shows
+	 * the user's content first.
+	 */
+	#show_disk: boolean = $state.raw(false);
 
 	/** Whether a `save_changes` write is in flight. */
 	saving: boolean = $state.raw(false);
@@ -178,6 +189,31 @@ export class DiskfileEditorState {
 	 * asked to `overwrite`.
 	 */
 	readonly has_conflict: boolean = $derived(this.disk_conflict && this.has_changes);
+	/**
+	 * Whether the views show the disk content rather than the user's
+	 * (`shown_content`), read-only — asked for with `set_showing_disk` during
+	 * a conflict, so the user can look at what's on disk without touching
+	 * their edit. Only ever true while `has_conflict` holds and the file is
+	 * on disk, so it ends when the conflict resolves, any way it resolves; it
+	 * follows a newer disk change. Never changes what's saved or sent.
+	 */
+	readonly showing_disk: boolean = $derived.by(
+		() => this.#show_disk && this.has_conflict && !this.diskfile.deleted_on_disk
+	);
+	/**
+	 * The text the views display: `current_content`, or the disk content while
+	 * `showing_disk`. Display only — saving and the conflict logic read
+	 * `current_content`, a file part the draft.
+	 */
+	readonly shown_content: string = $derived(
+		this.showing_disk ? (this.original_content ?? '') : this.current_content
+	);
+	/**
+	 * Whether the editor takes edits: the content is loaded (`content_loaded`)
+	 * and the views show the user's content, not the disk's (`showing_disk`).
+	 * While false, setting `current_content` is ignored.
+	 */
+	readonly can_edit: boolean = $derived(this.content_loaded && !this.showing_disk);
 
 	// History-related derived states
 	readonly selected_history_entry: HistoryEntry | null = $derived.by(() =>
@@ -251,10 +287,14 @@ export class DiskfileEditorState {
 		return this.original_content ?? '';
 	}
 
-	/** Applies an edit — see the class docs for how it lands in the history. */
+	/**
+	 * Applies an edit — see the class docs for how it lands in the history.
+	 * Ignored while the editor is read-only (`can_edit`).
+	 */
 	set current_content(value: string) {
-		// read-only — see `content_loaded`
-		if (!this.content_loaded) return;
+		if (!this.can_edit) return;
+		// an edit lands only on the user's content, so a lapsed request to show the disk ends
+		this.#show_disk = false;
 
 		const shown = this.current_content;
 		this.content_was_modified_by_user = value !== this.original_content;
@@ -277,7 +317,18 @@ export class DiskfileEditorState {
 
 	/** Disposes the history. Called by `Diskfiles` when the diskfile goes away. */
 	dispose(): void {
+		this.#show_disk = false;
 		this.history.dispose();
+	}
+
+	/**
+	 * Shows the disk content in the views instead of the user's, or back —
+	 * "show disk version" / "show your draft" on the conflict notice. Only
+	 * takes effect during a conflict (see `showing_disk`); changes nothing
+	 * else — the edit, the history, and what's saved stay as they are.
+	 */
+	set_showing_disk(showing: boolean): void {
+		this.#show_disk = showing && this.has_conflict && !this.diskfile.deleted_on_disk;
 	}
 
 	/**
@@ -423,6 +474,8 @@ export class DiskfileEditorState {
 	 * nothing left to write, whether the in-flight save succeeded
 	 */
 	save_changes(options?: DiskfileSaveOptions): Promise<boolean> {
+		// choosing to overwrite shows the content being written
+		if (options?.overwrite) this.#show_disk = false;
 		// never write over a file whose content wasn't loaded
 		// (`Diskfiles.update` refuses it too)
 		if (!this.content_loaded) {
@@ -547,7 +600,7 @@ export class DiskfileEditorState {
 	}
 
 	/**
-	 * Drops the edit in favor of the disk — "reload from disk" on a conflict,
+	 * Drops the edit in favor of the disk — "keep the disk version" on a conflict,
 	 * "don't save" on closing a tab: shows the disk content, setting the draft
 	 * aside as a discarded-edit entry so its text stays in the history (until
 	 * the history caps or a clear drop it). A file deleted on disk that was kept
@@ -569,6 +622,7 @@ export class DiskfileEditorState {
 	 * it shows the draft if there is one, else the disk content.
 	 */
 	reset_view(): void {
+		this.#show_disk = false;
 		const draft = this.history.draft_entry;
 		if (draft) {
 			this.selected_history_entry_id = draft.id;
@@ -581,12 +635,13 @@ export class DiskfileEditorState {
 	}
 
 	/**
-	 * Shows history entry `id` in the editor. Picking an entry changes
-	 * nothing else — editing it is what starts a draft.
+	 * Shows history entry `id` in the editor, ending any `showing_disk`.
+	 * Picking an entry changes nothing else — editing it is what starts a draft.
 	 */
 	set_content_from_history(id: Uuid): void {
 		const entry = this.history.find_entry_by_id(id);
 		if (!entry) return;
+		this.#show_disk = false;
 		this.selected_history_entry_id = id;
 		this.content_was_modified_by_user = entry.content !== this.original_content;
 		this.#clear_conflict_if_settled();

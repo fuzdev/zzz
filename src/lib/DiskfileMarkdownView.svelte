@@ -108,8 +108,10 @@
 	let conflict_notice: { focus: () => boolean } | undefined = $state.raw();
 
 	// the text the editor holds - a CRLF file's line breaks read as the textarea reads them, so its
-	// caret and mdz's offsets agree; typing writes the textarea's text to the draft, as it always has
-	const source = $derived(to_textarea_value(editor_state.current_content));
+	// caret and mdz's offsets agree; typing writes the textarea's text to the draft, as it always has.
+	// During a conflict it can be the disk's (`showing_disk`), read-only, so nothing is written then -
+	// a click on the preview still moves the caret in the read-only editor, which writes nothing
+	const source = $derived(to_textarea_value(editor_state.shown_content));
 
 	// one parse for the preview, the outline, and the link list - lazy, so the source alone with the
 	// drawer closed parses nothing
@@ -320,7 +322,7 @@
 							placeholder={editor_state.content_loaded
 								? format_placeholder(diskfile.path_relative)
 								: '[content not loaded]'}
-							readonly={!editor_state.content_loaded}
+							readonly={!editor_state.can_edit}
 							wrapper_attrs={{ class: 'flex:1 min-height:0' }}
 							attrs={{ class: 'height:100% border-radius:0 resize:none' }}
 							save_shortcut="page"
