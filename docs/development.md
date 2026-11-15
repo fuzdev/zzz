@@ -152,6 +152,11 @@ more accurate; the `.en` ones are English-only.
 The Vulkan build needs the Vulkan headers, a GLSL compiler, and the SPIR-V
 headers (`libvulkan-dev`, `glslc`, and `spirv-headers` on Debian).
 
+There is no switch that turns media off: transcription is off while
+`ZZZ_WHISPER_CPP_MODEL` is unset, and recording, the byte routes, and
+finalize are always there. An `ffmpeg` without the `fd` protocol fails
+every run as `media_invalid`.
+
 ### Terminal emulator module
 
 The `fuz_terminal` library (`src/lib/fuz_terminal/`) binds
@@ -183,7 +188,9 @@ project, which exists only when the module does.
 
 - `gro check` — All checks (typecheck, test, gen, format, lint)
 - `gro typecheck` — Type checking only (faster iteration)
-- `gro test` — Run Vitest tests
+- `gro test` (or `npm test`) — Run Vitest unit + db tests; the
+  `cross_backend_*` projects are excluded unless `FUZ_TEST_CROSS_BACKEND=1`
+  (`npm run test:cross` sets it — ../crates/CLAUDE.md § Integration Tests)
 - `gro test -- --watch` — Tests in watch mode
 - `gro gen` — Run `*.gen.ts` generators (regenerate their outputs)
 - `gro format` — Format with tsv
@@ -279,8 +286,213 @@ zzz                                       # start the daemon (detached) and open
 The CLI passes `zzzd` its own environment with `~/.zzz/.env` filling the
 gaps, runs it in `~/.zzz` (relative paths in `~/.zzz/.env` resolve there;
 relative paths in the CLI's own environment resolve against where `zzz` runs), and
-serves the UI from `ZZZ_STATIC_DIR` if set, else `~/.zzz/static` — see the
-CLI section of ../CLAUDE.md for the full rules.
+serves the UI from `ZZZ_STATIC_DIR` if set, else `~/.zzz/static` — the full
+rules are in § The `zzz` CLI below.
+
+## The `zzz` CLI
+
+The Rust CLI (`crates/zzz`, argh; its modules in ../crates/CLAUDE.md) manages
+the daemon and opens the UI:
+
+```bash
+zzz                          # start daemon if needed, open zzz (the browser, or a configured opener)
+zzz ~/dev/                   # open workspace at ~/dev/ (a file opens its directory)
+zzz daemon start             # start daemon (foreground)
+zzz daemon stop              # stop the recorded daemon
+zzz daemon status            # show daemon info (exit 0 running, 1 not responding, 3 not running, 4 unknown)
+zzz init                     # initialize ~/.zzz/
+```
+
+The global daemon runs on port 4460 with `~/.zzz/` as its home and working
+directory. `zzz init` creates it (mode `0700`) with `config.json` (the port),
+`.env` (the daemon's environment, mode `0600`, with a generated cookie key),
+`bootstrap_token` (the one-shot admin token), and the app directory `.zzz/`
+(so `~/.zzz/.zzz/`) — never overwriting an existing file. The daemon deletes
+the token once the first admin exists; a later `zzz init` recreates it when
+missing (say the database was dropped), and a running daemon picks it up on
+restart, since it checks bootstrap availability once at boot. The CLI spawns
+and discovers the `zzzd` daemon binary (the `[[bin]]` target of the
+`zzz_server` crate) — `ZZZ_SERVER_BIN` (a relative value resolves against
+the directory `zzz` runs in; one that isn't an executable file is an error,
+not a fallback), else beside the resolved CLI executable (symlinks followed,
+so a symlinked `zzz` finds the `zzzd` beside its target; this covers a dev
+build: `target/debug/zzz` runs `target/debug/zzzd`), else `~/.zzz/bin/zzzd`,
+then `zzzd` on `$PATH` — a candidate that isn't an executable file is skipped.
+Never from the current directory (relative `$PATH` entries are skipped), so
+running `zzz` inside an untrusted checkout can't execute its
+`target/debug/zzzd` with your database URL and cookie key; finding none is an
+error (`ZZZ_SERVER_BIN` must `exec` the server, not fork it — the listening socket
+is checked on the spawned pid). Build both
+with `cargo`: `cargo build -p zzz` (CLI) and `cargo build -p zzz_server`
+(daemon → `zzzd`).
+
+When the CLI starts `zzzd` it:
+
+- **env** — passes its own environment, with `~/.zzz/.env` filling any
+  variable that environment doesn't set (or sets blank — a blank value is
+  never passed on: the CLI removes it from the child's env; so to disable a
+  key `~/.zzz/.env` sets, comment it out there — an empty exported value
+  doesn't override it), and
+  `FUZ_ALLOWED_ORIGINS` defaulting to
+  `http://localhost:<port>,http://127.0.0.1:<port>`. `DATABASE_URL` and
+  `SECRET_FUZ_COOKIE_KEYS` must be set in one or the other. `.env` lines
+  that aren't assignments are skipped with a warning naming their line
+  numbers. When the environment overrides a `.env` key with a different
+  value, a note names the key (never the value).
+  `ZZZ_ENABLE_TEST_ACTIONS` is never passed on, from either source (a
+  warning says so when it's set).
+- **cwd** — runs it in `~/.zzz`. For the path-valued vars (`PUBLIC_ZZZ_DIR`,
+  `PUBLIC_ZZZ_SCOPED_DIRS`, `FUZ_BOOTSTRAP_TOKEN_PATH`, `ZZZ_STATIC_DIR`,
+  `ZZZ_FFMPEG_BIN`, `ZZZ_WHISPER_CPP_BIN`, `ZZZ_WHISPER_CPP_MODEL`) the
+  CLI expands `~`; a relative value from `~/.zzz/.env` resolves against
+  `~/.zzz`, and one from the CLI's own environment against the directory
+  `zzz` runs in. The three tool vars are the exception to the first half:
+  `zzzd` requires them absolute, so a relative one in `~/.zzz/.env` (which
+  the CLI passes through as written) refuses to boot — write `~/…` or a full
+  path there.
+- **port** — `--port` (only `zzz daemon start` takes it: `zzz` reuses
+  whatever daemon is recorded) > `ZZZ_PORT` > `zzz_config_port` in
+  `~/.zzz/config.json` > 4460, passed as `--port`; the port must be free.
+  Every source must be a port in `1..=65535`, and a `config.json` that
+  exists must parse as a JSON object — otherwise it's an error naming the
+  source (the file, for `config.json`), never a fallback.
+- **UI** — `ZZZ_STATIC_DIR` if set (must be a directory), else
+  `~/.zzz/static`, passed as `--static-dir`; neither is an error.
+
+A daemon counts as started once the spawned process itself holds the
+listening socket and answers `/health` (probed on `127.0.0.1`, bypassing any
+`HTTP(S)_PROXY`); one that exits first fails the start at once (the detached
+`zzz` start shows the tail of `~/.zzz/run/daemon.log`, mode `0600`). Until it
+serves, a timeout or SIGINT/SIGTERM/SIGHUP stops the child (`SIGTERM`, then
+`SIGKILL` after 10s) — no unrecorded daemon is left behind — and
+`daemon.json` is written only once it serves. `~/.zzz/run/daemon.json`
+identifies the daemon by boot id, pid, **and** kernel start time, so a pid
+reused by another process (or a record from before a reboot) is treated as
+gone — never signalled — and the file is removed only while it still
+records the same process: by `zzz daemon start` when its foreground daemon
+exits, by `stop` (after stopping it, or once it's stale), by `zzz` (once it's
+stale, or after stopping an unresponsive one), or by `status` once it's
+stale. A `daemon.json` this zzz can't read — an older or newer zzz's, or a
+corrupt one — is reported (with its pid, "stop it manually", when it names
+one; a corrupt one usually doesn't, so "remove it once no daemon is running")
+and never signalled, removed, or overwritten: `zzz` and `zzz daemon start`
+refuse to start a daemon while it's there, `zzz daemon stop` refuses to
+signal, and `status` reports the state unknown (exit 4). Once serving, foreground
+`zzz daemon start` exits with zzzd's own status (0 on a clean stop, 128 + the
+signal if one killed it); a signal during startup exits 128 + that signal, and
+a startup failure exits 1. A usage or config error — a bad argument, a
+non-UTF-8 one, an invalid port, a bad `config.json`, missing env, no `zzzd` —
+exits 2 before anything runs; `--help` exits 0.
+
+`zzz <path>` expands `~`, resolves the path against the current directory,
+and canonicalizes it (the form the daemon stores for workspaces) before
+building the `?workspace=` URL; a missing path is an error, and a file opens
+its parent directory.
+
+`zzz` opens that URL in the browser (`xdg-open` / `open` / `start`) unless an
+**opener** — an open command to run instead — is configured:
+
+- **sources** — `opener` in `~/.zzz/config.json`, then `ZZZ_OPENER` in the
+  CLI's own environment (`~/.zzz/.env` is the daemon's and isn't read for
+  it). A blank value (or a config `null`) reads as unset and falls through to
+  the next source, then to the browser.
+- **shape** — in `config.json`, a string is the program alone (never split)
+  and an array of strings is the program followed by its arguments, so flags
+  need no shell parsing: `"opener": ["~/bin/my-opener", "--new-window"]`.
+  Any other JSON type, an empty array, a non-string element, or a blank
+  program (the array's first element) is an error naming the file.
+  `ZZZ_OPENER` is the program alone.
+- **program** — surrounding whitespace is trimmed and `~` expands; a relative
+  path resolves against `~/.zzz` from `config.json` and against the directory
+  `zzz` runs in from `ZZZ_OPENER`. A bare name (no `/` — `~name` included, as
+  only `~` and `~/…` expand) is refused from both sources: `$PATH` isn't
+  searched, and `zzz` never runs a same-named executable from whatever
+  directory it's in — write `./name` for a file in that directory, or an
+  absolute path. A bare name, or a program that isn't an executable file, is
+  an error (exit 2), checked before any daemon is started — never a fallback
+  to the browser, and a bad `config.json` opener doesn't fall back to
+  `ZZZ_OPENER`.
+- **launch** — the URL is the final argument, after the configured ones, and
+  the program is executed directly: no shell sees the URL or the arguments.
+  The URL is always its own argument, so a `--flag=<url>` form needs a
+  wrapper script. It runs detached (its own process group, output in
+  `~/.zzz/run/opener.log`, mode `0600`, emptied at each launch) in the
+  directory `zzz` runs in, with the CLI's environment
+  minus `ZZZ_ENABLE_TEST_ACTIONS`; the daemon's `~/.zzz/.env` values aren't
+  added. `zzz` doesn't wait for it, so the opener's own exit status isn't
+  checked; only a failure to start it is an error (exit 1).
+
+`zzz` reads `config.json` for the opener on every run, so a file that isn't a
+JSON object is an error (exit 2) even when a daemon is already running.
+
+## Environment Variables
+
+### Server (read by `zzz_server` at boot)
+
+- `ZZZ_PORT` — HTTP server port (default 4460; `cargo xtask dev` uses 4461); the `--port` flag wins. Anything but a port in `1..=65535` refuses to boot. The bind address is always loopback — there is no `HOST` override.
+- `ZZZ_STATIC_DIR` — directory of the built SPA to serve (`--static-dir` wins); must be a directory, or `zzzd` refuses to boot. Unset, `zzzd` serves no frontend (dev: Vite serves it)
+- `ZZZ_TRUSTED_PROXIES` — comma-separated trusted proxy IPs / CIDR ranges for `client_ip` resolution
+- `ZZZ_FFMPEG_BIN` — the `ffmpeg` binary to run (see § Local tools); an absolute path to an executable file, or `zzzd` refuses to boot. Unset, `zzzd` uses the `ffmpeg` on its `PATH`
+- `ZZZ_WHISPER_CPP_BIN` — whisper.cpp's `whisper-cli` binary to run, under the same rule. Unset, `zzzd` uses the `whisper-cli` on its `PATH`
+- `ZZZ_WHISPER_CPP_MODEL` — the Whisper model file (`ggml-*.bin`) transcription loads; an absolute path to a file, or `zzzd` refuses to boot. There is no default and no search — unset, nothing is transcribed. zzz downloads no models
+- `DATABASE_URL` — PostgreSQL connection (`postgres://`; required — unset or blank refuses to boot, naming it)
+- `SECRET_FUZ_COOKIE_KEYS` — HMAC signing keys (min 32 chars; required, like `DATABASE_URL`)
+- `FUZ_ALLOWED_ORIGINS` — the origins the UI is served from, checked against every browser request's `Origin` (required — `zzzd` refuses to boot on an absent or empty list, since an empty allowlist would allow every origin; the CLI defaults it to `http://localhost:<port>,http://127.0.0.1:<port>`). List exact ports: the session cookie reaches every port on `localhost`, so a wildcard (`http://localhost:*`) admits any page served on any local port to the WebSocket. Each entry is `scheme://host[:port]`, http or https; a malformed one (a trailing slash, a missing scheme, a stray comma, a scheme's default port written out, …) refuses to boot, naming the entry, and a wildcard port or host label refuses to boot, saying what it admits, unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true` (exactly `true` or `false`), which boots it with that warning on every boot. The hosts it names are also the non-loopback `Host`s `zzzd` answers to (see ./architecture.md § Security posture)
+- `FUZ_BOOTSTRAP_TOKEN_PATH` — One-shot admin bootstrap token path
+- `FUZ_DB_CHECKOUT_TIMEOUT_MS` — bound on the pool checkouts a request makes, in ms (default 5000, `1..=600000`; anything else refuses to boot); a failed checkout answers 503 `service_unavailable`, a failed query keeps its 500. `FUZ_DB_AUDIT_CHECKOUT_TIMEOUT_MS` (default 30000, same range) bounds the checkout behind each audit pool write instead — the failed-login row a request waits on included
+- `PUBLIC_ZZZ_DIR` — Zzz app directory (default `.zzz`, a subdirectory of the daemon's working directory); must not be the working directory itself (under the CLI that's the daemon home, with `.env` and `bootstrap_token`) — `zzzd` refuses to boot on that. The check catches the daemon home only as the working directory: an explicit `PUBLIC_ZZZ_DIR` naming the absolute path of `~/.zzz` for a daemon run elsewhere (say `cargo xtask dev`) makes the home the app dir, whose filer indexes and broadcasts its `.env` — don't
+- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd` doesn't expand `~`; the CLI does); an entry that is, or is inside, a `.zzz` directory other than the app dir refuses to boot
+- `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live dispatchers (integration tests only — must stay unset in prod; blank reads as unset, and the `zzz` CLI never passes it to a daemon it starts)
+- `SECRET_ANTHROPIC_API_KEY` — Claude API key
+- `SECRET_OPENAI_API_KEY` — OpenAI API key
+- `SECRET_GOOGLE_API_KEY` — Google Gemini API key
+
+`zzzd` reads a blank (empty or whitespace) value of any of its path vars as
+unset — `PUBLIC_ZZZ_DIR` falls back to `.zzz`, never `/` — and fails to boot
+on an empty or unresolvable path (a missing scoped dir is fine). It creates
+the app directory (and missing parents, mode `0700`) at boot, and fails to
+boot with the path in the error if it can't. A value that isn't valid UTF-8
+fails boot too, rather than reading as unset.
+
+Its command line is `zzzd [--port <port>] [--static-dir <dir>]` (each value
+also as `--flag=value`); `-h` / `--help` prints that usage (exit 0), and an
+unknown or malformed argument exits 2 with the usage on stderr rather than
+being ignored. A `--static-dir` may be any path, UTF-8 or not. A boot failure
+prints `error: <error chain>` and a hint to stderr and exits 2 for a
+configuration error (env, the database's isolation setting), 1 otherwise.
+
+PTY terminals spawned by the server don't get the `SECRET_*`, `FUZ_*`,
+`ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, or `PORT` variables — they're
+scrubbed from the child environment, which keeps them out of a shell's env
+but isn't isolation (see ./architecture.md § Known Limitations → PTY terminals).
+
+`zzzd` reads only its process environment — it loads no env file. The `zzz`
+CLI supplies it from `~/.zzz/.env`, where the **process env wins** (the file
+fills gaps; see § The `zzz` CLI); `cargo xtask dev` from `.env.development`, where the
+**file wins** — it's dev's source of truth, so a stale exported
+`DATABASE_URL` can't redirect dev migrations, and xtask prints each
+inherited key it overrides. In both, a blank value is unset: a template's
+empty `SECRET_*_API_KEY=` line never clears an exported key. `.env.production` is what `gro build` reads for
+the `PUBLIC_ZZZ_*` vars, and the template for running `zzzd` under a process
+manager (see § Production build). The CLI itself also
+reads `ZZZ_SERVER_BIN` (the `zzzd` binary to spawn) and `ZZZ_OPENER` (an
+open command to run instead of the browser — see § The `zzz` CLI).
+
+### SvelteKit frontend vars (PUBLIC_ZZZ_\*)
+
+Declared in `src/env.ts` (public and static, imported from `$app/env/public`),
+so the build bakes them in. Each is optional — unset reads as empty, and
+`src/lib/constants.ts` supplies the default.
+
+- `PUBLIC_ZZZ_SERVER_PROTOCOL` — `http` or `https`
+- `PUBLIC_ZZZ_SERVER_HOST` — Server hostname (frontend)
+- `PUBLIC_ZZZ_SERVER_PORT` — the server the UI calls (dev: the Vite port, 5460, which proxies `/api` — `cargo xtask dev` forces it, and `vite dev` refuses to start when it names any other port than the one it serves on: `src/lib/dev_server_port.ts`); empty → the page's own origin, which is how the production build (served by `zzzd` on any port) is configured
+- `PUBLIC_ZZZ_SERVER_API_PATH` — API endpoint path
+- `PUBLIC_ZZZ_WEBSOCKET_URL` — WebSocket URL (dev: `zzzd` directly); empty → `<API path>/ws` on the page's origin
+
+`PUBLIC_ZZZ_SERVER_PROXIED_PORT` is dev-only and not baked in: `vite.config.ts`
+reads it from the process env as the backend port its dev proxy targets
+(`cargo xtask dev` forces 4461).
 
 ## Code Generation
 
@@ -288,9 +500,9 @@ The `*.gen.ts` files are hand-written generators; `gro gen` runs them and writes
 their outputs. Edit the generators, never the outputs (each output carries a
 `DO NOT EDIT` banner):
 
-- `action_collections.gen.ts` (`src/lib/action_collections.ts`) — Action spec collections, input/output type maps
-- `action_metatypes.gen.ts` (`src/lib/action_metatypes.ts`) — Action method types, handler enums
-- `frontend_action_types.gen.ts` (`src/lib/frontend_action_types.ts`) — Frontend handler types
+- `action_collections.gen.ts` (`src/lib/action_collections.ts`) — `ActionInputs` / `ActionOutputs` type maps + `ActionEventDatas`
+- `action_metatypes.gen.ts` (`src/lib/action_metatypes.ts`) — the `ActionMethod` open union, the narrow handler enums (`BackendRequestResponseMethod`, `BroadcastActionMethod`, …), the `FrontendActionsApi` interface
+- `frontend_action_types.gen.ts` (`src/lib/frontend_action_types.ts`) — `TypedActionEvent` + `FrontendActionHandlers`
 - `reference.gen.ts` (`docs/reference.md`) — Action-spec + cell-class reference lists
 
 Run `gro gen` after changing `action_specs.ts` (or `cell_classes.ts`). `gro check`
@@ -362,6 +574,10 @@ export const cell_classes = {
 ```
 
 ### Adding a New Action
+
+The test-only `_testing_emit_notifications` and `_testing_notification`
+specs live in `src/lib/testing_action_specs.ts`, as TS twins of the methods
+`zzzd` registers only when `ZZZ_ENABLE_TEST_ACTIONS=1`.
 
 1. Define the spec in `src/lib/action_specs.ts`:
 
@@ -551,6 +767,9 @@ app.api.toggle_main_menu();
 ## Testing
 
 Tests live in `src/test/` (not co-located). Split large suites by aspect with dot-separated names.
+
+`src/test/sveltekit_env_setup.ts`, a vitest setup file, stubs the page global
+that `$app/env/public` reads.
 
 ```bash
 gro test                                    # all tests

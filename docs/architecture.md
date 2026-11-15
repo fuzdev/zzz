@@ -311,7 +311,7 @@ export const cell_classes = {
 	Chats,
 	Thread,
 	Threads,
-	Turn /* ... 33 total */
+	Turn /* ... */
 } satisfies Record<string, typeof Cell<any>>;
 
 // frontend.svelte.ts — auto-registers all classes under their keys
@@ -322,6 +322,47 @@ for (const [class_name, constructor] of Object.entries(cell_classes)) {
 // Lookup by ID at runtime
 const cell = app.cell_registry.all.get(id);
 ```
+
+The registered classes (./reference.md has the generated roster). `Socket`
+is not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
+`FrontendWebsocketClient` — so it isn't listed:
+
+- `Parts` (`parts.svelte.ts`) — Collection of all parts
+- `TextPart` (`part.svelte.ts`) — Direct text content
+- `DiskfilePart` (`part.svelte.ts`) — File reference content
+- `Capabilities` (`capabilities.svelte.ts`) — Feature capability tracking
+- `Chat` (`chat.svelte.ts`) — Chat container with threads
+- `Chats` (`chats.svelte.ts`) — Collection of chats
+- `Diskfile` (`diskfile.svelte.ts`) — Single file on disk (its content when loaded, and its `mtime`)
+- `DiskfileTab` (`diskfile_tab.svelte.ts`) — Editor tab for a file
+- `DiskfileTabs` (`diskfile_tabs.svelte.ts`) — Tab manager
+- `DiskfileHistory` (`diskfile_history.svelte.ts`) — File edit history (owned by the file's app-level `DiskfileEditorState`)
+- `Diskfiles` (`diskfiles.svelte.ts`) — Collection of disk files
+- `DiskfilesEditor` (`diskfiles_editor.svelte.ts`) — Multi-file editor state
+- `Job` (`job.svelte.ts`) — A backend job: long-running work on a file (a transcription), its status and progress
+- `Jobs` (`jobs.svelte.ts`) — The account's jobs, mirroring the backend's
+- `Model` (`model.svelte.ts`) — AI model definition
+- `Models` (`models.svelte.ts`) — Model catalog with indexes
+- `Action` (`action.svelte.ts`) — Single action event state
+- `Actions` (`actions.svelte.ts`) — Action history: the newest 512 calls, payloads over 8192 characters of JSON replaced by markers (§ Actions Log)
+- `Prompt` (`prompt.svelte.ts`) — Reusable prompt template
+- `Prompts` (`prompts.svelte.ts`) — Collection of prompts
+- `Provider` (`provider.svelte.ts`) — AI provider config
+- `Providers` (`providers.svelte.ts`) — Collection of providers
+- `Recorder` (`recorder.svelte.ts`) — App-level microphone recording to a file: the upload sink, finalize, transcribe-on-stop, over an `AudioCapture` (`audio_capture.svelte.ts`, app-free: microphone, pause / resume, duration, level, chunks to any sink)
+- `Turn` (`turn.svelte.ts`) — Single conversation message
+- `Thread` (`thread.svelte.ts`) — Linear conversation with one model
+- `Threads` (`threads.svelte.ts`) — Collection of threads
+- `Space` (`space.svelte.ts`) — Named grouping of workspace dirs
+- `Spaces` (`spaces.svelte.ts`) — Collection of spaces
+- `Terminal` (`terminal.svelte.ts`) — PTY terminal run: status, buffered output, ordered input
+- `Terminals` (`terminals.svelte.ts`) — App-level terminal runs; routes output/exit notifications
+- `TerminalPreset` (`terminal_preset.svelte.ts`) — Saved terminal command config
+- `TerminalPresets` (`terminal_presets.svelte.ts`) — Collection of terminal presets
+- `Time` (`time.svelte.ts`) — Reactive time state
+- `Ui` (`ui.svelte.ts`) — UI state (menus, layout)
+- `Workspace` (`workspace.svelte.ts`) — Open workspace directory
+- `Workspaces` (`workspaces.svelte.ts`) — Collection of workspaces
 
 ## Content Model
 
@@ -1642,6 +1683,71 @@ items.where('provider_name', 'claude'); // multi → ReadonlyArray<Model>
 items.derived_index('ordered_by_name'); // derived → Array<Model>
 ```
 
+## Zzz App Directory
+
+The app directory stores zzz's own files. Configured via `PUBLIC_ZZZ_DIR`
+(default `.zzz`, relative to the daemon's working directory): `./.zzz` under
+`cargo xtask dev`, `~/.zzz/.zzz` for the CLI's daemon, whose working directory
+is the daemon home `~/.zzz/` (see ./development.md § The `zzz` CLI).
+
+- `state/` — Persistent data (reserved — the Rust backend currently keeps domain state in memory)
+- `cache/` — Regenerable data, safe to delete: scratch for tool runs — unnamed temp files (unlinked as soon as they're created) and, during a transcription, a `.zzz-tmp-<uuid>/` directory removed when it ends
+- `recordings/` — where the recordings page records: audio files and their transcript sidecars
+- `run/` — Runtime ephemeral (the test binary's `daemon_token`)
+
+It's a permanent `ScopedFs` root with its own filer, so the frontend can
+read and write files there. A workspace or scoped-dir filer whose root contains the
+app directory skips it by its full path (its own filer covers it), so a
+custom-named app dir (say `data`) doesn't hide other `data/` folders. Every
+filer also skips any directory named `.zzz` — the conventional app dir and the
+CLI's daemon home, which holds `.env` and `bootstrap_token` — and
+`workspace_open` refuses a `.zzz` directory, or a path inside one, other than
+the app dir itself (`forbidden` / `zzz_home_not_allowed`), so `zzz ~/.zzz/.env`
+(which opens `~/.zzz/`) can't index and broadcast those secrets. The app dir
+and the paths inside it stay openable.
+
+The daemon home holds the CLI's files beside it: `config.json`, `.env`,
+`bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
+(`daemon.json` — boot id, pid, start time, port — `daemon.log`, and an
+opener's `opener.log`).
+
+All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
+Saves are atomic: `diskfile_update` stages the content in a hidden
+`.zzz-tmp-<uuid>` file beside the target (never indexed or broadcast by the
+filer), fsyncs it, and renames it over the target, so a failed or concurrent
+save never leaves an empty or mixed file. The file's mode is kept — except
+setuid and setgid, which zzz always drops on a save —
+and its owner best-effort (a file owned by another user becomes the daemon user's when
+zzz can't restore it); being a new inode, a saved file **loses its hardlinks**
+(other names keep the old content) and any xattrs/ACLs. An existing file must
+be writable by the daemon — a read-only file is refused (`permission_denied`)
+even though its directory would allow the rename. When the rename can't
+happen but the file itself is writable — its directory isn't writable, or the
+file is a bind mount (`EBUSY`) or in a sticky directory (`EPERM`) — the save
+falls back to writing in place (truncate + write + fsync), which is **not
+atomic**: a failure midway leaves the file truncated or partial. A new file
+in a non-writable directory fails with `directory_not_writable`. Only regular
+files are written — a directory, FIFO, socket, or device node target is
+refused. A crash mid-save can orphan a staging file; the filer's walk deletes
+exact `.zzz-tmp-<uuid>` regular files older than an hour (ones inside ignored
+directories stay). The files page's new file and new folder go in the active
+workspace (`Diskfiles.new_files_dir`) and are disabled while no workspace is
+open; a failure (say a non-writable directory) is reported, never silent, as
+is a failed delete (each alert leads with the name or path). The entered
+name is trimmed, leading slashes dropped; refused (`parse_new_diskfile_name`):
+a blank name, one naming the workspace itself, a whitespace-only path
+segment, a `..` climbing out of the workspace, and a file name whose last
+segment is empty, `.`, or `..`. "New
+file" uses `diskfile_create`, which creates the final name exclusively
+(`O_EXCL`) and fails with `conflict` / `already_exists` instead of
+overwriting; "new folder" (`directory_create`) fails the same way when the
+name is taken, directory or not. For both, a symlink at the name is refused
+as `forbidden` / `symlink_not_allowed` (zzz never follows symlinks), and a
+missing parent folder that can't be created under a read-only ancestor
+reports `permission_denied` rather than `directory_not_writable`. The UI shows a path inside the app directory relative to it and
+any other path absolute — including a file part's `path` attribute in the
+prompt XML sent to models.
+
 ## Filesystem
 
 Two separate concerns:
@@ -1999,6 +2105,97 @@ activating it — and resyncs the session to fetch them
 (`Workspaces.receive_remote_open`); the notification for the client's own
 open, which can land before the reply, is recognized and skips the resync.
 
+## Auth gate
+
+The about and docs routes are public: they render (and prerender) without
+a session or a backend, so a static-only build still shows them. Every
+other route sits behind the root layout's auth gate
+(`src/lib/auth_gate.ts`) — a bootstrap or login form, or, when no zzz
+backend answers `/health`, a page saying the route needs the zzz daemon. A
+login or bootstrap returns to the page it replaced (path, query, and hash).
+
+## Security posture
+
+zzz is a single-operator local app: one person, their own machine, the daemon
+running as their OS user on loopback. Accounts and the auth stack keep other
+OS users' processes and other browser origins out — not same-user processes,
+which can read `~/.zzz/.env` and the bootstrap token — and they don't separate
+accounts from each other.
+
+- Every session and every full-scope API token effectively has the daemon OS
+  user's powers (a method-scoped token is limited to its listed methods):
+  terminals (a shell as that user), `workspace_open` of any directory
+  including `/` (which makes it writable and scans it) — except `.zzz`
+  directories other than the app dir (see § Zzz App Directory) — and file
+  reads and writes anywhere in scope (the file actions, and the byte routes
+  at `/api/files/bytes`, which a method-scoped token can't use at all).
+- Terminal output and control — and jobs — are scoped to the account that
+  created them, and a deleted or purged account's terminals are closed and
+  its jobs cancelled — but that
+  isn't a security boundary: any account can open its own shell.
+- Revisit — role-gating the `terminal_*`, `workspace_*`, and file actions —
+  if multi-account use ever matters.
+
+Only zzz's own UI can drive the daemon from a browser. The session cookie is
+`HttpOnly; Secure; SameSite=Strict`, which keeps other sites' pages out but not
+pages on other `localhost` ports, so every request, the static frontend and
+an unrouted path included, also passes three gates — each behind a body cap,
+so a request declaring a `Content-Length` over its route's cap is a 413
+whatever else is wrong with it (`crates/zzz_server/src/router.rs`):
+
+- **Origin** — a request with an `Origin` must match `FUZ_ALLOWED_ORIGINS`
+  (403 `forbidden_origin`), on the WebSocket upgrade too. A request without
+  one passes (a non-browser client, or a same-origin `GET` such as a media
+  element's `src`).
+- **Host** — `Host` must be loopback (`localhost`, `127.0.0.0/8`, `[::1]`, at
+  any port) or named by an allowed origin (403 `forbidden_host`). This stops
+  DNS rebinding: a page that re-points its own domain at `127.0.0.1` talks to
+  `zzzd` same-origin, sending no `Origin`, but its `Host` is its domain.
+- **CORS simple requests** — a `POST` with no `Content-Type`, or a form or
+  text one, is refused (415 `unsupported_content_type`). A browser sends those
+  cross-origin without a preflight, and same-site ignores the port, so a page
+  on another `localhost` port would carry the session cookie. Any other type
+  makes the browser preflight first, and `zzzd` answers no preflight, so the
+  request is never sent. JSON calls send `application/json` and byte uploads
+  `application/octet-stream`.
+
+`src/test/cross_backend/browser_gates.cross.test.ts` pins them.
+
+`zzzd` can't tell which process serves an allowed origin — it trusts whatever
+page is there. So the allowlist names only origins that are zzz's own:
+
+- **Production** — `zzzd` serves the UI itself (`--static-dir`), so the
+  allowed origins are its own, `http://localhost:<port>` and
+  `http://127.0.0.1:<port>` (the CLI's default, and `.env.production.example`):
+  the page comes from the process that checks the list. `zzzd` binds
+  `127.0.0.1` only; a browser reaches it as `localhost` by falling back from
+  `[::1]`. So the `localhost` name is `zzzd`'s only while nothing else listens
+  on `[::1]` at that port: a process bound there is what the browser reaches
+  first as `http://localhost:<port>`, an allowed origin, and it is sent the
+  session cookie.
+- **Development** — Vite serves the UI at `http://localhost:5460`, the one
+  origin `.env.development.example` allows. `vite.config.ts` pins the port
+  with `strictPort`, so Vite fails to start rather than move to a port `zzzd`
+  refuses, and the port is zzz's own, not Vite's default — a default port is
+  the one another project's dev server holds whenever zzz's doesn't, and a
+  `zzzd` that allowed it would take that project's page for its UI. This makes
+  the origin zzz's in practice, not by construction: any local process can
+  bind `5460` while zzz's dev server is down. Only `localhost` is listed —
+  Vite binds what that name resolves to, often `[::1]` alone, so
+  `http://127.0.0.1:5460` may be another process's page. `vite preview` is
+  pinned to `5461`, which is allowed only when listed.
+  `src/test/cross_backend/dev_origins.cross.test.ts` runs a backend on the
+  template's list.
+- **Another origin** goes in `FUZ_ALLOWED_ORIGINS` (it replaces the list). A
+  port wildcard (`http://localhost:*`) lets every page served on any local
+  port act with the session, and a host wildcard (`https://*.example.com`)
+  every page on a matching host, which the `Host` gate then answers to as
+  well; `zzzd` refuses to boot on either unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true`
+  is set, which boots it with a warning for each, and refuses to boot on a
+  malformed entry. A plain `http` origin that isn't loopback passes
+  the gates but can't hold a session: the cookie is `Secure`, which a browser
+  accepts only over `https` or on loopback.
+
 ## Capabilities
 
 `Capabilities` (`capabilities.svelte.ts`) is a single Cell aggregating
@@ -2032,3 +2229,26 @@ Population, per capability:
   (`SECRET_ANTHROPIC_API_KEY` / `SECRET_OPENAI_API_KEY` /
   `SECRET_GOOGLE_API_KEY`), so a key change lands on daemon restart rather
   than through an action
+
+## Known Limitations
+
+- **WebSocket auth** — Auth is enforced at upgrade time — the spine resolves credentials from the request headers (cookie sessions, bearer tokens — bearer silently discarded in browser context via Origin/Referer defense) before upgrading and re-reads them once the connection is registered, before admitting it. Per-action auth checks enforce spec-level auth: `keeper` requires `daemon_token` + keeper role; `{role}` requires a global grant of the named role (matches the HTTP path). Batch JSON-RPC is rejected (not yet supported). Sockets are closed on session/token revocation, logout, and password change via audit events — `token_revoke` closes only the revoked token's sockets (granular), `logout` / `session_revoke_all` / `token_revoke_all` / `password_change` close all sockets on the account (logout included, per the fuz_app contract — so another tab's logout closes this tab's socket while its session stays valid). RPC revocations close sockets only after their transaction commits. An expired session's sockets are closed by the auth cleanup, within one cleanup interval of the expiry. An account holds at most 50 sockets (`fuz_realtime::DEFAULT_MAX_CONNECTIONS_PER_ACCOUNT`); one more closes its oldest with 4004. A socket closed with 4004 stays closed until the user reconnects — reconnecting would close a newer socket in turn — so the frontend never reopens it on its own (`Socket.superseded`) and shows a notice saying why, with a reconnect button. No per-message session revalidation. ActionPeer itself has no auth awareness. On the frontend, a revoked socket, an `unauthenticated` RPC error, or repeated failed reconnects (a browser can't see an upgrade's 401) trigger a session recheck (`src/lib/session_recheck.ts`); only a definitive 401 from the account status route drops the App and shows the login gate, so a daemon restart doesn't log anyone out. A recheck that finds the session still valid after a revoked close reconnects the socket (`Socket.reconnect_revoked`).
+- **Bearer auth soft-fails** — bearer resolution soft-fails for invalid/expired/empty tokens (no early error response). Auth enforcement happens downstream via the per-action auth checks, producing `{code: -32001, message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked by bad bearer credentials.
+- **Domain state is in-memory** — auth/accounts are in the PostgreSQL DB, but zzz domain state (files, terminals, workspaces, jobs) is in-memory, lost on restart — a running transcription included, though the transcripts already written are files and stay. The frontend resyncs after every reconnect (a restart included): it reloads `session_load` and reconciles — workspaces the daemon no longer has are dropped (after a restart they're reopened instead, and dropped only if the directory is gone or forbidden), files it no longer indexes are pruned (a file with unsaved edits stays, flagged deleted on disk), and running terminals it doesn't list become `lost`. Notifications sent while the socket was down aren't replayed, so terminal output from that window is missing (the terminal view says so). See § File Editing.
+- **16 MiB messages** — a JSON-RPC message is capped at 16 MiB on both transports (`RPC_MESSAGE_MAX_BYTES`: the `/api/rpc` body limit and the `/api/ws` message limit). The server closes the socket on an oversized WebSocket message, so the frontend's `Socket` refuses any request over the cap before sending (`invalid_request`, `data.reason` `payload_too_large`; `src/lib/rpc_message_limit.ts`) — a huge save or a very long completion history fails cleanly instead of dropping the socket. Saving any file the filer loads (at most 4 MiB) fits, except in the worst case: JSON escapes a control character to 6 bytes, so a file dense with them can exceed the cap, and that save is refused the same clean way. The cap isn't confined to authenticated callers on HTTP (see ../crates/CLAUDE.md), which is acceptable only because the bind is loopback
+- **32 MiB outbound queue per socket** — what the server has queued for a WebSocket and not yet written is bounded at 32 MiB (`WS_OUTBOUND_QUEUE_BYTES`); past it the server closes the socket (code 4005) instead of holding more, and the frontend reconnects and resyncs like after any drop. Sized so the largest `filer_change` (a 4 MiB file, up to 24 MiB once JSON-escaped) still fits behind other frames. A batch of file changes is sent with a yield after each, so each socket's writer can take a frame before the next is queued — a client that keeps up gets the batch frame by frame, and one that falls more than the budget behind is closed like any other. A change that only moved a file's timestamps (a `touch`, a rewrite of the same bytes) is sent without the contents, so it never weighs on the budget; a large batch of files whose contents did change still does. Terminal output is paced instead (see Terminal output pacing below), so a terminal that prints faster than the browser takes it slows down rather than closing the socket; a client that doesn't ack output (not zzz's UI) isn't paced, and falling more than the budget behind closes its socket — the terminal keeps running (see ../crates/CLAUDE.md)
+- **Terminal output pacing** — the UI acks terminal output as it consumes it (`terminal_ack`, batched): once a view's emulator has parsed it, or as it's buffered with no view mounted (§ fuz_terminal; § Terminals has the details). The backend stops reading a terminal's PTY while more than 1 MiB of its output is unacked, resuming at 256 KiB — the kernel then blocks the process in its write, as a slow local terminal would. Input, resize, and close still work while it's blocked. So a flood (`cat` of a huge file, `yes`) runs at the speed the browser parses it — drawing is separate, at most once per animation frame, and skips the frames in between — and a tab in the background, where the browser throttles timers, may slow such a process further. A terminal is paced only against connections that have acked it and are still open, and against the fastest of those; a client that never acks (a raw API client) gets the output unpaced. So the UI announces each terminal's position — an ack sent at once — when its process starts, which paces a new terminal from its first byte, and again with the first chunk after each socket connect, holding its acks until then: a position consumed before the connect is behind the output sent while the socket was down, which never arrives, so acking it could leave the terminal paused for good. Between a reconnect and that announce reaching the backend — about a round trip after the first chunk — the output is unpaced. Output for a terminal this tab doesn't show — another tab's, or one left running by a reload — is dropped unacked, so a flood from one closes this tab's socket once it falls the outbound budget behind, and again after each reconnect while the flood lasts. Nothing times a stalled client out: a tab that stays connected and stops acking (its JavaScript frozen) keeps the terminals it alone shows blocked until it resumes or its socket closes
+- **Unloaded files are read-only** — the file index holds contents only for UTF-8 files up to 4 MiB it could read; any other file arrives with `contents: null` (`Diskfile.content_loaded` is `false`). The editor shows it read-only and empty with a "content not loaded" notice (no stale earlier text, no copy button) and never saves it (`DiskfileEditorState` ignores edits and refuses `save_changes`; `Diskfiles.update` refuses to write over it too, with `conflict` / `content_not_loaded`), since a save would overwrite a file nobody has seen. A file part for it contributes a `[content not loaded — …]` placeholder to a formatted prompt instead of silently dropping out
+- **No persistent undo** — saves overwrite the file on disk; the editor keeps an in-memory per-file history (`DiskfileHistory`) you can restore from, lost on reload, as are unsaved drafts — leaving the page while any file has unsaved changes asks first (`beforeunload`), and a session that ends (logout, or a recheck finding it revoked) drops the App and its drafts with it. A file's editing state is app-level (`Diskfiles.get_editor_state`): disk changes are recorded with no editor open, a draft survives tab switches and keeps a file deleted on disk, closing a draft's last tab asks save / don't save / cancel, and a disk change under a draft pauses saving until you overwrite or reload (see § File Editing). The conflict check is frontend-only: an external write landing between the backend receiving a save and its broadcast arriving is overwritten silently. Histories of files you've opened stay in memory for the session (each capped by entries and size)
+- **Symlinks are invisible** — the filer never follows or indexes a symlink (file or directory), and `ScopedFs` rejects symlinked paths, so linked files don't appear in the file tree
+- **File watching** — the filer adds one inotify watch per directory it indexes (never inside ignored directories like `node_modules/` or `target/`), and those watches come out of the user's `max_user_watches` budget, shared with every other process. An unreadable subdirectory is skipped (logged once) and picked up if it becomes readable; an unreadable root fails `workspace_open` with `forbidden` (`permission_denied`). When the watch limit is reached (or no watcher can be created), the workspace still opens with every file the scan found, but in **degraded mode**: `workspace_open` returns `watch_status: 'degraded'` (kept on the opening tab's `Workspace` cell; the workspaces page and the desk menu show it — another tab or a reload shows `'full'`), and the directories without a watch are rescanned every 5 seconds or more (retrying their watches each time), so changes there show up late. A workspace that degrades or recovers after it opened isn't re-announced — only the daemon log says so. Rescans re-read only files whose `lstat` changed, trusting a stamp only after the file has been still for 2 seconds
+- **Workspace scope** — opening a workspace makes its directory a writable `ScopedFs` root with its own filer until it's closed; closing never revokes the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). Any absolute directory can be opened — `/` makes the whole filesystem writable and scans it — except a `.zzz` directory (or a path inside one) other than the app dir. A workspace opened in another tab (or by `zzz <dir>`) appears here unactivated, and its files arrive with a session resync
+- **Terminals** — any authenticated account can create a terminal, which runs a command as the daemon's OS user (see § Security posture). Each terminal belongs to the account that created it: its output (`terminal_data`, `terminal_exited`) reaches only that account's sockets, and other accounts' `terminal_data_send` / `terminal_resize` / `terminal_close` act as if it didn't exist (`not_found`, as for an unknown or ended id). `terminal_create` takes only an absolute `cwd`, and `terminal_close` only `SIGTERM` (the default) or `SIGKILL`. The frontend's terminal list is in-memory, so a page reload loses it while the backend processes keep running. A view mounted later (coming back to the terminals page, a restart's fresh view, a reopen) is replayed from the cell's output buffer (`TERMINAL_OUTPUT_MAX_LENGTH`), not from an earlier view's scrollback, and keeps the newest of it up to its scrollback limit (`TERMINAL_SCROLLBACK_MAX_BYTES`) — the buffer usually holds more than that
+- **Terminal emulator** — terminals are drawn by `FuzTerminal` (§ fuz_terminal), which doesn't do everything a desktop terminal does yet. **Paste is from zzz's context menu only** (right-click the terminal → paste): it's bracketed when the program has turned on bracketed paste (a shell then holds a multi-line paste for Enter, as bash 5.1+ does by default), and text that could run commands as it arrives — a line break when the program hasn't, or the bracketed-paste end sequence in either case — is pasted only once you confirm it (if the program switches bracketed paste while you're asked and the text is unsafe in the new mode, nothing is sent, and a notice says to paste again; a line break the switch made safe is pasted bracketed). A paste longer than the terminal's input queue takes (64 Ki characters, less any input still waiting to be sent) is refused whole, with a notice. The browser asks before the first clipboard read (Firefox shows a paste button each time). Ctrl+Shift+V does nothing in the terminal, Shift+Insert reaches the program as a key, a middle click pastes no primary selection, and the browser's own menu (Shift+right-click) has no usable Paste over the terminal. The input box under each terminal sends text. **No scrollback scrolling**: the wheel over a terminal scrolls the page's list of runs, never the terminal — inside `less`, `man`, or vim on the alternate screen too — and Shift+PgUp / Shift+PgDn go to the program; there's no scrollbar. The history is still in the emulator, up to its scrollback limit (`TERMINAL_SCROLLBACK_MAX_BYTES`, 2 MiB of the emulator's memory, so a wider terminal keeps fewer lines, the oldest dropped first), and the copy button copies all of it. **No IME composition**: text an input method composes, and dead keys on platforms that deliver them as a composition, isn't typed, nor is a virtual keyboard's. **No mouse reporting**: a program that asks for mouse events (vim with `mouse=a`, htop, tmux) gets none; a click focuses, a drag selects. **No reverse video** (DECSCNM) while the default colors are the theme's. **The look follows the app**: the default foreground and background are the theme's, while ANSI white and bright white stay light in both schemes, so text a program colors white is hard to read on a light theme, as in any light-themed terminal; the type is the app's monospace at the component's size. **Selection** is the browser's over the visible rows: a row copies as one line and a soft-wrapped line copies with a break per row (the copy button joins it), and a selection over rows that redraw is lost. **Copy** is Ctrl+Alt+C or Ctrl+Insert while a selection takes some of the terminal's text (with none, the key goes to the program); Ctrl+C is always the program's, and Ctrl+Shift+C is the browser's own shortcut (the element inspector in Chrome and Firefox). On macOS Cmd+C copies, and the two chords are the program's. The browser's menu (Shift+right-click) copies too. **Focus**: Tab and Shift+Tab are the program's while a terminal has focus, so keyboard focus doesn't leave it by Tab — click elsewhere; a terminal whose process ended takes no keys, Tab included. **Keys** follow Ghostty's encodings, which differ from what xterm-style terminals commonly send — Shift+Enter is `CSI 27;2;13~`, which a plain shell prints as junk, and Ctrl+Shift+letter is `CSI … u`; § fuz_terminal (*Keyboard input*) lists the differences. Ctrl+digit is taken by the terminal while it has focus, its default prevented — whether a browser still switches tabs on it is the browser's decision. The Kitty keyboard protocol is supported when a program turns it on. Meta combinations, Ctrl+Shift+C, Ctrl+Shift+V, and (except on macOS) the page zoom keys — Ctrl with `=`, `+`, `-`, `_`, or `0` — stay the browser's, so a program never gets them (Emacs's Ctrl+_ undo included). Without the built module (`cargo xtask ghostty-vt`, Zig 0.17) each terminal shows a message instead, with a retry button; its process still runs
+- **PTY terminals** — terminal spawning uses the `fuz_pty` Rust crate as a native dependency of `zzz_server` (no FFI indirection). `PtyManager` runs one I/O task per terminal (readiness-driven reads paced by the client's output acks, an ordered input queue — at most 256 chunks and 4 MiB per terminal, beyond which input is refused with `queue_overflow` — that writes large pastes in full, reaping with `SIGKILL` escalation so closed terminals leave no zombies). Terminal children inherit zzzd's environment **minus** `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, and `PORT` — this keeps the daemon's API keys, cookie keys, and DB URL out of the child's environment, but it is not isolation (the shell runs as the same user and can read `/proc/<zzzd pid>/environ` or the `.env` files). The prefix match also drops the user's own `FUZ_*` variables from terminals; everything else (`PATH`, `HOME`, `SSH_AUTH_SOCK`, …) passes through, and `fuz_pty` sets `TERM=xterm-256color`, the xterm-compatible terminal Ghostty's emulator is. See ../crates/CLAUDE.md for details. Requires the sibling Rust workspace checked out alongside this repo (path dep).
+- **Recording** — two places record, over the same `Recorder`: the files page's record button (beside new file and new folder; disabled without an open workspace) records to the active workspace, and the recordings page (`/recordings`: a record button, a level meter, and the recordings with their transcripts) records to `recordings/` in the app directory, which needs no workspace and keeps voice notes out of a repository. Deleting on the recordings page removes a recording with its transcripts; on the files page, exactly the file selected. A recording is a new file named for the local time (`2026-01-31_09-05-07.webm`) — Opus in WebM where the browser records it, else Ogg, else MP4. The file is created under its final name and grows as chunks upload every few seconds (the byte routes), so a crashed or closed tab loses at most the last chunk and leaves a file that still plays but has no duration; `media_finalize` on it later fixes that. Stopping uploads the rest and finalizes, then queues a transcription when the recorder's "transcribe" toggle is on (the default; with no speech model set up it quietly doesn't). The microphone opens only from a click or key press in the UI — `Recorder.start` refuses without a user gesture, and no action the backend can send starts capture. While it may be open an indicator with pause and stop shows on every page (`RecorderIndicator` in the root layout), leaving the page asks first, and a session that ends (logout, or a recheck finding it revoked) closes it with the App. One recording at a time, per tab. The filer sees the file grow: it re-reads and broadcasts it on each chunk while it's under the index's size limit. An upload that fails for good — the session ended, the file changed on disk — ends the recording and says why; the file keeps what landed. See § Recording
+- **Transcription** — batch, not live: the transcript is made from the finished file, and text fills in while the job runs (whisper.cpp decodes in windows of about thirty seconds), not while you speak. It needs `ffmpeg`, whisper.cpp, and a model the operator placed and pointed `ZZZ_WHISPER_CPP_MODEL` at; without whisper.cpp or a model, recording still works and transcribing says what's missing. Without `ffmpeg`, recording still saves the audio, but every stop reports that it couldn't finalize, and the file has no duration. The UI offers transcription on audio extensions (`.webm`, `.ogg`, `.mp3`, `.wav`, `.flac`, `.m4a`, …); the action itself takes any container `ffmpeg` is told how to read here, a `.mkv` or `.mp4` included, and transcribes its first audio stream. The format is taken from the extension, so a mislabeled file fails to decode. The language is detected unless given. The model loads on every job. Word timings are whisper.cpp's own estimates. A transcript isn't checked against its audio afterward — if the audio's bytes change, the sidecar still shows (its recorded hash no longer matches). A sidecar over the file index's 4 MiB limit wouldn't load in the UI. One job runs at a time; jobs and their history are lost on a daemon restart, and a crash mid-transcription can leave a `.zzz-tmp-*` scratch directory in the app directory's `cache/` (hidden from the file index). A transcript's text is whatever was said near the microphone — it's shown as text, and nothing sends it to a chat, a prompt, or a terminal on its own
+- **Audio files** — the files page shows a file with an audio extension (`diskfile_content_kind.ts`: `.webm`, `.ogg`, `.mp3`, `.wav`, `.flac`, `.m4a`, …) in a player instead of the text editor (`DiskfileView` picks; `DiskfileAudioView` plays it from the byte route, with finalize, download, and delete), with its transcript beside it — click a segment to play from there — or a transcribe button when it has none. A transcript sidecar (`*.transcript.json`) opens read-only in `DiskfileTranscriptView`, with the audio's player when the audio is beside it. The kind comes from the extension alone — the file index carries no type — so a `.webm` holding video plays as its audio, and a text file named `.ogg` gets a player that can't play it. The player reloads when the file's `mtime` moves (`Diskfile.mtime`, from the index's disk node), and the file being recorded shows as recording, with no player, until it's saved. Images and video have no viewer yet
+- **No git integration** — no commit/push/pull from the UI
+- **No MCP/A2A** — protocol support planned but not implemented
+- **Backend** — `zzz_server` serves the full RPC surface with the full auth stack. `cargo xtask dev` runs it with the Vite frontend. Anthropic, OpenAI, and Gemini providers fully implemented (non-streaming + SSE streaming). No batch JSON-RPC. A single `/api/rpc` + `/api/ws` serves the boot-compiled `ActionRegistry` (handlers in `handlers/`), plus the admin audit-log SSE stream at `GET /api/admin/audit/stream` and the file byte routes at `/api/files/bytes`.
