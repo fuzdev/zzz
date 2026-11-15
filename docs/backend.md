@@ -1052,7 +1052,12 @@ commands):
   can't hold a completion and its pooled DB connection forever; it's
   generous because a non-streaming completion sends no headers until it's
   done (Anthropic caps those at 10 minutes) and reasoning models can go
-  quiet mid-stream. `complete()` clones the `reqwest::Client`
+  quiet mid-stream. It is `https_only` and follows no redirects
+  (`reqwest::redirect::Policy::none()`): each request carries the API key in
+  its headers, so a plain `http` URL fails before connecting and a `3xx`
+  comes back as the response, an upstream error with its status
+  (`provider::common::client_builder`; its tests run their plaintext local
+  servers through a test-only `https_only(false)`). `complete()` clones the `reqwest::Client`
   (internally `Arc`'d) and releases the lock before HTTP calls, so a
   long-running streaming response doesn't hold it against a status refresh.
   SSE parsing is manual (`provider/sse.rs`: line endings normalized, split

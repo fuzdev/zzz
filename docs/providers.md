@@ -106,7 +106,11 @@ truncated success:
 The frontend keeps any text that streamed in before an error and shows the
 error separately. Transport error messages have the request URL stripped.
 The shared HTTP client bounds connection setup at 30 seconds; there is no
-overall request timeout, since streaming completions run long.
+overall request timeout, since streaming completions run long. It speaks only
+`https` — a plain `http` URL fails before anything connects — and follows no
+redirects: every request carries the API key, so a `3xx` answer is reported
+as an upstream error (`provider_http_error` with its status) rather than
+replaying the request, key and prompt included, to wherever it points.
 
 Every provider failure — a missing or invalid API key included — is an
 `ai_provider_error` (-32020, HTTP 502, declared in

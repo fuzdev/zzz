@@ -5,8 +5,9 @@
 //!   `build_text_progress_chunk` produces the uniform streaming-chunk shape
 //!   `{message: {role, content}}` the text-streaming providers emit on every
 //!   delta.
-//! - HTTP plumbing: the shared `reqwest::Client` builder (with connect and
-//!   read timeouts), cancellable `send_request` / `read_json_body`, and
+//! - HTTP plumbing: the shared `reqwest::Client` builder (connect and read
+//!   timeouts, `https` only, no redirects), cancellable `send_request` /
+//!   `read_json_body`, and
 //!   `reqwest_error_message`, which strips the request URL so nothing in a
 //!   query string can leak into a JSON-RPC error message.
 //! - Message shaping: `is_blank`, `join_system_text`, and
@@ -88,7 +89,8 @@ pub fn build_text_progress_chunk(content: &str) -> Value {
 
 /// Build the shared provider `reqwest::Client` with `headers` as defaults.
 ///
-/// Applies [`CONNECT_TIMEOUT`] and [`READ_TIMEOUT`].
+/// Applies [`CONNECT_TIMEOUT`] and [`READ_TIMEOUT`], and refuses plain
+/// `http` and redirects (see `client_builder`).
 ///
 /// # Errors
 ///
@@ -105,11 +107,25 @@ pub fn build_client_with_headers(headers: HeaderMap) -> Result<reqwest::Client, 
 
 /// The provider client configuration, with the read timeout injectable so
 /// tests can exercise it without waiting [`READ_TIMEOUT`].
+///
+/// Every request carries an API key in its default headers, so the client
+/// sends nothing a network can read or a server can redirect:
+///
+/// - **`https` only** — a plain `http` URL fails before any connection is
+///   made. Every provider's API URL is `https`; this holds that for any URL
+///   the client is handed.
+/// - **No redirects** — a `3xx` answer is returned as the response, which
+///   the provider then reports as an upstream error (`provider_http_error`
+///   with its status). Following one would replay the request, key and
+///   prompt included, to wherever the `Location` points (`307` / `308` keep
+///   the method and body).
 fn client_builder(headers: HeaderMap, read_timeout: Duration) -> reqwest::ClientBuilder {
     reqwest::Client::builder()
         .default_headers(headers)
         .connect_timeout(CONNECT_TIMEOUT)
         .read_timeout(read_timeout)
+        .https_only(true)
+        .redirect(reqwest::redirect::Policy::none())
 }
 
 /// Build a header value for a credential, marked sensitive so it's
@@ -405,6 +421,8 @@ pub fn join_system_text(
 #[cfg(test)]
 mod tests {
     use std::ops::ControlFlow;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -425,11 +443,105 @@ mod tests {
         (url, server)
     }
 
+    /// The production client but for its read timeout and one test-only
+    /// override: plain `http`, which the local servers here speak (they have
+    /// no TLS). Everything else — the redirect policy included — is
+    /// [`client_builder`]'s.
     fn short_timeout_client() -> reqwest::Client {
         fuz_sys::tls::ensure_crypto_provider();
         client_builder(HeaderMap::new(), Duration::from_millis(200))
+            .https_only(false)
             .build()
             .unwrap()
+    }
+
+    /// A local HTTP server that answers every request with `response` and
+    /// counts them.
+    async fn counting_server(
+        response: String,
+    ) -> (String, Arc<AtomicUsize>, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let requests = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&requests);
+        let server = tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = [0_u8; 4096];
+                if socket.read(&mut request).await.unwrap_or(0) > 0 {
+                    counted.fetch_add(1, Ordering::SeqCst);
+                }
+                let _ = socket.write_all(response.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            }
+        });
+        (url, requests, server)
+    }
+
+    #[tokio::test]
+    async fn a_redirect_is_an_error_and_never_followed() {
+        // where a followed redirect would go
+        let (target, target_requests, target_server) = counting_server(
+            "HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}".to_owned(),
+        )
+        .await;
+        for (status, reason) in [
+            (301, "Moved Permanently"),
+            (302, "Found"),
+            (303, "See Other"),
+            (307, "Temporary Redirect"),
+            (308, "Permanent Redirect"),
+        ] {
+            let (url, requests, server) = counting_server(format!(
+                "HTTP/1.1 {status} {reason}\r\nlocation: {target}next\r\n\
+                 content-length: 0\r\nconnection: close\r\n\r\n"
+            ))
+            .await;
+            let signal = CancellationToken::new();
+            let response = send_request(
+                short_timeout_client().post(&url).body("{\"prompt\":1}"),
+                "claude",
+                &signal,
+            )
+            .await
+            .unwrap();
+            assert_eq!(response.status().as_u16(), status);
+            let error = check_response_status(response, "claude", &signal, |_| None)
+                .await
+                .unwrap_err();
+            server.abort();
+
+            assert_eq!(
+                error.data,
+                Some(json!({"reason": "provider_http_error", "status": status})),
+                "{status}"
+            );
+            assert_eq!(requests.load(Ordering::SeqCst), 1, "{status}: one request");
+        }
+        target_server.abort();
+        assert_eq!(
+            target_requests.load(Ordering::SeqCst),
+            0,
+            "no redirect was followed"
+        );
+    }
+
+    #[tokio::test]
+    async fn plain_http_is_refused_before_connecting() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/v1/messages", listener.local_addr().unwrap());
+        let client = build_client_with_headers(HeaderMap::new()).unwrap();
+        let error = tokio::time::timeout(
+            Duration::from_secs(5),
+            send_request(client.post(&url), "claude", &CancellationToken::new()),
+        )
+        .await
+        .expect("refused at once, not sent to wait for an answer")
+        .unwrap_err();
+        assert!(error.message.starts_with("claude: "), "{}", error.message);
+        // nothing connected
+        let accepted = tokio::time::timeout(Duration::from_millis(200), listener.accept()).await;
+        assert!(accepted.is_err(), "the client connected: {accepted:?}");
     }
 
     #[tokio::test]
