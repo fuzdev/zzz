@@ -399,7 +399,10 @@ commands):
   `directory_create` (missing parents created, a taken name `conflict` /
   `already_exists`), writes into `zzz_dir` + nested subdirs,
   path-traversal / out-of-scope / relative-path rejection and the error codes
-  (see Filesystem errors), wrong file kinds (a directory, a FIFO — refused
+  (see Filesystem errors), a `.zzz` home refused to `diskfile_update`,
+  `diskfile_create`, `diskfile_delete`, and `directory_create` however it's
+  spelled and whether or not the path exists (nothing written, created, or
+  removed), wrong file kinds (a directory, a FIFO — refused
   without blocking), atomic replace keeping the mode with no temp file left,
   permissions (a read-only file refused, a writable file in a read-only
   directory written in place, a new file there `directory_not_writable`),
@@ -420,8 +423,11 @@ commands):
   the sandboxing CSP, `Cross-Origin-Resource-Policy`, `no-store` on every
   response), exclusive create (non-UTF-8 bytes, parents created, a taken name
   `already_exists`), offset-checked append (a retried or skipped chunk is a
-  409 `offset_mismatch` carrying the current size; never creates), path
-  refusals with the file actions' reasons, the body cap (built from the
+  409 `offset_mismatch` carrying the current size; never creates; a FIFO
+  with no reader refused, 400 `not_a_regular_file`), path refusals with the
+  file actions' reasons (a FIFO read refused too), a `.zzz` home refused on
+  every method (403 `zzz_home_not_allowed`, whether or not the file exists,
+  nothing written), the body cap (built from the
   frontend's `FILE_BYTES_MAX_BODY_BYTES`, pinning it to the backend's), and
   the gates — a malformed query refused before auth, 401 without a
   credential on every method, 403 for an origin off the allowlist, a session
@@ -639,11 +645,15 @@ commands):
   inside, a directory named `.zzz` other than the app dir — checked on the
   canonical path, so no symlink gets around it — with `forbidden` /
   `zzz_home_not_allowed` (`handlers::filesystem::ERROR_ZZZ_HOME_NOT_ALLOWED`,
-  `filer::is_in_zzz_home`): the CLI's daemon home holds `.env` and
-  `bootstrap_token`. `diskfile_read` refuses a file in one the same way, on
-  the path `ScopedFs` resolves (`.` and `..` resolved lexically — `ScopedFs`
-  then refuses a symlink anywhere along it) and before anything is opened, so
-  the refusal doesn't say whether the file exists. A filer started on such a root refuses too
+  `scoped_fs::is_in_zzz_home`): the CLI's daemon home holds `.env` and
+  `bootstrap_token`. Every `ScopedFs` operation refuses a path in one the
+  same way, whatever root covers it (`ScopedFsError::ZzzHomeNotAllowed` —
+  the file actions, the media actions, and the byte routes, where it's a
+  403): its path validation checks the lexically normalized path (`.` and
+  `..` resolved — the symlink checks after it make that the path acted on)
+  before the roots and before anything touches the filesystem, so the
+  refusal doesn't say whether the path exists. The app dir and its contents
+  pass. A filer started on such a root refuses too
   (`FilerConfig::root_in_zzz_home`); a scoped dir there fails boot before
   any filer starts (`PUBLIC_ZZZ_SCOPED_DIRS` below).
   `workspace_close` of a path that isn't open → `invalid_params` /
@@ -704,7 +714,7 @@ commands):
   the read leaves them older than the contents, never newer, and `size` is
   the contents' length when they're loaded, so the two agree.
   Any regular file in scope is readable, indexed or not, except one in a
-  `.zzz` home (Filesystem errors above).
+  `.zzz` home, which `ScopedFs` refuses (Filesystem errors above).
 - **File byte routes**: `file_bytes.rs` mounts `GET` / `HEAD` / `POST` /
   `PATCH` on `/api/files/bytes` (`file_bytes::FILE_BYTES_PATH`), taking the
   file as an absolute `?path=`. They exist because the file actions carry
@@ -752,12 +762,10 @@ commands):
     validators are sent). A refusal at a gate does not: the 400 for a bad
     query, the 401, the scope 403, the 413, and the Origin layer's 403 are the
     spine's plain JSON errors, returned as they come.
-  - **`.zzz` directories**: `ScopedFs` checks roots only, so a path inside a
-    `.zzz` directory that an open root covers (a workspace on `~` covers
-    `~/.zzz/.env`) is readable here, though the filer never indexes it,
-    `workspace_open` refuses such a directory as a root, and `diskfile_read`
-    refuses a file in one. The file actions could already write there; this
-    is the one read path.
+  - **`.zzz` directories**: a path inside a `.zzz` directory other than the
+    app dir is refused on every method (403 `zzz_home_not_allowed`), even
+    when an open root covers it (a workspace on `~` covers `~/.zzz/.env`) —
+    `ScopedFs` refuses it for every operation (Filesystem errors above).
   - **Create** (`POST`) is `ScopedFs::create_file` — the `diskfile_create`
     path, taking bytes: exclusive, parents created, 201 `{"size"}`.
   - **Append** (`PATCH`, `ScopedFs::append_file`) writes only when the file

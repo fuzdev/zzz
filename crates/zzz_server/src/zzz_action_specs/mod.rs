@@ -83,7 +83,7 @@ mod any_credential_surface {
         .expect("a lazy pool builds without connecting");
         Arc::new(crate::handlers::App::new(
             pool.clone(),
-            crate::scoped_fs::ScopedFs::new(vec![]),
+            crate::scoped_fs::ScopedFs::without_roots(),
             String::new(),
             vec![],
             crate::provider::ProviderManager::new(),

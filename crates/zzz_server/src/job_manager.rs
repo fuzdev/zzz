@@ -499,7 +499,7 @@ mod tests {
         .expect("a lazy pool builds without connecting");
         Arc::new(App::new(
             pool.clone(),
-            crate::scoped_fs::ScopedFs::new(vec![]),
+            crate::scoped_fs::ScopedFs::without_roots(),
             String::new(),
             vec![],
             crate::provider::ProviderManager::new(),

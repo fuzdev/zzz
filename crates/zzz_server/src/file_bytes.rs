@@ -27,8 +27,11 @@
 //! routes refuse a foreign page even outside that stack. The query check runs
 //! before the credential walk, so a malformed query answers the same whatever
 //! the caller's credentials. Paths go through
-//! [`ScopedFs`](crate::scoped_fs::ScopedFs): absolute, in scope, no symlinks,
-//! regular files only. A write's body is read only after the gates pass.
+//! [`ScopedFs`](crate::scoped_fs::ScopedFs): absolute, in scope, outside any
+//! `.zzz` directory but the app dir (`403 zzz_home_not_allowed`, so the CLI
+//! daemon home's `.env` and `bootstrap_token` stay out of reach of a root
+//! that covers them), no symlinks, regular files only. A write's body is read
+//! only after the gates pass.
 //!
 //! These routes are outside the action system, so nothing derived from action
 //! specs covers them: no audit row, no actions-log entry, no generated client,
@@ -48,10 +51,6 @@
 //! and is `Cache-Control: no-store`: a path's bytes change under it (a
 //! recording grows, a save replaces it), and no validators are sent. A gate's
 //! refusal is the spine's JSON error as it comes, without them.
-//!
-//! `ScopedFs` is the only path check, and it knows roots, not `.zzz`
-//! directories: a file inside one that an open root covers is readable here,
-//! though the filer never indexes it and `diskfile_read` refuses it.
 
 use std::fmt::Write as _;
 use std::sync::Arc;

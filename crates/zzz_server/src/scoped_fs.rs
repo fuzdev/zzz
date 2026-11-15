@@ -49,6 +49,26 @@ fn to_normalized_string(path: &Path) -> String {
     s
 }
 
+/// zzz's conventional app-dir and CLI daemon-home name.
+pub const ZZZ_DIR_NAME: &str = ".zzz";
+
+/// Whether `path` is, or is inside, a `.zzz` directory other than the app dir.
+///
+/// That's the CLI's daemon home (`~/.zzz/`, holding `.env` and
+/// `bootstrap_token`) or another daemon's app dir — any `.zzz` component
+/// that isn't part of `zzz_dir`'s own path.
+///
+/// The app dir and everything inside it pass, unless a `.zzz` sits below the
+/// app dir too. Both paths must name what they spell — canonical, or
+/// lexically normalized with symlinks refused along them, as [`ScopedFs`]
+/// does — so a symlink can't spell its way around the check.
+pub fn is_in_zzz_home(path: &Path, zzz_dir: &Path) -> bool {
+    path.strip_prefix(zzz_dir)
+        .unwrap_or(path)
+        .components()
+        .any(|c| c.as_os_str() == ZZZ_DIR_NAME)
+}
+
 // -- Errors -------------------------------------------------------------------
 
 /// Errors from scoped filesystem operations.
@@ -64,6 +84,11 @@ pub enum ScopedFsError {
     /// Outside every allowed root.
     #[error("Path is not allowed: {0}")]
     PathNotAllowed(String),
+    /// In a `.zzz` directory other than the app dir ([`is_in_zzz_home`]) —
+    /// the CLI's daemon home, with `.env` and `bootstrap_token`, or another
+    /// daemon's app dir — whatever root covers it.
+    #[error("Path is in a .zzz directory, which holds zzz's own files (secrets, tokens): {0}")]
+    ZzzHomeNotAllowed(String),
     #[error("Path is a symlink which is not allowed: {0}")]
     SymlinkNotAllowed(String),
     /// A directory where a file was expected.
@@ -116,7 +141,19 @@ impl ScopedFsError {
 /// Scoping wrapper around filesystem operations.
 ///
 /// Restricts all operations to the currently-allowed directories. Rejects
-/// relative paths, path traversal, and symlinks.
+/// relative paths, path traversal, symlinks, and `.zzz` directories other
+/// than the app dir.
+///
+/// **`.zzz` directories are refused under every root.** A path that is, or is
+/// inside, a `.zzz` directory other than `zzz_dir` ([`is_in_zzz_home`]) fails
+/// every operation with [`ScopedFsError::ZzzHomeNotAllowed`] — reads, writes,
+/// appends, creates, deletes, and opens alike — even when a root covers it (a
+/// workspace on `~` covers the CLI's daemon home `~/.zzz/`, with its `.env`
+/// and `bootstrap_token`). The check runs on the lexically normalized path
+/// the operation acts on, before anything touches the filesystem, so the
+/// refusal says nothing about whether the path exists; the symlink checks
+/// that follow make that path the one the operation reaches. The app dir and
+/// the paths inside it stay usable.
 ///
 /// The allowed set is a fixed set of permanent roots (`zzz_dir` +
 /// `scoped_dirs`, from [`Self::new`]) plus runtime roots for open workspaces
@@ -141,6 +178,9 @@ impl ScopedFsError {
 /// created after validation.
 #[derive(Debug)]
 pub struct ScopedFs {
+    /// The app dir, exempt from the `.zzz` refusal ([`is_in_zzz_home`]).
+    /// Also the first permanent root.
+    zzz_dir: PathBuf,
     /// Roots fixed at construction (`zzz_dir` + `scoped_dirs`), each
     /// normalized with a trailing `/`. Never removed —
     /// [`Self::remove_path`] only touches [`Self::dynamic_paths`], so
@@ -165,19 +205,37 @@ pub struct ScopedFs {
 }
 
 impl ScopedFs {
-    /// Create a new `ScopedFs` with the given permanent directory roots.
+    /// Create a new `ScopedFs` whose permanent roots are the app dir
+    /// `zzz_dir` and `scoped_dirs`.
     ///
-    /// Each path is normalized with a trailing `/` and must be absolute.
-    /// These roots are never removed by [`Self::remove_path`].
-    pub fn new(paths: Vec<PathBuf>) -> Self {
-        let mut permanent_paths: Vec<String> = Vec::with_capacity(paths.len());
-        for normalized in paths.into_iter().map(|p| to_normalized_string(&p)) {
+    /// Each path must be absolute and canonical (the `.zzz` refusal compares
+    /// `zzz_dir` with paths as they're spelled), and is normalized with a
+    /// trailing `/`. These roots are never removed by [`Self::remove_path`].
+    pub fn new(zzz_dir: PathBuf, scoped_dirs: &[PathBuf]) -> Self {
+        let mut permanent_paths: Vec<String> = Vec::with_capacity(1 + scoped_dirs.len());
+        for normalized in std::iter::once(&zzz_dir)
+            .chain(scoped_dirs)
+            .map(|p| to_normalized_string(p))
+        {
             if !permanent_paths.contains(&normalized) {
                 permanent_paths.push(normalized);
             }
         }
         Self {
+            zzz_dir,
             permanent_paths,
+            dynamic_paths: RwLock::new(Vec::new()),
+            append_lock: Arc::new(Mutex::new(())),
+        }
+    }
+
+    /// A `ScopedFs` with no roots at all, which allows nothing — for tests
+    /// that need an `App` but never touch files.
+    #[cfg(test)]
+    pub(crate) fn without_roots() -> Self {
+        Self {
+            zzz_dir: PathBuf::new(),
+            permanent_paths: Vec::new(),
             dynamic_paths: RwLock::new(Vec::new()),
             append_lock: Arc::new(Mutex::new(())),
         }
@@ -235,8 +293,13 @@ impl ScopedFs {
     ///
     /// - Rejects relative paths and null bytes
     /// - Normalizes path components (resolves `.` and `..`)
+    /// - Rejects `.zzz` directories other than the app dir
+    ///   ([`is_in_zzz_home`]), before anything touches the filesystem
     /// - Checks against allowed directories
     /// - Rejects symlinks (target and all parent directories)
+    ///
+    /// Every operation calls this first, so each refusal here holds for all
+    /// of them.
     async fn ensure_safe_path(&self, path: &str) -> Result<PathBuf, ScopedFsError> {
         // Reject null bytes
         if path.contains('\0') {
@@ -251,6 +314,16 @@ impl ScopedFs {
 
         // Normalize path (resolve . and .. without touching the filesystem)
         let normalized = normalize_path(raw);
+
+        // `.zzz` directories hold zzz's own files (the CLI's `.env` and
+        // `bootstrap_token`) whatever root covers them. Lexical and first, so
+        // the refusal is the same whether or not the path exists; the symlink
+        // checks below make the normalized path the one acted on.
+        if is_in_zzz_home(&normalized, &self.zzz_dir) {
+            return Err(ScopedFsError::ZzzHomeNotAllowed(
+                normalized.to_string_lossy().into_owned(),
+            ));
+        }
 
         // Check against allowed paths
         if !self.is_path_allowed(&normalized) {
@@ -643,19 +716,14 @@ fn existing_regular_file(path: &Path) -> Result<Option<std::fs::Metadata>, Scope
 /// Open an existing target for writing without changing it — the
 /// writability check, and the handle an in-place write uses. `O_NOFOLLOW`
 /// and `O_NONBLOCK` guard against a symlink or FIFO swapped in since the
-/// `lstat`, and the handle is re-checked to be a regular file.
+/// `lstat` (errors mapped by [`open_error`]), and the handle is re-checked
+/// to be a regular file.
 fn open_for_write_in_place(path: &Path) -> Result<std::fs::File, ScopedFsError> {
     let file = std::fs::OpenOptions::new()
         .write(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)
-        .map_err(|e| {
-            if e.raw_os_error() == Some(libc::ELOOP) {
-                ScopedFsError::SymlinkNotAllowed(ScopedFsError::display(path))
-            } else {
-                ScopedFsError::io(path, e)
-            }
-        })?;
+        .map_err(|e| open_error(path, e))?;
     let is_file = file
         .metadata()
         .map_err(|e| ScopedFsError::io(path, e))?
@@ -809,14 +877,31 @@ fn create_file_exclusive(path: &Path, content: &[u8]) -> Result<(), ScopedFsErro
     Ok(())
 }
 
+/// Map an `O_NOFOLLOW | O_NONBLOCK` open's failure on `path` — shared by
+/// every open of an existing file here, so they agree.
+///
+/// `ELOOP` is a symlink (swapped in since path validation). `ENXIO` is what
+/// `open(2)` returns for a socket, a FIFO opened for writing with no reader,
+/// and a device node with no device behind it — read as
+/// [`ScopedFsError::NotARegularFile`] only when an `lstat` confirms the path
+/// isn't a regular file, since a filesystem's own open (FUSE, say) can return
+/// it for one; then, and for everything else, it's [`ScopedFsError::Io`].
+fn open_error(path: &Path, error: std::io::Error) -> ScopedFsError {
+    match error.raw_os_error() {
+        Some(libc::ELOOP) => ScopedFsError::SymlinkNotAllowed(ScopedFsError::display(path)),
+        Some(libc::ENXIO) if std::fs::symlink_metadata(path).is_ok_and(|m| !m.is_file()) => {
+            ScopedFsError::NotARegularFile(ScopedFsError::display(path))
+        }
+        _ => ScopedFsError::io(path, error),
+    }
+}
+
 /// Open an existing regular file `O_NOFOLLOW | O_NONBLOCK` — for reading, or
 /// for appending when `append` — and `fstat` it. A directory, FIFO, socket,
 /// or device node is refused; `O_NONBLOCK` keeps a FIFO from blocking the
-/// open, and has no effect on a regular file. `open(2)` itself fails with
-/// `ENXIO` for a socket, a FIFO opened for writing with no reader, and a
-/// device node with no device behind it — none of them a regular file, so
-/// `ENXIO` reads as one (a filesystem's own open, e.g. FUSE, could return it
-/// for a regular file, and would be misnamed here).
+/// open, and has no effect on a regular file. Open failures map through
+/// [`open_error`], so a socket or a reader-less FIFO, which `open(2)` itself
+/// refuses with `ENXIO`, is [`ScopedFsError::NotARegularFile`] too.
 fn open_regular_file(
     path: &Path,
     append: bool,
@@ -830,11 +915,7 @@ fn open_regular_file(
     let file = options
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)
-        .map_err(|e| match e.raw_os_error() {
-            Some(libc::ELOOP) => ScopedFsError::SymlinkNotAllowed(ScopedFsError::display(path)),
-            Some(libc::ENXIO) => ScopedFsError::NotARegularFile(ScopedFsError::display(path)),
-            _ => ScopedFsError::io(path, e),
-        })?;
+        .map_err(|e| open_error(path, e))?;
     let meta = file.metadata().map_err(|e| ScopedFsError::io(path, e))?;
     if meta.is_dir() {
         return Err(ScopedFsError::IsADirectory(ScopedFsError::display(path)));
@@ -908,8 +989,15 @@ mod tests {
 
     use super::*;
 
+    /// A `ScopedFs` whose app dir is the first path, scoping the rest too.
     fn scoped(paths: &[&str]) -> ScopedFs {
-        ScopedFs::new(paths.iter().map(PathBuf::from).collect())
+        match paths {
+            [] => ScopedFs::without_roots(),
+            [zzz_dir, scoped_dirs @ ..] => ScopedFs::new(
+                PathBuf::from(zzz_dir),
+                &scoped_dirs.iter().map(PathBuf::from).collect::<Vec<_>>(),
+            ),
+        }
     }
 
     fn allowed(fs: &ScopedFs, path: &str) -> bool {
@@ -997,6 +1085,34 @@ mod tests {
     }
 
     #[test]
+    fn zzz_home_paths_are_every_dotzzz_but_the_app_dirs_own() {
+        let app = Path::new("/home/u/.zzz/.zzz");
+        for path in [
+            "/home/u/.zzz",
+            "/home/u/.zzz/run",
+            "/w/.zzz",
+            "/w/.zzz/inner",
+            "/home/u/.zzz/.zzz/sub/.zzz",
+            "/home/u/.zzz/other",
+        ] {
+            assert!(is_in_zzz_home(Path::new(path), app), "{path}");
+        }
+        for path in [
+            "/home/u/.zzz/.zzz",
+            "/home/u/.zzz/.zzz/state",
+            "/home/u",
+            "/w/.zzzz",
+            "/w/zzz",
+            "/",
+        ] {
+            assert!(!is_in_zzz_home(Path::new(path), app), "{path}");
+        }
+        // an app dir with no `.zzz` in its path exempts nothing else
+        assert!(is_in_zzz_home(Path::new("/w/.zzz"), Path::new("/w/data")));
+        assert!(!is_in_zzz_home(Path::new("/w/data"), Path::new("/w/data")));
+    }
+
+    #[test]
     fn duplicate_permanent_roots_collapse() {
         let fs = scoped(&["/z/zzz", "/z/zzz/"]);
         assert_eq!(fs.permanent_paths, vec!["/z/zzz/".to_owned()]);
@@ -1017,8 +1133,9 @@ mod tests {
             self.0.join(rel)
         }
 
+        /// The temp dir as the app dir and only root.
         fn fs(&self) -> ScopedFs {
-            ScopedFs::new(vec![self.0.clone()])
+            ScopedFs::new(self.0.clone(), &[])
         }
 
         /// Entries left behind by staged writes.
@@ -1689,6 +1806,231 @@ mod tests {
         }
     }
 
+    // -- `.zzz` directories --
+
+    /// The CLI's layout under a temp dir: the temp dir is a scoped root that
+    /// covers `home/.zzz/` (a daemon home, holding `.env`), and the app dir is
+    /// `home/.zzz/.zzz/`.
+    fn daemon_home() -> (TempDir, ScopedFs) {
+        let tmp = TempDir::new();
+        let app_dir = tmp.path("home/.zzz/.zzz");
+        std::fs::create_dir_all(&app_dir).unwrap();
+        std::fs::write(tmp.path("home/.zzz/.env"), "SECRET=x").unwrap();
+        let fs = ScopedFs::new(app_dir, std::slice::from_ref(&tmp.0));
+        (tmp, fs)
+    }
+
+    fn assert_zzz_home_refused<T: std::fmt::Debug>(
+        result: &Result<T, ScopedFsError>,
+        op: &str,
+        path: &str,
+    ) {
+        assert!(
+            matches!(result, Err(ScopedFsError::ZzzHomeNotAllowed(_))),
+            "{op} {path}: {result:?}"
+        );
+    }
+
+    /// Run every public operation on `path`, each expected to be refused. An
+    /// append is sent at the file's current size, so only the refusal can
+    /// stop it.
+    async fn assert_every_op_refused(fs: &ScopedFs, path: &str) {
+        let size = std::fs::symlink_metadata(path).map_or(0, |m| m.len());
+        let source = std::fs::File::open("/dev/null").unwrap();
+        assert_zzz_home_refused(&fs.open_file(path).await, "open_file", path);
+        assert_zzz_home_refused(
+            &fs.write_file(path, "new".to_owned()).await,
+            "write_file",
+            path,
+        );
+        assert_zzz_home_refused(
+            &fs.write_file_from(path, source).await,
+            "write_file_from",
+            path,
+        );
+        assert_zzz_home_refused(
+            &fs.create_file(path, b"new".to_vec()).await,
+            "create_file",
+            path,
+        );
+        assert_zzz_home_refused(
+            &fs.append_file(path, size, b"new".to_vec()).await,
+            "append_file",
+            path,
+        );
+        assert_zzz_home_refused(&fs.create_dir(path).await, "create_dir", path);
+        assert_zzz_home_refused(&fs.rm(path).await, "rm", path);
+    }
+
+    /// Every entry under `dir`, recursively, as paths relative to it.
+    fn tree(dir: &Path) -> Vec<String> {
+        fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                out.push(path.strip_prefix(root).unwrap().display().to_string());
+                if std::fs::symlink_metadata(&path).unwrap().is_dir() {
+                    walk(root, &path, out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(dir, dir, &mut out);
+        out.sort();
+        out
+    }
+
+    #[tokio::test]
+    async fn every_operation_refuses_a_zzz_home_under_a_root() {
+        let (tmp, fs) = daemon_home();
+        let root = tmp.0.to_str().unwrap();
+        let before = tree(&tmp.0);
+        for path in [
+            // the daemon home's files, existing or not, and the home itself
+            format!("{root}/home/.zzz/.env"),
+            format!("{root}/home/.zzz/run/daemon.json"),
+            format!("{root}/home/.zzz"),
+            format!("{root}/home/.zzz/"),
+            // however it's spelled
+            format!("{root}/sub/../home/.zzz/.env"),
+            format!("{root}/home/./.zzz/./.env"),
+            format!("{root}/home/.zzz/.zzz/../.env"),
+            // a `.zzz` below the app dir, and another daemon's app dir
+            format!("{root}/home/.zzz/.zzz/sub/.zzz/x"),
+            format!("{root}/other/.zzz"),
+            format!("{root}/other/.zzz/new.txt"),
+        ] {
+            assert_every_op_refused(&fs, &path).await;
+        }
+        assert_eq!(tree(&tmp.0), before, "nothing created or removed");
+        assert_eq!(
+            std::fs::read_to_string(tmp.path("home/.zzz/.env")).unwrap(),
+            "SECRET=x",
+            "untouched"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_zzz_home_is_refused_before_the_filesystem_is_touched() {
+        let (tmp, fs) = daemon_home();
+        let root = tmp.0.to_str().unwrap();
+
+        // an existing file and a missing one answer alike, naming the
+        // normalized path
+        for (path, named) in [
+            (format!("{root}/home/.zzz/.env"), "home/.zzz/.env"),
+            (format!("{root}/home/.zzz/missing"), "home/.zzz/missing"),
+            (format!("{root}/x/../home/.zzz/.env"), "home/.zzz/.env"),
+        ] {
+            let result = fs.open_file(&path).await;
+            assert!(
+                matches!(&result, Err(ScopedFsError::ZzzHomeNotAllowed(p))
+                    if *p == tmp.path(named).to_string_lossy()),
+                "{path}: {result:?}"
+            );
+        }
+
+        // where an `lstat` would fail or a symlink would be refused, the
+        // `.zzz` refusal comes first — nothing was looked up
+        std::fs::write(tmp.path("file.txt"), "f").unwrap();
+        std::os::unix::fs::symlink(tmp.path("home"), tmp.path("home_link")).unwrap();
+        for path in [
+            format!("{root}/file.txt/.zzz/x"),
+            format!("{root}/home_link/.zzz/.env"),
+            "/zzz_scoped_fs_test_no_such_root/.zzz/x".to_owned(),
+        ] {
+            assert_every_op_refused(&fs, &path).await;
+        }
+        assert!(
+            !tmp.path("home/.zzz/new.txt").exists() && !tmp.path("file.txt/.zzz").exists(),
+            "nothing created"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_app_dir_stays_usable_inside_a_zzz_home() {
+        let (tmp, fs) = daemon_home();
+        let app = tmp.path("home/.zzz/.zzz");
+        let app = app.to_str().unwrap();
+
+        fs.create_dir(&format!("{app}/recordings")).await.unwrap();
+        let file = format!("{app}/recordings/a.txt");
+        fs.create_file(&file, b"a".to_vec()).await.unwrap();
+        fs.write_file(&file, "b".to_owned()).await.unwrap();
+        assert_eq!(fs.append_file(&file, 1, b"c".to_vec()).await.unwrap(), 2);
+        let (mut opened, _) = fs.open_file(&file).await.unwrap();
+        let mut content = String::new();
+        std::io::Read::read_to_string(&mut opened, &mut content).unwrap();
+        assert_eq!(content, "bc");
+        fs.write_file_from(&file, opened).await.unwrap();
+        fs.write_file(&format!("{app}/recordings/../b.txt"), "x".to_owned())
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(format!("{app}/b.txt")).unwrap(),
+            "x"
+        );
+        fs.rm(&file).await.unwrap();
+
+        // the app dir itself is an ordinary path: taken, not refused
+        let again = fs.create_dir(app).await;
+        assert!(
+            matches!(again, Err(ScopedFsError::AlreadyExists(_))),
+            "{again:?}"
+        );
+    }
+
+    // -- open errors --
+
+    #[test]
+    fn open_errors_name_a_special_file_only_when_it_is_one() {
+        let tmp = TempDir::new();
+        let file = tmp.path("file.txt");
+        std::fs::write(&file, "x").unwrap();
+        let fifo = tmp.path("fifo");
+        make_fifo(&fifo);
+        let enxio = || std::io::Error::from_raw_os_error(libc::ENXIO);
+
+        // `ENXIO` from a filesystem's own open of a regular file is an I/O error
+        let result = open_error(&file, enxio());
+        assert!(
+            matches!(&result, ScopedFsError::Io { source, .. }
+                if source.raw_os_error() == Some(libc::ENXIO)),
+            "{result:?}"
+        );
+        // and from an open of something else, or of a path gone since, too
+        let result = open_error(&tmp.path("missing"), enxio());
+        assert!(matches!(result, ScopedFsError::Io { .. }), "{result:?}");
+        let result = open_error(&fifo, enxio());
+        assert!(
+            matches!(result, ScopedFsError::NotARegularFile(_)),
+            "{result:?}"
+        );
+        let result = open_error(&file, std::io::Error::from_raw_os_error(libc::ELOOP));
+        assert!(
+            matches!(result, ScopedFsError::SymlinkNotAllowed(_)),
+            "{result:?}"
+        );
+    }
+
+    /// Both open sites agree: a FIFO with no reader, swapped in after the
+    /// `lstat` a write starts with, fails its open with `ENXIO`.
+    #[test]
+    fn a_fifo_swapped_in_before_the_write_open_is_not_a_regular_file() {
+        let tmp = TempDir::new();
+        let fifo = tmp.path("fifo");
+        make_fifo(&fifo);
+        let result = open_for_write_in_place(&fifo);
+        assert!(
+            matches!(result, Err(ScopedFsError::NotARegularFile(_))),
+            "{result:?}"
+        );
+        let result = open_regular_file(&fifo, true);
+        assert!(
+            matches!(result, Err(ScopedFsError::NotARegularFile(_))),
+            "{result:?}"
+        );
+    }
+
     /// `create_file_exclusive` below the symlink-refusing path validation.
     fn write_create_exclusive_direct(path: &Path) -> Result<(), ScopedFsError> {
         create_file_exclusive(path, b"x")
@@ -1719,7 +2061,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("zzz_scoped_fs_test_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let dir = dir.canonicalize().unwrap();
-        let fs = ScopedFs::new(vec![dir.clone()]);
+        let fs = ScopedFs::new(dir.clone(), &[]);
 
         fs.add_path(&dir);
         fs.remove_path(&dir);

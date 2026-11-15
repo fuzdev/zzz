@@ -19,9 +19,7 @@ use fuz_http::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::filer::{
-    TextContents, UnloadedReason, is_in_zzz_home, read_text_contents, system_time_to_ms,
-};
+use crate::filer::{TextContents, UnloadedReason, read_text_contents, system_time_to_ms};
 use crate::handlers::{App, not_found_error};
 use crate::scoped_fs::{ScopedFsError, normalize_path};
 
@@ -57,7 +55,8 @@ pub const ERROR_NOT_A_DIRECTORY: &str = "not_a_directory";
 /// (`invalid_params`).
 pub const ERROR_NOT_A_REGULAR_FILE: &str = "not_a_regular_file";
 /// A `.zzz` directory other than the app dir, or a path inside one
-/// (`forbidden`): `workspace_open` of one, `diskfile_read` of a file in one.
+/// (`forbidden`): every `ScopedFs` operation on one
+/// ([`ScopedFsError::ZzzHomeNotAllowed`]), and `workspace_open` of one.
 ///
 /// That's the CLI's daemon home (`~/.zzz/`, with `.env` and
 /// `bootstrap_token`) or another daemon's app dir.
@@ -67,8 +66,9 @@ pub const ERROR_ZZZ_HOME_NOT_ALLOWED: &str = "zzz_home_not_allowed";
 /// `action` (e.g. `failed to write file`).
 ///
 /// - malformed paths and wrong file kinds → `invalid_params` (-32602)
-/// - out-of-scope paths, symlinks, OS permission refusals, and a
-///   non-writable directory for a new file or directory → `forbidden` (-32002)
+/// - out-of-scope paths, `.zzz` directories, symlinks, OS permission
+///   refusals, and a non-writable directory for a new file or directory →
+///   `forbidden` (-32002)
 /// - a missing path → `not_found` (-32003)
 /// - `diskfile_create` / `directory_create` over an existing path, or a save
 ///   whose file was replaced mid-save, or an append at the wrong offset →
@@ -84,6 +84,9 @@ pub fn scoped_fs_error(action: &str, error: &ScopedFsError) -> JsonrpcError {
     match error {
         ScopedFsError::InvalidPath(_) => invalid_params(&message, Some(ERROR_INVALID_PATH)),
         ScopedFsError::PathNotAllowed(_) => forbidden(&message, Some(ERROR_PATH_NOT_ALLOWED)),
+        ScopedFsError::ZzzHomeNotAllowed(_) => {
+            forbidden(&message, Some(ERROR_ZZZ_HOME_NOT_ALLOWED))
+        }
         ScopedFsError::SymlinkNotAllowed(_) => forbidden(&message, Some(ERROR_SYMLINK_NOT_ALLOWED)),
         ScopedFsError::IsADirectory(_) => invalid_params(&message, Some(ERROR_IS_A_DIRECTORY)),
         ScopedFsError::NotARegularFile(_) => {
@@ -165,11 +168,9 @@ struct DiskfileReadOutput {
 /// timestamps.
 ///
 /// Any regular file in scope, indexed or not — except one in a `.zzz`
-/// directory other than the app dir ([`is_in_zzz_home`]), refused before
-/// anything is opened, so the refusal says nothing about whether the file
-/// exists. The check runs on the path `ScopedFs` resolves (`.` and `..`
-/// resolved lexically), which names the file itself since `ScopedFs` then
-/// refuses a symlink anywhere along it.
+/// directory other than the app dir, which `ScopedFs` refuses
+/// (`zzz_home_not_allowed`) before anything is opened, so the refusal says
+/// nothing about whether the file exists.
 ///
 /// One handle serves the whole answer: `ScopedFs::open_file` opens it
 /// `O_NOFOLLOW | O_NONBLOCK` and `fstat`s it (regular files only), and the
@@ -186,9 +187,8 @@ struct DiskfileReadOutput {
 ///
 /// # Errors
 ///
-/// `invalid_params` for a malformed input; `forbidden`
-/// (`zzz_home_not_allowed`) for a path in a `.zzz` home; otherwise
-/// [`scoped_fs_error`] (`path_not_found`, `path_not_allowed`,
+/// `invalid_params` for a malformed input; otherwise [`scoped_fs_error`]
+/// (`path_not_found`, `path_not_allowed`, `zzz_home_not_allowed`,
 /// `symlink_not_allowed`, `is_a_directory`, `not_a_regular_file`, …).
 pub async fn diskfile_read(
     params: Value,
@@ -201,17 +201,6 @@ pub async fn diskfile_read(
 
     let PathInput { path } = parse_strict_params(params)?;
     require_absolute(&path)?;
-
-    let normalized = normalize_path(Path::new(&path));
-    if is_in_zzz_home(&normalized, Path::new(&app.zzz_dir)) {
-        return Err(forbidden(
-            &format!(
-                "{ACTION}: .zzz directories hold zzz's own files (secrets, tokens) and can't be read: {}",
-                normalized.display()
-            ),
-            Some(ERROR_ZZZ_HOME_NOT_ALLOWED),
-        ));
-    }
 
     let (file, meta) = app
         .scoped_fs
@@ -226,7 +215,9 @@ pub async fn diskfile_read(
             scoped_fs_error(
                 ACTION,
                 &ScopedFsError::Io {
-                    path: normalized.to_string_lossy().into_owned(),
+                    path: normalize_path(Path::new(&path))
+                        .to_string_lossy()
+                        .into_owned(),
                     source,
                 },
             )
@@ -371,6 +362,11 @@ mod tests {
                 ScopedFsError::PathNotAllowed("/x".to_owned()),
                 JsonrpcErrorCode::Forbidden,
                 Some(ERROR_PATH_NOT_ALLOWED),
+            ),
+            (
+                ScopedFsError::ZzzHomeNotAllowed("/x".to_owned()),
+                JsonrpcErrorCode::Forbidden,
+                Some(ERROR_ZZZ_HOME_NOT_ALLOWED),
             ),
             (
                 ScopedFsError::SymlinkNotAllowed("/x".to_owned()),

@@ -463,6 +463,63 @@ describe('filesystem cross-backend', () => {
 		}
 	});
 
+	// `ScopedFs` refuses a `.zzz` directory other than the app dir under every
+	// root, so no file action reaches the CLI daemon home's `.env` and
+	// `bootstrap_token` through a workspace or scoped dir that covers it
+	test('file_actions_refuse_zzz_homes', async () => {
+		const fixture = await setup_test();
+		const dir = join(scoped_dir, `zzz_home_${randomUUID()}`);
+		const home = join(dir, '.zzz');
+		const env_path = join(home, '.env');
+		const env_content = 'SECRET_FUZ_COOKIE_KEYS=not-for-writing';
+		await mkdir(join(home, 'run'), { recursive: true });
+		await writeFile(env_path, env_content, 'utf-8');
+		try {
+			const cases: Array<[string, Record<string, unknown>, string]> = [
+				['diskfile_update', { path: env_path, content: 'overwritten' }, 'failed to write file'],
+				[
+					'diskfile_update',
+					{ path: `${dir}/sub/../.zzz/./new.txt`, content: 'x' },
+					'failed to write file'
+				],
+				['diskfile_create', { path: join(home, 'new.txt'), content: 'x' }, 'failed to create file'],
+				[
+					'diskfile_create',
+					{ path: join(home, 'run', 'deep', 'new.txt'), content: 'x' },
+					'failed to create file'
+				],
+				['diskfile_delete', { path: env_path }, 'failed to delete file'],
+				['diskfile_delete', { path: join(home, 'missing') }, 'failed to delete file'],
+				['directory_create', { path: join(home, 'new_dir') }, 'failed to create directory'],
+				// taken, which would otherwise be `already_exists`
+				['directory_create', { path: `${home}/` }, 'failed to create directory'],
+				// another daemon's app dir
+				['directory_create', { path: join(dir, 'other', '.zzz') }, 'failed to create directory']
+			];
+			for (const [method, params, action] of cases) {
+				const res = await rpc_call({
+					app: fixture.transport,
+					path: handle.config.rpc_path,
+					method,
+					params,
+					headers: fixture.create_session_headers()
+				});
+				const label = `${method} ${JSON.stringify(params)}`;
+				assert.ok(!res.ok, `${label} should fail`);
+				assert.equal(res.error.code, JSONRPC_ERROR_CODES.forbidden, label);
+				assert.deepEqual(res.error.data, { reason: 'zzz_home_not_allowed' }, label);
+				assert.ok(res.error.message.startsWith(`${action}: `), `${label}: ${res.error.message}`);
+			}
+			assert.equal(await readFile(env_path, 'utf-8'), env_content, 'untouched');
+			assert.deepEqual((await readdir(home)).sort(), ['.env', 'run'], 'nothing created');
+			assert.deepEqual(await readdir(join(home, 'run')), [], 'nothing created');
+			assert.ok(!(await file_exists(join(dir, 'sub'))), 'nothing created');
+			assert.ok(!(await file_exists(join(dir, 'other'))), 'nothing created');
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	test('diskfile_update_replaces_atomically', async () => {
 		const fixture = await setup_test();
 		const dir = join(scoped_dir, `atomic_${randomUUID()}`);

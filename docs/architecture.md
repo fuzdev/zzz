@@ -967,14 +967,18 @@ is the daemon home `~/.zzz/` (see ./development.md § The `zzz` CLI).
 It's a permanent `ScopedFs` root with its own filer, so the frontend can
 read and write files there. A workspace or scoped-dir filer whose root contains the
 app directory skips it by its full path (its own filer covers it), so a
-custom-named app dir (say `data`) doesn't hide other `data/` folders. Every
-filer also skips any directory named `.zzz` — the conventional app dir and the
-CLI's daemon home, which holds `.env` and `bootstrap_token` — and
-`workspace_open` refuses a `.zzz` directory, or a path inside one, other than
-the app dir itself (`forbidden` / `zzz_home_not_allowed`), so `zzz ~/.zzz/.env`
-(which opens `~/.zzz/`) can't index and broadcast those secrets, and
-`diskfile_read` refuses a file in one the same way. The app dir and the paths
-inside it stay openable and readable.
+custom-named app dir (say `data`) doesn't hide other `data/` folders.
+
+A directory named `.zzz` other than the app dir — the CLI's daemon home, which
+holds `.env` and `bootstrap_token`, or another daemon's app dir — is off limits
+whatever root covers it (a workspace on `~` covers `~/.zzz/`). `ScopedFs`
+refuses every operation on a path in one — reads, writes, creates, appends,
+deletes, through the file actions, the media actions, and the byte routes
+alike — with `forbidden` / `zzz_home_not_allowed` (403 on the byte routes),
+whether or not the path exists. Every filer skips them, and `workspace_open`
+refuses one as a workspace (same error), so `zzz ~/.zzz/.env` (which opens
+`~/.zzz/`) can't index and broadcast those secrets. The app dir and the paths
+inside it stay openable, readable, and writable.
 
 The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 `bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
@@ -1027,7 +1031,7 @@ Two separate concerns:
 
 ### ScopedFs
 
-All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, symlinks rejected, absolute paths required, parent directories checked recursively.
+All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, `.zzz` directories other than the app dir refused under every root (see § Zzz App Directory), symlinks rejected, absolute paths required, parent directories checked recursively.
 
 The allowed roots are the permanent boot-time set (the app directory + scoped dirs) plus one runtime root per open workspace. A path is allowed when any root covers it, and removing a workspace's root never touches a permanent root — so closing a workspace opened on, nested in, or containing the app directory or a scoped dir leaves the access those roots grant intact.
 
@@ -1043,7 +1047,7 @@ The file actions (`diskfile_update`, `diskfile_create`) carry contents as UTF-8 
 - **Create** — `POST` creates the file exclusively from the request body, like `diskfile_create`.
 - **Append** — `PATCH` with `&offset=` appends the body only if the file is exactly `offset` bytes long, and otherwise answers 409 `offset_mismatch` with the file's current `size`, having written nothing. A writer that streams a file as chunks sends each at the offset it expects: a retried chunk can't land twice, and the reply's size tells it whether the first attempt landed.
 
-Paths go through `ScopedFs`, and errors carry the same reasons as the file actions' (`path_not_allowed`, `already_exists`, …) in a flat `{error}` body. The routes need a session or a full-scope API token.
+Paths go through `ScopedFs`, and errors carry the same reasons as the file actions' (`path_not_allowed`, `zzz_home_not_allowed`, `already_exists`, …) in a flat `{error}` body. The routes need a session or a full-scope API token.
 
 A file in a workspace is untrusted content, so a read never hands the browser something to run: only allowlisted raster image, audio, and video extensions are served with their media type, and everything else — HTML, SVG, XML, scripts, text — is an `application/octet-stream` download. Every response that serves or describes a file — a read, a write's reply, a file error — carries `X-Content-Type-Options: nosniff`, a sandboxing `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`, and is never cached (`no-store`); a refusal at a gate (a bad query, no credential, an oversized body, a foreign origin) is a plain JSON error without them.
 
@@ -1401,10 +1405,9 @@ accounts from each other.
   terminals (a shell as that user), `workspace_open` of any directory
   including `/` (which makes it writable and scans it) — except `.zzz`
   directories other than the app dir (see § Zzz App Directory) — and file
-  reads and writes anywhere in scope (the file actions, and the byte routes
-  at `/api/files/bytes`, which a method-scoped token can't use at all; the
-  byte routes alone read inside such a `.zzz` directory when a root covers
-  it).
+  reads and writes anywhere in scope but those `.zzz` directories (the file
+  actions, and the byte routes at `/api/files/bytes`, which a method-scoped
+  token can't use at all).
 - Terminal output and control — and jobs — are scoped to the account that
   created them, and a deleted or purged account's terminals are closed and
   its jobs cancelled — but that
@@ -1655,8 +1658,9 @@ Population, per capability:
   the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). Any
   absolute directory can be opened — `/` makes the whole filesystem writable
   and scans it — except a `.zzz` directory (or a path inside one) other than
-  the app dir. A workspace opened in another tab (or by `zzz <dir>`) appears
-  here unactivated, and its files arrive with a session resync
+  the app dir, which no root makes readable or writable. A workspace opened
+  in another tab (or by `zzz <dir>`) appears here unactivated, and its files
+  arrive with a session resync
 - **Terminals** — any authenticated account can create a terminal, which runs
   a command as the daemon's OS user (see § Security posture). Each terminal
   belongs to the account that created it: its output (`terminal_data`,

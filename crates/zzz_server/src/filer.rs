@@ -85,6 +85,7 @@ use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::handlers::App;
+use crate::scoped_fs::{ZZZ_DIR_NAME, is_in_zzz_home};
 
 // -- Indexing limits ----------------------------------------------------------
 
@@ -291,25 +292,6 @@ const DEFAULT_IGNORED_DIRS: &[&str] = &[
     "dist",
     ZZZ_DIR_NAME,
 ];
-
-/// zzz's conventional app-dir and CLI daemon-home name.
-const ZZZ_DIR_NAME: &str = ".zzz";
-
-/// Whether `path` is, or is inside, a `.zzz` directory other than the app dir.
-///
-/// That's the CLI's daemon home (`~/.zzz/`, holding `.env` and
-/// `bootstrap_token`) or another daemon's app dir — any `.zzz` component
-/// that isn't part of `zzz_dir`'s own path.
-///
-/// The app dir and everything inside it pass, unless a `.zzz` sits below the
-/// app dir too (every filer skips those). Both paths are expected in their
-/// canonical form, so a symlink can't spell its way around the check.
-pub fn is_in_zzz_home(path: &Path, zzz_dir: &Path) -> bool {
-    path.strip_prefix(zzz_dir)
-        .unwrap_or(path)
-        .components()
-        .any(|c| c.as_os_str() == ZZZ_DIR_NAME)
-}
 
 /// Check if a single path component is ignored by every watcher: a name in
 /// the default directory ignore list, or a `ScopedFs::write_file` staging
@@ -3352,34 +3334,6 @@ mod tests {
         let files = scan_with(&root, &config.ignored_dirs).await;
         let keys: Vec<String> = files.keys().cloned().collect();
         assert_eq!(keys, vec![tmp.key("notes.txt")]);
-    }
-
-    #[test]
-    fn zzz_home_paths_are_every_dotzzz_but_the_app_dirs_own() {
-        let app = Path::new("/home/u/.zzz/.zzz");
-        for path in [
-            "/home/u/.zzz",
-            "/home/u/.zzz/run",
-            "/w/.zzz",
-            "/w/.zzz/inner",
-            "/home/u/.zzz/.zzz/sub/.zzz",
-            "/home/u/.zzz/other",
-        ] {
-            assert!(is_in_zzz_home(Path::new(path), app), "{path}");
-        }
-        for path in [
-            "/home/u/.zzz/.zzz",
-            "/home/u/.zzz/.zzz/state",
-            "/home/u",
-            "/w/.zzzz",
-            "/w/zzz",
-            "/",
-        ] {
-            assert!(!is_in_zzz_home(Path::new(path), app), "{path}");
-        }
-        // an app dir with no `.zzz` in its path exempts nothing else
-        assert!(is_in_zzz_home(Path::new("/w/.zzz"), Path::new("/w/data")));
-        assert!(!is_in_zzz_home(Path::new("/w/data"), Path::new("/w/data")));
     }
 
     #[test]

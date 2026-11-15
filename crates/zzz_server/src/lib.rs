@@ -320,12 +320,15 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
 
     let scoped_dir_strings = std::mem::take(&mut config.scoped_dirs);
 
-    // Permanent roots: zzz_dir first, then scoped_dirs — canonicalized paths,
-    // not raw config paths
-    let mut scoped_fs_paths: Vec<PathBuf> = Vec::with_capacity(1 + scoped_dir_strings.len());
-    scoped_fs_paths.push(PathBuf::from(&config.zzz_dir));
-    scoped_fs_paths.extend(scoped_dir_strings.iter().map(PathBuf::from));
-    let scoped_fs = scoped_fs::ScopedFs::new(scoped_fs_paths);
+    // Permanent roots: zzz_dir, then scoped_dirs — canonicalized paths, not
+    // raw config paths
+    let scoped_fs = scoped_fs::ScopedFs::new(
+        PathBuf::from(&config.zzz_dir),
+        &scoped_dir_strings
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>(),
+    );
 
     // AI providers — read API keys from env (empty counts as unset),
     // construct ProviderManager
@@ -762,7 +765,7 @@ fn check_app_dir_is_not_cwd(zzz_dir: &str, cwd: &Path) -> Result<(), StartupErro
 }
 
 /// Refuse a scoped dir that is, or is inside, a `.zzz` directory other than
-/// the app dir ([`filer::is_in_zzz_home`]) — its filer would refuse to start
+/// the app dir ([`scoped_fs::is_in_zzz_home`]) — its filer would refuse to start
 /// (so nothing would be indexed) while it stayed a writable `ScopedFs` root,
 /// and `.zzz` directories hold zzz's own files (the CLI's `.env` and
 /// `bootstrap_token`). Paths are the resolved forms.
@@ -775,7 +778,7 @@ fn check_scoped_dirs(scoped_dirs: &[String], zzz_dir: &str) -> Result<(), Startu
     let app_dir = Path::new(zzz_dir);
     scoped_dirs
         .iter()
-        .find(|dir| filer::is_in_zzz_home(Path::new(dir), app_dir))
+        .find(|dir| scoped_fs::is_in_zzz_home(Path::new(dir), app_dir))
         .map_or(Ok(()), |dir| {
             Err(StartupError::Config(format!(
                 "PUBLIC_ZZZ_SCOPED_DIRS entry {dir} is in a .zzz directory other than the app dir {zzz_dir}: .zzz directories hold zzz's own files (secrets, tokens) and can't be scoped"

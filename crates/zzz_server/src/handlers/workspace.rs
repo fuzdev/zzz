@@ -19,13 +19,13 @@ use serde_json::Value;
 
 use crate::filer::{
     FilerConfig, FilerLifetime, SerializableDisknode, WatchStatus, disknodes_json_size_hint,
-    is_in_zzz_home,
 };
 use crate::handlers::filesystem::{
     ERROR_INVALID_PATH, ERROR_NOT_A_DIRECTORY, ERROR_PATH_NOT_FOUND, ERROR_PERMISSION_DENIED,
     ERROR_ZZZ_HOME_NOT_ALLOWED,
 };
 use crate::handlers::{App, WorkspaceInfo, not_found_error};
+use crate::scoped_fs::is_in_zzz_home;
 
 /// `workspace_close` of a path that isn't an open workspace (`invalid_params`)
 /// — e.g. one a restart forgot, which a client can then drop locally.

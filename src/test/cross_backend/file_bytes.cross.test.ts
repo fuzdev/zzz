@@ -10,7 +10,18 @@
 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import {
+	lstat,
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	stat,
+	symlink,
+	writeFile
+} from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { describe, test, assert } from 'vitest';
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
@@ -182,6 +193,9 @@ describe('file bytes cross-backend', () => {
 			await symlink(target, link);
 			const directory = await new_path('dir');
 			await mkdir(directory);
+			// a FIFO is refused, not read — a read of one with no writer would block
+			const fifo = await new_path('fifo.webm');
+			execFileSync('mkfifo', [fifo]);
 			const expect = async (path: string, status: number, error: string): Promise<void> => {
 				const res = await fixture.transport(bytes_url(path), {
 					headers: fixture.create_session_headers()
@@ -196,12 +210,14 @@ describe('file bytes cross-backend', () => {
 				await expect('relative/path.txt', 400, 'invalid_path');
 				await expect(link, 403, 'symlink_not_allowed');
 				await expect(directory, 400, 'is_a_directory');
+				await expect(fifo, 400, 'not_a_regular_file');
 				await expect(await new_path('missing.txt'), 404, 'path_not_found');
 			} finally {
 				await rm(outside_dir, { recursive: true, force: true });
 				await rm(link, { force: true });
 				await rm(target, { force: true });
 				await rm(directory, { recursive: true, force: true });
+				await rm(fifo, { force: true });
 			}
 		});
 	});
@@ -302,6 +318,27 @@ describe('file bytes cross-backend', () => {
 			}
 		});
 
+		// `open(2)` refuses a FIFO with no reader for writing (`ENXIO`), so the
+		// append neither blocks nor writes
+		test('append refuses a FIFO', async () => {
+			const fixture = await setup_test();
+			const fifo = await new_path('fifo.webm');
+			execFileSync('mkfifo', [fifo]);
+			try {
+				const res = await fixture.transport(append_url(fifo, 0), {
+					method: 'PATCH',
+					headers: fixture.create_session_headers(OCTET_STREAM),
+					body: BINARY
+				});
+				assert.equal(res.status, 400);
+				assert.deepEqual(await res.json(), { error: 'not_a_regular_file' });
+				assert_locked_down(res);
+				assert.ok((await lstat(fifo)).isFIFO(), 'the FIFO is left in place');
+			} finally {
+				await rm(fifo, { force: true });
+			}
+		});
+
 		// the frontend's `FILE_BYTES_MAX_BODY_BYTES` twins the backend constant
 		// of the same name: a body of exactly the cap is written, one byte more
 		// is refused
@@ -330,6 +367,65 @@ describe('file bytes cross-backend', () => {
 				assert.equal((await stat(path)).size, FILE_BYTES_MAX_BODY_BYTES, 'nothing appended');
 			} finally {
 				await rm(path, { force: true });
+			}
+		});
+	});
+
+	// `ScopedFs` refuses a `.zzz` directory other than the app dir under every
+	// root, so the CLI daemon home's `.env` and `bootstrap_token` are out of
+	// reach of a workspace or scoped dir that covers them
+	describe('.zzz directories', () => {
+		test('refuses a .zzz home on every method, whether or not the file exists', async () => {
+			const fixture = await setup_test();
+			const dir = await new_path('zzz_home');
+			const home = join(dir, '.zzz');
+			const env_path = join(home, '.env');
+			const env_content = 'SECRET_FUZ_COOKIE_KEYS=not-for-reading';
+			await mkdir(home, { recursive: true });
+			await writeFile(env_path, env_content);
+			const expect_refused = async (res: Response, label: string): Promise<void> => {
+				assert.equal(res.status, 403, label);
+				assert.deepEqual(await res.json(), { error: 'zzz_home_not_allowed' }, label);
+				assert_locked_down(res);
+			};
+			try {
+				for (const path of [
+					env_path,
+					join(home, 'missing.webm'),
+					`${dir}/sub/../.zzz/./.env`,
+					join(dir, 'other', '.zzz', 'new.webm')
+				]) {
+					const size = path === env_path ? Buffer.byteLength(env_content) : 0;
+					const get = await fixture.transport(bytes_url(path), {
+						headers: fixture.create_session_headers()
+					});
+					await expect_refused(get, `GET ${path}`);
+					const head = await fixture.transport(bytes_url(path), {
+						method: 'HEAD',
+						headers: fixture.create_session_headers()
+					});
+					assert.equal(head.status, 403, `HEAD ${path}`);
+					assert.equal((await read_bytes(head)).length, 0, `HEAD ${path}`);
+					assert_locked_down(head);
+					const post = await fixture.transport(bytes_url(path), {
+						method: 'POST',
+						headers: fixture.create_session_headers(OCTET_STREAM),
+						body: BINARY
+					});
+					await expect_refused(post, `POST ${path}`);
+					const patch = await fixture.transport(append_url(path, size), {
+						method: 'PATCH',
+						headers: fixture.create_session_headers(OCTET_STREAM),
+						body: BINARY
+					});
+					await expect_refused(patch, `PATCH ${path}`);
+				}
+				assert.equal(await readFile(env_path, 'utf-8'), env_content, 'untouched');
+				assert.deepEqual(await readdir(home), ['.env'], 'nothing created');
+				assert.ok(!(await file_exists(join(dir, 'other'))), 'nothing created');
+				assert.ok(!(await file_exists(join(dir, 'sub'))), 'nothing created');
+			} finally {
+				await rm(dir, { recursive: true, force: true });
 			}
 		});
 	});

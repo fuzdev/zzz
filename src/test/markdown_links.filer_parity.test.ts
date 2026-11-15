@@ -36,7 +36,8 @@ describe('the file index ignores what the backend filer ignores', () => {
 			const literal = /^"([^"]*)"$/.exec(entry);
 			if (literal) return literal[1]!;
 			assert.match(entry, /^[A-Z_][A-Z0-9_]*$/, `an entry is a string or a constant: ${entry}`);
-			return parse_str_const(source, entry);
+			// a constant is the filer's own or one it imports from `scoped_fs.rs`
+			return parse_str_const(`${source}\n${read_crate_source('scoped_fs.rs')}`, entry);
 		});
 		assert.deepEqual([...FILE_INDEX_IGNORED_DIR_NAMES].sort(), names.sort());
 	});
