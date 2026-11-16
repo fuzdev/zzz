@@ -1,6 +1,12 @@
 import { test, describe, assert } from 'vitest';
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 
-import { parse_project_path } from '#lib/project_helpers.ts';
+import {
+	format_project_fallback,
+	format_project_opened,
+	parse_project_path
+} from '#lib/project_helpers.ts';
+import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
 
 describe('parse_project_path', () => {
 	test('passes an absolute directory or file path through as given', () => {
@@ -47,5 +53,61 @@ describe('parse_project_path', () => {
 			assert.include(result.message, 'path must be absolute');
 			assert.include(result.message, '"~" is not expanded');
 		}
+	});
+});
+
+describe('format_project_fallback', () => {
+	const registry_path = parse_or_throw(DiskfilePath, '/dev/repos.toml');
+
+	test('names the registry and why it was passed over', () => {
+		assert.strictEqual(
+			format_project_fallback({ kind: 'unregistered', registry_path }),
+			'/dev/repos.toml lists no cloned repo holding it'
+		);
+		assert.strictEqual(
+			format_project_fallback({
+				kind: 'registry_refused',
+				registry_path,
+				reason: 'registry_untrusted'
+			}),
+			"/dev/repos.toml isn't trusted: it or a folder above it has another owner or loose permissions"
+		);
+		assert.strictEqual(
+			format_project_fallback({
+				kind: 'registry_refused',
+				registry_path,
+				reason: 'registry_not_confined'
+			}),
+			'/dev/repos.toml is a link out of its folder, or through another link'
+		);
+	});
+
+	test('an unknown reason is shown as given', () => {
+		assert.strictEqual(
+			format_project_fallback({ kind: 'registry_refused', registry_path, reason: 'new_reason' }),
+			'/dev/repos.toml was refused (new_reason)'
+		);
+	});
+});
+
+describe('format_project_opened', () => {
+	const root = parse_or_throw(DiskfileDirectoryPath, '/dev/zzz/');
+
+	test('names the root only when it differs from the path', () => {
+		assert.strictEqual(
+			format_project_opened('/dev/zzz', { root, kind: 'git_repo', fallback: null }),
+			'Opened /dev/zzz/ — a git checkout.'
+		);
+		assert.strictEqual(
+			format_project_opened('/dev/zzz/src/a.ts', {
+				root,
+				kind: 'git_repo',
+				fallback: {
+					kind: 'unregistered',
+					registry_path: parse_or_throw(DiskfilePath, '/dev/repos.toml')
+				}
+			}),
+			'Opened /dev/zzz/src/a.ts, rooted at /dev/zzz/ — a git checkout; /dev/repos.toml lists no cloned repo holding it.'
+		);
 	});
 });

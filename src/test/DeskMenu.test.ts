@@ -20,6 +20,7 @@ const plain_info = (root: string, name: string): ProjectInfoJson => ({
 	opened_at: '2026-11-16T00:00:00.000Z',
 	kind: 'plain_dir',
 	registry_path: null,
+	fallback: null,
 	entries: [],
 	focused: [parse_or_throw(DiskfileDirectoryPath, root)],
 	rev: 1

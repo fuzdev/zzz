@@ -2,7 +2,9 @@
 //!
 //! A project is a root directory and what kind of thing it is. From an
 //! opened path (a file opens its parent — a symlink to a file, its target's
-//! parent), the first rule that applies decides ([`resolve_project`]):
+//! parent; a path under a `.git` component, the directory holding the
+//! outermost one), the first rule that applies decides
+//! ([`resolve_project`]):
 //!
 //! 1. **A registry** — a `repos.toml` found walking up by `fuz_repos`'s
 //!    discovery ([`discover_registry`]), placed at the registry root it
@@ -15,18 +17,56 @@
 //!    home directory or the allowlisted root, that one included) and, when
 //!    it's a symlink, confined: its target inside the root it would make,
 //!    and named by its link text through no other symlink ([`link_text_path`]).
-//!    One that isn't
-//!    refuses the open, before the file is read, rather than being skipped,
-//!    since a skip would widen the root to a registry further up. The
-//!    registry's entries are each canonicalized and confined to the root
-//!    ([`EntryDir`]): one that escapes, or isn't a directory, is refused
-//!    alone, and the project still resolves. A root that
-//!    is inside a checkout of one of its own entries (`fuz_repos`'s
-//!    `RootInEntry`, [`entry_holding_root`]) falls through to rule 2.
+//!    One that isn't refuses the open, before the file is read, rather than
+//!    being skipped, since a skip would widen the root to a registry further
+//!    up — unless it's a registry kept inside a checkout, below (see
+//!    *Passed over*). The registry's entries are each canonicalized and
+//!    confined to the root ([`EntryDir`]): one that escapes, isn't a
+//!    directory, or is in a git dir is refused alone, and the project still
+//!    resolves.
+//!
+//!    The registry roots the project when the opened directory is inside
+//!    one of its present entries, or is its root or isn't under its root
+//!    at all (a linked worktree whose main checkout's registry is linked
+//!    elsewhere) — unless no entry is present and the root is a checkout.
+//!    A directory under the root in no present entry falls back instead
+//!    (*Passed over*), as do the root of a checkout with no entry present
+//!    and a linked worktree outside it: the root has one kind whichever
+//!    path opens it.
 //! 2. **A git checkout** — the nearest directory at or above the path, inside
-//!    the same bound, holding a `.git` (anything that stats, as `fuz_repos`'s
-//!    discovery reads one: a directory, or a linked worktree's file).
+//!    the same bound, holding a `.git` that is a directory or a regular file
+//!    (a linked worktree's gitfile) — anything else there is ignored.
 //! 3. **The directory itself.**
+//!
+//! **Passed over** — a registry found by rule 1 that doesn't root the
+//! project leaves it to rules 2 and 3, recorded as its [`Fallback`]:
+//!
+//! - **Unregistered**: the opened directory is under the registry's root in
+//!   none of its present entries, or is the root of a checkout with none
+//!   present, or a linked worktree outside that root. The checkout is
+//!   looked for at or below the root, never above it — and strictly below
+//!   it when any entry is present, since a root holding clones is a
+//!   workspace that rule 2 would index whole; from outside the root, it's
+//!   the one rule 2 alone would find.
+//! - **Refused**: a registry kept inside a checkout — the one discovery
+//!   offered first, with no link above its checkout naming the same file —
+//!   that is untrusted, unconfined, protected, unreadable, or invalid. It
+//!   falls back only to a checkout holding the opened path at or below the
+//!   registry's own directory — at or below what the open would root at
+//!   were the file absent; anything else refuses as before. A registry outside
+//!   any checkout, or one a link above names, still refuses: it, or the
+//!   link, is the registry that would have rooted the open. So is a registry
+//!   replaced mid-open, which a retry reads.
+//! - **Root in entry**: a registry root inside a checkout of one of its own
+//!   entries (`fuz_repos`'s `RootInEntry`, [`entry_holding_root`]) falls
+//!   back as a refused registry does, at or below its own directory —
+//!   or, from a linked worktree outside it, that worktree's own checkout
+//!   (the one rule 2 alone would find).
+//!
+//! None of these widens: each fallback root is at or below the root the
+//! registry would have made, or, from a linked worktree outside it, the
+//! worktree's own checkout, and nothing read from the registry passed
+//! over decides it but a root-in-entry registry's entries.
 //!
 //! Whatever the rule, the root must pass the root rules
 //! ([`crate::root_policy`]) and lie outside every protected directory
@@ -50,7 +90,9 @@ use std::os::unix::fs::MetadataExt as _;
 use std::path::{Path, PathBuf};
 
 use fuz_git::Git;
-use fuz_repos::discover::{Bound, Candidate, discover_registry, entry_holding_root};
+use fuz_repos::discover::{
+    Bound, Candidate, CandidateKind, FileId, discover_registry, entry_holding_root,
+};
 use fuz_repos::registry::{Entry, ValidRegistry};
 
 use crate::file_trust::{Inode, TrustedOwner, Untrusted};
@@ -99,6 +141,14 @@ pub const ERROR_ENTRY_NOT_CONFINED: &str = "entry_not_confined";
 /// symlink, a loop, no permission ([`EntryRefusal::Unresolvable`]).
 pub const ERROR_ENTRY_UNRESOLVABLE: &str = "entry_unresolvable";
 
+/// A registry entry whose dir resolves into a git dir
+/// ([`EntryRefusal::InGitDir`]).
+pub const ERROR_ENTRY_IN_GIT_DIR: &str = "entry_in_git_dir";
+
+/// A registry passed over because its root is inside a checkout of one of
+/// its own entries (`RootInEntry`, [`Fallback::RegistryRefused`]).
+pub const ERROR_REGISTRY_ROOT_IN_ENTRY: &str = "registry_root_in_entry";
+
 /// What [`resolve_project`] resolves against.
 #[derive(Debug, Clone, Copy)]
 pub struct ResolveOptions<'a> {
@@ -119,10 +169,34 @@ pub struct Project {
     /// The project's root directory, canonical.
     pub root: PathBuf,
     /// The directory the open resolved from, canonical: the opened path, or
-    /// its parent when it names a file. Not always inside `root` (a linked
-    /// worktree's registry, see the module docs).
+    /// its parent when it names a file, or the directory holding the `.git`
+    /// it's in. Not always inside `root` (a linked worktree's registry, see
+    /// the module docs).
     pub opened: PathBuf,
     pub kind: ProjectKind,
+    /// The registry passed over, when one was found and didn't root the
+    /// project — never set on a registry project.
+    pub fallback: Option<Fallback>,
+}
+
+/// Why a project found under a registry isn't that registry's (see the
+/// module docs' *Passed over*).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Fallback {
+    /// The opened directory is under the registry's root in none of its
+    /// present entries.
+    Unregistered {
+        /// The registry file as found at its root.
+        registry: PathBuf,
+    },
+    /// The registry was refused, or its root is in a checkout of one of its
+    /// own entries.
+    RegistryRefused {
+        /// The registry file as discovery offered it.
+        registry: PathBuf,
+        /// [`ProjectError::reason`], or [`ERROR_REGISTRY_ROOT_IN_ENTRY`].
+        reason: &'static str,
+    },
 }
 
 /// Which rule rooted a [`Project`].
@@ -180,6 +254,11 @@ pub enum EntryRefusal {
     /// It resolves to something other than a directory.
     #[error("{} resolves to {}, not a directory", path.display(), resolved.display())]
     NotADirectory { path: PathBuf, resolved: PathBuf },
+    /// It resolves into a `.git` directory under the root — an entry named
+    /// `.git`, or linked into one. Focused, it would index a repo's git dir
+    /// and put its hooks in reach of the file actions.
+    #[error("{} resolves into a git dir: {}", path.display(), resolved.display())]
+    InGitDir { path: PathBuf, resolved: PathBuf },
     /// Something is there that can't be resolved.
     #[error("{} can't be resolved", path.display())]
     Unresolvable {
@@ -196,6 +275,7 @@ impl EntryRefusal {
             Self::NotConfined { .. } => ERROR_ENTRY_NOT_CONFINED,
             Self::Protected { .. } => ERROR_PROTECTED_DIR_NOT_ALLOWED,
             Self::NotADirectory { .. } => ERROR_NOT_A_DIRECTORY,
+            Self::InGitDir { .. } => ERROR_ENTRY_IN_GIT_DIR,
             Self::Unresolvable { .. } => ERROR_ENTRY_UNRESOLVABLE,
         }
     }
@@ -333,7 +413,9 @@ impl ProjectError {
 /// [`ProjectError`]: a relative or unresolvable path; an opened directory or
 /// root the root rules refuse or that is protected; a registry that is
 /// untrusted, replaced, unconfined, unreadable, or invalid — the open is
-/// refused rather than falling back, so the reason reaches the user.
+/// refused rather than falling back, so the reason reaches the user, unless
+/// it's a registry inside a checkout that falls back to that checkout (the
+/// module docs' *Passed over*).
 pub fn resolve_project(path: &Path, options: &ResolveOptions<'_>) -> Result<Project, ProjectError> {
     if !path.is_absolute() {
         return Err(ProjectError::NotAbsolute {
@@ -352,17 +434,80 @@ pub fn resolve_project(path: &Path, options: &ResolveOptions<'_>) -> Result<Proj
     };
     check_root(&opened, options)?;
     let bound = WalkBound::new(&opened, options.root_policy)?;
+    // a path under a `.git` component opens as the directory holding the
+    // outermost one, so no rule roots a project at or inside it
+    let opened = bound.outside_git_dir(opened);
+    check_root(&opened, options)?;
 
-    let (root, kind) = find_registry(&opened, &bound, options)?.unwrap_or_else(|| {
-        nearest_checkout(&opened, &bound).map_or_else(
-            || (opened.clone(), ProjectKind::PlainDir),
-            |top| (top, ProjectKind::GitRepo),
-        )
-    });
+    let (root, kind, fallback) = match find_registry(&opened, &bound, options)? {
+        Found::Registry(Registry {
+            root,
+            path,
+            entries,
+        }) => {
+            let present = || {
+                entries.iter().filter_map(|entry| match &entry.dir {
+                    EntryDir::Present(dir) => Some(dir),
+                    EntryDir::Missing | EntryDir::Refused(_) => None,
+                })
+            };
+            // a root holding clones is a workspace: a checkout at the root
+            // would index every clone in it. A root holding none that is a
+            // checkout is that checkout, opened at the root, below it, or
+            // from a linked worktree outside it, so the root has one kind
+            // for a given disk state
+            let workspace = present().next().is_some();
+            let under_root = opened.starts_with(&root);
+            let rooted = if opened == root || !under_root {
+                workspace || !is_checkout(&root)
+            } else {
+                present().any(|dir| opened.starts_with(dir))
+            };
+            if rooted {
+                (root, ProjectKind::Registry { path, entries }, None)
+            } else {
+                // under the root, never above it; from outside it, the
+                // checkout rule 2 alone would find
+                let checkout = nearest_checkout(&opened, |dir| {
+                    if under_root {
+                        dir.starts_with(&root) && (!workspace || dir != root)
+                    } else {
+                        bound.contains(dir)
+                    }
+                });
+                let (root, kind) = checkout_or_dir(checkout, &opened);
+                (root, kind, Some(Fallback::Unregistered { registry: path }))
+            }
+        }
+        Found::PassedOver { checkout, fallback } => {
+            let (root, kind) = checkout_or_dir(checkout, &opened);
+            (root, kind, Some(fallback))
+        }
+        Found::Nothing => {
+            let (root, kind) = checkout_or_dir(
+                nearest_checkout(&opened, |dir| bound.contains(dir)),
+                &opened,
+            );
+            (root, kind, None)
+        }
+    };
     // a backstop: the hook checked a registry root, and a checkout or the
     // opened dir is the opened dir or above it, inside the bound
     check_root(&root, options)?;
-    Ok(Project { root, opened, kind })
+    Ok(Project {
+        root,
+        opened,
+        kind,
+        fallback,
+    })
+}
+
+/// Rules 2 and 3: `checkout` when there is one, else the opened directory.
+fn checkout_or_dir(checkout: Option<PathBuf>, opened: &Path) -> (PathBuf, ProjectKind) {
+    checkout.map_or_else(
+        || (opened.to_owned(), ProjectKind::PlainDir),
+        |top| (top, ProjectKind::GitRepo),
+    )
 }
 
 /// Refuses a directory that can't be a root: a protected one, or one the
@@ -431,6 +576,22 @@ impl WalkBound {
         dir.starts_with(self.bound.dir()) && (self.inclusive || dir != self.bound.dir())
     }
 
+    /// `opened` (canonical), or the directory holding the outermost `.git`
+    /// component of it below the bound's dir — what an open in a git dir
+    /// opens. A `.git` at or above the bound's dir is the bound's business,
+    /// not the open's.
+    fn outside_git_dir(&self, opened: PathBuf) -> PathBuf {
+        let Ok(rel) = opened.strip_prefix(self.bound.dir()) else {
+            return opened;
+        };
+        let Some(depth) = rel.components().position(|c| c.as_os_str() == ".git") else {
+            return opened;
+        };
+        let mut lifted = self.bound.dir().to_owned();
+        lifted.extend(rel.components().take(depth));
+        lifted
+    }
+
     /// Whether the trust rule checks `dir` (canonical): the bound's dir too,
     /// even below the home directory, as sshd checks the home directory
     /// itself — whoever can write it can move the directories under it.
@@ -439,31 +600,97 @@ impl WalkBound {
     }
 }
 
+/// What rule 1 found ([`find_registry`]).
+#[derive(Debug)]
+enum Found {
+    /// No registry.
+    Nothing,
+    /// A registry, read and parsed — whether it roots the project depends on
+    /// where the opened directory is ([`resolve_project`]).
+    Registry(Registry),
+    /// A registry found and passed over: the checkout to fall back to (or
+    /// none, for the opened directory), and why.
+    PassedOver {
+        checkout: Option<PathBuf>,
+        fallback: Fallback,
+    },
+}
+
+/// A registry found by rule 1.
+#[derive(Debug)]
+struct Registry {
+    root: PathBuf,
+    /// The registry file as found at the root.
+    path: PathBuf,
+    entries: Vec<ProjectEntry>,
+}
+
+/// A candidate discovery offered the hook, kept past the walk.
+#[derive(Debug)]
+struct Offered {
+    kind: CandidateKind,
+    path: PathBuf,
+    dir: PathBuf,
+    file: FileId,
+}
+
 /// Rule 1: the registry discovered from `opened`, read and parsed, with its
-/// root and entries — `None` when there is none, or when its root is in a
-/// checkout of one of its entries.
+/// root and entries — or passed over, when its root is in a checkout of one
+/// of its entries, or when it's refused inside a checkout
+/// ([`passed_over`]).
 fn find_registry(
     opened: &Path,
     bound: &WalkBound,
     options: &ResolveOptions<'_>,
-) -> Result<Option<(PathBuf, ProjectKind)>, ProjectError> {
-    let accept =
-        |c: &Candidate<'_>| vet_candidate(c, bound, options.owner, options.zzz_dir).map(Some);
-    let Some((location, file)) =
-        discover_registry(opened, Some(&bound.bound), options.git, accept)?
-    else {
-        return Ok(None);
+) -> Result<Found, ProjectError> {
+    // the last candidate offered is the one refused on an `Err`, and the one
+    // taken on success: a taken `Nearest` is followed only by `Link`s, each
+    // taken or refused
+    let mut offered: Option<Offered> = None;
+    let accept = |c: &Candidate<'_>| {
+        offered = Some(Offered {
+            kind: c.kind,
+            path: c.path.to_owned(),
+            dir: c.dir.to_owned(),
+            file: c.file,
+        });
+        vet_candidate(c, bound, options.owner, options.zzz_dir).map(Some)
     };
-    let src = read_registry(file, &location.path)?;
-    let registry = ValidRegistry::parse(&src, &location.path).map_err(|source| {
-        ProjectError::RegistryInvalid {
+    let (location, file) = match discover_registry(opened, Some(&bound.bound), options.git, accept)
+    {
+        Ok(Some(found)) => found,
+        Ok(None) => return Ok(Found::Nothing),
+        Err(error) => return passed_over(opened, bound, offered.as_ref(), error),
+    };
+    let registry = read_registry(file, &location.path).and_then(|src| {
+        ValidRegistry::parse(&src, &location.path).map_err(|source| ProjectError::RegistryInvalid {
             path: location.path.clone(),
             source,
-        }
-    })?;
+        })
+    });
+    let registry = match registry {
+        Ok(registry) => registry,
+        Err(error) => return passed_over(opened, bound, offered.as_ref(), error),
+    };
     let entries = registry.entries();
     if entry_holding_root(&location.root, &entries, Some(&bound.bound), options.git).is_some() {
-        return Ok(None);
+        // at or below the registry's own directory, as a refused registry
+        // falls back: an unbounded walk would reach an outer checkout and
+        // give its root a second kind, indexed whole
+        let below = opened.starts_with(&location.root);
+        return Ok(Found::PassedOver {
+            checkout: nearest_checkout(opened, |dir| {
+                if below {
+                    dir.starts_with(&location.root)
+                } else {
+                    bound.contains(dir)
+                }
+            }),
+            fallback: Fallback::RegistryRefused {
+                registry: location.path,
+                reason: ERROR_REGISTRY_ROOT_IN_ENTRY,
+            },
+        });
     }
     let entries = entries
         .into_iter()
@@ -472,13 +699,63 @@ fn find_registry(
             ProjectEntry { entry, dir }
         })
         .collect();
-    Ok(Some((
-        location.root,
-        ProjectKind::Registry {
-            path: location.path,
-            entries,
+    Ok(Found::Registry(Registry {
+        root: location.root,
+        path: location.path,
+        entries,
+    }))
+}
+
+/// A refused registry passed over for the checkout holding `opened`, or
+/// `error` (see the module docs' *Passed over*).
+///
+/// Only a `Nearest` candidate whose directory holds `opened` and is inside
+/// a checkout, with no link above that checkout naming the same file, and
+/// only for a checkout holding `opened` at or below the candidate's
+/// directory — the root the open would have without the file. A `Link`, a
+/// registry outside any checkout, or one a link names is the registry that
+/// would have rooted the open, and a registry replaced mid-open is read
+/// again by a retry: each still refuses.
+fn passed_over(
+    opened: &Path,
+    bound: &WalkBound,
+    offered: Option<&Offered>,
+    error: ProjectError,
+) -> Result<Found, ProjectError> {
+    let Some(candidate) = offered else {
+        return Err(error);
+    };
+    if candidate.kind != CandidateKind::Nearest
+        || matches!(error, ProjectError::RegistryReplaced { .. })
+        || !opened.starts_with(&candidate.dir)
+    {
+        return Err(error);
+    }
+    let Some(holding) = nearest_checkout(&candidate.dir, |dir| bound.contains(dir)) else {
+        return Err(error);
+    };
+    // a link above the checkout to this file would have rooted the open there
+    let linked = holding
+        .ancestors()
+        .skip(1)
+        .take_while(|dir| bound.contains(dir))
+        .any(|dir| {
+            std::fs::metadata(dir.join(fuz_repos::discover::REGISTRY_FILE))
+                .is_ok_and(|m| m.dev() == candidate.file.dev && m.ino() == candidate.file.ino)
+        });
+    if linked {
+        return Err(error);
+    }
+    let Some(checkout) = nearest_checkout(opened, |dir| dir.starts_with(&candidate.dir)) else {
+        return Err(error);
+    };
+    Ok(Found::PassedOver {
+        checkout: Some(checkout),
+        fallback: Fallback::RegistryRefused {
+            registry: candidate.path.clone(),
+            reason: error.reason(),
         },
-    )))
+    })
 }
 
 /// The discovery hook: vets a candidate registry and opens it, returning
@@ -654,6 +931,13 @@ fn confine_entry(root: &Path, name: &str, zzz_dir: &Path) -> EntryDir {
     if !resolved.starts_with(root) || resolved == root {
         return EntryDir::Refused(EntryRefusal::NotConfined { path, resolved });
     }
+    // `resolved` is under `root`, checked above
+    if resolved
+        .strip_prefix(root)
+        .is_ok_and(|rel| rel.components().any(|c| c.as_os_str() == ".git"))
+    {
+        return EntryDir::Refused(EntryRefusal::InGitDir { path, resolved });
+    }
     if let Some(dir) = protected_dir(&resolved, zzz_dir) {
         return EntryDir::Refused(EntryRefusal::Protected {
             path,
@@ -668,15 +952,22 @@ fn confine_entry(root: &Path, name: &str, zzz_dir: &Path) -> EntryDir {
     }
 }
 
-/// Rule 2: the nearest directory at or above `opened`, inside the bound,
-/// holding a `.git` that stats (followed through symlinks) — what
-/// `fuz_repos`'s discovery counts as a checkout.
-fn nearest_checkout(opened: &Path, bound: &WalkBound) -> Option<PathBuf> {
+/// Rule 2: the nearest directory at or above `opened` that `within`
+/// admits — it stops at the first it doesn't — holding a `.git` that is a
+/// directory or a regular file (a linked worktree's gitfile), followed
+/// through symlinks. A FIFO, socket, or device named `.git` is no checkout.
+fn nearest_checkout(opened: &Path, within: impl Fn(&Path) -> bool) -> Option<PathBuf> {
     opened
         .ancestors()
-        .take_while(|dir| bound.contains(dir))
-        .find(|dir| std::fs::metadata(dir.join(".git")).is_ok())
+        .take_while(|dir| within(dir))
+        .find(|dir| is_checkout(dir))
         .map(Path::to_owned)
+}
+
+/// Whether `dir` holds a `.git` that is a directory or a regular file,
+/// followed through symlinks ([`nearest_checkout`]).
+fn is_checkout(dir: &Path) -> bool {
+    std::fs::metadata(dir.join(".git")).is_ok_and(|m| m.is_dir() || m.is_file())
 }
 
 #[cfg(test)]
@@ -1121,6 +1412,13 @@ purpose = "a reference"
         f.mkdir("home/dev/meta/src");
         f.symlink("meta/repos.toml", "home/dev/repos.toml");
 
+        // rooted at the link: opened at the root, or in the listed `meta`
+        let project = f.resolve("home/dev").unwrap();
+        assert_eq!(registry(&project).0, f.path("home/dev/repos.toml"));
+        let listed = format!(
+            "{REGISTRY}\n[repos.meta]\nurl = \"https://github.com/me/meta\"\nvisibility = \"public\"\npurpose = \"the registry\"\n"
+        );
+        f.write("home/dev/meta/repos.toml", &listed);
         let project = f.resolve("home/dev/meta/src").unwrap();
         assert_eq!(project.root, f.path("home/dev"));
         assert_eq!(registry(&project).0, f.path("home/dev/repos.toml"));
@@ -1228,15 +1526,32 @@ purpose = "a reference"
         let project = f.resolve("home/dev/meta/src").unwrap();
         assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
         assert_eq!(project.root, f.path("home/dev/meta"));
+        assert_eq!(
+            project.fallback,
+            Some(Fallback::RegistryRefused {
+                registry: f.path("home/dev/meta/repos.toml"),
+                reason: ERROR_REGISTRY_ROOT_IN_ENTRY,
+            })
+        );
 
-        // a checkout of no entry keeps the registry
+        // a checkout of no entry isn't passed over as one: with nothing
+        // cloned it opens as its checkout, unregistered, and with an entry
+        // present the registry roots it
         f.git(
             "home/dev/meta",
             &["remote", "set-url", "origin", "https://github.com/me/other"],
         );
-        let project = f.resolve("home/dev/meta/src").unwrap();
+        let project = f.resolve("home/dev/meta").unwrap();
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert!(
+            matches!(project.fallback, Some(Fallback::Unregistered { .. })),
+            "{project:?}"
+        );
+        f.mkdir("home/dev/meta/meta");
+        let project = f.resolve("home/dev/meta").unwrap();
         assert_eq!(registry(&project).0, f.path("home/dev/meta/repos.toml"));
         assert_eq!(project.root, f.path("home/dev/meta"));
+        assert_eq!(project.fallback, None);
     }
 
     #[test]
@@ -1293,6 +1608,41 @@ purpose = "a reference"
     }
 
     #[test]
+    fn a_linked_worktree_of_a_checkout_whose_registry_lists_nothing_cloned_is_its_own_checkout() {
+        // the main checkout's registry is untracked, so the worktree has no
+        // copy and discovery finds the main checkout's: with nothing cloned
+        // the root is the checkout, from the worktree as from the root
+        let f = Fixture::new();
+        f.write("home/dev/tool/a.txt", "a");
+        f.git("home/dev/tool", &["init", "-q"]);
+        f.git("home/dev/tool", &["add", "a.txt"]);
+        f.git("home/dev/tool", &["commit", "-q", "-m", "a"]);
+        f.git("home/dev/tool", &["worktree", "add", "-q", "../../wt"]);
+        f.chmod("home/wt", 0o755);
+        f.mkdir("home/wt/sub");
+        f.write("home/dev/tool/repos.toml", REGISTRY);
+        let unregistered = Fallback::Unregistered {
+            registry: f.path("home/dev/tool/repos.toml"),
+        };
+
+        let project = f.resolve("home/dev/tool").unwrap();
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert_eq!(project.fallback.as_ref(), Some(&unregistered));
+        let project = f.resolve("home/wt/sub").unwrap();
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert_eq!(project.root, f.path("home/wt"));
+        assert_eq!(project.fallback.as_ref(), Some(&unregistered));
+
+        // an entry cloned: the registry, from the worktree as from the root
+        f.mkdir("home/dev/tool/app");
+        for rel in ["home/dev/tool", "home/wt/sub"] {
+            let project = f.resolve(rel).unwrap();
+            assert_eq!(project.root, f.path("home/dev/tool"), "{rel}");
+            assert_eq!(registry(&project).0, f.path("home/dev/tool/repos.toml"));
+        }
+    }
+
+    #[test]
     fn a_linked_worktree_without_a_registry_is_its_own_checkout() {
         let f = Fixture::new();
         f.write("home/dev/repo/a.txt", "a");
@@ -1308,7 +1658,7 @@ purpose = "a reference"
     }
 
     #[test]
-    fn any_git_entry_that_stats_makes_a_checkout() {
+    fn only_a_git_dir_or_gitfile_makes_a_checkout() {
         let f = Fixture::new();
         f.mkdir("home/dev/odd/src");
         let out = std::process::Command::new("mkfifo")
@@ -1317,8 +1667,21 @@ purpose = "a reference"
             .unwrap();
         assert!(out.status.success());
 
+        // a FIFO is passed over, as is anything else not a dir or file
+        let project = f.resolve("home/dev/odd/src").unwrap();
+        assert!(matches!(project.kind, ProjectKind::PlainDir), "{project:?}");
+        assert_eq!(project.root, f.path("home/dev/odd/src"));
+
+        // a gitfile is a linked worktree's, and a symlink is followed
+        std::fs::remove_file(f.path("home/dev/odd/.git")).unwrap();
+        f.write("home/dev/odd/.git", "gitdir: /nowhere\n");
         let project = f.resolve("home/dev/odd/src").unwrap();
         assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert_eq!(project.root, f.path("home/dev/odd"));
+        std::fs::remove_file(f.path("home/dev/odd/.git")).unwrap();
+        f.mkdir("home/dev/gitdir");
+        f.symlink("../gitdir", "home/dev/odd/.git");
+        let project = f.resolve("home/dev/odd/src").unwrap();
         assert_eq!(project.root, f.path("home/dev/odd"));
     }
 
@@ -1359,10 +1722,15 @@ purpose = "a reference"
         f.mkdir(".git");
         f.write("srv/repos.toml", REGISTRY);
         f.mkdir("srv/proj/app");
+        f.mkdir("srv/app");
 
-        let project = f.resolve("srv/proj/app").unwrap();
+        let project = f.resolve("srv/app").unwrap();
         assert_eq!(project.root, f.path("srv"));
-        assert!(matches!(entry(&project, "app"), EntryDir::Missing));
+        assert!(matches!(entry(&project, "app"), EntryDir::Present(_)));
+        // a dir in no entry falls back, inside the allowlisted root
+        let project = f.resolve("srv/proj/app").unwrap();
+        assert!(matches!(project.kind, ProjectKind::PlainDir), "{project:?}");
+        assert_eq!(project.root, f.path("srv/proj/app"));
 
         // the allowlisted root itself is trust-checked
         f.chmod("srv", 0o757);
@@ -1409,8 +1777,8 @@ purpose = "a reference"
         let candidate = |ino| Candidate {
             path: &path,
             dir: &dir,
-            kind: fuz_repos::discover::CandidateKind::Nearest,
-            file: fuz_repos::discover::FileId {
+            kind: CandidateKind::Nearest,
+            file: FileId {
                 dev: meta.dev(),
                 ino,
             },
@@ -1461,5 +1829,390 @@ purpose = "a reference"
             f.resolve("home/dev/app").unwrap_err().reason(),
             ERROR_REGISTRY_UNREADABLE
         );
+    }
+
+    /// The fallback a resolve passed over to, or a panic naming the project.
+    fn fallback(project: &Project) -> &Fallback {
+        project
+            .fallback
+            .as_ref()
+            .unwrap_or_else(|| panic!("expected a fallback, got {project:?}"))
+    }
+
+    /// The registry refused and why, for a project that fell back past one.
+    fn refused(project: &Project) -> (&Path, &'static str) {
+        match fallback(project) {
+            Fallback::RegistryRefused { registry, reason } => (registry, reason),
+            other @ Fallback::Unregistered { .. } => {
+                panic!("expected a refused registry, got {other:?}")
+            }
+        }
+    }
+
+    #[test]
+    fn a_dir_under_a_registry_root_in_no_entry_falls_back() {
+        let f = Fixture::new();
+        f.write("home/dev/repos.toml", REGISTRY);
+        f.mkdir("home/dev/app/src");
+        f.mkdir("home/dev/scratch/deep");
+        f.mkdir("home/dev/loose/.git");
+        f.mkdir("home/dev/loose/src");
+        let unregistered = Fallback::Unregistered {
+            registry: f.path("home/dev/repos.toml"),
+        };
+
+        // an unregistered directory: itself
+        let project = f.resolve("home/dev/scratch/deep").unwrap();
+        assert!(matches!(project.kind, ProjectKind::PlainDir), "{project:?}");
+        assert_eq!(project.root, f.path("home/dev/scratch/deep"));
+        assert_eq!(project.fallback.as_ref(), Some(&unregistered));
+        // an unregistered checkout: the checkout
+        let project = f.resolve("home/dev/loose/src").unwrap();
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert_eq!(project.root, f.path("home/dev/loose"));
+        assert_eq!(project.fallback.as_ref(), Some(&unregistered));
+
+        // in an entry, or the root itself: the registry
+        let project = f.resolve("home/dev/app/src").unwrap();
+        assert_eq!(project.root, f.path("home/dev"));
+        assert_eq!(project.fallback, None);
+        assert!(matches!(
+            f.resolve("home/dev").unwrap().kind,
+            ProjectKind::Registry { .. }
+        ));
+        // a loose file at the root opens the root
+        f.write("home/dev/notes.md", "");
+        assert_eq!(
+            f.resolve("home/dev/notes.md").unwrap().root,
+            f.path("home/dev")
+        );
+    }
+
+    #[test]
+    fn the_root_rules_hold_for_a_dir_in_no_entry() {
+        let f = Fixture::new();
+        f.write("home/dev/repos.toml", REGISTRY);
+        f.mkdir("home/dev/.ssh/keys");
+        f.mkdir("home/dev/.zzz/x");
+        let reason = |rel: &str| f.resolve(rel).unwrap_err().reason();
+
+        // refused before any fallback, as an open anywhere is
+        assert_eq!(
+            reason("home/dev/.ssh/keys"),
+            ERROR_PROTECTED_DIR_NOT_ALLOWED
+        );
+        assert_eq!(reason("home/dev/.zzz/x"), ERROR_PROTECTED_DIR_NOT_ALLOWED);
+    }
+
+    #[test]
+    fn a_checkouts_own_unlinked_registry_roots_it_only_once_an_entry_is_present() {
+        let f = Fixture::new();
+        f.write("home/dev/tool/repos.toml", REGISTRY);
+        f.mkdir("home/dev/tool/.git");
+        f.mkdir("home/dev/tool/src");
+        let unregistered = Fallback::Unregistered {
+            registry: f.path("home/dev/tool/repos.toml"),
+        };
+
+        // no entry present: the registry describes no workspace here, so the
+        // root and its files open the checkout alike — the root itself too,
+        // as a restart's reopen spells it, so alternating opens never flip
+        // its kind
+        for rel in ["home/dev/tool/src", "home/dev/tool", "home/dev/tool/"] {
+            let project = f.resolve(rel).unwrap();
+            assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+            assert_eq!(project.root, f.path("home/dev/tool"));
+            assert_eq!(project.fallback.as_ref(), Some(&unregistered));
+        }
+
+        // a clone present inside it: a workspace, never indexed whole — its
+        // own files open as a directory, the clone as the registry
+        f.mkdir("home/dev/tool/app/src");
+        let project = f.resolve("home/dev/tool/src").unwrap();
+        assert!(matches!(project.kind, ProjectKind::PlainDir), "{project:?}");
+        assert_eq!(project.root, f.path("home/dev/tool/src"));
+        assert_eq!(project.fallback.as_ref(), Some(&unregistered));
+        let project = f.resolve("home/dev/tool/app/src").unwrap();
+        assert_eq!(project.root, f.path("home/dev/tool"));
+        assert_eq!(project.fallback, None);
+        // and the root now opens the registry, from any spelling
+        for rel in ["home/dev/tool", "home/dev/tool/"] {
+            let project = f.resolve(rel).unwrap();
+            assert_eq!(registry(&project).0, f.path("home/dev/tool/repos.toml"));
+        }
+        // a checkout below its root, in no entry, is still that checkout
+        f.mkdir("home/dev/tool/vendor/lib/.git");
+        f.mkdir("home/dev/tool/vendor/lib/src");
+        let project = f.resolve("home/dev/tool/vendor/lib/src").unwrap();
+        assert_eq!(project.root, f.path("home/dev/tool/vendor/lib"));
+        assert_eq!(project.fallback.as_ref(), Some(&unregistered));
+    }
+
+    #[test]
+    fn a_refused_registry_in_a_checkout_falls_back_to_the_checkout() {
+        let f = Fixture::new();
+        f.mkdir("home/dev/tool/.git");
+        f.mkdir("home/dev/tool/src");
+        let registry = f.path("home/dev/tool/repos.toml");
+        let check = |want: &str| {
+            let project = f.resolve("home/dev/tool/src").unwrap();
+            assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+            assert_eq!(project.root, f.path("home/dev/tool"));
+            assert_eq!(refused(&project), (registry.as_path(), want));
+            // the root itself too: the registry never roots it
+            let project = f.resolve("home/dev/tool").unwrap();
+            assert_eq!(refused(&project).1, want);
+        };
+
+        // invalid
+        f.write("home/dev/tool/repos.toml", GARBAGE);
+        check(ERROR_REGISTRY_INVALID);
+        // untrusted: the file, or a dir inside the checkout
+        f.write("home/dev/tool/repos.toml", REGISTRY);
+        f.chmod("home/dev/tool/repos.toml", 0o666);
+        check(ERROR_REGISTRY_UNTRUSTED);
+        // unconfined: a link out of the checkout
+        std::fs::remove_file(&registry).unwrap();
+        f.write("home/dev/elsewhere/repos.toml", REGISTRY);
+        f.symlink("../elsewhere/repos.toml", "home/dev/tool/repos.toml");
+        check(ERROR_REGISTRY_NOT_CONFINED);
+        // owned by another uid
+        std::fs::remove_file(&registry).unwrap();
+        f.write("home/dev/tool/repos.toml", REGISTRY);
+        let mut f = f;
+        f.owner = TrustedOwner::new(uid() + 1, None);
+        let project = f.resolve("home/dev/tool/src").unwrap();
+        assert_eq!(refused(&project).1, ERROR_REGISTRY_UNTRUSTED);
+    }
+
+    #[test]
+    fn a_refused_registry_that_would_have_rooted_the_open_still_refuses() {
+        let f = Fixture::new();
+        // outside any checkout: the open would root there
+        f.write("home/dev/repos.toml", GARBAGE);
+        f.mkdir("home/dev/app/.git");
+        f.mkdir("home/dev/app/src");
+        let e = f.resolve("home/dev/app/src").unwrap_err();
+        assert_eq!(e.reason(), ERROR_REGISTRY_INVALID);
+        f.write("home/dev/repos.toml", REGISTRY);
+        f.chmod("home/dev/repos.toml", 0o666);
+        let (path, _) = untrusted(f.resolve("home/dev/app/src"));
+        assert_eq!(path, f.path("home/dev/repos.toml"));
+        std::fs::remove_file(f.path("home/dev/repos.toml")).unwrap();
+
+        // in a checkout, but named by a link above it, which roots the open:
+        // invalid as read through the link, or untrusted before the link is
+        // looked at
+        f.write("home/dev/meta/repos.toml", GARBAGE);
+        f.mkdir("home/dev/meta/.git");
+        f.mkdir("home/dev/meta/src");
+        f.symlink("meta/repos.toml", "home/dev/repos.toml");
+        let e = f.resolve("home/dev/meta/src").unwrap_err();
+        assert_eq!(e.reason(), ERROR_REGISTRY_INVALID);
+        f.write("home/dev/meta/repos.toml", REGISTRY);
+        f.chmod("home/dev/meta/repos.toml", 0o666);
+        let (path, _) = untrusted(f.resolve("home/dev/meta/src"));
+        assert_eq!(path, f.path("home/dev/meta/repos.toml"));
+
+        // in a checkout, but the checkout is above the registry: falling
+        // back would root wider than the registry's dir
+        f.write("home/dev/big/conf/repos.toml", GARBAGE);
+        f.mkdir("home/dev/big/.git");
+        f.mkdir("home/dev/big/conf/x");
+        let e = f.resolve("home/dev/big/conf/x").unwrap_err();
+        assert_eq!(e.reason(), ERROR_REGISTRY_INVALID);
+        // unless a checkout below it holds the path
+        f.mkdir("home/dev/big/conf/x/.git");
+        let project = f.resolve("home/dev/big/conf/x").unwrap();
+        assert_eq!(project.root, f.path("home/dev/big/conf/x"));
+        assert_eq!(refused(&project).1, ERROR_REGISTRY_INVALID);
+
+        // named by a link that is itself inside a checkout: the link rooted
+        // the open, so its refusal stands
+        let g = Fixture::new();
+        g.mkdir("home/dev/.git");
+        g.write("home/dev/meta/repos.toml", GARBAGE);
+        g.mkdir("home/dev/meta/.git");
+        g.mkdir("home/dev/meta/src");
+        g.symlink("meta/repos.toml", "home/dev/repos.toml");
+        let e = g.resolve("home/dev/meta/src").unwrap_err();
+        assert_eq!(e.reason(), ERROR_REGISTRY_INVALID);
+    }
+
+    #[test]
+    fn an_unregistered_fallback_never_roots_above_the_registry_root() {
+        let f = Fixture::new();
+        // a registry kept below a checkout's root, nothing cloned: the
+        // checkout above would index more than the registry's root holds
+        f.mkdir("home/big/.git");
+        f.write("home/big/ws/repos.toml", REGISTRY);
+        f.mkdir("home/big/ws/scratch/x");
+        let project = f.resolve("home/big/ws/scratch/x").unwrap();
+        assert!(matches!(project.kind, ProjectKind::PlainDir), "{project:?}");
+        assert_eq!(project.root, f.path("home/big/ws/scratch/x"));
+        assert!(
+            matches!(project.fallback, Some(Fallback::Unregistered { .. })),
+            "{project:?}"
+        );
+    }
+
+    #[test]
+    fn a_path_in_a_git_dir_opens_as_the_dir_holding_it() {
+        // a checkout holding its own registry, an entry cloned: the
+        // registry, as the root opens
+        let f = Fixture::new();
+        f.write("home/dev/tool/repos.toml", REGISTRY);
+        f.mkdir("home/dev/tool/.git/hooks");
+        f.mkdir("home/dev/tool/app/.git/hooks");
+        for rel in ["home/dev/tool/.git", "home/dev/tool/.git/hooks"] {
+            let project = f.resolve(rel).unwrap();
+            assert_eq!(project.root, f.path("home/dev/tool"), "{rel}");
+            assert_eq!(project.opened, f.path("home/dev/tool"), "{rel}");
+            assert_eq!(registry(&project).0, f.path("home/dev/tool/repos.toml"));
+        }
+        // an entry's git dir: the registry, the entry the opened dir
+        let project = f.resolve("home/dev/tool/app/.git/hooks").unwrap();
+        assert_eq!(project.root, f.path("home/dev/tool"));
+        assert_eq!(project.opened, f.path("home/dev/tool/app"));
+
+        // nothing cloned: the checkout, as the root opens
+        let g = Fixture::new();
+        g.write("home/dev/tool/repos.toml", REGISTRY);
+        g.mkdir("home/dev/tool/.git/hooks");
+        let project = g.resolve("home/dev/tool/.git/hooks").unwrap();
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert_eq!(project.root, g.path("home/dev/tool"));
+
+        // an unregistered checkout's git dir, and one under no registry: the
+        // checkout
+        let h = Fixture::new();
+        h.write("home/dev/repos.toml", REGISTRY);
+        h.mkdir("home/dev/app");
+        h.mkdir("home/dev/loose/.git/hooks");
+        h.mkdir("home/solo/.git/objects/ab");
+        let project = h.resolve("home/dev/loose/.git/hooks").unwrap();
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert_eq!(project.root, h.path("home/dev/loose"));
+        let project = h.resolve("home/solo/.git/objects/ab").unwrap();
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert_eq!(project.root, h.path("home/solo"));
+        // a registry kept in a git dir is never found from inside it
+        h.write("home/solo/.git/repos.toml", REGISTRY);
+        let project = h.resolve("home/solo/.git/objects").unwrap();
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert_eq!(project.fallback, None);
+        // the outermost git dir decides: a checkout's git dir holding
+        // another's (a submodule's, say) opens the outer checkout
+        h.mkdir("home/solo/.git/modules/sub/.git/hooks");
+        let project = h.resolve("home/solo/.git/modules/sub/.git/hooks").unwrap();
+        assert_eq!(project.root, h.path("home/solo"));
+        assert_eq!(project.opened, h.path("home/solo"));
+        // only a component named `.git` exactly
+        h.mkdir("home/back/.git-backup/x");
+        h.mkdir("home/back/y.git/x");
+        for rel in ["home/back/.git-backup/x", "home/back/y.git/x"] {
+            let project = h.resolve(rel).unwrap();
+            assert!(matches!(project.kind, ProjectKind::PlainDir), "{project:?}");
+            assert_eq!(project.root, h.path(rel));
+            assert_eq!(project.opened, h.path(rel));
+        }
+        // the home directory's git dir: the home directory, which can't be a
+        // root
+        h.mkdir("home/.git/hooks");
+        let e = h.resolve("home/.git/hooks").unwrap_err();
+        assert_eq!(e.reason(), ERROR_ROOT_NOT_ALLOWED);
+    }
+
+    #[test]
+    fn an_entry_in_a_git_dir_is_refused_alone() {
+        let f = Fixture::new();
+        let text = "owners = [\"me\"]\n\n[repos.dot]\nurl = \"https://github.com/me/dot\"\ndir = \".git\"\nvisibility = \"public\"\npurpose = \"x\"\n\n[repos.inner]\nurl = \"https://github.com/me/inner\"\nvisibility = \"public\"\npurpose = \"x\"\n\n[repos.app]\nurl = \"https://github.com/me/app\"\nvisibility = \"public\"\npurpose = \"x\"\n";
+        f.write("home/dev/repos.toml", text);
+        f.mkdir("home/dev/.git");
+        f.mkdir("home/dev/app/.git/hooks");
+        f.symlink("app/.git/hooks", "home/dev/inner");
+
+        let project = f.resolve("home/dev").unwrap();
+        for key in ["dot", "inner"] {
+            match entry(&project, key) {
+                EntryDir::Refused(refusal @ EntryRefusal::InGitDir { .. }) => {
+                    assert_eq!(refusal.reason(), ERROR_ENTRY_IN_GIT_DIR);
+                }
+                other => panic!("{key}: {other:?}"),
+            }
+        }
+        assert!(matches!(entry(&project, "app"), EntryDir::Present(_)));
+    }
+
+    #[test]
+    fn a_registry_in_its_own_entry_never_roots_an_outer_checkout() {
+        let f = Fixture::new();
+        f.write("home/dev/g/a.txt", "a");
+        f.git("home/dev/g", &["init", "-q"]);
+        f.git(
+            "home/dev/g",
+            &["remote", "add", "origin", "https://github.com/me/g"],
+        );
+        // g's own registry lists `app`, cloned: g is a workspace
+        f.write("home/dev/g/repos.toml", REGISTRY);
+        f.mkdir("home/dev/g/app");
+        // a registry under g listing g itself by URL roots in its own entry
+        let own = "owners = [\"me\"]\n\n[repos.g]\nurl = \"https://github.com/me/g\"\nvisibility = \"public\"\npurpose = \"g\"\n";
+        f.write("home/dev/g/sub/repos.toml", own);
+        f.mkdir("home/dev/g/sub/x");
+        let outer = f.resolve("home/dev/g").unwrap();
+        assert!(matches!(outer.kind, ProjectKind::Registry { .. }));
+        let inner = f.resolve("home/dev/g/sub/x").unwrap();
+        assert!(
+            matches!(inner.kind, ProjectKind::PlainDir),
+            "{:?}",
+            inner.kind
+        );
+        assert_eq!(inner.root, f.path("home/dev/g/sub/x"));
+    }
+
+    /// A checkout whose untracked registry lists the checkout itself, with
+    /// a linked worktree outside it at `wt`.
+    fn own_registry_with_worktree(f: &Fixture, at: &str, wt: &str) {
+        f.write(&format!("{at}/a.txt"), "a");
+        f.write(&format!("{at}/lore/deep/x.md"), "x");
+        f.git(at, &["init", "-q"]);
+        f.git(at, &["remote", "add", "origin", "https://github.com/me/g"]);
+        let own = "owners = [\"me\"]\n\n[repos.g]\nurl = \"https://github.com/me/g\"\nvisibility = \"public\"\npurpose = \"g\"\n";
+        f.write(&format!("{at}/repos.toml"), own);
+        f.git(at, &["add", "a.txt", "lore"]);
+        f.git(at, &["commit", "-q", "-m", "a"]);
+        f.git(at, &["worktree", "add", "-q", wt]);
+    }
+
+    #[test]
+    fn a_worktree_of_a_registry_in_its_own_entry_falls_back_to_the_worktree() {
+        let f = Fixture::new();
+        own_registry_with_worktree(&f, "home/dev/g", "../../wt");
+        f.chmod("home/wt", 0o755);
+        for rel in ["home/wt/lore/deep", "home/wt"] {
+            let project = f.resolve(rel).unwrap();
+            assert!(
+                matches!(project.kind, ProjectKind::GitRepo),
+                "{rel}: {project:?}"
+            );
+            assert_eq!(project.root, f.path("home/wt"), "{rel}");
+        }
+        // a worktree inside an unrelated outer checkout stops at the worktree,
+        // and the outer checkout keeps its own kind
+        f.write("home/o/o.txt", "o");
+        f.git("home/o", &["init", "-q"]);
+        f.git(
+            "home/dev/g",
+            &["worktree", "add", "-q", "-b", "outer", "../../o/wt"],
+        );
+        f.chmod("home/o/wt", 0o755);
+        let inner = f.resolve("home/o/wt/lore/deep").unwrap();
+        assert!(matches!(inner.kind, ProjectKind::GitRepo), "{inner:?}");
+        assert_eq!(inner.root, f.path("home/o/wt"));
+        let outer = f.resolve("home/o").unwrap();
+        assert!(matches!(outer.kind, ProjectKind::GitRepo), "{outer:?}");
+        assert_eq!(outer.root, f.path("home/o"));
+        assert!(outer.fallback.is_none());
     }
 }

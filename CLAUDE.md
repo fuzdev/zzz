@@ -254,15 +254,25 @@ Details: ./docs/development.md § Adding a New Action.
   registry found walking up (strictly below `$HOME`, or within the
   allowlisted root; owned by you or root, never `o+w`, `g+w` only by your
   private group — `file_trust.rs`), else the git checkout holding it,
-  else the directory. An untrusted or unconfined registry refuses the open
-  with its reason; a registry entry escaping the root is refused alone.
+  else the directory; a path under a `.git` component opens as the
+  directory holding the outermost one. A path under a registry's root in
+  none of its present entries opens as its checkout or directory instead,
+  never above the registry's root, as do the root of a checkout with none
+  present and a linked worktree of it; an untrusted, unconfined, or
+  invalid registry refuses the open with its reason, unless it's kept
+  inside a checkout (with no link above), which then opens as a checkout
+  holding the path at or below the registry's directory. Either fallback
+  is the project's `fallback`, shown as why it's rooted there. A registry
+  entry escaping the root, or in a git dir, is refused alone.
   Opening a path **focuses** the repo holding it, and `repo_focus` /
   `repo_unfocus` focus or unfocus a registry's present entries one by one
   (the file tree's lazy rows, the projects page) — daemon-wide, until
   unfocused or the project closes; a checkout's or plain directory's root
   stays focused while it's open. A focused directory is indexed whole, a
   registry's root at its top level only (its loose files), and an
-  unfocused repo or an unregistered directory under it not at all. File access is the whole
+  unfocused repo or an unregistered directory under it not at all as part
+  of the registry's project — an unregistered directory opened by a path
+  in it is its own project, indexed whole. File access is the whole
   root regardless: opening a path in a registry puts all of it (say all
   of `~/dev`) in scope, unfocused repos and unregistered directories
   included.
@@ -379,8 +389,9 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
 - **Focus is by hand** — a repo is indexed only once focused (opening a
   path in it, the file tree, the projects page), and stays focused until
   unfocused, its project closes, or a later open finds its entry missing;
-  nothing under a registry's root but its loose files and focused repos is
-  indexed, and a new file where nothing is indexed is refused.
+  nothing else under a registry's root is indexed by the registry's
+  project — an unregistered directory only as its own project, once a path
+  in it is opened — and a new file where nothing is indexed is refused.
 - **Chats, prompts, and terminal presets** live in page memory, lost on reload.
 - **WebSocket auth** at upgrade only, with event-driven revocation; at most
   50 sockets per account; no batch JSON-RPC.

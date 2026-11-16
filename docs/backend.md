@@ -440,7 +440,13 @@ commands):
   `project_changed`, a `repo_files` read at it, and `session_load`'s
   `projects_rev` carry, an open that changes nothing keeping the rev
   (`opened` false), and `project_close` answers `{rev}`; a registry its
-  other users can write refuses the open (`registry_untrusted`).
+  other users can write refuses the open (`registry_untrusted`); a path in
+  no entry opens as its directory with `fallback` `unregistered` on the
+  reply and the `project_changed` `open`, and an invalid registry inside a
+  checkout opens the checkout with `fallback` `registry_refused` /
+  `registry_invalid`; a checkout holding its own registry with nothing
+  cloned opens as the checkout, `unregistered`, from a path in it and from
+  its root alike — the root with its focus requested, as a reopen asks.
 - **`filesystem.cross.test.ts`** — `diskfile_read` (a text file whole with
   its size and `mtime`, read through to the disk — a same-length rewrite read
   at once, a file in an ignored directory the filer never indexes — a file
@@ -730,8 +736,11 @@ commands):
   `invalid_params` / `registry_unreadable`, `registry_invalid`; an
   untrusted or unconfined one → `forbidden` / `registry_untrusted`,
   `registry_not_confined`; one replaced while it was checked → `conflict`
-  / `registry_changed`; an unusable walk bound → `internal_error` /
-  `bound_unusable`; the root or the path's own focus whose listing is
+  / `registry_changed` — each but the last falling back instead for a
+  registry kept inside a checkout, no link above naming it, to a checkout
+  at or below its directory (the project's `fallback`, `registry_refused`
+  with that reason; ./architecture.md § Projects → Fallbacks); an unusable
+  walk bound → `internal_error` / `bound_unusable`; the root or the path's own focus whose listing is
   refused → `forbidden` / `permission_denied`. A refused registry entry fails
   nothing: its `entry_*` reason is on the entry. Nor does a focus the open
   requested (`focus`) that doesn't land: each is reported in the reply's

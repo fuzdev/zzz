@@ -13,8 +13,10 @@
  * `repo_unfocus` index and release and what they refuse, what `repo_files`
  * reads for a client pulling another's focus and what it refuses, the
  * lifecycle rev each change stamps and every reply and notification carries,
- * the refusal of an untrusted registry with its reason, and the scope a close
- * releases.
+ * the refusal of an untrusted registry with its reason, the fallback past a
+ * registry for a path in none of its entries or under a refused registry in
+ * a checkout (`fallback`, on the reply and `project_changed`), and the scope
+ * a close releases.
  *
  * @module
  */
@@ -487,5 +489,90 @@ describe('project registry cross-backend', () => {
 		const list = await call(fixture, 'project_list');
 		assert.ok(list.ok);
 		assert.deepEqual((list.result as Record<string, unknown>).projects, [], 'nothing opened');
+	});
+
+	test('a path in no entry opens as its directory, saying which registry passed it over', async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		const ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: fixture.transport.cookies()
+		});
+		try {
+			await ws.request('_warmup', 'ping', undefined);
+			const opened = await open_project(fixture, join(dev, 'scratch', 'x.txt'));
+			const fallback = { kind: 'unregistered', registry_path: join(dev, 'repos.toml') };
+			assert.strictEqual(opened.project.root, `${dev}/scratch/`);
+			assert.strictEqual(opened.project.kind, 'plain_dir');
+			assert.deepEqual(opened.project.fallback, fallback as typeof opened.project.fallback);
+			assert.deepEqual(file_ids(opened), [join(dev, 'scratch', 'x.txt')]);
+
+			const notification = await ws.wait_for<Record<string, unknown>>(
+				is_notification('project_changed'),
+				5_000
+			);
+			const params = parse(ProjectChangedInput, notification.params);
+			assert.ok(params.ok, JSON.stringify(params));
+			assert.strictEqual(params.value.type, 'open');
+			assert.deepEqual(params.value.project.fallback, opened.project.fallback);
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('an invalid registry in a checkout opens the checkout, naming why', async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		const tool = join(dev, 'tool');
+		for (const dir of [tool, join(tool, '.git'), join(tool, 'src')]) {
+			await mkdir(dir);
+			await chmod(dir, 0o755);
+		}
+		for (const [path, text] of [
+			[join(tool, 'repos.toml'), 'this is not [[ toml'],
+			[join(tool, 'src', 'c.ts'), 'c']
+		] as const) {
+			await writeFile(path, text, 'utf-8');
+			await chmod(path, 0o644);
+		}
+		const opened = await open_project(fixture, join(tool, 'src'));
+		assert.strictEqual(opened.project.root, `${tool}/`);
+		assert.strictEqual(opened.project.kind, 'git_repo');
+		assert.deepEqual(opened.project.fallback, {
+			kind: 'registry_refused',
+			registry_path: join(tool, 'repos.toml'),
+			reason: 'registry_invalid'
+		} as typeof opened.project.fallback);
+		assert.deepEqual(file_ids(opened), [join(tool, 'repos.toml'), join(tool, 'src', 'c.ts')]);
+	});
+
+	test('a checkout holding its own registry, nothing cloned, opens as the checkout from its root too', async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		const tool = join(dev, 'tool');
+		for (const dir of [tool, join(tool, '.git'), join(tool, 'src')]) {
+			await mkdir(dir);
+			await chmod(dir, 0o755);
+		}
+		for (const [path, text] of [
+			[join(tool, 'repos.toml'), REGISTRY],
+			[join(tool, 'src', 'c.ts'), 'c']
+		] as const) {
+			await writeFile(path, text, 'utf-8');
+			await chmod(path, 0o644);
+		}
+		const fallback = { kind: 'unregistered', registry_path: join(tool, 'repos.toml') };
+		const from_src = await open_project(fixture, join(tool, 'src'));
+		assert.strictEqual(from_src.project.root, `${tool}/`);
+		assert.strictEqual(from_src.project.kind, 'git_repo');
+		assert.deepEqual(from_src.project.fallback, fallback as typeof from_src.project.fallback);
+		// a restart's reopen: the root, its one focus requested — the same kind
+		const reopened = await open_project(fixture, tool, [`${tool}/`]);
+		assert.strictEqual(reopened.project.root, `${tool}/`);
+		assert.strictEqual(reopened.project.kind, 'git_repo');
+		assert.deepEqual(reopened.project.fallback, fallback as typeof reopened.project.fallback);
+		assert.deepEqual(reopened.project.focused, [`${tool}/`]);
+		assert.deepEqual(reopened.refused, []);
 	});
 });

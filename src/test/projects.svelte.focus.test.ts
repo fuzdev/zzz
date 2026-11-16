@@ -63,6 +63,7 @@ const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectI
 	opened_at: '2026-11-16T00:00:00.000Z',
 	kind: 'registry',
 	registry_path: parse_or_throw(DiskfilePath, '/dev/repos.toml'),
+	fallback: null,
 	entries: [
 		{ key: 'app', kind: 'repo', dir: APP, state: 'present' },
 		{ key: 'site', kind: 'repo', dir: SITE, state: 'present' }

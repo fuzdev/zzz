@@ -392,7 +392,9 @@ and canonicalizes it before building the `/projects?project=<path>` URL —
 a directory with a trailing `/`, a file as itself; a missing path is an
 error. The page opens it with `project_open`: the daemon resolves the
 project holding it (a file, its parent's) — a trusted `repos.toml` above
-it, else its git checkout, else the directory — and focuses the repo
+it, else its git checkout, else the directory, with a path in none of the
+registry's repos opening as its checkout or directory — says where it
+rooted and why, and focuses the repo
 holding the path (./architecture.md § Projects). The file
 itself isn't opened in a tab yet — the page opens its project. The daemon
 holds the opened directory and the project's root to its root rules

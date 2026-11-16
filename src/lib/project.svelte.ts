@@ -1,5 +1,6 @@
 import {
 	array,
+	literal,
 	min_value,
 	nullable,
 	number,
@@ -9,6 +10,7 @@ import {
 	pipe,
 	safe_integer,
 	string,
+	variant,
 	with_default,
 	with_default_fn,
 	type Infer,
@@ -54,6 +56,30 @@ export const ProjectEntryJson = object({
 export type ProjectEntryJson = Infer<typeof ProjectEntryJson>;
 
 /**
+ * Why a project opened as a git checkout or plain directory rather than as
+ * the registry (`repos.toml`) found above the opened path: `unregistered` —
+ * the path is in none of its present entries — or `registry_refused`, with
+ * the daemon's `reason` (`registry_invalid`, `registry_untrusted`,
+ * `registry_not_confined`, `registry_root_in_entry`, …): a registry inside
+ * a checkout that couldn't be used, so the checkout opened instead.
+ */
+export const ProjectFallbackJson = variant('kind', [
+	object({
+		kind: literal('unregistered'),
+		/** The registry file passed over. */
+		registry_path: DiskfilePath
+	}),
+	object({
+		kind: literal('registry_refused'),
+		/** The registry file passed over. */
+		registry_path: DiskfilePath,
+		/** Why it was refused. */
+		reason: string
+	})
+]);
+export type ProjectFallbackJson = Infer<typeof ProjectFallbackJson>;
+
+/**
  * A lifecycle rev: the daemon bumps it on every change to its open projects
  * and stamps it on what changed, so a client applies a project's state only
  * when it's newer than the state it holds, whatever order replies and
@@ -80,6 +106,8 @@ export const ProjectInfoJson = object({
 	registry_path: nullable(DiskfilePath),
 	/** A registry's entries in its order; empty for other kinds. */
 	entries: array(ProjectEntryJson),
+	/** The registry passed over, for a checkout or plain directory opened under one. */
+	fallback: nullable(ProjectFallbackJson),
 	/**
 	 * The focused directories, each indexed whole, sorted. Opening a path
 	 * focuses the repo holding it, and `repo_focus` / `repo_unfocus` a
@@ -111,6 +139,7 @@ export const ProjectJson = cell_json_schema(
 		kind: with_default(ProjectKind, 'plain_dir'),
 		registry_path: with_default(nullable(DiskfilePath), null),
 		entries: with_default_fn(array(ProjectEntryJson), () => []),
+		fallback: with_default(nullable(ProjectFallbackJson), null),
 		focused: with_default_fn(array(DiskfileDirectoryPath), () => []),
 		/**
 		 * The rev of the state held (`ProjectRev`), `-1` when unknown — a
@@ -140,6 +169,7 @@ export class Project extends Cell<typeof ProjectJson> {
 	kind: ProjectKind = $state.raw()!;
 	registry_path: DiskfilePath | null = $state.raw()!;
 	entries: Array<ProjectEntryJson> = $state.raw()!;
+	fallback: ProjectFallbackJson | null = $state.raw()!;
 	focused: Array<DiskfileDirectoryPath> = $state.raw()!;
 	rev: number = $state.raw()!;
 

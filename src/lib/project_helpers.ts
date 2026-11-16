@@ -2,6 +2,7 @@ import { parse } from '@fuzdev/fuz_schema/schema.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 
 import { DiskfilePath } from './diskfile_types.ts';
+import type { ProjectFallbackJson, ProjectInfoJson, ProjectKind } from './project.svelte.ts';
 
 /**
  * `data.reason` of the `invalid_params` error `project_close` returns for a
@@ -31,6 +32,60 @@ export const ERROR_REPO_INDEX_FAILED = 'repo_index_failed';
  */
 export const PROJECT_DEGRADED_NOTICE =
 	"Not every directory has a file watch (likely the system's watch limit) — changes in some show up after a few seconds.";
+
+/** What each kind of project is, as a phrase. */
+export const PROJECT_KIND_PHRASES: Record<ProjectKind, string> = {
+	registry: 'a registry',
+	git_repo: 'a git checkout',
+	plain_dir: 'a directory'
+};
+
+/**
+ * The plain words for the daemon's reasons a registry is passed over, each
+ * true of every refusal the daemon reports under it.
+ */
+const REGISTRY_REFUSAL_PHRASES: Record<string, string> = {
+	registry_invalid: "isn't a valid registry",
+	registry_unreadable: "can't be read",
+	// the file, or a folder from it up to the home folder
+	registry_untrusted:
+		"isn't trusted: it or a folder above it has another owner or loose permissions",
+	// a link whose target is outside the root, or whose text may pass another link
+	registry_not_confined: 'is a link out of its folder, or through another link',
+	registry_root_in_entry: 'is in a checkout of one of its own repos',
+	protected_dir_not_allowed: 'links into a protected folder'
+};
+
+/**
+ * Why a project isn't the registry found above it, as a clause —
+ * `/dev/repos.toml lists no cloned repo holding it`. An `unregistered`
+ * project is in none of the registry's present entries, or is the root of a
+ * checkout with none present.
+ */
+export const format_project_fallback = (fallback: ProjectFallbackJson): string => {
+	if (fallback.kind === 'unregistered') {
+		return `${fallback.registry_path} lists no cloned repo holding it`;
+	}
+	const { reason } = fallback;
+	return `${fallback.registry_path} ${REGISTRY_REFUSAL_PHRASES[reason] ?? `was refused (${reason})`}`;
+};
+
+/**
+ * Where an open of `path` landed and why, for the notice after it —
+ * `Opened /dev/zzz/src, rooted at /dev/zzz/ — a git checkout; /dev/repos.toml
+ * lists no cloned repo holding it.`
+ */
+export const format_project_opened = (
+	path: string,
+	project: Pick<ProjectInfoJson, 'root' | 'kind' | 'fallback'>
+): string => {
+	const at =
+		path === project.root || `${path}/` === project.root
+			? `Opened ${project.root}`
+			: `Opened ${path}, rooted at ${project.root}`;
+	const why = project.fallback ? `; ${format_project_fallback(project.fallback)}` : '';
+	return `${at} — ${PROJECT_KIND_PHRASES[project.kind]}${why}.`;
+};
 
 /**
  * Parse user input (the open-project form or the `?project=` URL param) into

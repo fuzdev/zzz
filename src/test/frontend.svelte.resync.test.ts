@@ -49,6 +49,7 @@ const create_project_info = (root: DiskfileDirectoryPath, rev = 1): ProjectInfoJ
 	opened_at: new Date(0).toISOString(),
 	kind: 'plain_dir',
 	registry_path: null,
+	fallback: null,
 	entries: [],
 	focused: [root],
 	rev
@@ -908,6 +909,7 @@ describe('a registry project after a restart', () => {
 		...create_project_info(DEV, rev),
 		kind: 'registry',
 		registry_path: parse_or_throw(DiskfilePath, '/dev/repos.toml'),
+		fallback: null,
 		entries: [
 			{ key: 'app', kind: 'repo', dir: APP, state: 'present' },
 			{ key: 'site', kind: 'repo', dir: SITE, state: 'present' }

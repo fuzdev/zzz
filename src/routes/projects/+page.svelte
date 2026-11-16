@@ -6,7 +6,12 @@
 	import { frontend_context } from '#lib/frontend.svelte.ts';
 	import type { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
 	import type { Project } from '#lib/project.svelte.ts';
-	import { parse_project_path, PROJECT_DEGRADED_NOTICE } from '#lib/project_helpers.ts';
+	import {
+		format_project_fallback,
+		format_project_opened,
+		parse_project_path,
+		PROJECT_DEGRADED_NOTICE
+	} from '#lib/project_helpers.ts';
 	import { icon_add, icon_delete, icon_directory, icon_project } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from '#lib/Icon.svelte';
 	import PageFooter from '#routes/PageFooter.svelte';
@@ -16,6 +21,8 @@
 	let new_path = $state.raw('');
 	let opening = $state.raw(false);
 	let error_message: string | null = $state.raw(null);
+	/** Where the last open from this page landed and why. */
+	let opened_message: string | null = $state.raw(null);
 
 	const KIND_LABELS: Record<Project['kind'], string> = {
 		registry: 'registry',
@@ -25,13 +32,18 @@
 
 	/**
 	 * Open the project holding `path` and activate it — by the project the
-	 * daemon returns, whose root may be far above `path`.
+	 * daemon returns, whose root may be far above `path` — saying where it
+	 * landed and why.
 	 *
 	 * @returns an error message, or `null` on success
 	 */
 	const open_and_activate = async (path: DiskfilePath): Promise<string | null> => {
+		opened_message = null;
 		const result = await app.projects.open(path);
 		if (!result.ok) return result.error.message;
+		if (result.value.project) {
+			opened_message = format_project_opened(path, result.value.project);
+		}
 		// `null` when it's closed already — a close this client applied after the open landed
 		if (result.value.project) app.projects.activate(result.value.project.id);
 		return null;
@@ -123,8 +135,10 @@
 		<h1><Icon data={icon_project} /> Projects</h1>
 		<p class="text_50">
 			Open a file or directory to open its project: a trusted <code>repos.toml</code> found above
-			it, else its git repo, else the directory. The repo holding the path is focused — its files
-			are indexed and watched. A registry's own folder indexes only its loose files and its focused
+			it, else its git repo, else the directory. A path below the registry's folder in none of its
+			repos opens as its git repo or directory instead, as does one under a registry in a checkout
+			that can't be used — each says why. The repo holding the path is focused — its files are
+			indexed and watched. A registry's own folder indexes only its loose files and its focused
 			repos; focus or unfocus its other repos here or from the file tree.
 		</p>
 	</header>
@@ -152,6 +166,8 @@
 		</form>
 		{#if error_message}
 			<p class="color_c_60 mt_sm">{error_message}</p>
+		{:else if opened_message}
+			<p class="text_50 mt_sm">{opened_message}</p>
 		{/if}
 	</section>
 
@@ -179,6 +195,11 @@
 									<strong>{project.name}</strong>
 									<span class="text_50 font_size_sm font_family_mono ml_sm">{project.root}</span>
 									<small class="text_50 ml_sm">{KIND_LABELS[project.kind]}</small>
+									{#if project.fallback}
+										<small class="text_50 block">
+											{format_project_fallback(project.fallback)}
+										</small>
+									{/if}
 									{#if project.watch_status === 'degraded'}
 										<small class="text_50 block">{PROJECT_DEGRADED_NOTICE}</small>
 									{/if}

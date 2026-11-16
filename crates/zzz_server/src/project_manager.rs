@@ -65,6 +65,9 @@ pub struct OpenProject {
     /// When it was first opened (RFC 3339).
     pub opened_at: String,
     pub kind: OpenKind,
+    /// The registry passed over to root it here, when one was
+    /// ([`crate::project::Fallback`]) — as the latest resolve found it.
+    pub fallback: Option<OpenFallback>,
     /// The manager's rev at the commit that last changed this project
     /// ([`ProjectManager::commit`]); 0 for a project as resolved, not yet
     /// committed.
@@ -80,12 +83,14 @@ impl PartialEq for OpenProject {
             name,
             opened_at,
             kind,
+            fallback,
             rev: _,
         } = self;
         *root == other.root
             && *name == other.name
             && *opened_at == other.opened_at
             && *kind == other.kind
+            && *fallback == other.fallback
     }
 }
 
@@ -108,6 +113,22 @@ pub enum OpenKind {
     },
     GitRepo,
     PlainDir,
+}
+
+/// Why an open checkout or plain directory isn't the registry found above
+/// it ([`crate::project::Fallback`]) — on the wire as is, the twin of
+/// `ProjectFallbackJson`, tagged by `kind`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum OpenFallback {
+    /// The opened directory is in none of the registry's present entries.
+    Unregistered { registry_path: String },
+    /// The registry was refused, for `reason` (a `ProjectError` reason, or
+    /// `registry_root_in_entry`).
+    RegistryRefused {
+        registry_path: String,
+        reason: &'static str,
+    },
 }
 
 /// A registry entry of an open project ([`crate::project::ProjectEntry`]).
@@ -167,6 +188,7 @@ impl OpenProject {
             kind,
             registry_path,
             entries,
+            fallback: self.fallback.clone(),
             focused: self.focused().into_iter().map(str::to_owned).collect(),
             rev: self.rev,
         }
@@ -209,6 +231,9 @@ pub struct ProjectInfo {
     pub registry_path: Option<String>,
     /// A registry's entries, in its order; empty for other kinds.
     pub entries: Vec<ProjectEntryInfo>,
+    /// The registry passed over, for a checkout or plain directory found
+    /// under one.
+    pub fallback: Option<OpenFallback>,
     /// The focused directories (trailing `/`), sorted ([`OpenProject::focused`]).
     pub focused: Vec<String>,
     /// The rev at which this project last changed ([`OpenProject::rev`]) —
@@ -438,12 +463,14 @@ fn deepen(filers: &mut Filers, more: &Filers) {
     }
 }
 
-/// `existing` updated by a fresh resolve of the same root: the fresh kind
-/// and entries, and the focused directories of both that the fresh resolve
-/// still supports — a present entry's dir for a registry, the root for a
-/// checkout or plain directory. So a focus outlives no change of kind (a
-/// plain `~/dev` focused on its root, then a registry there) and no entry
-/// removed or gone missing.
+/// `existing` updated by a fresh resolve of the same root: the fresh kind,
+/// entries, and fallback — why the root is where it is now, which changes
+/// with the registry above as the kind does (one passed over as untrusted,
+/// then trusted and listing nothing that holds the path) — and the focused
+/// directories of both that the fresh resolve still supports — a present
+/// entry's dir for a registry, the root for a checkout or plain directory.
+/// So a focus outlives no change of kind (a plain `~/dev` focused on its
+/// root, then a registry there) and no entry removed or gone missing.
 pub(crate) fn merge_project(existing: &OpenProject, fresh: &OpenProject) -> OpenProject {
     let mut merged = OpenProject {
         opened_at: existing.opened_at.clone(),
@@ -1355,6 +1382,7 @@ mod tests {
                 focused: focus.iter().map(|key| format!("{root}{key}/")).collect(),
             },
             rev: 0,
+            fallback: None,
         }
     }
 
@@ -1366,6 +1394,7 @@ mod tests {
             opened_at: "t".to_owned(),
             kind: OpenKind::PlainDir,
             rev: 0,
+            fallback: None,
         }
     }
 
@@ -1411,6 +1440,37 @@ mod tests {
                 ("/w/app/".to_owned(), FilerDepth::Tree),
             ]
         );
+    }
+
+    #[test]
+    fn a_reopen_takes_the_fresh_fallback_and_counts_it_as_a_change() {
+        let refused = OpenProject {
+            fallback: Some(OpenFallback::RegistryRefused {
+                registry_path: "/w/repos.toml".to_owned(),
+                reason: "registry_untrusted",
+            }),
+            rev: 3,
+            ..plain_at("/w/x/")
+        };
+        let unregistered = OpenProject {
+            fallback: Some(OpenFallback::Unregistered {
+                registry_path: "/w/repos.toml".to_owned(),
+            }),
+            ..plain_at("/w/x/")
+        };
+        let merged = merge_project(&refused, &unregistered);
+        assert_eq!(merged.fallback, unregistered.fallback);
+        assert_eq!(merged.rev, 3);
+        // so the commit stamps a new rev and broadcasts an update
+        assert_ne!(merged, refused);
+        assert_eq!(merge_project(&refused, &refused), refused);
+
+        let info = serde_json::to_value(merged.to_info()).unwrap();
+        assert_eq!(
+            info["fallback"],
+            serde_json::json!({"kind": "unregistered", "registry_path": "/w/repos.toml"})
+        );
+        assert_eq!(plain_at("/w/").to_info().fallback, None);
     }
 
     #[test]

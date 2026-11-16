@@ -30,6 +30,7 @@ const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectI
 	opened_at: '2026-11-16T00:00:00.000Z',
 	kind: 'registry',
 	registry_path: parse_or_throw(DiskfilePath, '/dev/repos.toml'),
+	fallback: null,
 	entries: [
 		{ key: 'app', kind: 'repo', dir: APP, state: 'present' },
 		{ key: 'site', kind: 'repo', dir: SITE, state: 'present' },
@@ -65,7 +66,8 @@ beforeEach(() => {
 		new Promise<Reply>((resolve) => calls.push({ method, input, resolve }));
 	(app as unknown as { api: unknown }).api = {
 		repo_focus: pending('repo_focus'),
-		repo_unfocus: pending('repo_unfocus')
+		repo_unfocus: pending('repo_unfocus'),
+		project_open: pending('project_open')
 	};
 	app.projects.add(registry_info([APP]));
 	target = document.createElement('div');
@@ -147,6 +149,81 @@ describe('a registry project on the projects page', () => {
 		assert.include(
 			to_visible_text(target),
 			'failed to focus /dev/site/: failed to focus repo: gone'
+		);
+	});
+});
+
+const LOOSE = parse_or_throw(DiskfileDirectoryPath, '/dev/loose/');
+
+/** A checkout opened under the registry at `/dev/`, which passed it over. */
+const fallback_info = (fallback: ProjectInfoJson['fallback'], rev = 1): ProjectInfoJson => ({
+	root: LOOSE,
+	name: 'loose',
+	opened_at: '2026-11-16T00:00:00.000Z',
+	kind: 'git_repo',
+	registry_path: null,
+	fallback,
+	entries: [],
+	focused: [LOOSE],
+	rev
+});
+
+/** The projects listed, each row's text as it reads. */
+const project_texts = (): Array<string> =>
+	Array.from(target.querySelectorAll('section > ul > li')).map((el) => to_visible_text(el));
+
+describe('a project opened past a registry on the projects page', () => {
+	const REGISTRY = parse_or_throw(DiskfilePath, '/dev/repos.toml');
+
+	test('says the registry above it lists no cloned repo holding it', () => {
+		app.projects.add(fallback_info({ kind: 'unregistered', registry_path: REGISTRY }));
+		flushSync();
+		const row = project_texts().find((text) => text.startsWith('loose'));
+		assert.ok(row);
+		assert.include(row, 'git repo');
+		assert.include(row, '/dev/repos.toml lists no cloned repo holding it');
+	});
+
+	test('says why a registry in a checkout was refused', () => {
+		app.projects.add(
+			fallback_info({
+				kind: 'registry_refused',
+				registry_path: REGISTRY,
+				reason: 'registry_invalid'
+			})
+		);
+		flushSync();
+		const row = project_texts().find((text) => text.startsWith('loose'));
+		assert.include(row, "/dev/repos.toml isn't a valid registry");
+	});
+
+	test('an open says where it was rooted and why', async () => {
+		const input = target.querySelector('input');
+		assert.ok(input);
+		input.value = '/dev/loose/src';
+		input.dispatchEvent(new Event('input'));
+		flushSync();
+		target.querySelector('form')!.requestSubmit();
+		await tick();
+		assert.deepEqual(
+			calls.map((c) => [c.method, c.input]),
+			[['project_open', { path: '/dev/loose/src' }]]
+		);
+		calls[0]!.resolve({
+			ok: true,
+			value: {
+				project: fallback_info({ kind: 'unregistered', registry_path: REGISTRY }),
+				focus: LOOSE,
+				files: [],
+				watch_status: 'full',
+				refused: [],
+				opened: true
+			}
+		});
+		await tick();
+		assert.include(
+			to_visible_text(target),
+			'Opened /dev/loose/src, rooted at /dev/loose/ — a git checkout; /dev/repos.toml lists no cloned repo holding it.'
 		);
 	});
 });

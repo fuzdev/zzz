@@ -92,6 +92,7 @@ const WS_INFO: ProjectInfoJson = {
 	opened_at: '2026-09-26T00:00:00.000Z',
 	kind: 'plain_dir',
 	registry_path: null,
+	fallback: null,
 	entries: [],
 	focused: [WS_DIR],
 	rev: 1
@@ -188,6 +189,7 @@ describe('Projects.open', () => {
 					root: DEV,
 					kind: 'registry',
 					registry_path: parse_or_throw(DiskfilePath, '/dev/repos.toml'),
+					fallback: null,
 					entries: [
 						{ key: 'app', kind: 'repo', dir: APP, state: 'present' },
 						{ key: 'site', kind: 'repo', dir: SITE, state: 'missing' }
@@ -398,6 +400,7 @@ describe('a registry project', () => {
 		opened_at: '2026-09-26T00:00:00.000Z',
 		kind: 'registry',
 		registry_path: parse_or_throw(DiskfilePath, '/dev/repos.toml'),
+		fallback: null,
 		entries: [
 			{ key: 'app', kind: 'repo', dir: APP, state: 'present' },
 			{ key: 'site', kind: 'repo', dir: SITE, state: 'present' }

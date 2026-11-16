@@ -33,11 +33,11 @@ use crate::filer::{SerializableDisknode, WatchStatus, disknodes_json_size_hint};
 use crate::handlers::filesystem::{ERROR_INVALID_PATH, ERROR_PERMISSION_DENIED};
 use crate::handlers::{App, not_found_error};
 use crate::project::{
-    EntryDir, Project, ProjectError, ProjectKind, ResolveOptions, resolve_project,
+    EntryDir, Fallback, Project, ProjectError, ProjectKind, ResolveOptions, resolve_project,
 };
 use crate::project_manager::{
-    EntryState, FocusRefused, FocusedFiles, LifecycleError, OpenEntry, OpenKind, OpenProject,
-    Opened, ProjectInfo,
+    EntryState, FocusRefused, FocusedFiles, LifecycleError, OpenEntry, OpenFallback, OpenKind,
+    OpenProject, Opened, ProjectInfo,
 };
 
 /// `project_close` of a root that isn't an open project (`invalid_params`)
@@ -405,11 +405,23 @@ fn to_open_project(
         ProjectKind::GitRepo => OpenKind::GitRepo,
         ProjectKind::PlainDir => OpenKind::PlainDir,
     };
+    // shown, not acted on: a registry path that isn't UTF-8 is shown lossily
+    // rather than failing the open it didn't root
+    let fallback = project.fallback.as_ref().map(|fallback| match fallback {
+        Fallback::Unregistered { registry } => OpenFallback::Unregistered {
+            registry_path: registry.to_string_lossy().into_owned(),
+        },
+        Fallback::RegistryRefused { registry, reason } => OpenFallback::RegistryRefused {
+            registry_path: registry.to_string_lossy().into_owned(),
+            reason,
+        },
+    });
     Ok(OpenProject {
         root,
         name,
         opened_at,
         kind,
+        fallback,
         rev: 0,
     })
 }
@@ -477,8 +489,8 @@ pub async fn project_list(
 /// rather than merging into one already open; on the idempotent path too,
 /// so a client re-opening an open project can seed its tree the same way. A
 /// registry entry that's refused (escaping the root, protected,
-/// unresolvable, not a directory) is reported in the project's entries; the
-/// rest of the project still opens. The root or the opened path's focus
+/// unresolvable, not a directory, in a git dir) is reported in the project's
+/// entries; the rest of the project still opens. The root or the opened path's focus
 /// that can't be listed fails the open (`forbidden` / `permission_denied`),
 /// leaving nothing new open.
 ///
@@ -490,7 +502,9 @@ pub async fn project_list(
 /// path; `forbidden` for a path the OS refuses, a root the root rules refuse
 /// (`root_not_allowed`, `root_outside_home`), a protected directory, or an
 /// untrusted or unconfined registry; `conflict` for a registry replaced while
-/// it was checked; an internal error for an unusable walk bound, a filer
+/// it was checked — except a refused registry inside a checkout, which the
+/// open falls back past to that checkout, reporting it as the project's
+/// `fallback` ([`crate::project::Fallback`]); an internal error for an unusable walk bound, a filer
 /// that fails otherwise, or a notification that fails to serialize.
 pub async fn project_open(
     params: Value,
@@ -859,6 +873,7 @@ purpose = "a reference"
                 path: PathBuf::from("/w/repos.toml"),
                 entries,
             },
+            fallback: None,
         }
     }
 
@@ -867,6 +882,7 @@ purpose = "a reference"
             root: PathBuf::from("/p"),
             opened: PathBuf::from("/p/sub"),
             kind,
+            fallback: None,
         }
     }
 
@@ -917,6 +933,7 @@ purpose = "a reference"
                         "reason": "entry_not_confined",
                     },
                 ],
+                "fallback": null,
                 "focused": ["/w/app/"],
                 "rev": 0,
             })
@@ -927,6 +944,39 @@ purpose = "a reference"
                 ("/w/".to_owned(), FilerDepth::TopLevel),
                 ("/w/app/".to_owned(), FilerDepth::Tree),
             ]
+        );
+    }
+
+    #[test]
+    fn a_fallback_projects_the_registry_passed_over() {
+        let project = Project {
+            fallback: Some(Fallback::RegistryRefused {
+                registry: PathBuf::from("/w/repos.toml"),
+                reason: "registry_untrusted",
+            }),
+            ..plain_project(ProjectKind::GitRepo)
+        };
+        let info = to_open_project(&project, Some("/p/"), "t".to_owned()).unwrap();
+        assert_eq!(
+            serde_json::to_value(info.to_info()).unwrap()["fallback"],
+            serde_json::json!({
+                "kind": "registry_refused",
+                "registry_path": "/w/repos.toml",
+                "reason": "registry_untrusted",
+            })
+        );
+        let project = Project {
+            fallback: Some(Fallback::Unregistered {
+                registry: PathBuf::from("/w/repos.toml"),
+            }),
+            ..plain_project(ProjectKind::PlainDir)
+        };
+        let info = to_open_project(&project, Some("/p/"), "t".to_owned()).unwrap();
+        assert_eq!(
+            info.fallback,
+            Some(OpenFallback::Unregistered {
+                registry_path: "/w/repos.toml".to_owned()
+            })
         );
     }
 
@@ -998,6 +1048,7 @@ purpose = "a reference"
                 root: PathBuf::from("/w"),
                 opened: PathBuf::from("/w"),
                 kind: ProjectKind::PlainDir,
+                fallback: None,
             },
             Some("/w/"),
             "plain".to_owned(),
@@ -1130,6 +1181,7 @@ purpose = "a reference"
                     .collect(),
             },
             rev: 0,
+            fallback: None,
         }
     }
 
@@ -1228,6 +1280,7 @@ purpose = "a reference"
                 root: PathBuf::from(tmp.key("w/app")),
                 opened: PathBuf::from(tmp.key("w/app")),
                 kind: ProjectKind::PlainDir,
+                fallback: None,
             },
             Some(&app_dir),
             "t".to_owned(),
@@ -1283,6 +1336,7 @@ purpose = "a reference"
                 root: PathBuf::from(tmp.key("w")),
                 opened: PathBuf::from(tmp.key("w")),
                 kind: ProjectKind::PlainDir,
+                fallback: None,
             },
             Some(&root),
             "t".to_owned(),
@@ -1570,6 +1624,7 @@ purpose = "a reference"
                 root: PathBuf::from(tmp.key("p")),
                 opened: PathBuf::from(tmp.key("p")),
                 kind: ProjectKind::PlainDir,
+                fallback: None,
             },
             Some(&plain_root),
             "t".to_owned(),
@@ -1645,6 +1700,7 @@ purpose = "a reference"
                 root: PathBuf::from(tmp.key("w/app")),
                 opened: PathBuf::from(tmp.key("w/app")),
                 kind: ProjectKind::PlainDir,
+                fallback: None,
             },
             Some(&app_dir),
             "t".to_owned(),
@@ -1705,6 +1761,7 @@ purpose = "a reference"
                 root: PathBuf::from(tmp.key("p")),
                 opened: PathBuf::from(tmp.key("p")),
                 kind: ProjectKind::PlainDir,
+                fallback: None,
             },
             Some(&plain_root),
             "t".to_owned(),

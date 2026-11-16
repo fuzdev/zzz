@@ -1719,21 +1719,60 @@ concerns":
      refuses the open with its reason (`registry_untrusted`,
      `registry_not_confined`, `registry_changed`, `registry_unreadable`,
      `registry_invalid`) rather than being skipped, since a skip would widen
-     the root to a registry further up. Each entry is canonicalized and
-     confined to the root: one that escapes it, is protected, can't be
-     resolved, or isn't a directory is refused alone (`entry_not_confined`,
-     …), and one not yet cloned is `missing`. A root inside a checkout of
-     one of its own entries falls through to rule 2.
+     the root to a registry further up — unless it's kept inside a
+     checkout (below). Each entry is canonicalized and confined to the
+     root: one that escapes it, is protected, can't be resolved, isn't a
+     directory, or is in a git dir (an entry named `.git`) is refused alone
+     (`entry_not_confined`, `entry_in_git_dir`, …), and one not yet cloned
+     is `missing`. The registry roots the project when the path is in one
+     of its present entries, or is its root or outside it (a linked
+     worktree) — unless no entry is present and the root is a checkout; a
+     path under its root in no present entry falls back, as do the root of
+     a checkout with no entry present and a linked worktree of it, so a
+     root has one kind whichever path opens it. A path under a `.git`
+     component opens as the directory holding the outermost one.
   2. **A git checkout** — the nearest directory at or above the path, inside
-     the same bound, holding a `.git`.
+     the same bound, holding a `.git` that is a directory or a regular file
+     (a linked worktree's); anything else named `.git` is ignored.
   3. **The directory itself.**
+
+  **Fallbacks** — a registry found by rule 1 that doesn't root the project
+  hands it to rules 2 and 3 and is reported as the project's `fallback`
+  (`{kind, registry_path, reason?}`, on the reply, `project_changed`, and
+  `project_list`):
+
+  - `unregistered` — the path is under the registry's root in none of its
+    present entries (`~/dev/scratch`, a checkout `~/dev/repos.toml`
+    doesn't list), or is the root of a checkout holding the registry with
+    no entry present (a repo's own `repos.toml`, nothing cloned), or is a
+    linked worktree of that checkout outside the root, which opens as its
+    own checkout (the one rule 2 alone would find). Otherwise its checkout
+    is looked for at or below the root, never above it, and strictly below
+    it when any entry is present: a root
+    holding clones is a workspace that a checkout there would index whole.
+  - `registry_refused` — a registry kept inside a checkout (the nearest
+    one, with no link above its checkout naming the same file) that is
+    untrusted, unconfined, protected, unreadable, or invalid, carrying that
+    `reason`, falls back to a checkout holding the path at or below the
+    registry's own directory — what the open would root at without the
+    file. A registry outside any checkout, one a link above names (that
+    link would have rooted the open), one whose checkout is above its
+    directory (falling back would widen), and one replaced mid-open still
+    refuse. A root inside a checkout of one of its own entries falls
+    back the same way, at or below its own directory — or, from a linked
+    worktree outside it, that worktree's own checkout, the one rule 2 alone
+    would find (`registry_root_in_entry`).
+
+  No fallback widens: each root is at or below the root the registry
+  would have made, or, from a linked worktree outside it, the worktree's
+  own checkout, and nothing read from the registry passed over decides
+  it but a root-in-entry registry's entries.
 
   The opened directory and the root must both pass the root rules (§ Root
   scope) and lie outside every protected directory. The open **focuses**
   the repo holding the path — the deepest present registry entry containing
   it, or a checkout's or directory's root; opening a registry's root itself,
-  an unregistered directory under it, or a linked worktree outside it
-  focuses nothing. Focus is daemon-wide; each open of a path in another
+  or a linked worktree outside it, focuses nothing. Focus is daemon-wide; each open of a path in another
   repo adds its focus (`project_changed` `update`), and `repo_focus` /
   `repo_unfocus` add or drop a registry's present entries one by one
   without resolving the registry again. A focus lasts until it's
@@ -1749,7 +1788,9 @@ concerns":
   (`repo_not_in_project`, `repo_not_present`, `permission_denied`, or
   `repo_index_failed` for a listing that failed otherwise). A focused directory gets a whole-tree filer; a registry's root
   gets one at its top level alone (its loose files) — an unfocused repo
-  and an unregistered directory under it aren't indexed, so a root of
+  and an unregistered directory under it aren't indexed by the registry's
+  project (an unregistered directory opened by a path in it is its own
+  project, indexed whole), so a root of
   hundreds of thousands of files costs only what's focused. Filers are
   keyed by canonical path, so two entries resolving to one directory share
   one. The root is one `ScopedFs` root, writable whole.
@@ -1759,7 +1800,8 @@ concerns":
   registered, while a requested focus that can't is refused alone; and
   concurrent opens of one path share a scan), then, under
   the lock, the project is recorded — merged into an open one with the
-  same root: the fresh kind and entries, the union of the focus that the
+  same root: the fresh kind, entries, and `fallback` (why it's rooted there
+  now — a change counts as one, stamping a new rev), the union of the focus that the
   fresh resolve still supports (a present entry's dir, or the root of a
   checkout or plain directory; a whole-tree filer on a root now indexed
   at its top level is replaced by a top-level one) — the
@@ -2202,10 +2244,11 @@ Population, per capability:
   it's focused (opening a path in it, the file tree's lazy row, the
   projects page), and stays focused until it's unfocused, its project
   closes, or a later open finds its entry missing or the root's kind
-  changed. Under a registry's root only its loose files and its
-  focused repos are indexed — an unregistered directory never is, and a
-  new file there is refused, since it would never show; a
-  file another tool creates there doesn't appear. A registry's entries are
+  changed. Under a registry's root the registry's project indexes only
+  its loose files and its focused repos — an unregistered directory only
+  as its own project, once a path in it is opened. A new file where
+  nothing indexes it is refused, since it would never show; a file another
+  tool creates there doesn't appear. A registry's entries are
   resolved when it's opened, again on each later open, never in between —
   so `repo_focus` of an entry cloned since refuses it until a path in it
   is opened. Focusing indexes by a walk (the filer's ignore list, not

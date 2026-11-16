@@ -49,6 +49,7 @@ describe('Project', () => {
 		const project = new Project({ app, json: { root } });
 		assert.strictEqual(project.kind, 'plain_dir');
 		assert.strictEqual(project.registry_path, null);
+		assert.strictEqual(project.fallback, null);
 		assert.deepEqual(project.entries, []);
 		assert.deepEqual(project.focused, []);
 		assert.strictEqual(project.watch_status, 'full');

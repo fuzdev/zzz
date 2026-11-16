@@ -231,6 +231,10 @@ mod tests {
                         name: "w".to_owned(),
                         opened_at: "2026-01-01T00:00:00Z".to_owned(),
                         kind: crate::project_manager::OpenKind::PlainDir,
+                        fallback: Some(crate::project_manager::OpenFallback::RegistryRefused {
+                            registry_path: "/w/repos.toml".to_owned(),
+                            reason: "registry_invalid",
+                        }),
                         rev: 7,
                     }
                     .to_info(),
@@ -262,6 +266,11 @@ mod tests {
                     "kind": "plain_dir",
                     "registry_path": null,
                     "entries": [],
+                    "fallback": {
+                        "kind": "registry_refused",
+                        "registry_path": "/w/repos.toml",
+                        "reason": "registry_invalid",
+                    },
                     "focused": ["/w/"],
                     "rev": 7,
                 }],
