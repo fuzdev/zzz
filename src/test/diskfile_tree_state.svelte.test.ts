@@ -118,10 +118,14 @@ describe('DiskfileTreeIndex', () => {
 });
 
 describe('to_diskfile_tree_rows', () => {
-	/** A source over a fixed map of children, recording which folders it was asked to list. */
+	/**
+	 * A source over a fixed map of children, recording which folders it was asked to list —
+	 * `repos` the registry repos under `/w/`, each whether it's focused.
+	 */
 	const create_source = (
 		children: Record<string, { dirs?: Array<string>; files?: Array<string> }>,
-		expanded: ReadonlyArray<string>
+		expanded: ReadonlyArray<string>,
+		repos: Record<string, boolean> = {}
 	): DiskfileTreeSource & { listed: Array<string> } => {
 		const listed: Array<string> = [];
 		const get = (dir: string) => ({
@@ -139,7 +143,8 @@ describe('to_diskfile_tree_rows', () => {
 				return files.length === 0 && dirs.length === 1 ? dirs[0]! : null;
 			},
 			is_expanded: (path) => expanded.includes(path),
-			is_ignored_dir: () => false
+			is_ignored_dir: () => false,
+			get_repo: (dir) => (dir in repos ? { project_root: '/w/', focused: repos[dir]! } : null)
 		};
 	};
 
@@ -207,6 +212,38 @@ describe('to_diskfile_tree_rows', () => {
 		const main = rows.find((row) => row.label === 'main.ts')!;
 		assert.strictEqual(main.parent_key, to_diskfile_tree_row_key('/w/', '/w/src/'));
 		assert.isNull(rows[0]!.parent_key);
+	});
+
+	test('an unfocused repo is a lazy row, and a repo never joins a compact row', () => {
+		const children = {
+			'/w/': { dirs: ['/w/app/', '/w/refs/', '/w/site/'] },
+			'/w/app/': { dirs: ['/w/app/src/'] },
+			'/w/app/src/': { files: ['/w/app/src/x.ts'] },
+			// an entry nested one folder down, and one holding a kept draft
+			'/w/refs/': { dirs: ['/w/refs/keys/'] },
+			'/w/site/': { files: ['/w/site/draft.md'] }
+		};
+		const source = create_source(
+			children,
+			['/w/', '/w/app/', '/w/app/src/', '/w/refs/', '/w/refs/keys/', '/w/site/'],
+			{ '/w/app/': true, '/w/refs/keys/': false, '/w/site/': false }
+		);
+		const rows = to_diskfile_tree_rows(['/w/'], source);
+		assert.deepEqual(outline(rows), [
+			'- /w/',
+			'  - app',
+			'    - src',
+			'      x.ts',
+			'  - refs',
+			'    ~ keys',
+			'  ~ site'
+		]);
+		const site = rows.at(-1)!;
+		assert(site.kind === 'unfocused');
+		assert.strictEqual(site.project_root, '/w/');
+		assert.strictEqual(site.key, to_diskfile_tree_row_key('/w/', '/w/site/'));
+		assert.deepEqual([site.posinset, site.setsize], [3, 3]);
+		assert.notInclude(source.listed, '/w/site/', 'an unfocused repo is never walked');
 	});
 
 	test('overlapping roots show a path under each, with distinct keys', () => {

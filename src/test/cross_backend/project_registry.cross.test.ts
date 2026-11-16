@@ -8,7 +8,8 @@
  * Pins what `project_open` resolves (the root, its kind, every entry's
  * state), what it indexes (the root's loose files and the focused repo —
  * never an unfocused repo or an unregistered directory), the focus an open
- * adds to an open project (`project_changed` `update`), the refusal of an
+ * adds to an open project (`project_changed` `update`), what `repo_focus` and
+ * `repo_unfocus` index and release and what they refuse, the refusal of an
  * untrusted registry with its reason, and the scope a close releases.
  *
  * @module
@@ -23,9 +24,17 @@ import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/pro
 import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
 import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_transport.ts';
-import { is_notification } from '@fuzdev/fuz_app/testing/transports/ws_client.ts';
+import {
+	is_notification,
+	is_notification_with
+} from '@fuzdev/fuz_app/testing/transports/ws_client.ts';
 
-import { ProjectChangedInput, ProjectOpenOutput } from '#lib/action_specs.ts';
+import {
+	ProjectChangedInput,
+	ProjectOpenOutput,
+	RepoFocusOutput,
+	RepoUnfocusOutput
+} from '#lib/action_specs.ts';
 
 const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
@@ -174,6 +183,116 @@ describe('project registry cross-backend', () => {
 		} finally {
 			await ws.close();
 		}
+	});
+
+	test('focusing an entry indexes it; unfocusing it drops its files for every client', async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		const root = `${dev}/`;
+		const app_dir = `${dev}/app/`;
+		await open_project(fixture, dev);
+
+		const ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: fixture.transport.cookies()
+		});
+		/** The next `project_changed` `update` reporting `focused`. */
+		const update_with = (focused: Array<string>) =>
+			ws.wait_for<Record<string, unknown>>(
+				is_notification_with<{ type: string; project: { focused: Array<string> } }>(
+					'project_changed',
+					(params) =>
+						params.type === 'update' &&
+						JSON.stringify(params.project.focused) === JSON.stringify(focused)
+				),
+				5_000
+			);
+		try {
+			await ws.request('_warmup', 'ping', undefined);
+			const focused_update = update_with([app_dir]);
+			const res = await call(fixture, 'repo_focus', { root, dir: app_dir });
+			assert.ok(res.ok, `repo_focus failed: ${JSON.stringify(res)}`);
+			const focused = parse(RepoFocusOutput, res.result);
+			assert.ok(focused.ok, JSON.stringify(focused));
+			assert.deepEqual(focused.value.project.focused, [app_dir]);
+			assert.deepEqual(focused.value.files.map((f) => f.id as string).sort(), [
+				join(dev, 'README.md'),
+				join(dev, 'app', 'a.ts'),
+				join(dev, 'app', 'src', 'b.ts'),
+				join(dev, 'repos.toml')
+			]);
+			const notification = parse(ProjectChangedInput, (await focused_update).params);
+			assert.ok(notification.ok, JSON.stringify(notification));
+
+			// again: the same focus, a trailing slash optional
+			const again = await call(fixture, 'repo_focus', { root: dev, dir: join(dev, 'app') });
+			assert.ok(again.ok, `repo_focus failed: ${JSON.stringify(again)}`);
+			assert.deepEqual((again.result as RepoFocusOutput).project.focused, [app_dir]);
+
+			const unfocused_update = update_with([]);
+			const unfocus = await call(fixture, 'repo_unfocus', { root, dir: app_dir });
+			assert.ok(unfocus.ok, `repo_unfocus failed: ${JSON.stringify(unfocus)}`);
+			const unfocused = parse(RepoUnfocusOutput, unfocus.result);
+			assert.ok(unfocused.ok, JSON.stringify(unfocused));
+			assert.deepEqual(unfocused.value.project.focused, []);
+			await unfocused_update;
+
+			// another client's snapshot no longer has the repo's files
+			const session = await ws.request<{ data: { files: Array<{ id: string }> } }>(
+				'snapshot',
+				'session_load',
+				undefined
+			);
+			const ids = session.data.files.map((f) => f.id);
+			assert.include(ids, join(dev, 'README.md'));
+			assert.notInclude(ids, join(dev, 'app', 'a.ts'));
+			assert.notInclude(ids, join(dev, 'app', 'src', 'b.ts'));
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('repo_focus and repo_unfocus refuse what isn’t a present entry, naming why', async () => {
+		const fixture = await setup_test();
+		const { dev, outside } = await create_registry_root();
+		const root = `${dev}/`;
+		await open_project(fixture, dev);
+		await open_project(fixture, outside);
+
+		const refused = async (
+			method: string,
+			params: Record<string, unknown>,
+			code: number,
+			reason: string
+		): Promise<void> => {
+			const res = await call(fixture, method, params);
+			assert.ok(!res.ok, `${method} ${JSON.stringify(params)} should be refused`);
+			assert.strictEqual(res.error.code, code, JSON.stringify(res.error));
+			assert.deepEqual(res.error.data, { reason }, JSON.stringify(res.error));
+		};
+		await refused(
+			'repo_focus',
+			{ root: `${dev}_none/`, dir: `${dev}/app/` },
+			-32602,
+			'project_not_open'
+		);
+		await refused('repo_focus', { root, dir: `${dev}/scratch/` }, -32602, 'repo_not_in_project');
+		await refused('repo_focus', { root, dir: `${dev}/site/` }, -32003, 'repo_not_present');
+		await refused('repo_focus', { root, dir: `${dev}/escape/` }, -32002, 'repo_not_present');
+		await refused(
+			'repo_unfocus',
+			{ root: `${outside}/`, dir: `${outside}/` },
+			-32602,
+			'project_not_registry'
+		);
+		await refused('repo_unfocus', { root, dir: `${dev}/scratch/` }, -32602, 'repo_not_in_project');
+
+		const list = await call(fixture, 'project_list');
+		assert.ok(list.ok);
+		const projects = (list.result as { projects: Array<{ root: string; focused: Array<string> }> })
+			.projects;
+		assert.deepEqual(projects.find((p) => p.root === root)?.focused, [], 'nothing focused');
 	});
 
 	test('the whole root is in scope while open, and out of it once closed', async () => {

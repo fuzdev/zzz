@@ -256,10 +256,13 @@ Details: ./docs/development.md § Adding a New Action.
   private group — `file_trust.rs`), else the git checkout holding it,
   else the directory. An untrusted or unconfined registry refuses the open
   with its reason; a registry entry escaping the root is refused alone.
-  Opening a path **focuses** the repo holding it — daemon-wide, until the
-  project closes; a focused directory is indexed whole, a registry's root
-  at its top level only (its loose files), and an unfocused repo or an
-  unregistered directory under it not at all. File access is the whole
+  Opening a path **focuses** the repo holding it, and `repo_focus` /
+  `repo_unfocus` focus or unfocus a registry's present entries one by one
+  (the file tree's lazy rows, the projects page) — daemon-wide, until
+  unfocused or the project closes; a checkout's or plain directory's root
+  stays focused while it's open. A focused directory is indexed whole, a
+  registry's root at its top level only (its loose files), and an
+  unfocused repo or an unregistered directory under it not at all. File access is the whole
   root regardless: opening a path in a registry puts all of it (say all
   of `~/dev`) in scope, unfocused repos and unregistered directories
   included.
@@ -373,11 +376,11 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
 
 - **Domain state is in memory** — lost on a daemon restart; the frontend
   resyncs after every reconnect and reopens the projects a restart lost.
-- **No unfocusing** — a focus lasts until the project closes, or until a
-  later open finds its entry missing or the root's kind changed, and an
-  unfocused repo isn't shown in the file tree; nothing under a registry's
-  root but its loose files and focused repos is indexed, and a new file
-  where nothing is indexed is refused.
+- **Focus is by hand** — a repo is indexed only once focused (opening a
+  path in it, the file tree, the projects page), and stays focused until
+  unfocused, its project closes, or a later open finds its entry missing;
+  nothing under a registry's root but its loose files and focused repos is
+  indexed, and a new file where nothing is indexed is refused.
 - **Chats, prompts, and terminal presets** live in page memory, lost on reload.
 - **WebSocket auth** at upgrade only, with event-driven revocation; at most
   50 sockets per account; no batch JSON-RPC.

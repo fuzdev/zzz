@@ -422,6 +422,38 @@ export const ProjectCloseInput = object({
 });
 export type ProjectCloseInput = Infer<typeof ProjectCloseInput>;
 
+/**
+ * Input for `repo_focus`: a registry entry of an open project, by the
+ * project's `root` and the entry's `dir` as the project reports them.
+ */
+export const RepoFocusInput = object({
+	root: DiskfileDirectoryPath,
+	dir: DiskfileDirectoryPath
+});
+export type RepoFocusInput = Infer<typeof RepoFocusInput>;
+
+/** Output for `repo_focus`. */
+export const RepoFocusOutput = object({
+	project: ProjectInfoJson,
+	/** The index of every filer of the project, the newly focused repo's included. */
+	files: array(SerializableDisknode),
+	watch_status: ProjectWatchStatus
+});
+export type RepoFocusOutput = Infer<typeof RepoFocusOutput>;
+
+/** Input for `repo_unfocus`: a registry entry of an open project, as for `repo_focus`. */
+export const RepoUnfocusInput = object({
+	root: DiskfileDirectoryPath,
+	dir: DiskfileDirectoryPath
+});
+export type RepoUnfocusInput = Infer<typeof RepoUnfocusInput>;
+
+/** Output for `repo_unfocus`: the project as the unfocus left it. */
+export const RepoUnfocusOutput = object({
+	project: ProjectInfoJson
+});
+export type RepoUnfocusOutput = Infer<typeof RepoUnfocusOutput>;
+
 /** Output for `project_list`. */
 export const ProjectListOutput = object({
 	projects: array(ProjectInfoJson)
@@ -430,8 +462,8 @@ export type ProjectListOutput = Infer<typeof ProjectListOutput>;
 
 /**
  * Input for `project_changed`: a project newly `open`, `close`d, or an
- * `update` to an open one — a new focus, or its registry's entries resolved
- * again.
+ * `update` to an open one — a focus added or dropped, or its registry's
+ * entries resolved again.
  */
 export const ProjectChangedInput = object({
 	type: one_of(['open', 'update', 'close']),
@@ -786,6 +818,32 @@ export const project_list_action_spec = {
 	description: 'List all open projects.'
 } satisfies RequestResponseActionSpec;
 
+export const repo_focus_action_spec = {
+	method: 'repo_focus',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: true,
+	input: RepoFocusInput,
+	output: RepoFocusOutput,
+	async: true,
+	description:
+		"Focus a registry entry of an open project — its files are then indexed and watched, as opening a path in it would, without resolving the registry again — and notify `project_changed` `update`; idempotent. Refuses a root that isn't open (`invalid_params` / `project_not_open`), a project that isn't a registry (`project_not_registry`), a directory that's none of its entries (`repo_not_in_project`), and an entry not yet cloned or gone since (`not_found`), or refused (`forbidden`), as last resolved (`repo_not_present` — opening the project again resolves it); a repo that can't be listed otherwise fails as `project_open`'s focused directory does (`forbidden` / `permission_denied`), leaving the project as it was."
+} satisfies RequestResponseActionSpec;
+
+export const repo_unfocus_action_spec = {
+	method: 'repo_unfocus',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: true,
+	input: RepoUnfocusInput,
+	output: RepoUnfocusOutput,
+	async: true,
+	description:
+		"Drop a registry entry from an open project's focus — its file watching stops unless another open project keeps it, and its files leave the index — and notify `project_changed` `update`; idempotent, and a registry may keep no focus. Refuses a root that isn't open (`invalid_params` / `project_not_open`), a project that isn't a registry, whose root stays focused while it's open (`project_not_registry`), and a directory that's none of its entries (`repo_not_in_project`)."
+} satisfies RequestResponseActionSpec;
+
 export const project_changed_action_spec = {
 	method: 'project_changed',
 	kind: 'remote_notification',
@@ -795,7 +853,8 @@ export const project_changed_action_spec = {
 	input: ProjectChangedInput,
 	output: fuz_void,
 	async: true,
-	description: 'Notifies frontends when a project is opened, changed (a new focus), or closed.'
+	description:
+		'Notifies frontends when a project is opened, changed (a focus added or dropped, its registry resolved again), or closed.'
 } satisfies RemoteNotificationActionSpec;
 
 /**
@@ -840,5 +899,7 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	project_open_action_spec,
 	project_close_action_spec,
 	project_list_action_spec,
+	repo_focus_action_spec,
+	repo_unfocus_action_spec,
 	project_changed_action_spec
 ];

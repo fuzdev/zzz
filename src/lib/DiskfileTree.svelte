@@ -24,12 +24,18 @@
 	 * naming the active row by `aria-activedescendant`, so it survives that row
 	 * scrolling out of the window.
 	 *
+	 * A registry project's repos show under its root from its entries
+	 * (`Projects.repos`), not from the index: one that isn't focused is a lazy
+	 * row, dimmed, with no files under it, and expanding it — Right, Enter,
+	 * Space, or a click — focuses it (`DiskfileTreeState.focus_repo`), when it
+	 * becomes a folder row, expanded.
+	 *
 	 * Keys: Up and Down move, Right expands or moves into a folder, Left
 	 * collapses or moves to the parent, Home and End jump, Enter opens a file
 	 * (a permanent tab), Space previews it, and either toggles a folder; the
-	 * ContextMenu key or Shift+F10 opens the active row's menu, a file's or a
-	 * folder's. A click previews a file and a double click opens it; a click
-	 * toggles a folder. Keys and clicks inside a row's own controls — the
+	 * ContextMenu key or Shift+F10 opens the active row's menu, a file's, a
+	 * folder's, or an unfocused repo's. A click previews a file and a double
+	 * click opens it; a click toggles a folder. Keys and clicks inside a row's own controls — the
 	 * inline create's input (`DiskfileTreeCreateInput`) — are the control's,
 	 * and the keyboard passes over that input's row. A note on a create the
 	 * tree can't show (`DiskfileTreeState.notice`) stays in view above the rows
@@ -144,6 +150,8 @@
 			const diskfile = diskfiles.get_by_path(row.path as DiskfilePath);
 			// the second click of a double click opens the preview for good, like the list's rows
 			if (diskfile) diskfiles.select(diskfile.id, e.detail === 2);
+		} else if (row.kind === 'unfocused') {
+			if (e.detail <= 1) void tree.focus_repo(row);
 		} else if (e.detail <= 1) {
 			// a double click toggles once, not twice
 			tree.toggle(row);

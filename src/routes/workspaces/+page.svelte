@@ -102,6 +102,16 @@
 		if (!result.ok) error_message = `failed to close ${root}: ${result.error.message}`;
 	};
 
+	/** Focuses or unfocuses a registry entry of `project`, saying why when it can't. */
+	const toggle_focus = async (project: Project, dir: DiskfileDirectoryPath): Promise<void> => {
+		error_message = null;
+		const unfocus = project.focused.includes(dir);
+		const result = unfocus ? await project.unfocus_repo(dir) : await project.focus_repo(dir);
+		if (!result.ok) {
+			error_message = `failed to ${unfocus ? 'unfocus' : 'focus'} ${dir}: ${result.error.message}`;
+		}
+	};
+
 	/** `dir` relative to `root` when under it, for a shorter listing. */
 	const to_relative = (dir: string, root: string): string =>
 		dir.startsWith(root) && dir !== root ? dir.slice(root.length) : dir;
@@ -113,8 +123,8 @@
 		<p class="text_50">
 			Open a file or directory to open its project: a trusted <code>repos.toml</code> found above
 			it, else its git repo, else the directory. The repo holding the path is focused — its files
-			are indexed and watched. A registry's own folder shows only its loose files and its focused
-			repos.
+			are indexed and watched. A registry's own folder indexes only its loose files and its focused
+			repos; focus or unfocus its other repos here or from the file tree.
 		</p>
 	</header>
 
@@ -186,26 +196,40 @@
 								{project.entries.length}
 								{project.entries.length === 1 ? 'entry' : 'entries'} in
 								<span class="font_family_mono">{project.registry_path}</span>
-								{#if project.focused.length}
-									— focused:
-									{#each project.focused as dir, i (dir)}
-										<span class="font_family_mono">{to_relative(dir, project.root)}</span
-										>{#if i < project.focused.length - 1},{' '}{/if}
-									{/each}
-								{:else}
-									— none focused; open a path in one of its repos to focus it
-								{/if}
+								— {project.focused.length || 'none'} focused
 							</p>
-							{#if project.refused_entries.length}
-								<ul class="font_size_sm">
-									{#each project.refused_entries as entry (`${entry.kind}:${entry.key}`)}
-										<li>
-											<span class="font_family_mono">{entry.key}</span> refused:
-											<span class="text_50">{entry.reason}</span>
-										</li>
-									{/each}
-								</ul>
-							{/if}
+							<ul class="unstyled font_size_sm">
+								{#each project.entries as entry (`${entry.kind}:${entry.key}`)}
+									{@const focused = project.focused.includes(entry.dir)}
+									<li class="row gap_sm">
+										<span class="font_family_mono" class:text_50={!focused}>
+											{to_relative(entry.dir, project.root)}
+										</span>
+										{#if entry.kind === 'reference'}<small class="text_50">reference</small>{/if}
+										{#if entry.state === 'present'}
+											<button
+												type="button"
+												class="sized_sm plain"
+												disabled={app.projects.pending_repos.has(entry.dir)}
+												title={focused ? 'stop indexing its files' : 'index and watch its files'}
+												onclick={() => void toggle_focus(project, entry.dir)}
+											>
+												{app.projects.pending_repos.has(entry.dir)
+													? focused
+														? 'unfocusing…'
+														: 'focusing…'
+													: focused
+														? 'unfocus'
+														: 'focus'}
+											</button>
+										{:else if entry.state === 'missing'}
+											<small class="text_50">not cloned</small>
+										{:else}
+											<small class="text_50">refused: {entry.reason}</small>
+										{/if}
+									</li>
+								{/each}
+							</ul>
 						{/if}
 					</li>
 				{/each}

@@ -505,7 +505,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 				reason: typeof reason === 'string' ? reason : null
 			};
 		} catch (error) {
-			return { ok: false, message: to_error_message(error, 'read failed'), reason: null };
+			return {
+				ok: false,
+				message: to_error_message(error, 'read failed'),
+				reason: null
+			};
 		}
 	}
 
@@ -604,8 +608,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Replaces the file tree under `roots` with a session snapshot's: upserts
 	 * every snapshot file (like `add_initial`), and removes each known file under
 	 * a root that the snapshot lacks, via `remove_by_path` — so a file open with
-	 * unsaved edits is kept, flagged `deleted_on_disk`. Files outside every root
-	 * are left alone, since the snapshot says nothing about them.
+	 * unsaved edits is kept, flagged `deleted_on_disk` — except that one in an
+	 * unfocused repo (`is_in_unfocused_repo`) with a draft or a tab is kept
+	 * unflagged: it left the index, not the disk. Files outside every root are
+	 * left alone, since the snapshot says nothing about them.
 	 *
 	 * @param files - the snapshot's file tree
 	 * @param roots - the directories (trailing `/`) whose complete trees `files` holds
@@ -618,7 +624,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	reconcile(
 		files: Array<SerializableDisknode>,
 		roots: ReadonlyArray<string>,
-		options?: { changes?: DiskfileSnapshotChanges; skip_dirs?: ReadonlyArray<string> }
+		options?: {
+			changes?: DiskfileSnapshotChanges;
+			skip_dirs?: ReadonlyArray<string>;
+		}
 	): void {
 		const skip_paths = options?.changes?.paths;
 		const skip_dirs = options?.skip_dirs ?? [];
@@ -638,6 +647,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			const { path } = diskfile;
 			if (snapshot_paths.has(path) || skip_paths?.has(path)) continue;
 			if (!is_under_any(path, roots) || is_under_any(path, skip_dirs)) continue;
+			if (this.#is_held(diskfile) && this.is_in_unfocused_repo(path)) continue;
 			this.remove_by_path(path);
 		}
 	}
@@ -664,14 +674,42 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Forgets diskfile `id` if it's deleted on disk and nothing holds it anymore
-	 * — no draft and no tab. Called when its draft is discarded and when its
-	 * last tab closes.
+	 * Releases the files known under `dir`, a repo just unfocused, that the
+	 * index no longer covers (`is_in_unfocused_repo`): each is forgotten with
+	 * its editing state, except one held — with a draft or a tab — which is
+	 * kept as it is, not flagged `deleted_on_disk` since it's still on disk,
+	 * until the repo is focused again (the focus's files then settle it) or
+	 * nothing holds it (`release_if_unneeded`). A kept file isn't watched
+	 * meanwhile; a save still checks the disk version it was based on.
+	 */
+	release_unfocused(dir: string): void {
+		for (const diskfile of this.items.values) {
+			const { path } = diskfile;
+			if (!path.startsWith(dir) || !this.is_in_unfocused_repo(path)) continue;
+			if (this.#is_held(diskfile)) continue;
+			this.#forget(diskfile);
+		}
+	}
+
+	/** Whether `diskfile` has a draft or an editor tab — what keeps one outside the index. */
+	#is_held(diskfile: Diskfile): boolean {
+		return (
+			!!this.#editor_states.get(diskfile.id)?.has_unsaved_edits ||
+			this.editor.tabs.by_diskfile_id.has(diskfile.id)
+		);
+	}
+
+	/**
+	 * Forgets diskfile `id` if it's outside what the index covers — deleted on
+	 * disk, or kept from an unfocused repo for its draft or tab
+	 * (`release_unfocused`) — and nothing holds it anymore: no draft and no tab. Called when its
+	 * draft is discarded and when its last tab closes.
 	 */
 	release_if_unneeded(id: Uuid): void {
 		const diskfile = this.items.by_id.get(id);
 		if (
-			diskfile?.deleted_on_disk &&
+			diskfile &&
+			(diskfile.deleted_on_disk || this.is_in_unfocused_repo(diskfile.path)) &&
 			!this.#editor_states.get(id)?.has_unsaved_edits &&
 			!this.editor.tabs.by_diskfile_id.has(id)
 		) {
@@ -808,10 +846,33 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
+	 * Whether `path` is in a repo of an open registry project — a present
+	 * entry — that isn't focused, and outside everything else the index covers:
+	 * on disk, but never reported, so a file there is neither listed nor
+	 * watched.
+	 */
+	is_in_unfocused_repo(path: string): boolean {
+		const { trees, top_levels } = this.index_coverage;
+		if (is_under_any(path, trees)) return false;
+		// a nested registry's loose files, which its root's top-level filer indexes
+		if (
+			top_levels.some((root) => path.startsWith(root) && !path.slice(root.length).includes('/'))
+		) {
+			return false;
+		}
+		for (const [dir, project] of this.app.projects.repos) {
+			if (path.startsWith(dir) && !project.focused.includes(dir as DiskfileDirectoryPath))
+				return true;
+		}
+		return false;
+	}
+
+	/**
 	 * The directories the file tree shows as roots, each with a trailing `/`:
 	 * the app directory, the scoped dirs, and the open projects' roots. A
 	 * project's index covers its focused directories and, for a registry, the
-	 * root's loose files — an unfocused repo has no files, so it isn't shown.
+	 * root's loose files — an unfocused repo has no files, and the tree shows
+	 * it from the project's entries (`Projects.repos`).
 	 */
 	readonly indexed_roots: ReadonlyArray<DiskfileDirectoryPath> = $derived.by(() => {
 		const { zzz_dir, scoped_dirs, projects } = this.app;

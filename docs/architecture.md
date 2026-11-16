@@ -1575,7 +1575,10 @@ explorer, and the editors), so saving writes the path back (always allowed
 while flagged; a successful save clears the flag right away) and the `add`
 broadcast reattaches it (same id). It's forgotten once nothing holds it — no
 draft (discarded from the editor's notice or a "don't save") and no tab
-(`Diskfiles.release_if_unneeded`). The explorer lists it for its draft
+(`Diskfiles.release_if_unneeded`). A file that leaves the index because its
+repo was unfocused isn't deleted: it's forgotten, unless it has a draft or
+a tab, which keep it as it is, unflagged (§ Spaces and Projects).
+The explorer lists it for its draft
 (`Diskfiles.listed`); pickers don't (`on_disk`); a `DiskfilePart` shows and
 sends the draft, marked deleted. Tabs, history, and editor state are
 UI-session-only — a reload restores only what `session_load` provides.
@@ -1621,7 +1624,8 @@ permanent tab, Space previews it, and either toggles a folder; the ContextMenu
 key (or Shift+F10) opens the active row's menu. Focus stays on the tree, which
 names the active row by `aria-activedescendant`, so it survives the row
 scrolling away. A click previews a file, a double click opens it, and a click
-toggles a folder.
+toggles a folder. A registry's repos that aren't focused show as lazy rows
+that expanding focuses (§ Spaces and Projects).
 
 **The explorer's contextmenus.** A file's menu (`DiskfileContextmenu`, on list
 and tree rows, tabs, and the file views) copies the file's absolute path, its
@@ -1637,8 +1641,11 @@ folder below it or collapses them, and copies its path, relative path, and name
 — a root only its path. Expanding skips the folders the rows never show, and
 past `EXPAND_ALL_BELOW_CONFIRM_FILE_COUNT` files below (counted from the index's
 links, not walked) asks first: every file then shows, and each file change
-under it rederives them all. A compact row acts on its innermost folder.
-Rename, move, and deleting a folder wait on backend actions.
+under it rederives them all — an unfocused repo isn't focused by it. A
+compact row acts on its innermost folder. A registry's focused repo's menu
+also unfocuses it; an unfocused repo's lazy row has a "repo" menu instead —
+focus it, open a terminal there, copy its path. Rename, move, and deleting
+a folder wait on backend actions.
 
 **Creating in the tree** names the new file or folder inline, VS Code style: an
 input (`DiskfileTreeCreateInput`) shows as the folder's first child, expanded
@@ -1704,9 +1711,14 @@ separate concerns":
   the repo holding the path — the deepest present registry entry containing
   it, or a checkout's or directory's root; opening a registry's root itself,
   an unregistered directory under it, or a linked worktree outside it
-  focuses nothing. Focus is daemon-wide and lasts until the project closes;
-  each open of a path in another repo adds its focus (`project_changed`
-  `update`). A focused directory gets a whole-tree filer; a registry's root
+  focuses nothing. Focus is daemon-wide; each open of a path in another
+  repo adds its focus (`project_changed` `update`), and `repo_focus` /
+  `repo_unfocus` add or drop a registry's present entries one by one
+  without resolving the registry again. A focus lasts until it's
+  unfocused, the project closes, or a later open finds its entry gone; a
+  checkout's or plain directory's root is its one focus while it's open
+  (`project_not_registry`), and a registry may keep none, as opening its
+  root alone leaves it. A focused directory gets a whole-tree filer; a registry's root
   gets one at its top level alone (its loose files) — an unfocused repo
   and an unregistered directory under it aren't indexed, so a root of
   hundreds of thousands of files costs only what's focused. Filers are
@@ -1724,7 +1736,17 @@ separate concerns":
   filers re-ensured, the root added to `ScopedFs`, and `project_changed`
   broadcast (`open`, or `update` when an open project changed); the reply
   carries the project, the open's `focus`, every filer's files, and the
-  `watch_status`. `project_close` reverses that, stopping the filers no
+  `watch_status`. `repo_focus` checks the entry is present as the
+  project's last resolve left it (`repo_not_in_project`, or
+  `repo_not_present` for one not cloned or refused), starts its filer
+  before the lock, then under it records the focus, re-ensures the filers,
+  and broadcasts `update`, replying with the project, every filer's files,
+  and the `watch_status`; focusing a focused repo changes and broadcasts
+  nothing. `repo_unfocus` drops the focus under the lock and releases its
+  filer as an open's narrowing does — stopped unless another open project
+  keeps it, narrowed to a top-level one if that's all one keeps (a nested
+  registry's root) — then broadcasts `update`. `project_close` reverses
+  an open, stopping the filers no
   other open project keeps — except that the boot-time app directory and
   `PUBLIC_ZZZ_SCOPED_DIRS` keep their permanent filers and `ScopedFs`
   roots, so closing a project that overlaps one never revokes its access.
@@ -1747,7 +1769,8 @@ into the active Space. Opening happens on `/workspaces`, the projects page
 (path input → `project_open`; the `?project=<path>` query param
 auto-opens — this is how the CLI's `zzz <path>` lands the browser on a
 project). It lists each open project with its kind, and a registry's
-registry file, focused repos, and refused entries with their reasons. Both
+registry file and each of its entries: a present one with a button to
+focus or unfocus it, a missing or refused one with why. Both
 paths require an absolute path (a leading `~` isn't expanded) and activate
 the project `project_open` returns, and the query param is handled once and
 then stripped from the URL, so a reload doesn't reopen a project the user
@@ -1762,16 +1785,40 @@ carried every directory the notification brought in: a reply built
 before another client's focus doesn't carry it. A reply never shrinks the
 focus this client already has that its resolve still supports (a reply
 may predate another client's focus); a notification or a snapshot is the
-daemon's word on it. A change that drops a focus or the project's kind —
-in a notification or this client's own reply — resyncs too, once no open
-is in flight: the daemon stopped indexing there, and stopping a filer
-deletes nothing on clients, so the snapshot prunes those files. A change
-that lands while a snapshot is in flight asks for another after it, since
-that snapshot leaves the changed project's files alone.
+daemon's word on it. Stopping a filer deletes nothing on clients, so a
+change that drops a focus needs its files released here. An unfocus — a
+notification dropping only focuses on entries still present, the kind
+unchanged, with no open or focus of this client in flight, or this
+client's own `repo_unfocus` reply — releases them at once
+(`Diskfiles.release_unfocused`): each file the index no longer covers is
+forgotten, except one held by a draft or a tab, kept as it is — not
+flagged deleted, since it's still on disk — until the repo is focused
+again or nothing holds it. Such a file isn't watched meanwhile, so a change
+on disk shows only once the repo is focused again, or as a conflict when
+it's saved (the save checks the disk version it was based on). Any other
+drop (a kind change, an entry gone), or one while an open or focus is in
+flight, whose reply may bring the files back, resyncs once none is, and
+the snapshot prunes them, keeping a file with a draft or a tab in an
+unfocused repo the same way. A change that lands while a
+snapshot is in flight asks for another after it, since that snapshot
+leaves the changed project's files alone. `Projects.focus_repo` applies
+its reply like an open's, reconciling the repo's files (a draft kept
+while it was unfocused whose file is gone is flagged deleted then);
+`Projects.unfocus_repo`'s reply keeps the focus this client has besides
+the repo, since it may predate another client's.
 
-The file tree shows one root row per open project's root. Since only the
-root's loose files and the focused repos are indexed, an unfocused repo
-doesn't show at all.
+The file tree shows one root row per open project's root, and under a
+registry's root its present entries from the project (`Projects.repos`),
+not from the index: a focused repo as a folder row, an unfocused one as a
+dimmed lazy row with nothing under it, which expanding — Right, Enter,
+Space, a click, or its menu's "focus repo" — focuses
+(`DiskfileTreeState.focus_repo`), turning it into its folder row, expanded.
+A missing or refused entry isn't shown (the projects page says why). A
+repo's folder is always a row of its own, never part of a compact one, so
+its row keeps its identity as it's focused or unfocused. A focused repo's
+folder menu unfocuses it. A restart's reopen restores every focus however
+it was made, by `project_open` of each focused directory, which focuses
+that entry.
 
 ## Auth gate
 
@@ -2088,15 +2135,20 @@ Population, per capability:
   directory other than the app dir readable or writable. A project opened
   in another tab (or by `zzz <path>`) appears here unactivated, and its files
   arrive with a session resync
-- **Projects and focus** — no unfocusing: a focus lasts until its project
-  closes, or until a later open finds its entry missing or the root's kind
-  changed (clients then resync to prune the files no longer indexed), and the file tree hides an unfocused repo rather
-  than listing it. Under a registry's root only its loose files and its
+- **Projects and focus** — focus is by hand: a repo is indexed only once
+  it's focused (opening a path in it, the file tree's lazy row, the
+  projects page), and stays focused until it's unfocused, its project
+  closes, or a later open finds its entry missing or the root's kind
+  changed. Under a registry's root only its loose files and its
   focused repos are indexed — an unregistered directory never is, and a
   new file there is refused, since it would never show; a
   file another tool creates there doesn't appear. A registry's entries are
-  resolved when it's opened, again on each later open, never in between.
-  Focusing indexes by a walk (the filer's ignore list, not `.gitignore`)
+  resolved when it's opened, again on each later open, never in between —
+  so `repo_focus` of an entry cloned since refuses it until a path in it
+  is opened. Focusing indexes by a walk (the filer's ignore list, not
+  `.gitignore`). A file kept from an unfocused repo for its draft or tab
+  isn't watched: a change on disk meanwhile shows only when the repo is
+  focused again, or as a conflict when it's saved
 - **Terminals** — any authenticated account can create a terminal, which runs
   a command as the daemon's OS user (see § Security posture). Each terminal
   belongs to the account that created it: its output (`terminal_data`,

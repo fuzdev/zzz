@@ -1,14 +1,14 @@
 //! `ActionSpec` builders for project methods.
 //!
-//! Mirrors the three project specs in `src/lib/action_specs.ts`:
-//! `project_list` (read-only), `project_open` and `project_close`
-//! (side-effects) — each account-grain (`account: required, actor: none`)
-//! like its TS spec.
+//! Mirrors the project specs in `src/lib/action_specs.ts`: `project_list`
+//! (read-only), `project_open`, `project_close`, `repo_focus`, and
+//! `repo_unfocus` (side-effects) — each account-grain (`account: required,
+//! actor: none`) like its TS spec.
 //!
 //! ## Side-effects flag
 //!
-//! `project_open` / `project_close` carry `side_effects: true`, matching
-//! their TS specs. They don't touch the DB (project state is in-memory), but
+//! `project_open` / `project_close` / `repo_focus` / `repo_unfocus` carry
+//! `side_effects: true`, matching their TS specs. They don't touch the DB (project state is in-memory), but
 //! they mutate server state, so the flag keeps them off the side-effect-free
 //! `GET /api/rpc` path and marks the transactional boundary for audit
 //! emission on project mutations.
@@ -34,7 +34,9 @@ pub fn build_project_specs(app: Arc<App>) -> Vec<ActionSpec> {
     vec![
         project_list_spec(Arc::clone(&app)),
         project_open_spec(Arc::clone(&app)),
-        project_close_spec(app),
+        project_close_spec(Arc::clone(&app)),
+        repo_focus_spec(Arc::clone(&app)),
+        repo_unfocus_spec(app),
     ]
 }
 
@@ -72,6 +74,33 @@ fn project_close_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "project_close",
+        AuthSpec::account_grain(CredentialGate::Any),
+        InputShape::Object,
+        handler,
+    )
+}
+
+fn repo_focus_spec(app: Arc<App>) -> ActionSpec {
+    let handler: ActionOutputHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
+        let app = Arc::clone(&app);
+        Box::pin(async move { project::repo_focus(params, ctx, app).await })
+    });
+    ActionSpec::new_output(
+        "repo_focus",
+        AuthSpec::account_grain(CredentialGate::Any),
+        InputShape::Object,
+        true,
+        handler,
+    )
+}
+
+fn repo_unfocus_spec(app: Arc<App>) -> ActionSpec {
+    let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
+        let app = Arc::clone(&app);
+        Box::pin(async move { project::repo_unfocus(params, ctx, app).await })
+    });
+    ActionSpec::with_side_effects(
+        "repo_unfocus",
         AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,

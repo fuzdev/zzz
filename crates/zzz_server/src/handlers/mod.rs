@@ -62,7 +62,8 @@ pub struct App {
     pub instance_id: Uuid,
     /// The open projects, keyed by root (trailing `/`).
     pub projects: RwLock<HashMap<String, ProjectInfo>>,
-    /// Serializes `project_open` / `project_close`. Each spans the
+    /// Serializes `project_open` / `project_close` / `repo_focus` /
+    /// `repo_unfocus`. Each spans the
     /// `projects` map, `ScopedFs`, and the project's filers across await
     /// points; interleaved, an open could re-add scope and watchers for a
     /// project a concurrent close just removed. An open's initial scans run
@@ -249,7 +250,8 @@ pub struct ProjectInfo {
     /// A registry's entries, in its order; empty for other kinds.
     pub entries: Vec<ProjectEntryInfo>,
     /// The focused directories (trailing `/`), sorted — each indexed whole.
-    /// A checkout's or plain directory's root is its one.
+    /// A checkout's or plain directory's root is its one; a registry's are
+    /// its present entries an open or `repo_focus` focused.
     pub focused: Vec<String>,
 }
 

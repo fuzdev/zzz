@@ -64,34 +64,6 @@ describe('Project', () => {
 		assert.deepEqual(project.reopen_paths, [root]);
 	});
 
-	test('lists the refused registry entries', () => {
-		const root = parse_or_throw(DiskfileDirectoryPath, '/dev/');
-		const dir = (name: string) => parse_or_throw(DiskfileDirectoryPath, `/dev/${name}/`);
-		const project = new Project({
-			app,
-			json: {
-				root,
-				kind: 'registry',
-				registry_path: '/dev/repos.toml',
-				entries: [
-					{ key: 'a', kind: 'repo', dir: dir('a'), state: 'present' },
-					{ key: 'b', kind: 'repo', dir: dir('b'), state: 'missing' },
-					{
-						key: 'c',
-						kind: 'reference',
-						dir: dir('c'),
-						state: 'refused',
-						reason: 'entry_not_confined'
-					}
-				]
-			}
-		});
-		assert.deepEqual(
-			project.refused_entries.map((e) => [e.key, e.reason]),
-			[['c', 'entry_not_confined']]
-		);
-	});
-
 	test('registers in cell registry', () => {
 		const path = parse_or_throw(DiskfileDirectoryPath, '/some/dir/');
 		const project = new Project({ app, json: { root: path } });

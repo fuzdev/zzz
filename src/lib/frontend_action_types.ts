@@ -379,6 +379,34 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'project_list', 'receive_error', 'handling'>
 		) => void | Promise<void>;
 	};
+	repo_focus?: {
+		send_request?: (
+			action_event: TypedActionEvent<'repo_focus', 'send_request', 'handling'>
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'repo_focus', 'receive_response', 'handling'>
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'repo_focus', 'send_error', 'handling'>
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'repo_focus', 'receive_error', 'handling'>
+		) => void | Promise<void>;
+	};
+	repo_unfocus?: {
+		send_request?: (
+			action_event: TypedActionEvent<'repo_unfocus', 'send_request', 'handling'>
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'repo_unfocus', 'receive_response', 'handling'>
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'repo_unfocus', 'send_error', 'handling'>
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'repo_unfocus', 'receive_error', 'handling'>
+		) => void | Promise<void>;
+	};
 	project_changed?: {
 		receive?: (
 			action_event: TypedActionEvent<'project_changed', 'receive', 'handling'>

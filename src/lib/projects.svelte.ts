@@ -6,6 +6,7 @@ import {
 	type Infer,
 	type InferInput
 } from '@fuzdev/fuz_schema/schema.ts';
+import { SvelteSet } from 'svelte/reactivity';
 import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
@@ -71,6 +72,25 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		this.active_id ? this.items.by_id.get(this.active_id) : undefined
 	);
 
+	/**
+	 * The open registry projects' present entries — their repos — by dir,
+	 * each to its project: what the file tree shows under a registry's root,
+	 * focused or not.
+	 */
+	readonly repos: ReadonlyMap<string, Project> = $derived.by(() => {
+		const repos: Map<DiskfileDirectoryPath, Project> = new Map();
+		for (const project of this.items.values) {
+			if (project.kind !== 'registry') continue;
+			for (const entry of project.entries) {
+				if (entry.state === 'present') repos.set(entry.dir, project);
+			}
+		}
+		return repos;
+	});
+
+	/** The repos with a `focus_repo` or `unfocus_repo` in flight from this client, by dir. */
+	readonly pending_repos: SvelteSet<DiskfileDirectoryPath> = new SvelteSet();
+
 	constructor(options: ProjectsOptions) {
 		super(ProjectsJson, options);
 
@@ -99,12 +119,12 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		return { roots, stop: () => this.#change_trackers.delete(roots) };
 	}
 
-	// not reactive — bookkeeping for `receive_remote_change`
+	// not reactive — bookkeeping for `receive_remote_change`: opens and focuses in flight
 	#opening = 0;
 	/**
 	 * Per root, the directories a remote change brought into the project
 	 * (its root, for a project new here) whose files no reply has carried
-	 * yet — deferred while this client's own opens are in flight.
+	 * yet — deferred while this client's own opens and focuses are in flight.
 	 */
 	readonly #remote_pending: Map<string, Set<string>> = new Map();
 	/**
@@ -164,6 +184,13 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	 * the files, so the resync waits for the opens to settle, and is skipped
 	 * only when their replies carried every directory it brought in — a reply
 	 * built before another client's focus doesn't cover that focus.
+	 *
+	 * A change that drops focuses needs their files released, since stopping a
+	 * filer deletes nothing here: an unfocus — only focuses on entries still
+	 * present dropped, the kind unchanged, no open or focus in flight —
+	 * releases them at once (`Diskfiles.release_unfocused`); any other drop
+	 * resyncs, once no open or focus is in flight (a reply may bring the
+	 * files back).
 	 */
 	receive_remote_change(json: ProjectInfoJson): void {
 		const known = this.get_by_root(json.root);
@@ -178,6 +205,18 @@ export class Projects extends Cell<typeof ProjectsJson> {
 				: json.focused.filter((dir) => !before.focused.includes(dir));
 		const dropped = before !== null && is_narrowed(before, json);
 		if (!needed.length && !dropped) return;
+		if (this.#opening === 0 && !needed.length && before?.kind === json.kind) {
+			// only focuses dropped, with no reply in flight that could bring their
+			// files back — release what the index no longer covers here, without a
+			// snapshot: an unfocused repo's files go, those with a draft or tab
+			// stay (a repo dropped otherwise — gone, or out of the registry — is
+			// the snapshot's)
+			const unfocused = before.focused.filter((dir) => !json.focused.includes(dir));
+			if (unfocused.every((dir) => this.repos.get(dir)?.root === json.root)) {
+				for (const dir of unfocused) this.app.diskfiles.release_unfocused(dir);
+				return;
+			}
+		}
 		if (this.#opening > 0) {
 			let pending = this.#remote_pending.get(json.root);
 			if (!pending && needed.length) this.#remote_pending.set(json.root, (pending = new Set()));
@@ -219,20 +258,7 @@ export class Projects extends Cell<typeof ProjectsJson> {
 			if (!result.ok) return result;
 
 			const { project: project_json, focus, watch_status, files } = result.value;
-			const known = this.get_by_root(project_json.root);
-			const before = known ? { kind: known.kind, focused: [...known.focused] } : null;
-			const project = this.add(project_json, { keep_focus: true });
-			// a focus the daemon dropped (a kind change, an entry gone) leaves
-			// files it no longer indexes, which only a resync prunes
-			if (before !== null && is_narrowed(before, project)) this.#resync_after_opens = true;
-			// the reply carries the files of its root and of every directory it
-			// lists focused — what a deferred remote change needed of them is here
-			const pending = this.#remote_pending.get(project.root);
-			if (pending) {
-				pending.delete(project_json.root);
-				for (const dir of project_json.focused) pending.delete(dir);
-				if (!pending.size) this.#remote_pending.delete(project.root);
-			}
+			const project = this.#receive_reply(project_json);
 			project.watch_status = watch_status;
 			if (focus !== null) project.last_focus = focus;
 			if (options?.reconcile_files) {
@@ -246,6 +272,96 @@ export class Projects extends Cell<typeof ProjectsJson> {
 			// on every exit, a throw included, so deferred remote changes always resync
 			this.#opening--;
 			this.#flush_remote_changes();
+		}
+	}
+
+	/**
+	 * Applies the project in an open's or a focus's reply, which carries the
+	 * files of its root and of every directory it lists focused.
+	 */
+	#receive_reply(project_json: ProjectInfoJson): Project {
+		const known = this.get_by_root(project_json.root);
+		const before = known ? { kind: known.kind, focused: [...known.focused] } : null;
+		const project = this.add(project_json, { keep_focus: true });
+		// a focus the daemon dropped (a kind change, an entry gone) leaves
+		// files it no longer indexes, which only a resync prunes
+		if (before !== null && is_narrowed(before, project)) this.#resync_after_opens = true;
+		// what a deferred remote change needed of the reply's directories is here
+		const pending = this.#remote_pending.get(project.root);
+		if (pending) {
+			pending.delete(project_json.root);
+			for (const dir of project_json.focused) pending.delete(dir);
+			if (!pending.size) this.#remote_pending.delete(project.root);
+		}
+		return project;
+	}
+
+	/**
+	 * Focuses `dir`, a present registry entry of the open project at `root`, on
+	 * the backend (`repo_focus`) — its files are then indexed, as opening a
+	 * path in it would — and adds them, applied around what `filer_change`
+	 * reported while the request was in flight. The reply covers the repo
+	 * whole, so a file known under it that the reply lacks is gone from disk
+	 * (`Diskfiles.reconcile` — one kept for its draft while the repo was
+	 * unfocused is flagged deleted).
+	 *
+	 * @returns the project, or the RPC error
+	 */
+	async focus_repo(
+		root: DiskfileDirectoryPath,
+		dir: DiskfileDirectoryPath
+	): Promise<Result<{ value: Project }, { error: JsonrpcErrorObject }>> {
+		const changes = this.app.diskfiles.track_changes();
+		this.#opening++;
+		this.pending_repos.add(dir);
+		try {
+			let result: Awaited<ReturnType<typeof this.app.api.repo_focus>>;
+			try {
+				result = await this.app.api.repo_focus({ root, dir });
+			} finally {
+				changes.stop();
+			}
+			if (!result.ok) return result;
+			const { project: project_json, watch_status, files } = result.value;
+			const project = this.#receive_reply(project_json);
+			project.watch_status = watch_status;
+			this.app.diskfiles.reconcile(files, [dir], { changes });
+			return { ok: true, value: project };
+		} finally {
+			this.pending_repos.delete(dir);
+			this.#opening--;
+			this.#flush_remote_changes();
+		}
+	}
+
+	/**
+	 * Unfocuses `dir`, a registry entry of the open project at `root`, on the
+	 * backend (`repo_unfocus`), then releases its files here
+	 * (`Diskfiles.release_unfocused`): the index no longer covers them. The
+	 * reply may predate a change another client made, so it keeps the focus
+	 * this client has besides `dir`, as an open's reply does.
+	 *
+	 * @returns the project, or the RPC error
+	 */
+	async unfocus_repo(
+		root: DiskfileDirectoryPath,
+		dir: DiskfileDirectoryPath
+	): Promise<Result<{ value: Project }, { error: JsonrpcErrorObject }>> {
+		this.pending_repos.add(dir);
+		try {
+			const result = await this.app.api.repo_unfocus({ root, dir });
+			if (!result.ok) return result;
+			const reply = result.value.project;
+			const project = this.add(reply, { keep_focus: true });
+			if (!reply.focused.includes(dir)) {
+				project.focused = project.focused.filter((focused) => focused !== dir);
+			}
+			// a snapshot in flight skips this root (`track_changes`), so ask for one after it
+			if (this.app.session_status === 'pending') this.app.resync_session();
+			this.app.diskfiles.release_unfocused(dir);
+			return { ok: true, value: project };
+		} finally {
+			this.pending_repos.delete(dir);
 		}
 	}
 

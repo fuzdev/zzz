@@ -275,6 +275,20 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
+	// `Projects.focus_repo` adds the project and the repo's files
+	repo_focus: {
+		receive_error: ({ data: { error } }) => {
+			console.error('[frontend_action_handlers] repo_focus failed:', error);
+		}
+	},
+
+	// `Projects.unfocus_repo` updates the project and releases the repo's files
+	repo_unfocus: {
+		receive_error: ({ data: { error } }) => {
+			console.error('[frontend_action_handlers] repo_unfocus failed:', error);
+		}
+	},
+
 	project_changed: {
 		receive: ({ data: { input } }) => {
 			if (input.type === 'close') {

@@ -406,9 +406,14 @@ commands):
   root refused `entry_not_confined`), focused on that repo, indexing the
   root's loose files and the focused repo alone (not an unregistered
   directory); the root alone focuses nothing, and a later open of a repo
-  adds its focus with a `project_changed` `update`; the whole root is in
-  scope while open and out of it once closed; a registry its other users
-  can write refuses the open (`registry_untrusted`).
+  adds its focus with a `project_changed` `update`; `repo_focus` of an
+  entry indexes it and notifies another socket, again changes nothing, and
+  `repo_unfocus` drops it from that socket's next snapshot; both refuse
+  what isn't a present entry (`project_not_open`, `repo_not_in_project`,
+  `repo_not_present` as `not_found` for one not cloned and `forbidden` for
+  a refused one, `project_not_registry` for a plain directory); the whole
+  root is in scope while open and out of it once closed; a registry its
+  other users can write refuses the open (`registry_untrusted`).
 - **`filesystem.cross.test.ts`** — `diskfile_read` (a text file whole with
   its size and `mtime`, read through to the disk — a same-length rewrite read
   at once, a file in an ignored directory the filer never indexes — a file
@@ -728,8 +733,16 @@ commands):
   (`FilerConfig::root_protected`); a scoped dir there, or one the root rules
   refuse, fails boot before any filer starts (`PUBLIC_ZZZ_SCOPED_DIRS`
   below).
-  `project_close` of a root that isn't open → `invalid_params` /
-  `project_not_open` (`handlers::project::ERROR_PROJECT_NOT_OPEN`).
+  `project_close`, `repo_focus`, or `repo_unfocus` of a root that isn't
+  open → `invalid_params` / `project_not_open`
+  (`handlers::project::ERROR_PROJECT_NOT_OPEN`). `repo_focus` /
+  `repo_unfocus` on a checkout or plain directory → `invalid_params` /
+  `project_not_registry`, of a directory that's none of the registry's
+  entries → `invalid_params` / `repo_not_in_project`; `repo_focus` of an
+  entry not cloned, or gone since the registry was resolved → `not_found`,
+  or refused → `forbidden`, all `repo_not_present`; a repo whose listing
+  fails otherwise → as for `project_open`'s focused directory, the message
+  `failed to focus repo: …`.
 - **Atomic writes**: `ScopedFs::write_file` stages content in a hidden
   `.zzz-tmp-<uuid>` file beside the target (`O_EXCL | O_NOFOLLOW`), gives it
   the replaced file's mode minus setuid/setgid (zzz always drops them — the
@@ -1003,22 +1016,27 @@ commands):
   `diskfile_read`'s open and read, run on `spawn_blocking`). `project_open`
   resolves its project on `spawn_blocking` (stats, a registry read, at most
   a few git calls through the `App::git` runner, built over the terminal
-  environment and version-checked once at boot), and it and `project_close`
-  serialize on `App::project_lifecycle` (a `tokio::sync::Mutex`), since each
+  environment and version-checked once at boot), and it, `project_close`,
+  `repo_focus`, and `repo_unfocus` serialize on `App::project_lifecycle`
+  (a `tokio::sync::Mutex`), since each
   spans the projects map, `ScopedFs`, and the project's filers across await
-  points. `project_open` runs in its own task (a dropped caller can't
-  abandon it halfway) and starts the filers — the initial walks and
+  points. Each runs in its own task — the spine cancels a socket's
+  in-flight handlers when it closes, and a dropped caller can't abandon one
+  halfway. `project_open` starts the filers — the initial walks and
   watches — before taking the lock, then re-ensures them under the lock (a
   dedup hit, unless a racing close stopped one), so a large tree's scan
-  doesn't hold up other opens and closes. A filer is stopped only when no
+  doesn't hold up other opens and closes; `repo_focus` does the same with
+  its repo's filer, checking the entry before the scan and again under the
+  lock. A filer is stopped only when no
   open project keeps it; one an open project no longer needs whole — a
   root that turned into a registry's, indexed at its top level — is
   replaced by a top-level one (`FilerManager::replace_filer`, the old one
   running until the new one has scanned), once nothing can fail the open,
   so a rollback finds every filer the project had kept; a start never
-  narrows a filer. Every `project_changed` is broadcast under the lock (the
-  broadcast takes the guard), so one root's notifications go out in the
-  order its opens and closes took effect.
+  narrows a filer. `repo_unfocus` releases its repo's filer the same way.
+  Every `project_changed` is broadcast under the lock (the broadcast takes
+  the guard), so one root's notifications go out in the order its opens,
+  focuses, and closes took effect.
 - **`parking_lot::RwLock`** for short synchronous sections (the projects
   map, `ScopedFs` roots); no poisoning. The async managers (filer index,
   PTY terminals, providers) use `tokio::sync::RwLock` — scope sync guards

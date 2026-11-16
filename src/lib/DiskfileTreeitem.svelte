@@ -7,8 +7,12 @@
 	} from '@fuzdev/fuz_ui/icons.ts';
 
 	import { frontend_context } from './frontend.svelte.ts';
-	import type { DiskfileTreeDirRow, DiskfileTreeFileRow } from './diskfile_tree_state.svelte.ts';
-	import type { DiskfilePath } from './diskfile_types.ts';
+	import type {
+		DiskfileTreeDirRow,
+		DiskfileTreeFileRow,
+		DiskfileTreeUnfocusedRow
+	} from './diskfile_tree_state.svelte.ts';
+	import type { DiskfileDirectoryPath, DiskfilePath } from './diskfile_types.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import DiskfileDirectoryContextmenu from './DiskfileDirectoryContextmenu.svelte';
 	import DiskfileStatusLabel from './DiskfileStatusLabel.svelte';
@@ -23,9 +27,12 @@
 	 * One row of `DiskfileTree`: a `treeitem` with its ARIA state, indented by
 	 * its depth. Presentational — the tree handles its pointer and keyboard
 	 * input, so the row is never focused itself (`aria-activedescendant`).
-	 * A file row has the file contextmenu, a folder or root row the folder one
-	 * (`DiskfileDirectoryContextmenu`). Each row is its own `li`, never inside
-	 * another's, so a row's menu gathers no other row's entries.
+	 * A file row has the file contextmenu, a folder, root, or unfocused repo
+	 * row the folder one (`DiskfileDirectoryContextmenu`). An unfocused repo's
+	 * row is dimmed, says it's not focused to assistive tech, and shows
+	 * "focusing…" while a focus is in flight; a focused repo's row shows
+	 * "unfocusing…" while an unfocus is. Each row is its own `li`, never
+	 * inside another's, so a row's menu gathers no other row's entries.
 	 *
 	 * @module
 	 */
@@ -36,7 +43,7 @@
 		index,
 		active = false
 	}: {
-		row: DiskfileTreeDirRow | DiskfileTreeFileRow;
+		row: DiskfileTreeDirRow | DiskfileTreeFileRow | DiskfileTreeUnfocusedRow;
 		/** The element id the tree's `aria-activedescendant` names. */
 		id: string;
 		/** The row's position in `DiskfileTreeState.rows`, which the tree's click handler reads back. */
@@ -45,7 +52,7 @@
 		active?: boolean | undefined;
 	} = $props();
 
-	const { diskfiles } = frontend_context.get();
+	const { diskfiles, projects } = frontend_context.get();
 
 	const NO_STATUS: DiskfileStatus = { deleted: false, dirty: false, conflict: false };
 
@@ -56,6 +63,10 @@
 		diskfile ? to_diskfile_status(diskfiles, diskfile) : NO_STATUS
 	);
 	const selected = $derived(!!diskfile && diskfiles.selected_file_id === diskfile.id);
+	// a repo's focus or unfocus in flight — the row says which
+	const pending = $derived(
+		row.kind !== 'file' && projects.pending_repos.has(row.path as DiskfileDirectoryPath)
+	);
 </script>
 
 <li
@@ -65,10 +76,19 @@
 	aria-level={row.depth + 1}
 	aria-setsize={row.setsize}
 	aria-posinset={row.posinset}
-	aria-expanded={row.kind === 'file' ? undefined : row.expanded}
+	aria-expanded={row.kind === 'file' ? undefined : row.kind === 'unfocused' ? false : row.expanded}
 	aria-selected={selected}
-	aria-label={row.kind === 'file' ? to_diskfile_status_label(row.label, status) : undefined}
-	title={row.kind === 'root' ? row.path : undefined}
+	aria-busy={pending || undefined}
+	aria-label={row.kind === 'file'
+		? to_diskfile_status_label(row.label, status)
+		: row.kind === 'unfocused'
+			? `${row.label}, not focused`
+			: undefined}
+	title={row.kind === 'root'
+		? row.path
+		: row.kind === 'unfocused'
+			? 'not focused — expand to index its files'
+			: undefined}
 >
 	{#if diskfile}
 		<DiskfileContextmenu {diskfile}>
@@ -97,10 +117,16 @@
 				<span class="chevron-space"></span>
 				<Icon data={icon_file} />
 				<DiskfileStatusLabel label={row.label} {status} />
+			{:else if row.kind === 'unfocused'}
+				<Icon data={icon_chevron_right} />
+				<Icon data={icon_directory} />
+				<span class="ml_xs ellipsis text_50">{row.label}</span>
+				{#if pending}<span class="ml_xs text_50">focusing…</span>{/if}
 			{:else}
 				<Icon data={row.expanded ? icon_chevron_down : icon_chevron_right} />
 				<Icon data={icon_directory} />
 				<span class="ml_xs ellipsis" class:bold={row.kind === 'root'}>{row.label}</span>
+				{#if pending}<span class="ml_xs text_50">unfocusing…</span>{/if}
 			{/if}
 		</small>
 	</div>

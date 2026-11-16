@@ -44,6 +44,8 @@ export const ActionSpecs: ActionSpecs = {
 	project_open: specs.project_open_action_spec,
 	project_close: specs.project_close_action_spec,
 	project_list: specs.project_list_action_spec,
+	repo_focus: specs.repo_focus_action_spec,
+	repo_unfocus: specs.repo_unfocus_action_spec,
 	project_changed: specs.project_changed_action_spec
 };
 export type ActionSpecs = {
@@ -77,6 +79,8 @@ export type ActionSpecs = {
 	readonly project_open: typeof specs.project_open_action_spec;
 	readonly project_close: typeof specs.project_close_action_spec;
 	readonly project_list: typeof specs.project_list_action_spec;
+	readonly repo_focus: typeof specs.repo_focus_action_spec;
+	readonly repo_unfocus: typeof specs.repo_unfocus_action_spec;
 	readonly project_changed: typeof specs.project_changed_action_spec;
 };
 
@@ -117,6 +121,8 @@ export interface ActionInputs {
 	project_open: Infer<typeof specs.project_open_action_spec.input>;
 	project_close: Infer<typeof specs.project_close_action_spec.input>;
 	project_list: Infer<typeof specs.project_list_action_spec.input>;
+	repo_focus: Infer<typeof specs.repo_focus_action_spec.input>;
+	repo_unfocus: Infer<typeof specs.repo_unfocus_action_spec.input>;
 	project_changed: Infer<typeof specs.project_changed_action_spec.input>;
 }
 
@@ -155,6 +161,8 @@ export interface ActionCallInputs {
 	project_open: InferInput<typeof specs.project_open_action_spec.input>;
 	project_close: InferInput<typeof specs.project_close_action_spec.input>;
 	project_list: InferInput<typeof specs.project_list_action_spec.input>;
+	repo_focus: InferInput<typeof specs.repo_focus_action_spec.input>;
+	repo_unfocus: InferInput<typeof specs.repo_unfocus_action_spec.input>;
 	project_changed: InferInput<typeof specs.project_changed_action_spec.input>;
 }
 
@@ -193,6 +201,8 @@ export interface ActionOutputs {
 	project_open: Infer<typeof specs.project_open_action_spec.output>;
 	project_close: Infer<typeof specs.project_close_action_spec.output>;
 	project_list: Infer<typeof specs.project_list_action_spec.output>;
+	repo_focus: Infer<typeof specs.repo_focus_action_spec.output>;
+	repo_unfocus: Infer<typeof specs.repo_unfocus_action_spec.output>;
 	project_changed: Infer<typeof specs.project_changed_action_spec.output>;
 }
 
@@ -328,6 +338,16 @@ export interface ActionEventDatas {
 		'project_list',
 		ActionInputs['project_list'],
 		ActionOutputs['project_list']
+	>;
+	repo_focus: ActionEventRequestResponseData<
+		'repo_focus',
+		ActionInputs['repo_focus'],
+		ActionOutputs['repo_focus']
+	>;
+	repo_unfocus: ActionEventRequestResponseData<
+		'repo_unfocus',
+		ActionInputs['repo_unfocus'],
+		ActionOutputs['repo_unfocus']
 	>;
 	project_changed: ActionEventRemoteNotificationData<
 		'project_changed',

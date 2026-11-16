@@ -1,5 +1,5 @@
-//! Project handlers — `project_open`, `project_close`, `project_list`, and
-//! the `project_changed` notification.
+//! Project handlers — `project_open`, `project_close`, `project_list`,
+//! `repo_focus`, `repo_unfocus`, and the `project_changed` notification.
 //!
 //! Spine signature `(Value, ActionContext<'_>, Arc<App>)`; the
 //! closure-captured `Arc<App>` carries the zzz-specific deps the spine
@@ -11,9 +11,12 @@
 //! root is one `ScopedFs` root, and its files are indexed by filers on what
 //! is **focused**: opening a path focuses the repo holding it — the registry
 //! entry containing it, or a checkout's or a plain directory's root — and
-//! focus is daemon-wide, kept until the project closes. A registry's root
-//! itself is indexed only at its top level (its loose files): its
-//! subdirectories are its repos, and an unfocused one isn't indexed at all.
+//! `repo_focus` / `repo_unfocus` focus a registry's entries one by one. Focus
+//! is daemon-wide, kept until it's unfocused or the project closes; a
+//! checkout's or plain directory's root stays focused while it's open. A
+//! registry's root itself is indexed only at its top level (its loose files):
+//! its subdirectories are its repos, and an unfocused one isn't indexed at
+//! all.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -55,6 +58,20 @@ pub const ERROR_ROOT_NOT_ALLOWED: &str = "root_not_allowed";
 /// allow it there ([`crate::root_policy`]).
 pub const ERROR_ROOT_OUTSIDE_HOME: &str = "root_outside_home";
 
+/// `repo_focus` / `repo_unfocus` on a project that isn't a registry
+/// (`invalid_params`): a checkout's or plain directory's one focus is its
+/// root, kept while it's open.
+pub const ERROR_PROJECT_NOT_REGISTRY: &str = "project_not_registry";
+
+/// `repo_focus` / `repo_unfocus` of a directory that's none of the project's
+/// registry entries (`invalid_params`).
+pub const ERROR_REPO_NOT_IN_PROJECT: &str = "repo_not_in_project";
+
+/// `repo_focus` of a registry entry that isn't present as the project last
+/// resolved it: not yet cloned (`not_found`) or refused (`forbidden`).
+/// Opening a path in it resolves the registry again.
+pub const ERROR_REPO_NOT_PRESENT: &str = "repo_not_present";
+
 // -- Inputs -----------------------------------------------------------------
 
 /// Input for `project_open` — twin of `ProjectOpenInput`.
@@ -69,6 +86,16 @@ struct ProjectOpenInput {
 #[serde(deny_unknown_fields)]
 struct ProjectCloseInput {
     root: String,
+}
+
+/// Input for `repo_focus` and `repo_unfocus` — twin of `RepoFocusInput` and
+/// `RepoUnfocusInput`. Both are directory keys as the daemon reports them
+/// (a project's `root`, an entry's `dir`); a missing trailing `/` is added.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepoInput {
+    root: String,
+    dir: String,
 }
 
 // -- Notification params -----------------------------------------------------
@@ -111,6 +138,20 @@ struct ProjectOpenResult {
     /// Whether every indexed directory of the project has a file watch —
     /// `degraded` when the OS watch limit left some to periodic rescans.
     watch_status: WatchStatus,
+}
+
+#[derive(Serialize)]
+struct RepoFocusResult {
+    project: ProjectInfo,
+    /// The index of every filer of the project, the newly focused repo's
+    /// included — as `project_open` returns it.
+    files: Vec<SerializableDisknode>,
+    watch_status: WatchStatus,
+}
+
+#[derive(Serialize)]
+struct RepoUnfocusResult {
+    project: ProjectInfo,
 }
 
 // -- Helpers -----------------------------------------------------------------
@@ -176,10 +217,19 @@ fn open_error(error: &ProjectError) -> JsonrpcError {
     }
 }
 
+/// `key` as a directory key: with a trailing `/`.
+fn with_trailing_slash(mut key: String) -> String {
+    if !key.ends_with('/') {
+        key.push('/');
+    }
+    key
+}
+
 /// The error for a focused or root directory whose filer can't start: its
 /// listing refused (`forbidden`), gone (`not_found`), or anything else.
-fn filer_error(dir: &str, error: &std::io::Error) -> JsonrpcError {
-    let message = format!("failed to open project: can't index {dir}: {error}");
+/// `failed` names what failed (`open project`, `focus repo`).
+fn filer_error(failed: &str, dir: &str, error: &std::io::Error) -> JsonrpcError {
+    let message = format!("failed to {failed}: can't index {dir}: {error}");
     match error.kind() {
         std::io::ErrorKind::PermissionDenied => forbidden(&message, Some(ERROR_PERMISSION_DENIED)),
         std::io::ErrorKind::NotFound => {
@@ -326,16 +376,37 @@ async fn ensure_filer(app: &Arc<App>, dir: &str, depth: FilerDepth) -> std::io::
 }
 
 /// Start every filer in `filers`, failing at the first that can't.
+/// `failed` names what fails with it ([`filer_error`]).
 async fn ensure_filers(
     app: &Arc<App>,
     filers: &BTreeMap<String, FilerDepth>,
+    failed: &str,
 ) -> Result<(), JsonrpcError> {
     for (dir, depth) in filers {
         ensure_filer(app, dir, *depth)
             .await
-            .map_err(|e| filer_error(dir, &e))?;
+            .map_err(|e| filer_error(failed, dir, &e))?;
     }
     Ok(())
+}
+
+/// The index of every filer in `filers`, deduplicated by path, and whether
+/// each has every directory watched.
+async fn files_of(
+    app: &App,
+    filers: &BTreeMap<String, FilerDepth>,
+) -> (Vec<SerializableDisknode>, WatchStatus) {
+    let mut files: BTreeMap<String, SerializableDisknode> = BTreeMap::new();
+    let mut watch_status = WatchStatus::Full;
+    for dir in filers.keys() {
+        for file in app.filer_manager.files_for(dir).await {
+            files.entry(file.id.clone()).or_insert(file);
+        }
+        if app.filer_manager.watch_status_for(dir).await == WatchStatus::Degraded {
+            watch_status = WatchStatus::Degraded;
+        }
+    }
+    (files.into_values().collect(), watch_status)
 }
 
 /// What the open projects keep of each directory: the deepest any of them
@@ -531,7 +602,7 @@ async fn open_project(
     // of other projects shouldn't wait on them. A directory that can't be
     // listed fails the open here, before anything is recorded.
     let wanted = filers_of(&fresh);
-    if let Err(error) = ensure_filers(&app, &wanted).await {
+    if let Err(error) = ensure_filers(&app, &wanted, OPEN_PROJECT).await {
         let lifecycle = app.project_lifecycle.lock().await;
         stop_unkept_filers(&app, wanted.keys(), &lifecycle).await;
         return Err(error);
@@ -554,7 +625,7 @@ async fn open_project(
     // `start_filer` only returns once a registered filer has finished its
     // initial scan, so the returned files always come from completed scans.
     let filers = filers_of(&project);
-    if let Err(error) = ensure_filers(&app, &filers).await {
+    if let Err(error) = ensure_filers(&app, &filers, OPEN_PROJECT).await {
         {
             let mut projects = app.projects.write();
             match &previous {
@@ -581,17 +652,7 @@ async fn open_project(
     }
     drop(lifecycle);
 
-    let mut files: BTreeMap<String, SerializableDisknode> = BTreeMap::new();
-    let mut watch_status = WatchStatus::Full;
-    for dir in filers.keys() {
-        for file in app.filer_manager.files_for(dir).await {
-            files.entry(file.id.clone()).or_insert(file);
-        }
-        if app.filer_manager.watch_status_for(dir).await == WatchStatus::Degraded {
-            watch_status = WatchStatus::Degraded;
-        }
-    }
-    let files: Vec<SerializableDisknode> = files.into_values().collect();
+    let (files, watch_status) = files_of(&app, &filers).await;
     let size_hint = disknodes_json_size_hint(&files) + PROJECT_OPEN_OVERHEAD;
     let result = ProjectOpenResult {
         project,
@@ -602,9 +663,15 @@ async fn open_project(
     Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
 }
 
-/// The non-file part of a `project_open` response, budgeted on top of the
-/// files' size hint — the registry's entries included.
+/// The non-file part of a `project_open` or `repo_focus` response, budgeted
+/// on top of the files' size hint — the registry's entries included.
 const PROJECT_OPEN_OVERHEAD: usize = 16 * 1024;
+
+/// What fails when an open's filer can't start ([`filer_error`]).
+const OPEN_PROJECT: &str = "open project";
+
+/// What fails when a focus's filer can't start ([`filer_error`]).
+const FOCUS_REPO: &str = "focus repo";
 
 /// `project_close` — close an open project.
 ///
@@ -631,11 +698,18 @@ pub async fn project_close(
             Some(ERROR_INVALID_PATH),
         ));
     }
+    // Run to completion in its own task: the spine cancels a socket's
+    // in-flight handlers when it closes, and a close dropped between its map
+    // removal and its filer stops would leave filers nothing ever stops.
+    tokio::spawn(close_project(app, root))
+        .await
+        .map_err(|e| internal_error_with_source("failed to close project", &e))??;
+    Ok(Value::Null)
+}
 
-    let mut key = root.clone();
-    if !key.ends_with('/') {
-        key.push('/');
-    }
+/// The body of `project_close` once `root` is known absolute.
+async fn close_project(app: Arc<App>, root: String) -> Result<(), JsonrpcError> {
+    let mut key = with_trailing_slash(root.clone());
     // resolved before the lock — only consulted if `key` itself isn't open
     let canonical_key = tokio::fs::canonicalize(&root)
         .await
@@ -650,16 +724,261 @@ pub async fn project_close(
     }
 
     let Some(project) = release_project(&app, &key, &lifecycle).await else {
-        return Err(invalid_params(
-            &format!("project not open: {root}"),
-            Some(ERROR_PROJECT_NOT_OPEN),
-        ));
+        return Err(not_open_error(&root));
     };
     let broadcast = broadcast_project_changed(&app, ProjectChange::Close, &project, &lifecycle);
     drop(lifecycle);
-    broadcast?;
+    broadcast
+}
 
-    Ok(Value::Null)
+/// The error for a root that names no open project.
+fn not_open_error(root: &str) -> JsonrpcError {
+    invalid_params(
+        &format!("project not open: {root}"),
+        Some(ERROR_PROJECT_NOT_OPEN),
+    )
+}
+
+/// The entry of `project` whose checkout is `dir` — refused when `project`
+/// isn't a registry or has no such entry. `failed` names what fails.
+fn entry_of<'a>(
+    project: &'a ProjectInfo,
+    dir: &str,
+    failed: &str,
+) -> Result<&'a ProjectEntryInfo, JsonrpcError> {
+    if project.kind != ProjectInfoKind::Registry {
+        return Err(invalid_params(
+            &format!(
+                "failed to {failed}: {} isn't a registry project — its root is its one focus",
+                project.root
+            ),
+            Some(ERROR_PROJECT_NOT_REGISTRY),
+        ));
+    }
+    project
+        .entries
+        .iter()
+        .find(|entry| entry.dir == dir)
+        .ok_or_else(|| {
+            invalid_params(
+                &format!(
+                    "failed to {failed}: {dir} is none of the registry entries of {}",
+                    project.root
+                ),
+                Some(ERROR_REPO_NOT_IN_PROJECT),
+            )
+        })
+}
+
+/// The error for a repo whose filer can't start: one gone since the registry
+/// was last resolved is `repo_not_present` (`not_found`), as a missing entry
+/// is; anything else as an open's ([`filer_error`]).
+fn focus_filer_error(dir: &str, error: &std::io::Error) -> JsonrpcError {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        return not_found_error(
+            &format!(
+                "failed to focus repo: {dir} is gone since the registry was resolved (opening the project again resolves it): {error}"
+            ),
+            ERROR_REPO_NOT_PRESENT,
+        );
+    }
+    filer_error(FOCUS_REPO, dir, error)
+}
+
+/// Check that `dir` is a present registry entry of `project` — what
+/// `repo_focus` can focus.
+fn check_focusable(project: &ProjectInfo, dir: &str) -> Result<(), JsonrpcError> {
+    let entry = entry_of(project, dir, FOCUS_REPO)?;
+    match entry.state {
+        EntryState::Present => Ok(()),
+        EntryState::Missing => Err(not_found_error(
+            &format!(
+                "failed to focus repo: registry entry {} isn't cloned at {dir} (opening a path in it resolves the registry again)",
+                entry.key
+            ),
+            ERROR_REPO_NOT_PRESENT,
+        )),
+        EntryState::Refused => Err(forbidden(
+            &format!(
+                "failed to focus repo: registry entry {} at {dir} is refused: {}",
+                entry.key,
+                entry.reason.unwrap_or("unknown")
+            ),
+            Some(ERROR_REPO_NOT_PRESENT),
+        )),
+    }
+}
+
+/// `repo_focus` — focus a registry entry of an open project.
+///
+/// Its whole tree is then indexed and watched, as opening a path in it would
+/// do, without resolving the registry again: the entry must be present as the
+/// project's last resolve left it.
+///
+/// Side-effects: starts the repo's filer, adds it to the project's focus,
+/// and broadcasts `project_changed` `update`. Idempotent: focusing a focused
+/// repo changes and broadcasts nothing. Returns the project and the index of
+/// every filer of the project, like `project_open`.
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed input, a root that names no open project
+/// (`project_not_open`), a project that isn't a registry
+/// (`project_not_registry`), or a directory that's none of its entries
+/// (`repo_not_in_project`); `not_found` for an entry not yet cloned or gone
+/// since the registry was resolved, and `forbidden` for a refused one
+/// (`repo_not_present`); `forbidden` / an internal error for a repo that
+/// can't be listed otherwise, leaving the project as it was; an internal
+/// error if the notification fails to serialize.
+pub async fn repo_focus(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
+) -> Result<ActionOutput, JsonrpcError> {
+    let RepoInput { root, dir } = parse_strict_params(params)?;
+    let (root, dir) = (with_trailing_slash(root), with_trailing_slash(dir));
+    // Run to completion in its own task, so a caller that goes away mid-scan
+    // can't leave a filer running for a focus that never landed.
+    tokio::spawn(focus_repo(app, root, dir))
+        .await
+        .map_err(|e| internal_error_with_source("failed to focus repo", &e))?
+}
+
+/// The body of `repo_focus`: check, start the repo's filer, then record it.
+async fn focus_repo(
+    app: Arc<App>,
+    root: String,
+    dir: String,
+) -> Result<ActionOutput, JsonrpcError> {
+    // checked before the scan, so a refused focus starts nothing
+    {
+        let projects = app.projects.read();
+        let project = projects.get(&root).ok_or_else(|| not_open_error(&root))?;
+        check_focusable(project, &dir)?;
+    }
+    // the scan runs before the lifecycle lock, as an open's does
+    if let Err(error) = ensure_filer(&app, &dir, FilerDepth::Tree).await {
+        let lifecycle = app.project_lifecycle.lock().await;
+        stop_unkept_filers(&app, [&dir], &lifecycle).await;
+        return Err(focus_filer_error(&dir, &error));
+    }
+
+    let lifecycle = app.project_lifecycle.lock().await;
+
+    // closed meanwhile, or opened again with the entry no longer present
+    let checked = app
+        .projects
+        .read()
+        .get(&root)
+        .cloned()
+        .ok_or_else(|| not_open_error(&root))
+        .and_then(|project| check_focusable(&project, &dir).map(|()| project));
+    let previous = match checked {
+        Ok(previous) => previous,
+        Err(error) => {
+            // TODO a filer the start above widened from a top level to a whole
+            // tree — a nested registry's root, which that project keeps at its
+            // top level — stays whole here, since this only stops what no
+            // project keeps; narrowing it back needs `release_narrowed_filers`'
+            // replace
+            stop_unkept_filers(&app, [&dir], &lifecycle).await;
+            return Err(error);
+        }
+    };
+    let mut project = previous.clone();
+    if !project.focused.contains(&dir) {
+        project.focused.push(dir.clone());
+        project.focused.sort();
+    }
+    app.projects
+        .write()
+        .insert(project.root.clone(), project.clone());
+
+    // an unfocus or close that ran between the start above and the lock
+    // stopped the filer, so ensure it again — dedup hits otherwise
+    let filers = filers_of(&project);
+    if let Err(error) = ensure_filers(&app, &filers, FOCUS_REPO).await {
+        app.projects
+            .write()
+            .insert(previous.root.clone(), previous.clone());
+        stop_unkept_filers(&app, filers.keys(), &lifecycle).await;
+        return Err(error);
+    }
+    if !previous.same_as(&project) {
+        broadcast_project_changed(&app, ProjectChange::Update, &project, &lifecycle)?;
+    }
+    drop(lifecycle);
+
+    let (files, watch_status) = files_of(&app, &filers).await;
+    let size_hint = disknodes_json_size_hint(&files) + PROJECT_OPEN_OVERHEAD;
+    let result = RepoFocusResult {
+        project,
+        files,
+        watch_status,
+    };
+    Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
+}
+
+/// `repo_unfocus` — drop a registry entry from an open project's focus.
+///
+/// Its filer stops unless another open project keeps it (a nested registry
+/// keeping it at its top level narrows it to that), and its files leave the
+/// index; no `filer_change` deletes them, so clients release them on the
+/// `project_changed` `update`.
+///
+/// Side-effects: removes the focus and broadcasts `project_changed`
+/// `update`. Idempotent: unfocusing an unfocused entry — present or not —
+/// changes and broadcasts nothing. A registry may be left with no focus, as
+/// opening its root alone leaves it. Returns the project.
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed input, a root that names no open project
+/// (`project_not_open`), a project that isn't a registry, whose root focus
+/// lasts while it's open (`project_not_registry`), or a directory that's
+/// none of its entries (`repo_not_in_project`); an internal error if the
+/// notification fails to serialize.
+pub async fn repo_unfocus(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
+) -> Result<Value, JsonrpcError> {
+    let RepoInput { root, dir } = parse_strict_params(params)?;
+    let (root, dir) = (with_trailing_slash(root), with_trailing_slash(dir));
+    // Run to completion in its own task: the spine cancels a socket's
+    // in-flight handlers when it closes, and an unfocus dropped mid-release
+    // would leave the focus gone, its filer running, and nothing broadcast.
+    let project = tokio::spawn(async move { unfocus_repo(&app, &root, &dir).await })
+        .await
+        .map_err(|e| internal_error_with_source("failed to unfocus repo", &e))??;
+    serde_json::to_value(RepoUnfocusResult { project })
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
+}
+
+/// The body of `repo_unfocus`, returning the project as it's left.
+async fn unfocus_repo(app: &Arc<App>, root: &str, dir: &str) -> Result<ProjectInfo, JsonrpcError> {
+    let lifecycle = app.project_lifecycle.lock().await;
+
+    let previous = app
+        .projects
+        .read()
+        .get(root)
+        .cloned()
+        .ok_or_else(|| not_open_error(root))?;
+    entry_of(&previous, dir, "unfocus repo")?;
+    let mut project = previous.clone();
+    project.focused.retain(|focused| focused != dir);
+    let broadcast = if previous.same_as(&project) {
+        Ok(())
+    } else {
+        app.projects
+            .write()
+            .insert(project.root.clone(), project.clone());
+        release_narrowed_filers(app, &previous, &lifecycle).await;
+        broadcast_project_changed(app, ProjectChange::Update, &project, &lifecycle)
+    };
+    drop(lifecycle);
+    broadcast.map(|()| project)
 }
 
 /// Close every open project through the same path as `project_close`.
@@ -944,6 +1263,11 @@ purpose = "a reference"
 
     /// Inert handles: a lazy pool that never connects, no roots, no sockets.
     fn inert_app() -> Arc<App> {
+        app_over(Arc::new(fuz_realtime::ConnectionRegistry::new()))
+    }
+
+    /// [`inert_app`] broadcasting over `realtime`.
+    fn app_over(realtime: Arc<fuz_realtime::ConnectionRegistry>) -> Arc<App> {
         let pool = fuz_db::create_pool(
             "postgres://localhost:1/project_test_unused",
             &fuz_db::PoolOptions::default(),
@@ -956,9 +1280,42 @@ purpose = "a reference"
             vec![],
             crate::provider::ProviderManager::new(),
             false,
-            Arc::new(fuz_realtime::ConnectionRegistry::new()),
+            realtime,
             Arc::new(fuz_auth::AuditEmitter::new(pool)),
         ))
+    }
+
+    /// [`inert_app`] with one socket, whose frames the receiver takes.
+    fn app_with_socket() -> (
+        Arc<App>,
+        fuz_realtime::Connection,
+        fuz_realtime::ConnectionReceiver,
+    ) {
+        let realtime = Arc::new(fuz_realtime::ConnectionRegistry::new());
+        let (sender, receiver) = fuz_realtime::connection_channel(1 << 20);
+        let connection = realtime.add_connection(
+            sender,
+            fuz_realtime::ConnectionIdentity::default(),
+            tokio_util::sync::CancellationToken::new(),
+        );
+        (app_over(realtime), connection, receiver)
+    }
+
+    /// The `project_changed` notifications queued on `rx`, each its type and
+    /// the focus it reports — other frames (`filer_change`) skipped.
+    fn project_changes(rx: &mut fuz_realtime::ConnectionReceiver) -> Vec<(String, Value)> {
+        let mut changes = Vec::new();
+        while let Ok(frame) = rx.try_recv() {
+            let message: Value = serde_json::from_str(frame.as_str()).unwrap();
+            if message["method"] == "project_changed" {
+                let params = &message["params"];
+                changes.push((
+                    params["type"].as_str().unwrap().to_owned(),
+                    params["project"]["focused"].clone(),
+                ));
+            }
+        }
+        changes
     }
 
     struct TempDir(PathBuf);
@@ -1177,6 +1534,269 @@ purpose = "a reference"
         );
     }
 
+    /// `focus_repo`'s result as JSON.
+    async fn focus(app: &Arc<App>, root: &str, dir: &str) -> Result<Value, JsonrpcError> {
+        let output = focus_repo(Arc::clone(app), root.to_owned(), dir.to_owned()).await?;
+        let mut out = Vec::new();
+        output.write_json(&mut out).unwrap();
+        Ok(serde_json::from_slice(&out).unwrap())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_focus_indexes_a_repo_and_an_unfocus_releases_it() {
+        let tmp = TempDir::new();
+        for rel in [
+            "w/README.md",
+            "w/app/a.txt",
+            "w/app/src/b.txt",
+            "w/site/s.txt",
+        ] {
+            tmp.write(rel);
+        }
+        let (app, _connection, mut rx) = app_with_socket();
+        let root = tmp.key("w/");
+        let app_dir = tmp.key("w/app/");
+        open(&app, registry_info(&tmp, &[]), None).await;
+        assert_eq!(
+            project_changes(&mut rx),
+            [("open".to_owned(), serde_json::json!([]))]
+        );
+
+        let focused = focus(&app, &root, &app_dir).await.unwrap();
+        assert_eq!(focused["project"]["focused"], serde_json::json!([app_dir]));
+        assert_eq!(focused["watch_status"], "full");
+        assert_eq!(
+            file_ids(&focused),
+            [
+                tmp.key("w/README.md"),
+                tmp.key("w/app/a.txt"),
+                tmp.key("w/app/src/b.txt")
+            ],
+            "the root's loose files and the focused repo — not the unfocused `site`"
+        );
+        assert_eq!(
+            project_changes(&mut rx),
+            [("update".to_owned(), serde_json::json!([app_dir]))]
+        );
+        assert_eq!(
+            app.projects.read()[&root].focused,
+            std::slice::from_ref(&app_dir)
+        );
+
+        // again: the same reply, nothing changed or broadcast
+        let again = focus(&app, &root, &app_dir).await.unwrap();
+        assert_eq!(again, focused);
+        assert!(project_changes(&mut rx).is_empty());
+
+        // the body takes keys as given — the handler adds the trailing slash —
+        // so a dir without one names no entry here
+        let project = unfocus_repo(&app, &root, app_dir.trim_end_matches('/'))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            reason(&project),
+            Some(ERROR_REPO_NOT_IN_PROJECT),
+            "keys are exact"
+        );
+        let project = unfocus_repo(&app, &root, &app_dir).await.unwrap();
+        assert!(project.focused.is_empty(), "a registry may keep no focus");
+        assert_eq!(
+            project_changes(&mut rx),
+            [("update".to_owned(), serde_json::json!([]))]
+        );
+        assert!(
+            app.filer_manager.files_for(&app_dir).await.is_empty(),
+            "its filer stopped"
+        );
+        assert_eq!(
+            app.filer_manager.files_for(&root).await.len(),
+            1,
+            "the root's top level stays"
+        );
+        // again: nothing changed or broadcast
+        assert!(
+            unfocus_repo(&app, &root, &app_dir)
+                .await
+                .unwrap()
+                .focused
+                .is_empty()
+        );
+        assert!(project_changes(&mut rx).is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_unfocus_keeps_a_filer_another_project_keeps() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/app/sub/c.txt"] {
+            tmp.write(rel);
+        }
+        let app = inert_app();
+        let root = tmp.key("w/");
+        let app_dir = tmp.key("w/app/");
+        open(&app, registry_info(&tmp, &["app"]), Some(app_dir.clone())).await;
+        // a plain-dir project at the repo keeps its whole tree
+        let plain = to_project_info(
+            &Project {
+                root: PathBuf::from(tmp.key("w/app")),
+                opened: PathBuf::from(tmp.key("w/app")),
+                kind: ProjectKind::PlainDir,
+            },
+            Some(&app_dir),
+            "t".to_owned(),
+        )
+        .unwrap();
+        open(&app, plain, Some(app_dir.clone())).await;
+
+        unfocus_repo(&app, &root, &app_dir).await.unwrap();
+        assert_eq!(app.filer_manager.files_for(&app_dir).await.len(), 2);
+
+        // a registry rooted at the repo keeps only its top level: the filer
+        // narrows to that
+        project_close_all(&app).await.unwrap();
+        open(&app, registry_info(&tmp, &["app"]), Some(app_dir.clone())).await;
+        let mut nested = registry_info(&tmp, &[]);
+        nested.root.clone_from(&app_dir);
+        nested.entries.clear();
+        open(&app, nested, None).await;
+        assert_eq!(
+            app.filer_manager.files_for(&app_dir).await.len(),
+            2,
+            "still whole"
+        );
+        unfocus_repo(&app, &root, &app_dir).await.unwrap();
+        assert_eq!(
+            app.filer_manager
+                .files_for(&app_dir)
+                .await
+                .into_iter()
+                .map(|f| f.id)
+                .collect::<Vec<_>>(),
+            [tmp.key("w/app/a.txt")],
+            "narrowed to the nested registry's top level"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_focus_or_unfocus_refuses_what_isnt_a_present_entry() {
+        let tmp = TempDir::new();
+        tmp.write("w/README.md");
+        tmp.write("p/x.txt");
+        let (app, _connection, mut rx) = app_with_socket();
+        let root = tmp.key("w/");
+        let mut info = registry_info(&tmp, &[]);
+        info.entries[1].state = EntryState::Missing;
+        info.entries.push(ProjectEntryInfo {
+            key: "keys".to_owned(),
+            kind: EntryInfoKind::Reference,
+            dir: tmp.key("w/keys/"),
+            state: EntryState::Refused,
+            reason: Some("entry_not_confined"),
+        });
+        open(&app, info, None).await;
+        let plain_root = tmp.key("p/");
+        let plain = to_project_info(
+            &Project {
+                root: PathBuf::from(tmp.key("p")),
+                opened: PathBuf::from(tmp.key("p")),
+                kind: ProjectKind::PlainDir,
+            },
+            Some(&plain_root),
+            "t".to_owned(),
+        )
+        .unwrap();
+        open(&app, plain, Some(plain_root.clone())).await;
+        project_changes(&mut rx);
+
+        let cases = [
+            (
+                tmp.key("none/"),
+                tmp.key("w/app/"),
+                JsonrpcErrorCode::InvalidParams,
+                ERROR_PROJECT_NOT_OPEN,
+            ),
+            (
+                plain_root.clone(),
+                plain_root.clone(),
+                JsonrpcErrorCode::InvalidParams,
+                ERROR_PROJECT_NOT_REGISTRY,
+            ),
+            (
+                root.clone(),
+                tmp.key("w/scratch/"),
+                JsonrpcErrorCode::InvalidParams,
+                ERROR_REPO_NOT_IN_PROJECT,
+            ),
+            (
+                root.clone(),
+                root.clone(),
+                JsonrpcErrorCode::InvalidParams,
+                ERROR_REPO_NOT_IN_PROJECT,
+            ),
+            (
+                root.clone(),
+                tmp.key("w/site/"),
+                JsonrpcErrorCode::NotFound,
+                ERROR_REPO_NOT_PRESENT,
+            ),
+            (
+                root.clone(),
+                tmp.key("w/keys/"),
+                JsonrpcErrorCode::Forbidden,
+                ERROR_REPO_NOT_PRESENT,
+            ),
+        ];
+        for (root, dir, code, expected) in &cases {
+            let error = focus(&app, root, dir).await.unwrap_err();
+            assert_eq!(error.code, *code, "{dir}");
+            assert_eq!(reason(&error), Some(*expected), "{dir}");
+        }
+        // no filer started for any of them (the two project roots have their own)
+        assert!(
+            app.filer_manager
+                .files_for(&tmp.key("w/scratch/"))
+                .await
+                .is_empty()
+        );
+        assert_eq!(app.filer_manager.files_for(&root).await.len(), 1);
+        // unfocus refuses the first three alike; a missing or refused entry
+        // was never focused, so its unfocus is a no-op
+        for (root, dir, _, expected) in &cases[..4] {
+            let error = unfocus_repo(&app, root, dir).await.unwrap_err();
+            assert_eq!(reason(&error), Some(*expected), "{dir}");
+        }
+        for (root, dir, _, _) in &cases[4..] {
+            assert!(unfocus_repo(&app, root, dir).await.is_ok(), "{dir}");
+        }
+        assert_eq!(
+            app.projects.read()[&plain_root].focused,
+            std::slice::from_ref(&plain_root)
+        );
+        assert!(project_changes(&mut rx).is_empty(), "nothing broadcast");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_focus_that_cant_be_indexed_leaves_the_project_as_it_was() {
+        let tmp = TempDir::new();
+        tmp.write("w/README.md");
+        let (app, _connection, mut rx) = app_with_socket();
+        let root = tmp.key("w/");
+        // `app` is present as resolved, then gone by the time it's focused
+        open(&app, registry_info(&tmp, &[]), None).await;
+        project_changes(&mut rx);
+        let error = focus(&app, &root, &tmp.key("w/app/")).await.unwrap_err();
+        assert_eq!(error.code, JsonrpcErrorCode::NotFound);
+        assert_eq!(reason(&error), Some(ERROR_REPO_NOT_PRESENT));
+        assert!(
+            error
+                .message
+                .contains("opening the project again resolves it"),
+            "{}",
+            error.message
+        );
+        assert!(app.projects.read()[&root].focused.is_empty());
+        assert!(project_changes(&mut rx).is_empty());
+    }
+
     #[test]
     fn open_errors_map_by_cause_with_the_resolver_reason() {
         let io = |kind| std::io::Error::from(kind);
@@ -1268,14 +1888,21 @@ purpose = "a reference"
     #[test]
     fn filer_errors_map_by_cause() {
         let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
-        let error = filer_error("/x/", &denied);
+        let error = filer_error(OPEN_PROJECT, "/x/", &denied);
+        assert_eq!(
+            error.message,
+            "failed to open project: can't index /x/: permission denied"
+        );
         assert_eq!(error.code, JsonrpcErrorCode::Forbidden);
         assert_eq!(reason(&error), Some(ERROR_PERMISSION_DENIED));
         let gone = std::io::Error::from(std::io::ErrorKind::NotFound);
-        assert_eq!(filer_error("/x/", &gone).code, JsonrpcErrorCode::NotFound);
+        assert_eq!(
+            filer_error(FOCUS_REPO, "/x/", &gone).code,
+            JsonrpcErrorCode::NotFound
+        );
         let other = std::io::Error::other("boom");
         assert_eq!(
-            filer_error("/x/", &other).code,
+            filer_error(OPEN_PROJECT, "/x/", &other).code,
             JsonrpcErrorCode::InternalError
         );
     }

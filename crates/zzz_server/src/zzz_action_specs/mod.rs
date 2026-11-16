@@ -54,11 +54,11 @@ pub fn build_zzz_owned_specs(
 /// `fuz_auth::action_auth::any_credential_surface`, the `fuz_cell_actions`
 /// census, and the other spine servers' censuses).
 ///
-/// The whole set is `CredentialGate::Any` today, deliberately. Eleven of these
+/// The whole set is `CredentialGate::Any` today, deliberately. Many of these
 /// specs are machine-capability *mutations* — `diskfile_update`,
 /// `diskfile_create`, `diskfile_delete`, `directory_create`, the four
-/// `terminal_*` verbs,
-/// `project_open` / `project_close`, and `completion_create` — and they
+/// `terminal_*` verbs, `project_open` / `project_close`, `repo_focus` /
+/// `repo_unfocus`, and `completion_create` — and they
 /// are the largest permissive surface in the ecosystem. That is a recorded
 /// **open posture**, not an omission: zzz is a local-first garage on a
 /// loopback-fixed bind where "any zzz credential carries local-user authority"

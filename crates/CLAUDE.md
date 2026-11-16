@@ -34,8 +34,8 @@ SSE stream from `fuz_realtime::audit_stream_router`, and zzz's own
 hand-written file byte routes (`file_bytes.rs`, outside the registry). Besides the handlers,
 `handlers/` holds `App` state and a `broadcast` shim over `App.realtime` (connection revocation
 lives on the spine's `ConnectionRegistry` — see Auth below). RPC methods:
-`ping`, `session_load`, `project_*`, `diskfile_*`, `directory_create`,
-`media_finalize`, `transcription_create`, `job_cancel`, `terminal_*`,
+`ping`, `session_load`, `project_*`, `repo_focus`, `repo_unfocus`,
+`diskfile_*`, `directory_create`, `media_finalize`, `transcription_create`, `job_cancel`, `terminal_*`,
 `provider_load_status`, `completion_create`,
 `account_verify`, `account_session_list`,
 `account_session_revoke`, `account_session_revoke_all`,
@@ -378,7 +378,7 @@ crates/zzz_server/src/
 │   ├── filesystem.rs # diskfile_read (+ its bounded text read, `read_text_contents`, and the bytes' `hash`), diskfile_update (+ its `expected_hash` compare-and-swap), diskfile_create, diskfile_delete, directory_create
 │   ├── job.rs        # job_cancel
 │   ├── media.rs      # media_finalize, transcription_create (+ `tool_error`, the `ToolError` → JSON-RPC mapping)
-│   ├── project.rs    # project_list, project_open, project_close (+ project_changed broadcast): the resolve, focus, the filers a project keeps (`filers_of`), and their release
+│   ├── project.rs    # project_list, project_open, project_close, repo_focus, repo_unfocus (+ project_changed broadcast): the resolve, focus, the filers a project keeps (`filers_of`), and their release
 │   ├── provider.rs   # provider_load_status, completion_create
 │   └── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_ack, terminal_close
 ├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by `run_app`'s `ActionRegistry::compile`; each captures `Arc<App>` and calls the matching `handlers::*` fn
@@ -444,7 +444,8 @@ way, moved into its typed output rather than copied into a `Value`.
 non-spine state — `instance_id` (a UUID minted at boot, returned by
 `session_load` as `server_instance_id` so clients can tell a restart),
 `projects` (`RwLock<HashMap>`, keyed by root), `project_lifecycle`
-(the `tokio::sync::Mutex` serializing `project_open` / `project_close`),
+(the `tokio::sync::Mutex` serializing `project_open` / `project_close` /
+`repo_focus` / `repo_unfocus`),
 `trusted_owner` (whose registries are trusted — `TrustedOwner::current`,
 read once at boot), `git` (the resolver's git runner over the terminal
 environment, version-checked once at boot),
@@ -526,7 +527,8 @@ joined after the drain, before PTY teardown.
 
 ## Known Limitations
 
-- RPC methods: `ping`, `session_load`, `project_*`, `diskfile_read`,
+- RPC methods: `ping`, `session_load`, `project_*`, `repo_focus`,
+  `repo_unfocus`, `diskfile_read`,
   `diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`,
   `media_finalize`,
   `transcription_create`, `job_cancel`, `terminal_*`, `provider_load_status`,
@@ -539,7 +541,8 @@ joined after the drain, before PTY teardown.
 - zzz-domain `remote_notification` actions: `job_changed` (a job's full state
   on every change) and `transcription_progress` (segments a running
   transcription just decoded), both sent only to the owning account's sockets,
-  `project_changed` (broadcast on open, update, and close), `filer_change`
+  `project_changed` (broadcast on open, update — a focus added or
+  dropped — and close), `filer_change`
   (`FilerManager` with `notify` crate — per-directory watches (see
   ../docs/backend.md § Known Issues → Filer watches), per-path debounced
   broadcasts (80ms quiet, capped at 500ms) with immediate index updates

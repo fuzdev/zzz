@@ -12,7 +12,7 @@ import {
 	type DiskfileChangeType
 } from '#lib/diskfile_types.ts';
 import { Frontend, SESSION_BOOT_FALLBACK_DELAY } from '#lib/frontend.svelte.ts';
-import type { SessionLoadData } from '#lib/action_specs.ts';
+import type { RepoFocusOutput, SessionLoadData } from '#lib/action_specs.ts';
 import type { ProjectInfoJson } from '#lib/project.svelte.ts';
 import { ERROR_PROJECT_NOT_OPEN } from '#lib/project_helpers.ts';
 import type { Terminal } from '#lib/terminal.svelte.ts';
@@ -92,12 +92,15 @@ let reads: Array<string>;
 let calls: Array<(result: SessionLoadResult) => void>;
 /** Pending `project_open` calls, resolved by the test. */
 let open_calls: Array<{ path: string; resolve: (result: ProjectOpenResult) => void }>;
+/** Pending `repo_focus` calls, resolved by the test. */
+let focus_calls: Array<(result: { ok: true; value: RepoFocusOutput }) => void>;
 
 beforeEach(() => {
 	server_instance_id = create_uuid();
 	app = monkeypatch_zzz_for_tests(new Frontend());
 	calls = [];
 	open_calls = [];
+	focus_calls = [];
 	disk = new Map();
 	reads = [];
 	(app as unknown as { api: unknown }).api = {
@@ -118,7 +121,8 @@ beforeEach(() => {
 			});
 		},
 		project_open: ({ path }: { path: string }) =>
-			new Promise<ProjectOpenResult>((resolve) => open_calls.push({ path, resolve }))
+			new Promise<ProjectOpenResult>((resolve) => open_calls.push({ path, resolve })),
+		repo_focus: () => new Promise((resolve) => focus_calls.push(resolve))
 	};
 });
 
@@ -810,6 +814,37 @@ describe('a registry project after a restart', () => {
 		ok: false as const,
 		error: { code: JSONRPC_ERROR_CODES.service_unavailable, message: 'socket closed' }
 	};
+
+	test('a repo focused from the tree reopens with the rest of the focus', async () => {
+		await load({
+			projects: [registry_info([APP])],
+			files: [node(APP_A)],
+			file_roots: [ZZZ_DIR, DEV, APP]
+		});
+		const focused = app.projects.focus_repo(DEV, SITE);
+		focus_calls[0]!({
+			ok: true,
+			value: {
+				project: registry_info([APP, SITE]),
+				files: [node(APP_A), node(SITE_A)],
+				watch_status: 'full'
+			}
+		});
+		assert.ok((await focused).ok);
+		server_instance_id = create_uuid();
+		await load();
+		open_calls[0]!.resolve(reply([APP], APP));
+		await flush();
+		assert.deepEqual(
+			open_calls.map((c) => c.path),
+			[APP, SITE],
+			'each by `project_open` of its dir, which focuses that entry'
+		);
+		open_calls[1]!.resolve(reply([APP, SITE], SITE));
+		await flush();
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
+		assert.strictEqual(focus_calls.length, 1, 'no `repo_focus` on a reopen');
+	});
 
 	test('a partial reopen keeps the project and drops the refused focus', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});

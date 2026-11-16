@@ -3,7 +3,7 @@ import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 
 import type { Frontend } from './frontend.svelte.ts';
-import { DiskfilePath } from './diskfile_types.ts';
+import { DiskfilePath, type DiskfileDirectoryPath } from './diskfile_types.ts';
 import {
 	is_file_index_ignored_name,
 	normalize_path,
@@ -245,6 +245,18 @@ export interface DiskfileTreeFileRow extends DiskfileTreeRowBase {
 }
 
 /**
+ * A repo of a registry project that isn't focused, so the index holds none
+ * of its files: a lazy folder row, shown from the project's entries, whose
+ * expanding focuses it (`DiskfileTreeState.focus_repo`) — it then shows as a
+ * folder row. `path` is the repo's dir.
+ */
+export interface DiskfileTreeUnfocusedRow extends DiskfileTreeRowBase {
+	readonly kind: 'unfocused';
+	/** The registry project's root. */
+	readonly project_root: string;
+}
+
+/**
  * The inline input naming a new file or folder (`DiskfileTreeState.creating`),
  * shown as the first child of the folder it creates in. Not a file-system
  * row: its `label` is empty, its `path` is the folder's, and it isn't counted
@@ -257,7 +269,16 @@ export interface DiskfileTreeCreateRow extends DiskfileTreeRowBase {
 }
 
 /** One visible row of the file tree. */
-export type DiskfileTreeRow = DiskfileTreeDirRow | DiskfileTreeFileRow | DiskfileTreeCreateRow;
+export type DiskfileTreeRow =
+	DiskfileTreeDirRow | DiskfileTreeFileRow | DiskfileTreeUnfocusedRow | DiskfileTreeCreateRow;
+
+/** A folder that's a repo of an open registry project — see `DiskfileTreeSource.get_repo`. */
+export interface DiskfileTreeRepo {
+	/** The registry project's root. */
+	readonly project_root: string;
+	/** Whether the project focuses it, so the index holds its files. */
+	readonly focused: boolean;
+}
 
 /** What an inline create makes. */
 export type DiskfileCreateKind = 'file' | 'folder';
@@ -307,6 +328,12 @@ export interface DiskfileTreeSource {
 	 * inside it, which shows as its own root.
 	 */
 	is_ignored_dir: (child: string, dir: string) => boolean;
+	/**
+	 * The registry repo whose checkout `dir` is, if any. A repo's folder never
+	 * joins a compact row, so its row is always its own, and an unfocused one
+	 * shows as a lazy row with no children.
+	 */
+	get_repo: (dir: string) => DiskfileTreeRepo | null;
 }
 
 /** The `key` of the row for `path` under `root` — NUL can't appear in a path. */
@@ -331,7 +358,9 @@ export const to_diskfile_tree_create_key = (root: string, dir: string): string =
  * A folder the file index never enters from the root around it (the source's
  * `is_ignored_dir`) isn't shown under that root: its files can only come from
  * a root nested inside it — say the app directory inside a project — which
- * shows as its own root.
+ * shows as its own root. A registry's repo (the source's `get_repo`) is
+ * always a row of its own, never part of a compact one, and an unfocused one
+ * is a lazy row with nothing under it.
  *
  * @param roots - the indexed roots, each with a trailing `/`
  */
@@ -379,10 +408,26 @@ const push_children = (
 	for (const child of dirs) {
 		let path = child;
 		let label = child.slice(dir.length, -1);
+		const repo = source.get_repo(child);
+		if (repo && !repo.focused) {
+			rows.push({
+				kind: 'unfocused',
+				key: to_diskfile_tree_row_key(root, child),
+				root,
+				path: child,
+				label,
+				depth,
+				setsize,
+				posinset: ++posinset,
+				parent_key,
+				project_root: repo.project_root
+			});
+			continue;
+		}
 		const chain = [child];
 		for (
-			let only = source.get_only_child_dir(path);
-			only && !source.is_ignored_dir(only, path);
+			let only = repo ? null : source.get_only_child_dir(path);
+			only && !source.is_ignored_dir(only, path) && !source.get_repo(only);
 			only = source.get_only_child_dir(path)
 		) {
 			label += '/' + only.slice(path.length, -1);
@@ -466,17 +511,21 @@ export class DiskfileTreeState {
 
 	/**
 	 * A note on the last inline create, when what it made won't show — the
-	 * file index skips it (`to_unindexed_segment`). Cleared by the next
-	 * create, and by the tree on the next key or the note's dismiss button.
+	 * file index skips it (`to_unindexed_segment`) — or on a repo focus or
+	 * unfocus that failed (`focus_repo`, `unfocus_repo`). Cleared by the next
+	 * create, focus, or unfocus, and by the tree on the next key or the note's
+	 * dismiss button.
 	 */
 	notice: string | null = $state.raw(null);
 
 	/**
 	 * What the tree shows that `Diskfiles.tree_index` lacks, merged into the
 	 * children it lists: files deleted on disk but kept for their drafts
-	 * (`Diskfiles.listed_deleted`) and the folders in `created_dirs`, with
-	 * their folders up to `/` like the index's — the index holds files on disk
-	 * only. Rarely more than a few, so it's rebuilt whole.
+	 * (`Diskfiles.listed_deleted`), the folders in `created_dirs`, and the
+	 * open registries' repos (`Projects.repos` — an unfocused one has no
+	 * files, a focused one may have none yet), with their folders up to `/`
+	 * like the index's — the index holds files on disk only. A few, or a
+	 * registry's entries, so it's rebuilt whole.
 	 */
 	readonly #extra: Map<string, DiskfileTreeExtraEntry> = $derived.by(() => {
 		const extra: Map<string, DiskfileTreeExtraEntry> = new Map();
@@ -500,6 +549,7 @@ export class DiskfileTreeState {
 		};
 		for (const diskfile of this.app.diskfiles.listed_deleted) link(diskfile.path, false);
 		for (const dir of this.created_dirs) link(dir, true);
+		for (const dir of this.app.projects.repos.keys()) link(dir, true);
 		return extra;
 	});
 
@@ -515,7 +565,16 @@ export class DiskfileTreeState {
 		// the filer's rule for names, and the app directory by its path — which only
 		// another root's walk can reach
 		is_ignored_dir: (child, dir) =>
-			is_file_index_ignored_name(child.slice(dir.length, -1)) || child === this.app.zzz_dir
+			is_file_index_ignored_name(child.slice(dir.length, -1)) || child === this.app.zzz_dir,
+		get_repo: (dir) => {
+			const project = this.app.projects.repos.get(dir);
+			return project
+				? {
+						project_root: project.root,
+						focused: project.focused.includes(dir as DiskfileDirectoryPath)
+					}
+				: null;
+		}
 	};
 
 	/**
@@ -653,7 +712,8 @@ export class DiskfileTreeState {
 
 	/**
 	 * Expands `row` and every folder below it, except the folders the rows
-	 * never show (the source's `is_ignored_dir`). Walks every folder below it,
+	 * never show (the source's `is_ignored_dir`) and unfocused repos, which
+	 * it doesn't focus. Walks every folder below it,
 	 * and the rows then list every file below it: on a large root that's the
 	 * whole subtree, which windowing keeps cheap to render but not to derive.
 	 */
@@ -664,6 +724,8 @@ export class DiskfileTreeState {
 			const dir = stack.pop()!;
 			for (const child of this.get_children(dir).dirs) {
 				if (this.#source.is_ignored_dir(child, dir)) continue;
+				// an unfocused repo's row has nothing to expand, and expanding one focuses it
+				if (this.#source.get_repo(child)?.focused === false) continue;
 				this.expanded.add(child);
 				stack.push(child);
 			}
@@ -809,11 +871,18 @@ export class DiskfileTreeState {
 		return row;
 	}
 
-	/** ArrowRight: expands a collapsed folder, or moves into an expanded one's first child. */
+	/**
+	 * ArrowRight: expands a collapsed folder, or moves into an expanded one's
+	 * first child; focuses an unfocused repo (`focus_repo`).
+	 */
 	expand_active(): void {
 		const row = this.#take_active_row();
 		if (!row) {
 			this.move_to(0);
+			return;
+		}
+		if (row.kind === 'unfocused') {
+			void this.focus_repo(row);
 			return;
 		}
 		if (row.kind === 'file' || row.kind === 'create') return;
@@ -846,18 +915,67 @@ export class DiskfileTreeState {
 
 	/**
 	 * Enter and Space: opens the active file — in a permanent tab if
-	 * `open_not_preview`, else a preview (see `Diskfiles.select`) — or toggles
-	 * the active folder. Does nothing on `creating`'s input row.
+	 * `open_not_preview`, else a preview (see `Diskfiles.select`) — toggles
+	 * the active folder, or focuses the active unfocused repo. Does nothing on
+	 * `creating`'s input row.
 	 */
 	open_active(open_not_preview: boolean): void {
 		const row = this.#take_active_row();
 		if (!row || row.kind === 'create') return;
-		if (row.kind === 'file') {
+		if (row.kind === 'unfocused') {
+			void this.focus_repo(row);
+		} else if (row.kind === 'file') {
 			const diskfile = this.app.diskfiles.get_by_path(row.path as DiskfilePath);
 			if (diskfile) this.app.diskfiles.select(diskfile.id, open_not_preview);
 		} else {
 			this.toggle(row);
 		}
+	}
+
+	/**
+	 * Focuses the unfocused repo `row` shows (`Projects.focus_repo`), so its
+	 * files are indexed, and shows them: the row turns into its folder's row,
+	 * expanded, kept in view. A focus already in flight is left to land; a
+	 * failure collapses it again and says why in `notice`.
+	 *
+	 * @returns whether it was focused
+	 */
+	async focus_repo(row: DiskfileTreeUnfocusedRow): Promise<boolean> {
+		const { projects } = this.app;
+		const dir = row.path as DiskfileDirectoryPath;
+		if (projects.pending_repos.has(dir)) return false;
+		this.notice = null;
+		// expanded before it's a folder row, so it shows open as soon as it is
+		this.expanded.add(dir);
+		const result = await projects.focus_repo(row.project_root as DiskfileDirectoryPath, dir);
+		if (!result.ok) {
+			this.expanded.delete(dir);
+			this.notice = `couldn’t focus ${row.label}: ${result.error.message}`;
+			return false;
+		}
+		if (this.active_key === row.key) this.scroll_request++;
+		return true;
+	}
+
+	/**
+	 * Unfocuses the focused repo `row` shows (`Projects.unfocus_repo`): its
+	 * files leave the tree, and the row turns into a lazy one. A failure says
+	 * why in `notice`.
+	 *
+	 * @returns whether it was unfocused
+	 */
+	async unfocus_repo(row: DiskfileTreeDirRow): Promise<boolean> {
+		const { projects } = this.app;
+		const dir = row.path as DiskfileDirectoryPath;
+		const project = projects.repos.get(dir);
+		if (!project || projects.pending_repos.has(dir)) return false;
+		this.notice = null;
+		const result = await projects.unfocus_repo(project.root, dir);
+		if (!result.ok) {
+			this.notice = `couldn’t unfocus ${row.label}: ${result.error.message}`;
+			return false;
+		}
+		return true;
 	}
 
 	/**
@@ -910,6 +1028,9 @@ export class DiskfileTreeState {
 			while (
 				own_row < dirs.length &&
 				dirs[own_row] !== root &&
+				// a repo's folder is never part of a compact row, from either side
+				!this.#source.get_repo(below) &&
+				!this.#source.get_repo(dirs[own_row]!) &&
 				this.#source.get_only_child_dir(dirs[own_row]!) === below
 			) {
 				below = dirs[own_row++]!;

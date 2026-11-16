@@ -11,6 +11,8 @@ import {
 	type InferInput
 } from '@fuzdev/fuz_schema/schema.ts';
 import { Timestamp } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import type { Result } from '@fuzdev/fuz_util/result.ts';
+import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
 import { type Datetime } from './datetime.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -65,7 +67,8 @@ export const ProjectInfoJson = object({
 	entries: array(ProjectEntryJson),
 	/**
 	 * The focused directories, each indexed whole, sorted. Opening a path
-	 * focuses the repo holding it; a checkout's or plain directory's root is
+	 * focuses the repo holding it, and `repo_focus` / `repo_unfocus` a
+	 * registry's entries one by one; a checkout's or plain directory's root is
 	 * its one. A registry's root is indexed at its top level alone, so an
 	 * unfocused entry has no files.
 	 */
@@ -104,7 +107,8 @@ export interface ProjectOptions extends CellOptions<typeof ProjectJson> {}
  * An open project: a root directory the daemon serves — one scoped root —
  * and the directories in it that are focused, which its file index covers.
  * Keyed by `root`. Focus is the daemon's, shared by every client, and lasts
- * until the project closes.
+ * until it's unfocused (`unfocus_repo`, a registry's entries only) or the
+ * project closes.
  */
 export class Project extends Cell<typeof ProjectJson> {
 	root: DiskfileDirectoryPath = $state.raw()!;
@@ -137,11 +141,6 @@ export class Project extends Cell<typeof ProjectJson> {
 		this.last_focus !== null && this.focused.includes(this.last_focus) ? this.last_focus : this.root
 	);
 
-	/** The registry entries refused one by one, each with why. */
-	readonly refused_entries: Array<ProjectEntryJson> = $derived(
-		this.entries.filter((entry) => entry.state === 'refused')
-	);
-
 	/**
 	 * The directories a reopen opens to restore this project's focus after a
 	 * daemon restart: each focused one, or the root when none is.
@@ -153,5 +152,19 @@ export class Project extends Cell<typeof ProjectJson> {
 	constructor(options: ProjectOptions) {
 		super(ProjectJson, options);
 		this.init();
+	}
+
+	/** Focuses `dir`, one of this registry's present entries — see `Projects.focus_repo`. */
+	focus_repo(
+		dir: DiskfileDirectoryPath
+	): Promise<Result<{ value: Project }, { error: JsonrpcErrorObject }>> {
+		return this.app.projects.focus_repo(this.root, dir);
+	}
+
+	/** Unfocuses `dir`, one of this registry's entries — see `Projects.unfocus_repo`. */
+	unfocus_repo(
+		dir: DiskfileDirectoryPath
+	): Promise<Result<{ value: Project }, { error: JsonrpcErrorObject }>> {
+		return this.app.projects.unfocus_repo(this.root, dir);
 	}
 }
