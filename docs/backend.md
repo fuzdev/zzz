@@ -726,7 +726,7 @@ commands):
   directory and the project root to the root rules (`root_policy::RootPolicy::admit`: strictly inside `$HOME` or
   in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor of it, or
   under `/proc`, `/sys`, `/dev`) — `forbidden` / `root_outside_home`
-  (`handlers::project::ERROR_ROOT_OUTSIDE_HOME`) where the allowlist would
+  (`root_policy::ERROR_ROOT_OUTSIDE_HOME`) where the allowlist would
   admit it, else `root_not_allowed` (`ERROR_ROOT_NOT_ALLOWED`) — and refuses
   a path that is, or is inside, a protected directory
   (`scoped_fs::protected_dir`): a credential directory (`.ssh`, `.gnupg`,

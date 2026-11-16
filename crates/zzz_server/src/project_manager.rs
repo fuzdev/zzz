@@ -29,6 +29,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use fuz_realtime::notify_to_string;
+use fuz_repos::registry::EntryKind;
 use serde::Serialize;
 
 use crate::filer::{FilerConfig, FilerDepth, FilerLifetime};
@@ -36,39 +37,141 @@ use crate::handlers::App;
 
 // -- State ----------------------------------------------------------------------
 
-/// An open project — twin of `ProjectInfoJson` in `project.svelte.ts`.
-#[derive(Debug, Clone, Serialize)]
-pub struct ProjectInfo {
+/// An open project as the manager holds it. [`ProjectInfo`] is its wire
+/// projection ([`Self::to_info`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenProject {
     /// The root, canonical, with a trailing `/` — the project's identity.
     pub root: String,
     /// The root's basename.
     pub name: String,
     /// When it was first opened (RFC 3339).
     pub opened_at: String,
-    pub kind: ProjectInfoKind,
-    /// The registry file as found at the root, for a registry project.
-    pub registry_path: Option<String>,
-    /// A registry's entries, in its order; empty for other kinds.
-    pub entries: Vec<ProjectEntryInfo>,
-    /// The focused directories (trailing `/`), sorted — each indexed whole.
-    /// A checkout's or plain directory's root is its one; a registry's are
-    /// its present entries an open or `repo_focus` focused.
-    pub focused: Vec<String>,
+    pub kind: OpenKind,
 }
 
-impl ProjectInfo {
-    /// Whether `other` reports the same project state — the open time aside,
-    /// which a merge keeps.
-    pub(crate) fn same_as(&self, other: &Self) -> bool {
-        self.root == other.root
-            && self.kind == other.kind
-            && self.registry_path == other.registry_path
-            && self.entries == other.entries
-            && self.focused == other.focused
+/// Which rule rooted an open project ([`crate::project::ProjectKind`]).
+///
+/// Only a registry has entries and a focus to change; a checkout's or plain
+/// directory's one focus is its root, for as long as it's open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenKind {
+    Registry {
+        /// The registry file as found at the root.
+        registry_path: String,
+        /// The entries, in the registry's order.
+        entries: Vec<OpenEntry>,
+        /// The focused entries' dirs (trailing `/`), each indexed whole: the
+        /// present entries an open or `repo_focus` focused. May be empty.
+        focused: BTreeSet<String>,
+    },
+    GitRepo,
+    PlainDir,
+}
+
+/// A registry entry of an open project ([`crate::project::ProjectEntry`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenEntry {
+    /// The entry's key in its table.
+    pub key: String,
+    pub kind: EntryKind,
+    /// Where its checkout is (trailing `/`): canonical when present, else
+    /// the declared dir under the root.
+    pub dir: String,
+    pub state: EntryState,
+}
+
+/// Where an entry's checkout stands, as the project's last resolve left it
+/// ([`crate::project::EntryDir`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryState {
+    /// Focusable.
+    Present,
+    /// Not yet cloned.
+    Missing,
+    /// Refused alone, for `reason`: `EntryRefusal::reason`, or `invalid_path`
+    /// for a present dir whose path isn't UTF-8.
+    Refused { reason: &'static str },
+}
+
+impl OpenProject {
+    /// The focused directories, sorted: a registry's focused entries, or a
+    /// checkout's or plain directory's root.
+    pub fn focused(&self) -> Vec<&str> {
+        match &self.kind {
+            OpenKind::Registry { focused, .. } => focused.iter().map(String::as_str).collect(),
+            OpenKind::GitRepo | OpenKind::PlainDir => vec![self.root.as_str()],
+        }
+    }
+
+    /// The project as the wire carries it.
+    pub fn to_info(&self) -> ProjectInfo {
+        let (kind, registry_path, entries) = match &self.kind {
+            OpenKind::Registry {
+                registry_path,
+                entries,
+                ..
+            } => (
+                ProjectInfoKind::Registry,
+                Some(registry_path.clone()),
+                entries.iter().map(OpenEntry::to_info).collect(),
+            ),
+            OpenKind::GitRepo => (ProjectInfoKind::GitRepo, None, Vec::new()),
+            OpenKind::PlainDir => (ProjectInfoKind::PlainDir, None, Vec::new()),
+        };
+        ProjectInfo {
+            root: self.root.clone(),
+            name: self.name.clone(),
+            opened_at: self.opened_at.clone(),
+            kind,
+            registry_path,
+            entries,
+            focused: self.focused().into_iter().map(str::to_owned).collect(),
+        }
     }
 }
 
-/// Which rule rooted a project ([`crate::project::ProjectKind`]).
+impl OpenEntry {
+    /// The entry as the wire carries it.
+    fn to_info(&self) -> ProjectEntryInfo {
+        let (state, reason) = match self.state {
+            EntryState::Present => (ProjectEntryState::Present, None),
+            EntryState::Missing => (ProjectEntryState::Missing, None),
+            EntryState::Refused { reason } => (ProjectEntryState::Refused, Some(reason)),
+        };
+        ProjectEntryInfo {
+            key: self.key.clone(),
+            kind: match self.kind {
+                EntryKind::Repo => EntryInfoKind::Repo,
+                EntryKind::Reference => EntryInfoKind::Reference,
+            },
+            dir: self.dir.clone(),
+            state,
+            reason,
+        }
+    }
+}
+
+// -- Wire -----------------------------------------------------------------------
+
+/// An open project — twin of `ProjectInfoJson` in `project.svelte.ts`. Built
+/// from an [`OpenProject`], never stored: its flat shape admits states the
+/// domain type rules out.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectInfo {
+    pub root: String,
+    pub name: String,
+    pub opened_at: String,
+    pub kind: ProjectInfoKind,
+    /// The registry file, for a registry project.
+    pub registry_path: Option<String>,
+    /// A registry's entries, in its order; empty for other kinds.
+    pub entries: Vec<ProjectEntryInfo>,
+    /// The focused directories (trailing `/`), sorted ([`OpenProject::focused`]).
+    pub focused: Vec<String>,
+}
+
+/// Which rule rooted a project ([`OpenKind`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectInfoKind {
@@ -80,14 +183,11 @@ pub enum ProjectInfoKind {
 /// A registry entry of an open project — twin of `ProjectEntryJson`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProjectEntryInfo {
-    /// The entry's key in its table.
     pub key: String,
     pub kind: EntryInfoKind,
-    /// Where its checkout is (trailing `/`): canonical when present, else
-    /// the declared dir under the root.
     pub dir: String,
-    pub state: EntryState,
-    /// Why it's refused (`EntryRefusal::reason`), for a refused entry.
+    pub state: ProjectEntryState,
+    /// Why it's refused, for a refused entry.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<&'static str>,
 }
@@ -100,10 +200,10 @@ pub enum EntryInfoKind {
     Reference,
 }
 
-/// Where an entry's checkout stands ([`crate::project::EntryDir`]).
+/// Where an entry's checkout stands ([`EntryState`], its reason aside).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum EntryState {
+pub enum ProjectEntryState {
     Present,
     Missing,
     Refused,
@@ -122,10 +222,10 @@ enum ProjectChange {
 }
 
 #[derive(Serialize)]
-struct ProjectChangedParams<'a> {
+struct ProjectChangedParams {
     #[serde(rename = "type")]
     change_type: ProjectChange,
-    project: &'a ProjectInfo,
+    project: ProjectInfo,
 }
 
 /// The directories to index, each with how much of it ([`filers_of`],
@@ -133,14 +233,14 @@ struct ProjectChangedParams<'a> {
 pub type Filers = BTreeMap<String, FilerDepth>;
 
 /// The open projects, keyed by root (trailing `/`).
-type Projects = BTreeMap<String, ProjectInfo>;
+type Projects = BTreeMap<String, OpenProject>;
 
 /// What readers that don't take the lock see: the state as the last commit
 /// left it ([`ProjectManager::published`]).
 #[derive(Debug, Default)]
 pub struct PublishedProjects {
     /// The open projects, by root.
-    pub projects: Vec<ProjectInfo>,
+    pub projects: Vec<OpenProject>,
     /// The directories those projects keep indexed ([`desired_filers`]). A
     /// filer running on any other directory belongs to no open project — a
     /// permanent one, or one an open or focus in flight started.
@@ -189,7 +289,7 @@ pub enum LifecycleError {
 /// indexed — whose files the reply carries.
 #[derive(Debug)]
 pub struct Landed {
-    pub project: ProjectInfo,
+    pub project: OpenProject,
     pub filers: Filers,
 }
 
@@ -199,11 +299,11 @@ pub struct Landed {
 ///
 /// A registry's root at its top level, and every focused directory whole.
 /// The root of a checkout or plain directory is its one focused directory.
-pub fn filers_of(project: &ProjectInfo) -> Filers {
+pub fn filers_of(project: &OpenProject) -> Filers {
     let mut filers: Filers = project
-        .focused
-        .iter()
-        .map(|dir| (dir.clone(), FilerDepth::Tree))
+        .focused()
+        .into_iter()
+        .map(|dir| (dir.to_owned(), FilerDepth::Tree))
         .collect();
     filers
         .entry(project.root.clone())
@@ -213,7 +313,7 @@ pub fn filers_of(project: &ProjectInfo) -> Filers {
 
 /// What `projects` keep of each directory: the deepest any of them indexes
 /// it.
-fn desired_filers<'a>(projects: impl IntoIterator<Item = &'a ProjectInfo>) -> Filers {
+fn desired_filers<'a>(projects: impl IntoIterator<Item = &'a OpenProject>) -> Filers {
     let mut desired = Filers::new();
     for project in projects {
         deepen(&mut desired, &filers_of(project));
@@ -237,40 +337,52 @@ fn deepen(filers: &mut Filers, more: &Filers) {
 /// checkout or plain directory. So a focus outlives no change of kind (a
 /// plain `~/dev` focused on its root, then a registry there) and no entry
 /// removed or gone missing.
-pub(crate) fn merge_project(existing: &ProjectInfo, fresh: &ProjectInfo) -> ProjectInfo {
-    let supported = |dir: &&String| match fresh.kind {
-        ProjectInfoKind::Registry => fresh
-            .entries
-            .iter()
-            .any(|entry| entry.state == EntryState::Present && &entry.dir == *dir),
-        ProjectInfoKind::GitRepo | ProjectInfoKind::PlainDir => **dir == fresh.root,
-    };
-    let focused: BTreeSet<&String> = existing
-        .focused
-        .iter()
-        .filter(supported)
-        .chain(&fresh.focused)
-        .collect();
-    ProjectInfo {
-        focused: focused.into_iter().cloned().collect(),
+pub(crate) fn merge_project(existing: &OpenProject, fresh: &OpenProject) -> OpenProject {
+    let mut merged = OpenProject {
         opened_at: existing.opened_at.clone(),
         ..fresh.clone()
+    };
+    // a checkout's or plain directory's one focus is its root, as fresh
+    if let OpenKind::Registry {
+        entries, focused, ..
+    } = &mut merged.kind
+    {
+        let supported = |dir: &str| {
+            entries
+                .iter()
+                .any(|entry| entry.state == EntryState::Present && entry.dir == dir)
+        };
+        let kept: Vec<String> = existing
+            .focused()
+            .into_iter()
+            .filter(|dir| supported(dir))
+            .map(str::to_owned)
+            .collect();
+        focused.extend(kept);
+    }
+    merged
+}
+
+/// The focus of `project` to change — refused when it isn't a registry,
+/// whose one focus is its root.
+fn focused_mut(project: &mut OpenProject) -> Result<&mut BTreeSet<String>, LifecycleError> {
+    match &mut project.kind {
+        OpenKind::Registry { focused, .. } => Ok(focused),
+        OpenKind::GitRepo | OpenKind::PlainDir => Err(LifecycleError::NotRegistry {
+            root: project.root.clone(),
+        }),
     }
 }
 
 /// The entry of `project` whose checkout is `dir` — refused when `project`
 /// isn't a registry or has no such entry.
-fn entry_of<'a>(
-    project: &'a ProjectInfo,
-    dir: &str,
-) -> Result<&'a ProjectEntryInfo, LifecycleError> {
-    if project.kind != ProjectInfoKind::Registry {
+fn entry_of<'a>(project: &'a OpenProject, dir: &str) -> Result<&'a OpenEntry, LifecycleError> {
+    let OpenKind::Registry { entries, .. } = &project.kind else {
         return Err(LifecycleError::NotRegistry {
             root: project.root.clone(),
         });
-    }
-    project
-        .entries
+    };
+    entries
         .iter()
         .find(|entry| entry.dir == dir)
         .ok_or_else(|| LifecycleError::RepoNotInProject {
@@ -281,7 +393,7 @@ fn entry_of<'a>(
 
 /// Check that `dir` is a present registry entry of `project` — what a focus
 /// can focus.
-fn check_focusable(project: &ProjectInfo, dir: &str) -> Result<(), LifecycleError> {
+fn check_focusable(project: &OpenProject, dir: &str) -> Result<(), LifecycleError> {
     let entry = entry_of(project, dir)?;
     match entry.state {
         EntryState::Present => Ok(()),
@@ -289,10 +401,10 @@ fn check_focusable(project: &ProjectInfo, dir: &str) -> Result<(), LifecycleErro
             key: entry.key.clone(),
             dir: dir.to_owned(),
         }),
-        EntryState::Refused => Err(LifecycleError::RepoRefused {
+        EntryState::Refused { reason } => Err(LifecycleError::RepoRefused {
             key: entry.key.clone(),
             dir: dir.to_owned(),
-            reason: entry.reason.unwrap_or("unknown"),
+            reason,
         }),
     }
 }
@@ -402,7 +514,7 @@ impl ProjectManager {
     ///
     /// [`LifecycleError::Filer`] when the root or a focused directory can't
     /// be listed, leaving nothing new open; [`LifecycleError::Notify`].
-    pub async fn open(&self, app: &Arc<App>, fresh: ProjectInfo) -> Result<Landed, LifecycleError> {
+    pub async fn open(&self, app: &Arc<App>, fresh: OpenProject) -> Result<Landed, LifecycleError> {
         // the scans run before the lock (see the module docs); a directory
         // that can't be listed fails the open here, before anything is recorded
         let started = filers_of(&fresh);
@@ -418,7 +530,7 @@ impl ProjectManager {
             previous.map_or_else(|| fresh.clone(), |existing| merge_project(existing, &fresh));
         let change = match previous {
             None => Some(ProjectChange::Open),
-            Some(previous) if !previous.same_as(&project) => Some(ProjectChange::Update),
+            Some(previous) if *previous != project => Some(ProjectChange::Update),
             Some(_) => None,
         };
         let mut next = projects.clone();
@@ -445,7 +557,7 @@ impl ProjectManager {
     /// # Errors
     ///
     /// [`LifecycleError::NotOpen`]; [`LifecycleError::Notify`].
-    pub async fn close(&self, app: &Arc<App>, root: &str) -> Result<ProjectInfo, LifecycleError> {
+    pub async fn close(&self, app: &Arc<App>, root: &str) -> Result<OpenProject, LifecycleError> {
         let mut key = with_trailing_slash(root.to_owned());
         // resolved before the lock — only consulted if `key` itself isn't open
         let canonical_key = tokio::fs::canonicalize(root)
@@ -480,10 +592,10 @@ impl ProjectManager {
     /// # Errors
     ///
     /// [`LifecycleError::Notify`] — every project is closed regardless.
-    pub async fn close_all(&self, app: &Arc<App>) -> Result<Vec<ProjectInfo>, LifecycleError> {
+    pub async fn close_all(&self, app: &Arc<App>) -> Result<Vec<OpenProject>, LifecycleError> {
         let mut projects = self.projects.lock().await;
-        let closed: Vec<ProjectInfo> = projects.values().cloned().collect();
-        let changes: Vec<(ProjectChange, ProjectInfo)> = closed
+        let closed: Vec<OpenProject> = projects.values().cloned().collect();
+        let changes: Vec<(ProjectChange, OpenProject)> = closed
             .iter()
             .map(|project| (ProjectChange::Close, project.clone()))
             .collect();
@@ -555,22 +667,22 @@ impl ProjectManager {
             .ok_or_else(|| LifecycleError::NotOpen {
                 root: root.to_owned(),
             })
-            .and_then(|project| check_focusable(project, dir).map(|()| project.clone()));
-        let previous = match checked {
-            Ok(previous) => previous,
+            .and_then(|previous| {
+                check_focusable(previous, dir)?;
+                let mut project = previous.clone();
+                focused_mut(&mut project)?.insert(dir.to_owned());
+                Ok((previous.clone(), project))
+            });
+        let (previous, project) = match checked {
+            Ok(checked) => checked,
             Err(error) => {
                 release(app, started, &desired_filers(projects.values())).await;
                 return Err(error);
             }
         };
-        let mut project = previous.clone();
-        if let Err(at) = project.focused.binary_search_by(|d| d.as_str().cmp(dir)) {
-            project.focused.insert(at, dir.to_owned());
-        }
         let mut next = projects.clone();
         next.insert(project.root.clone(), project.clone());
-        let changes =
-            (!previous.same_as(&project)).then(|| (ProjectChange::Update, project.clone()));
+        let changes = (previous != project).then(|| (ProjectChange::Update, project.clone()));
         self.commit(app, &mut projects, next, started, changes)
             .await?;
         drop(projects);
@@ -598,15 +710,15 @@ impl ProjectManager {
         app: &Arc<App>,
         root: &str,
         dir: &str,
-    ) -> Result<ProjectInfo, LifecycleError> {
+    ) -> Result<OpenProject, LifecycleError> {
         let mut projects = self.projects.lock().await;
         let previous = projects.get(root).ok_or_else(|| LifecycleError::NotOpen {
             root: root.to_owned(),
         })?;
         entry_of(previous, dir)?;
         let mut project = previous.clone();
-        project.focused.retain(|focused| focused != dir);
-        if previous.same_as(&project) {
+        focused_mut(&mut project)?.remove(dir);
+        if *previous == project {
             return Ok(project);
         }
         let mut next = projects.clone();
@@ -638,7 +750,7 @@ impl ProjectManager {
         projects: &mut tokio::sync::MutexGuard<'_, Projects>,
         next: Projects,
         started: &Filers,
-        changes: impl IntoIterator<Item = (ProjectChange, ProjectInfo)>,
+        changes: impl IntoIterator<Item = (ProjectChange, OpenProject)>,
     ) -> Result<(), LifecycleError> {
         let before = desired_filers(projects.values());
         let after = desired_filers(next.values());
@@ -698,11 +810,11 @@ impl ProjectManager {
 fn broadcast_project_changed(
     app: &App,
     change: ProjectChange,
-    project: &ProjectInfo,
+    project: &OpenProject,
 ) -> Result<(), LifecycleError> {
     let params = serde_json::to_value(ProjectChangedParams {
         change_type: change,
-        project,
+        project: project.to_info(),
     })
     .map_err(LifecycleError::Notify)?;
     app.broadcast(&notify_to_string("project_changed", &params));
@@ -837,35 +949,32 @@ mod tests {
 
     /// A registry project at `root` (a key) with an entry per `keys` — each
     /// present at `root/key/` — focusing `focus`.
-    fn registry_at(root: &str, keys: &[&str], focus: &[&str]) -> ProjectInfo {
-        let entry = |key: &&str| ProjectEntryInfo {
+    fn registry_at(root: &str, keys: &[&str], focus: &[&str]) -> OpenProject {
+        let entry = |key: &&str| OpenEntry {
             key: (*key).to_owned(),
-            kind: EntryInfoKind::Repo,
+            kind: EntryKind::Repo,
             dir: format!("{root}{key}/"),
             state: EntryState::Present,
-            reason: None,
         };
-        ProjectInfo {
+        OpenProject {
             root: root.to_owned(),
             name: "w".to_owned(),
             opened_at: "t".to_owned(),
-            kind: ProjectInfoKind::Registry,
-            registry_path: Some(format!("{root}repos.toml")),
-            entries: keys.iter().map(entry).collect(),
-            focused: focus.iter().map(|key| format!("{root}{key}/")).collect(),
+            kind: OpenKind::Registry {
+                registry_path: format!("{root}repos.toml"),
+                entries: keys.iter().map(entry).collect(),
+                focused: focus.iter().map(|key| format!("{root}{key}/")).collect(),
+            },
         }
     }
 
     /// A plain-directory project at `root` (a key), focusing its root.
-    fn plain_at(root: &str) -> ProjectInfo {
-        ProjectInfo {
+    fn plain_at(root: &str) -> OpenProject {
+        OpenProject {
             root: root.to_owned(),
             name: "plain".to_owned(),
             opened_at: "t".to_owned(),
-            kind: ProjectInfoKind::PlainDir,
-            registry_path: None,
-            entries: Vec::new(),
-            focused: vec![root.to_owned()],
+            kind: OpenKind::PlainDir,
         }
     }
 
@@ -878,15 +987,8 @@ mod tests {
         assert_eq!(app.filer_manager.project_filers().await, desired);
         let published = app.projects.published();
         assert_eq!(
-            published
-                .projects
-                .iter()
-                .map(|project| (&project.root, &project.focused))
-                .collect::<Vec<_>>(),
-            projects
-                .values()
-                .map(|project| (&project.root, &project.focused))
-                .collect::<Vec<_>>(),
+            published.projects.iter().collect::<Vec<_>>(),
+            projects.values().collect::<Vec<_>>(),
         );
         assert_eq!(
             published.filers,
@@ -1069,7 +1171,8 @@ mod tests {
         // is widened before the missing one fails the commit
         let mut projects = app.projects.projects.lock().await;
         let mut next = projects.clone();
-        next.get_mut(&root).unwrap().focused = vec![app_dir.clone(), gone.clone()];
+        *focused_mut(next.get_mut(&root).unwrap()).unwrap() =
+            BTreeSet::from([app_dir.clone(), gone.clone()]);
         let update = (ProjectChange::Update, next[&root].clone());
         let failed = app
             .projects
@@ -1117,7 +1220,7 @@ mod tests {
                 if dir == &app_dir && source.kind() == std::io::ErrorKind::NotFound),
             "{failed:?}"
         );
-        assert!(app.projects.published().projects[0].focused.is_empty());
+        assert!(app.projects.published().projects[0].focused().is_empty());
         assert!(project_changes(&mut rx).is_empty());
         assert_settled(&app).await;
     }

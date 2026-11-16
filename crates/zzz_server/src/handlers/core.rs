@@ -19,7 +19,7 @@ use serde_json::Value;
 use crate::filer::{FilerSnapshot, SerializableDisknode, disknodes_json_size_hint};
 use crate::handlers::{App, caller_account_id};
 use crate::job_manager::JobSnapshot;
-use crate::project_manager::ProjectInfo;
+use crate::project_manager::{OpenProject, ProjectInfo};
 
 #[derive(Serialize)]
 struct PingResult {
@@ -119,7 +119,11 @@ pub async fn session_load(
     // filer an open or focus in flight started isn't listed before its
     // project's change is
     let published = app.projects.published();
-    let projects: Vec<ProjectInfo> = published.projects.clone();
+    let projects: Vec<ProjectInfo> = published
+        .projects
+        .iter()
+        .map(OpenProject::to_info)
+        .collect();
 
     // Rescan each watched directory before reading the index — notify events
     // are eventually consistent, so a file written immediately before
@@ -213,15 +217,15 @@ mod tests {
                 zzz_dir: "/z".to_owned(),
                 scoped_dirs: vec!["/s".to_owned()],
                 provider_status: vec![json!({"name": "claude", "available": false})],
-                projects: vec![ProjectInfo {
-                    root: "/w/".to_owned(),
-                    name: "w".to_owned(),
-                    opened_at: "2026-01-01T00:00:00Z".to_owned(),
-                    kind: crate::project_manager::ProjectInfoKind::PlainDir,
-                    registry_path: None,
-                    entries: vec![],
-                    focused: vec!["/w/".to_owned()],
-                }],
+                projects: vec![
+                    OpenProject {
+                        root: "/w/".to_owned(),
+                        name: "w".to_owned(),
+                        opened_at: "2026-01-01T00:00:00Z".to_owned(),
+                        kind: crate::project_manager::OpenKind::PlainDir,
+                    }
+                    .to_info(),
+                ],
                 terminal_ids: vec!["t1".to_owned()],
                 jobs: vec![],
                 server_instance_id: "00000000-0000-4000-8000-000000000000".to_owned(),

@@ -27,7 +27,6 @@ use fuz_http::{
     JsonrpcError, JsonrpcErrorCode, forbidden, internal_error_with_source, invalid_params,
     parse_strict_params,
 };
-use fuz_repos::registry::EntryKind;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -38,23 +37,12 @@ use crate::project::{
     EntryDir, Project, ProjectError, ProjectKind, ResolveOptions, resolve_project,
 };
 use crate::project_manager::{
-    EntryInfoKind, EntryState, Filers, LifecycleError, ProjectEntryInfo, ProjectInfo,
-    ProjectInfoKind,
+    EntryState, Filers, LifecycleError, OpenEntry, OpenKind, OpenProject, ProjectInfo,
 };
 
 /// `project_close` of a root that isn't an open project (`invalid_params`)
 /// — e.g. one a restart forgot, which a client can then drop locally.
 pub const ERROR_PROJECT_NOT_OPEN: &str = "project_not_open";
-
-/// `project_open` of a path whose project root can never be a root
-/// (`forbidden`): `/`, the daemon's home directory or an ancestor of it, or a
-/// directory under `/proc`, `/sys`, or `/dev` ([`crate::root_policy`]).
-pub const ERROR_ROOT_NOT_ALLOWED: &str = "root_not_allowed";
-
-/// `project_open` of a path outside the daemon's home directory that
-/// `ZZZ_ROOTS_OUTSIDE_HOME` doesn't name (`forbidden`) — the operator can
-/// allow it there ([`crate::root_policy`]).
-pub const ERROR_ROOT_OUTSIDE_HOME: &str = "root_outside_home";
 
 /// `repo_focus` / `repo_unfocus` on a project that isn't a registry
 /// (`invalid_params`): a checkout's or plain directory's one focus is its
@@ -279,12 +267,13 @@ fn focus_of(project: &Project) -> Option<&Path> {
     }
 }
 
-/// A resolved project as the wire carries it, focusing `focus`.
-fn to_project_info(
+/// A resolved project as the manager holds it, focusing `focus` — which,
+/// for a checkout or plain directory, is its root.
+fn to_open_project(
     project: &Project,
     focus: Option<&str>,
     opened_at: String,
-) -> Result<ProjectInfo, JsonrpcError> {
+) -> Result<OpenProject, JsonrpcError> {
     let root = to_dir_key(&project.root).ok_or_else(|| non_utf8_error(&project.root))?;
     let name = project
         .root
@@ -292,54 +281,54 @@ fn to_project_info(
         .and_then(|n| n.to_str())
         .unwrap_or("")
         .to_owned();
-    let (kind, registry_path, entries) = match &project.kind {
+    let kind = match &project.kind {
         ProjectKind::Registry { path, entries } => {
             let registry_path = path.to_str().ok_or_else(|| non_utf8_error(path))?;
             let entries = entries
                 .iter()
                 .map(|entry| {
-                    let kind = match entry.entry.kind {
-                        EntryKind::Repo => EntryInfoKind::Repo,
-                        EntryKind::Reference => EntryInfoKind::Reference,
-                    };
                     // the declared path, as `root` spells it, unless present
                     let declared = format!("{root}{}/", entry.entry.dir.trim_end_matches('/'));
-                    let (dir, state, reason) = match &entry.dir {
+                    let (dir, state) = match &entry.dir {
                         EntryDir::Present(dir) => to_dir_key(dir).map_or(
-                            (declared, EntryState::Refused, Some(ERROR_INVALID_PATH)),
-                            |dir| (dir, EntryState::Present, None),
+                            (
+                                declared,
+                                EntryState::Refused {
+                                    reason: ERROR_INVALID_PATH,
+                                },
+                            ),
+                            |dir| (dir, EntryState::Present),
                         ),
-                        EntryDir::Missing => (declared, EntryState::Missing, None),
-                        EntryDir::Refused(refusal) => {
-                            (declared, EntryState::Refused, Some(refusal.reason()))
-                        }
+                        EntryDir::Missing => (declared, EntryState::Missing),
+                        EntryDir::Refused(refusal) => (
+                            declared,
+                            EntryState::Refused {
+                                reason: refusal.reason(),
+                            },
+                        ),
                     };
-                    ProjectEntryInfo {
+                    OpenEntry {
                         key: entry.entry.key.clone(),
-                        kind,
+                        kind: entry.entry.kind,
                         dir,
                         state,
-                        reason,
                     }
                 })
                 .collect();
-            (
-                ProjectInfoKind::Registry,
-                Some(registry_path.to_owned()),
+            OpenKind::Registry {
+                registry_path: registry_path.to_owned(),
                 entries,
-            )
+                focused: focus.map(str::to_owned).into_iter().collect(),
+            }
         }
-        ProjectKind::GitRepo => (ProjectInfoKind::GitRepo, None, Vec::new()),
-        ProjectKind::PlainDir => (ProjectInfoKind::PlainDir, None, Vec::new()),
+        ProjectKind::GitRepo => OpenKind::GitRepo,
+        ProjectKind::PlainDir => OpenKind::PlainDir,
     };
-    Ok(ProjectInfo {
+    Ok(OpenProject {
         root,
         name,
         opened_at,
         kind,
-        registry_path,
-        entries,
-        focused: focus.map(str::to_owned).into_iter().collect(),
     })
 }
 
@@ -380,7 +369,13 @@ pub async fn project_list(
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    let projects = app.projects.published().projects.clone();
+    let projects = app
+        .projects
+        .published()
+        .projects
+        .iter()
+        .map(OpenProject::to_info)
+        .collect();
     serde_json::to_value(ProjectListResult { projects })
         .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
@@ -440,7 +435,7 @@ pub async fn project_open(
         Some(dir) => Some(to_dir_key(dir).ok_or_else(|| non_utf8_error(dir))?),
         None => None,
     };
-    let fresh = to_project_info(&project, focus.as_deref(), fuz_sys::rfc3339_now())?;
+    let fresh = to_open_project(&project, focus.as_deref(), fuz_sys::rfc3339_now())?;
 
     // Run to completion in its own task, so a caller that goes away mid-open
     // can't leave filers running for a project that never opened.
@@ -452,7 +447,7 @@ pub async fn project_open(
 /// The body of `project_open` once the path is resolved.
 async fn open_project(
     app: Arc<App>,
-    fresh: ProjectInfo,
+    fresh: OpenProject,
     focus: Option<String>,
 ) -> Result<ActionOutput, JsonrpcError> {
     let landed = app
@@ -463,7 +458,7 @@ async fn open_project(
     let (files, watch_status) = files_of(&app, &landed.filers).await;
     let size_hint = disknodes_json_size_hint(&files) + PROJECT_OPEN_OVERHEAD;
     let result = ProjectOpenResult {
-        project: landed.project,
+        project: landed.project.to_info(),
         focus,
         files,
         watch_status,
@@ -567,7 +562,7 @@ async fn focus_repo(
     let (files, watch_status) = files_of(&app, &landed.filers).await;
     let size_hint = disknodes_json_size_hint(&files) + PROJECT_OPEN_OVERHEAD;
     let result = RepoFocusResult {
-        project: landed.project,
+        project: landed.project.to_info(),
         files,
         watch_status,
     };
@@ -608,8 +603,10 @@ pub async fn repo_unfocus(
         .await
         .map_err(|e| internal_error_with_source("failed to unfocus repo", &e))?
         .map_err(|e| lifecycle_error("unfocus repo", &e, None))?;
-    serde_json::to_value(RepoUnfocusResult { project })
-        .map_err(|e| internal_error_with_source("serialization failed", &e))
+    serde_json::to_value(RepoUnfocusResult {
+        project: project.to_info(),
+    })
+    .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// Close every open project through the same path as `project_close` —
@@ -622,7 +619,7 @@ pub async fn repo_unfocus(
 ///
 /// A JSON-RPC internal error if a notification fails to serialize; every
 /// project is closed regardless.
-pub async fn project_close_all(app: &Arc<App>) -> Result<Vec<ProjectInfo>, JsonrpcError> {
+pub async fn project_close_all(app: &Arc<App>) -> Result<Vec<OpenProject>, JsonrpcError> {
     // in its own task, like every other change: a caller dropped mid-close
     // can't leave the projects half released
     let closing = Arc::clone(app);
@@ -636,12 +633,13 @@ pub async fn project_close_all(app: &Arc<App>) -> Result<Vec<ProjectInfo>, Jsonr
 mod tests {
     use std::path::PathBuf;
 
-    use fuz_repos::registry::ValidRegistry;
+    use fuz_repos::registry::{EntryKind, ValidRegistry};
 
     use super::*;
     use crate::filer::FilerDepth;
     use crate::project::{EntryRefusal, ProjectEntry};
     use crate::project_manager::{filers_of, merge_project};
+    use crate::root_policy::{ERROR_ROOT_NOT_ALLOWED, ERROR_ROOT_OUTSIDE_HOME};
 
     const REGISTRY: &str = r#"owners = ["me"]
 
@@ -728,9 +726,9 @@ purpose = "a reference"
     #[test]
     fn a_registry_project_serializes_its_entries_and_focus() {
         let project = registry_project("/w/app/src", "/w/app");
-        let info = to_project_info(&project, Some("/w/app/"), "t".to_owned()).unwrap();
+        let info = to_open_project(&project, Some("/w/app/"), "t".to_owned()).unwrap();
         assert_eq!(
-            serde_json::to_value(&info).unwrap(),
+            serde_json::to_value(info.to_info()).unwrap(),
             serde_json::json!({
                 "root": "/w/",
                 "name": "w",
@@ -764,9 +762,9 @@ purpose = "a reference"
     fn a_present_entry_reports_where_it_resolves() {
         // a symlinked entry dir resolves elsewhere inside the root
         let project = registry_project("/w", "/w/real/app");
-        let info = to_project_info(&project, None, "t".to_owned()).unwrap();
-        assert_eq!(info.entries[0].dir, "/w/real/app/");
-        assert!(info.focused.is_empty());
+        let info = to_open_project(&project, None, "t".to_owned()).unwrap();
+        assert_eq!(info.to_info().entries[0].dir, "/w/real/app/");
+        assert!(info.focused().is_empty());
         // unfocused, the registry root is indexed at its top level alone
         assert_eq!(
             filers_of(&info).into_iter().collect::<Vec<_>>(),
@@ -780,8 +778,8 @@ purpose = "a reference"
             (ProjectKind::GitRepo, "git_repo"),
             (ProjectKind::PlainDir, "plain_dir"),
         ] {
-            let info = to_project_info(&plain_project(kind), Some("/p/"), "t".to_owned()).unwrap();
-            let value = serde_json::to_value(&info).unwrap();
+            let info = to_open_project(&plain_project(kind), Some("/p/"), "t".to_owned()).unwrap();
+            let value = serde_json::to_value(info.to_info()).unwrap();
             assert_eq!(value["kind"], wire);
             assert_eq!(value["registry_path"], Value::Null);
             assert_eq!(value["entries"], serde_json::json!([]));
@@ -795,35 +793,35 @@ purpose = "a reference"
 
     #[test]
     fn a_reopen_merges_focus_and_takes_the_fresh_entries() {
-        let first = to_project_info(
+        let first = to_open_project(
             &registry_project("/w/app", "/w/app"),
             Some("/w/app/"),
             "first".to_owned(),
         )
         .unwrap();
-        let mut second = to_project_info(
+        let mut second = to_open_project(
             &registry_project("/w/site", "/w/app"),
             Some("/w/site/"),
             "second".to_owned(),
         )
         .unwrap();
-        second.entries[1].state = EntryState::Present;
-        let merged = merge_project(&first, &second);
-        assert_eq!(merged.focused, ["/w/app/", "/w/site/"]);
+        entries_mut(&mut second)[1].state = EntryState::Present;
+        let mut merged = merge_project(&first, &second);
+        assert_eq!(merged.focused(), ["/w/app/", "/w/site/"]);
         assert_eq!(merged.opened_at, "first");
-        assert_eq!(merged.entries[1].state, EntryState::Present);
-        assert!(!merged.same_as(&first));
+        assert_eq!(entries_mut(&mut merged)[1].state, EntryState::Present);
+        assert_ne!(merged, first);
         // the same open again changes nothing
-        assert!(merge_project(&merged, &second).same_as(&merged));
+        assert_eq!(merge_project(&merged, &second), merged);
         // an open resolving the entries afresh reports them, and a focus on an
         // entry gone missing is dropped
         let site_gone = merge_project(&merged, &first);
-        assert!(!site_gone.same_as(&merged));
-        assert_eq!(site_gone.focused, ["/w/app/"]);
+        assert_ne!(site_gone, merged);
+        assert_eq!(site_gone.focused(), ["/w/app/"]);
 
         // a plain dir focused on its root, then a registry there: the old
         // focus goes with the kind that supported it
-        let plain = to_project_info(
+        let plain = to_open_project(
             &Project {
                 root: PathBuf::from("/w"),
                 opened: PathBuf::from("/w"),
@@ -834,7 +832,7 @@ purpose = "a reference"
         )
         .unwrap();
         let registry = merge_project(&plain, &first);
-        assert_eq!(registry.focused, ["/w/app/"]);
+        assert_eq!(registry.focused(), ["/w/app/"]);
         assert_eq!(
             filers_of(&registry).into_iter().collect::<Vec<_>>(),
             [
@@ -843,9 +841,15 @@ purpose = "a reference"
             ]
         );
         // and back: a registry's focus goes when the root is a plain dir again
-        let mut unregistered = plain;
-        unregistered.focused = vec!["/w/".to_owned()];
-        assert_eq!(merge_project(&registry, &unregistered).focused, ["/w/"]);
+        assert_eq!(merge_project(&registry, &plain).focused(), ["/w/"]);
+    }
+
+    /// The entries of a registry project.
+    fn entries_mut(project: &mut OpenProject) -> &mut Vec<OpenEntry> {
+        match &mut project.kind {
+            OpenKind::Registry { entries, .. } => entries,
+            OpenKind::GitRepo | OpenKind::PlainDir => panic!("not a registry"),
+        }
     }
 
     /// Inert handles: a lazy pool that never connects, no roots, no sockets.
@@ -934,25 +938,25 @@ purpose = "a reference"
 
     /// A registry project at `tmp/w/` with `app` and `site` present,
     /// focusing `focus`.
-    fn registry_info(tmp: &TempDir, focus: &[&str]) -> ProjectInfo {
-        let entry = |key: &str| ProjectEntryInfo {
+    fn registry_info(tmp: &TempDir, focus: &[&str]) -> OpenProject {
+        let entry = |key: &str| OpenEntry {
             key: key.to_owned(),
-            kind: EntryInfoKind::Repo,
+            kind: EntryKind::Repo,
             dir: tmp.key(&format!("w/{key}/")),
             state: EntryState::Present,
-            reason: None,
         };
-        ProjectInfo {
+        OpenProject {
             root: tmp.key("w/"),
             name: "w".to_owned(),
             opened_at: "t".to_owned(),
-            kind: ProjectInfoKind::Registry,
-            registry_path: Some(tmp.key("w/repos.toml")),
-            entries: vec![entry("app"), entry("site")],
-            focused: focus
-                .iter()
-                .map(|key| tmp.key(&format!("w/{key}/")))
-                .collect(),
+            kind: OpenKind::Registry {
+                registry_path: tmp.key("w/repos.toml"),
+                entries: vec![entry("app"), entry("site")],
+                focused: focus
+                    .iter()
+                    .map(|key| tmp.key(&format!("w/{key}/")))
+                    .collect(),
+            },
         }
     }
 
@@ -963,12 +967,12 @@ purpose = "a reference"
             .projects
             .iter()
             .find(|project| project.root == root)
-            .map(|project| project.focused.clone())
+            .map(|project| project.focused().into_iter().map(str::to_owned).collect())
             .unwrap()
     }
 
     /// `open_project`'s result as JSON.
-    async fn open(app: &Arc<App>, info: ProjectInfo, focus: Option<String>) -> Value {
+    async fn open(app: &Arc<App>, info: OpenProject, focus: Option<String>) -> Value {
         let output = open_project(Arc::clone(app), info, focus).await.unwrap();
         let mut out = Vec::new();
         output.write_json(&mut out).unwrap();
@@ -1034,7 +1038,7 @@ purpose = "a reference"
         assert_eq!(app.projects.published().projects.len(), 1);
 
         // a plain-dir project inside it shares the focused repo's filer
-        let mut nested = to_project_info(
+        let mut nested = to_open_project(
             &Project {
                 root: PathBuf::from(tmp.key("w/app")),
                 opened: PathBuf::from(tmp.key("w/app")),
@@ -1084,7 +1088,7 @@ purpose = "a reference"
         }
         let app = inert_app();
         let root = tmp.key("w/");
-        let plain = to_project_info(
+        let plain = to_open_project(
             &Project {
                 root: PathBuf::from(tmp.key("w")),
                 opened: PathBuf::from(tmp.key("w")),
@@ -1138,7 +1142,7 @@ purpose = "a reference"
         app: &Arc<App>,
         root: &str,
         dir: &str,
-    ) -> Result<ProjectInfo, JsonrpcError> {
+    ) -> Result<OpenProject, JsonrpcError> {
         app.projects
             .unfocus(app, root, dir)
             .await
@@ -1207,7 +1211,7 @@ purpose = "a reference"
             "keys are exact"
         );
         let project = unfocus_repo(&app, &root, &app_dir).await.unwrap();
-        assert!(project.focused.is_empty(), "a registry may keep no focus");
+        assert!(project.focused().is_empty(), "a registry may keep no focus");
         assert_eq!(
             project_changes(&mut rx),
             [("update".to_owned(), serde_json::json!([]))]
@@ -1226,7 +1230,7 @@ purpose = "a reference"
             unfocus_repo(&app, &root, &app_dir)
                 .await
                 .unwrap()
-                .focused
+                .focused()
                 .is_empty()
         );
         assert!(project_changes(&mut rx).is_empty());
@@ -1243,7 +1247,7 @@ purpose = "a reference"
         let app_dir = tmp.key("w/app/");
         open(&app, registry_info(&tmp, &["app"]), Some(app_dir.clone())).await;
         // a plain-dir project at the repo keeps its whole tree
-        let plain = to_project_info(
+        let plain = to_open_project(
             &Project {
                 root: PathBuf::from(tmp.key("w/app")),
                 opened: PathBuf::from(tmp.key("w/app")),
@@ -1264,7 +1268,7 @@ purpose = "a reference"
         open(&app, registry_info(&tmp, &["app"]), Some(app_dir.clone())).await;
         let mut nested = registry_info(&tmp, &[]);
         nested.root.clone_from(&app_dir);
-        nested.entries.clear();
+        entries_mut(&mut nested).clear();
         open(&app, nested, None).await;
         assert_eq!(
             app.filer_manager.files_for(&app_dir).await.len(),
@@ -1292,17 +1296,18 @@ purpose = "a reference"
         let (app, _connection, mut rx) = app_with_socket();
         let root = tmp.key("w/");
         let mut info = registry_info(&tmp, &[]);
-        info.entries[1].state = EntryState::Missing;
-        info.entries.push(ProjectEntryInfo {
+        entries_mut(&mut info)[1].state = EntryState::Missing;
+        entries_mut(&mut info).push(OpenEntry {
             key: "keys".to_owned(),
-            kind: EntryInfoKind::Reference,
+            kind: EntryKind::Reference,
             dir: tmp.key("w/keys/"),
-            state: EntryState::Refused,
-            reason: Some("entry_not_confined"),
+            state: EntryState::Refused {
+                reason: "entry_not_confined",
+            },
         });
         open(&app, info, None).await;
         let plain_root = tmp.key("p/");
-        let plain = to_project_info(
+        let plain = to_open_project(
             &Project {
                 root: PathBuf::from(tmp.key("p")),
                 opened: PathBuf::from(tmp.key("p")),

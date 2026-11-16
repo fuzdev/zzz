@@ -58,8 +58,9 @@ use crate::handlers::filesystem::{
     ERROR_INVALID_PATH, ERROR_NOT_A_DIRECTORY, ERROR_PATH_NOT_FOUND, ERROR_PERMISSION_DENIED,
     ERROR_PROTECTED_DIR_NOT_ALLOWED,
 };
-use crate::handlers::project::{ERROR_ROOT_NOT_ALLOWED, ERROR_ROOT_OUTSIDE_HOME};
-use crate::root_policy::{RootPolicy, RootRefusal};
+use crate::root_policy::{
+    ERROR_ROOT_NOT_ALLOWED, ERROR_ROOT_OUTSIDE_HOME, RootPolicy, RootRefusal,
+};
 use crate::scoped_fs::{ProtectedDir, protected_dir};
 
 /// The largest registry read; a larger one is refused unread.

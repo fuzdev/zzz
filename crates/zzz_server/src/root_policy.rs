@@ -42,6 +42,19 @@ pub const ROOTS_OUTSIDE_HOME_VAR: &str = "ZZZ_ROOTS_OUTSIDE_HOME";
 /// them), `/sys`, and `/dev`.
 pub const PSEUDO_FS_DIRS: &[&str] = &["/proc", "/sys", "/dev"];
 
+/// `project_open` of a path whose project root can never be a root
+/// (`forbidden`).
+///
+/// `/`, the daemon's home directory or an ancestor of it, or a directory
+/// under `/proc`, `/sys`, or `/dev` — a [`RootRefusal`] the allowlist can't
+/// fix.
+pub const ERROR_ROOT_NOT_ALLOWED: &str = "root_not_allowed";
+
+/// `project_open` of a path outside the daemon's home directory that
+/// [`ROOTS_OUTSIDE_HOME_VAR`] doesn't name (`forbidden`) — the operator can
+/// allow it there ([`RootRefusal::is_outside_home`]).
+pub const ERROR_ROOT_OUTSIDE_HOME: &str = "root_outside_home";
+
 /// Why a directory can't be a root.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RootRefusal {
