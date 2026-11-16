@@ -5,8 +5,7 @@
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
 
 	import { frontend_context } from './frontend.svelte.ts';
-	import type { Diskfile } from './diskfile.svelte.ts';
-	import DiskfileListitem from './DiskfileListitem.svelte';
+	import DiskfileList from './DiskfileList.svelte';
 	import {
 		icon_create_directory,
 		icon_create_file,
@@ -14,8 +13,6 @@
 		icon_workspace
 	} from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
-	import SortableList from './SortableList.svelte';
-	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
 	import { prompt_create_diskfile } from './diskfile_helpers.ts';
 	import { icon_microphone } from './media_icons.ts';
 
@@ -112,37 +109,10 @@
 			</div>
 		</div>
 
-		<!-- windowed: only the rows near the viewport render, so a workspace of thousands of files stays cheap -->
-		<SortableList
-			items={diskfiles.listed}
-			windowed
+		<DiskfileList
 			show_sort_controls={editor.show_sort_controls}
-			sorters={[
-				// TODO @many rework API to avoid casting
-				sort_by_text<Diskfile>('path_asc', 'path (a-z)', 'path_relative'),
-				sort_by_text<Diskfile>('path_desc', 'path (z-a)', 'path_relative', 'desc'),
-				sort_by_numeric<Diskfile>('updated_newest', 'updated (latest)', 'updated', 'desc'),
-				sort_by_numeric<Diskfile>('updated_oldest', 'updated (past)', 'updated', 'asc'),
-				sort_by_numeric<Diskfile>('created_newest', 'created (newest)', 'created', 'desc'),
-				sort_by_numeric<Diskfile>('created_oldest', 'created (oldest)', 'created', 'asc')
-			]}
-			sort_key_default="path_asc"
 			no_items={empty ? undefined : '[no files available]'}
-		>
-			<!-- TODO show the status of being open in any tab (what signifier?) -->
-			<!-- TODO bug with `selected` -->
-			{#snippet children(diskfile)}
-				{@const selected = diskfiles.selected_file_id === diskfile.id}
-				<DiskfileListitem
-					{diskfile}
-					{selected}
-					onselect={(diskfile, open_not_preview) => {
-						// TODO this needs to navigate to the path of the file (so should be a link, not this onselect callback)
-						diskfiles.select(diskfile.id, open_not_preview);
-					}}
-				/>
-			{/snippet}
-		</SortableList>
+		/>
 
 		{#if empty && diskfiles.listed.length === 0}
 			{@render empty()}
