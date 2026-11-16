@@ -37,11 +37,22 @@
 
 		{#snippet menu()}
 			<!-- TODO @many maybe a copy submenu on this item with copy id, name, etc, leverage generic cells -->
-			{#if part.content !== null && part.content !== undefined}
+			<!-- a file part's content is loaded on click when it isn't yet; kept after a failed read, to say why -->
+			{#if part.type !== 'diskfile' ||
+				(part.content_status !== undefined &&
+					(part.content_status !== 'unloadable' || part.diskfile?.content_error != null))
+			}
 				<ContextmenuEntryCopyToClipboard
-					content={part.content}
+					content={part.content ?? undefined}
+					load_content={part.type === 'diskfile' && part.content_status !== 'loaded'
+						? async () => {
+								// throws, so the entry says why, when the file can't load
+								if (part.diskfile) await part.app.diskfiles.load_content(part.diskfile);
+								return part.content;
+							}
+						: undefined}
 					label="copy content"
-					preview={part.content_preview ?? undefined}
+					preview={part.content_preview ?? ''}
 				/>
 			{/if}
 

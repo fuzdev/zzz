@@ -5,6 +5,8 @@ import { test, describe, beforeEach, assert, vi } from 'vitest';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { Thread } from '#lib/thread.svelte.ts';
+import { Turn } from '#lib/turn.svelte.ts';
+import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 import type { CompletionRequest } from '#lib/completion_types.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import { create_frontend_action_handlers } from '#lib/frontend_action_handlers.ts';
@@ -226,6 +228,120 @@ describe('a completion in flight when the socket drops', () => {
 		assert.ok(!assistant_turn.pending);
 		assert.include(assistant_turn.error_message, 'connection closed');
 		live.dispose();
+	});
+});
+
+describe('a file part still loading when sent', () => {
+	/** A turn whose file part's content isn't loaded yet, its read held by the test. */
+	const setup = () => {
+		const read = create_deferred<unknown>();
+		const read_paths: Array<string> = [];
+		(app.api as unknown as Record<string, unknown>).diskfile_read = ({
+			path
+		}: {
+			path: string;
+		}) => {
+			read_paths.push(path);
+			return read.promise;
+		};
+		app.diskfiles.add_initial([
+			{ id: FILE_PATH, source_dir: SOURCE_DIR, size: 9, ctime: 1, mtime: 1 }
+		]);
+		const thread = create_thread();
+		const part = app.parts.add({ type: 'diskfile', path: FILE_PATH });
+		const turn = new Turn({ app, json: { role: 'user', part_ids: [part.id] } });
+		thread.add_turn(turn);
+		return { thread, read, read_paths };
+	};
+	const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+	test('is awaited, and the request carries its content', async () => {
+		const { thread, read, read_paths } = setup();
+		const sent = thread.send_message('what does it say?');
+		assert.ok(thread.pending, 'pending at once, as for any send');
+		assert.strictEqual(thread.turns.size, 3);
+		await flush();
+		assert.strictEqual(calls.length, 0, 'waits for the content');
+		assert.deepEqual(read_paths, [FILE_PATH]);
+
+		read.resolve({
+			ok: true,
+			value: { contents: 'file text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+		});
+		await flush();
+		assert.strictEqual(calls.length, 1);
+		assert.deepEqual(calls[0]!.completion_request.completion_messages, [
+			{ role: 'user', content: 'file text' }
+		]);
+		const turns = Array.from(thread.turns.by_id.values());
+		assert.strictEqual(turns.at(-1)!.request, calls[0]!.completion_request);
+		assert.strictEqual(turns.at(-2)!.request, calls[0]!.completion_request);
+		calls[0]!.resolve();
+		await sent;
+	});
+
+	test('a failed read stops the send with an error, sending nothing', async () => {
+		const { thread, read } = setup();
+		const sent = thread.send_message('what does it say?');
+		read.resolve({ ok: false, error: { code: -32603, message: 'connection lost' } });
+		const assistant_turn = await sent;
+		assert.ok(assistant_turn);
+		assert.strictEqual(calls.length, 0);
+		assert.include(assistant_turn.error_message, FILE_PATH);
+		assert.include(assistant_turn.error_message, 'connection lost');
+		assert.ok(!thread.pending);
+	});
+
+	test('a file already failed when sent stops the send too', async () => {
+		const { thread, read } = setup();
+		read.resolve({ ok: false, error: { code: -32603, message: 'connection lost' } });
+		await flush();
+		assert.strictEqual(app.diskfiles.get_by_path(FILE_PATH)?.content_error, 'connection lost');
+		const assistant_turn = await thread.send_message('again');
+		assert.strictEqual(calls.length, 0);
+		assert.include(assistant_turn?.error_message, 'connection lost');
+	});
+
+	test('a failed read in a disabled turn does not stop the send', async () => {
+		const { thread, read } = setup();
+		read.resolve({ ok: false, error: { code: -32603, message: 'connection lost' } });
+		await flush();
+		for (const turn of thread.turns.by_id.values()) turn.enabled = false;
+		const sent = thread.send_message('hi');
+		await flush();
+		assert.strictEqual(calls.length, 1);
+		calls[0]!.resolve();
+		const assistant_turn = await sent;
+		assert.isUndefined(assistant_turn?.error_message);
+	});
+
+	test('a file too large to load is left out, as before, and the send goes', async () => {
+		const { thread, read } = setup();
+		const sent = thread.send_message('what does it say?');
+		read.resolve({
+			ok: true,
+			value: { contents: null, unloaded_reason: 'too_large', size: 9, ctime: 1, mtime: 1 }
+		});
+		await flush();
+		assert.strictEqual(calls.length, 1);
+		assert.deepEqual(calls[0]!.completion_request.completion_messages, []);
+		calls[0]!.resolve();
+		const assistant_turn = await sent;
+		assert.isUndefined(assistant_turn?.error_message);
+	});
+
+	test('cancelling while it loads sends nothing', async () => {
+		const { thread, read } = setup();
+		const sent = thread.send_message('hi');
+		const assistant_turn = Array.from(thread.turns.by_id.values()).at(-1)!;
+		thread.cancel_pending();
+		read.resolve({
+			ok: true,
+			value: { contents: 'file text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+		});
+		assert.strictEqual(await sent, assistant_turn);
+		assert.ok(assistant_turn.cancelled);
+		assert.strictEqual(calls.length, 0);
 	});
 });
 

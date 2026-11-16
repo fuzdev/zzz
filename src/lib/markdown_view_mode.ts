@@ -22,12 +22,13 @@ export const MARKDOWN_VIEW_MODE_LABELS: Readonly<Record<MarkdownViewMode, string
 
 /**
  * The mode a file opens in until one is chosen: `preview` where its content
- * is read-only (not loaded), else `split`.
+ * can't be loaded (read-only for good), else `split` — a file still loading
+ * opens in `split` too, so the view doesn't switch when it lands.
  *
- * @param content_loaded - whether the file's content was loaded, so it can be edited
+ * @param loadable - whether the file's content is loaded or can be, so it can be edited
  */
-export const to_default_markdown_view_mode = (content_loaded: boolean): MarkdownViewMode =>
-	content_loaded ? 'split' : 'preview';
+export const to_default_markdown_view_mode = (loadable: boolean): MarkdownViewMode =>
+	loadable ? 'split' : 'preview';
 
 /**
  * Each mode's keyboard shortcut, Ctrl+Shift with its position in

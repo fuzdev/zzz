@@ -26,7 +26,7 @@ import { XmlAttributeWithDefaults } from './xml.ts';
 import { CellJson } from './cell_types.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 import type { Frontend } from './frontend.svelte.ts';
-import { DiskfilePath } from './diskfile_types.ts';
+import { DiskfilePath, type DiskfileContentStatus } from './diskfile_types.ts';
 import { CONTENT_PREVIEW_LENGTH } from './constants.ts';
 
 /** Common properties for all part types. */
@@ -222,9 +222,14 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	/** Path property with private backing field. */
 	#path: DiskfilePath | null = $state.raw()!;
 
+	/** The path counted for this part in `Diskfiles.track_part_path`. Not reactive. */
+	#tracked_path: DiskfilePath | null = null;
+
 	/**
 	 * Writable value that determines `this.diskfile`.
 	 * Also includes special diskfile part logic for attributes.
+	 * The file at the path is held eagerly while the part references it, and
+	 * read now if it isn't loaded (`Diskfiles.track_part_path`).
 	 */
 	get path(): DiskfilePath | null {
 		return this.#path;
@@ -232,6 +237,10 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 
 	set path(value: DiskfilePath | null) {
 		this.#path = value;
+		if (!this.#disposed) {
+			this.app.diskfiles.track_part_path(this.#tracked_path, value);
+			this.#tracked_path = value;
+		}
 
 		if (value === null) return;
 
@@ -297,8 +306,9 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	 * `DiskfileEditorState`, whose `save_changes` reports failures.
 	 *
 	 * `undefined` when there's no file at `path`, `null` when the file's
-	 * content wasn't loaded (`Diskfile.content_loaded`) — never an editor's
-	 * empty text, so an unloaded file can't pass for an empty one.
+	 * content isn't loaded (`content_status` — not yet, or not loadable) —
+	 * never an editor's empty text, so an unloaded file can't pass for an
+	 * empty one. What sends or copies the part awaits `ensure_content` first.
 	 */
 	override get content(): string | null | undefined {
 		const { diskfile } = this;
@@ -310,8 +320,34 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 		);
 	}
 
+	/** The file's `Diskfile.content_status`, `undefined` when there's no file at `path`. */
+	readonly content_status: DiskfileContentStatus | undefined = $derived.by(
+		() => this.diskfile?.content_status
+	);
+
+	#disposed = false;
+
 	constructor(options: DiskfilePartOptions) {
 		super(DiskfilePartJson, options);
 		this.init();
+	}
+
+	/**
+	 * Loads the file's content if it isn't (`Diskfiles.ensure_content`) —
+	 * resolves at once when there's no file at `path`.
+	 */
+	ensure_content(): Promise<void> {
+		const { diskfile } = this;
+		return diskfile ? this.app.diskfiles.ensure_content(diskfile) : Promise.resolve();
+	}
+
+	/** Stops holding the file eagerly for this part. */
+	override dispose(): void {
+		if (!this.#disposed) {
+			this.#disposed = true;
+			this.app.diskfiles.track_part_path(this.#tracked_path, null);
+			this.#tracked_path = null;
+		}
+		super.dispose();
 	}
 }

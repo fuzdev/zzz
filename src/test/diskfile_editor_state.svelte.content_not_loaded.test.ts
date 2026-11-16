@@ -11,9 +11,9 @@ import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from '#lib/diskfile_helpers.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 /**
- * A diskfile whose content wasn't loaded (`content: null` — over the 4 MiB
- * index cap, not UTF-8, or unreadable) must never be saved over: an empty
- * editor for it isn't the file's content.
+ * A diskfile whose content can't be loaded (`content_status` `unloadable` —
+ * over the 4 MiB cap, not UTF-8, or unreadable) must never be saved over: an
+ * empty editor for it isn't the file's content.
  */
 
 const PATH = parse_or_throw(DiskfilePath, '/w/big.bin');
@@ -22,8 +22,11 @@ const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 let app: Frontend;
 let update: ReturnType<typeof vi.fn>;
 
-const add_diskfile = (content: string | null): Diskfile =>
-	app.diskfiles.add({ path: PATH, source_dir: SOURCE_DIR, content });
+const add_diskfile = (content: string | null): Diskfile => {
+	const diskfile = app.diskfiles.add({ path: PATH, source_dir: SOURCE_DIR, content });
+	if (content === null) diskfile.unloaded_status = 'unloadable';
+	return diskfile;
+};
 
 beforeEach(() => {
 	app = monkeypatch_zzz_for_tests(new Frontend());

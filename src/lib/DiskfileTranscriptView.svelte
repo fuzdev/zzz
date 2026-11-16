@@ -12,7 +12,7 @@
 	import DiskfileEditorView from './DiskfileEditorView.svelte';
 	import Icon from './Icon.svelte';
 	import TranscriptSegments from './TranscriptSegments.svelte';
-	import { delete_diskfile } from './diskfile_helpers.ts';
+	import { DISKFILE_CONTENT_LOADING_MESSAGE, delete_diskfile } from './diskfile_helpers.ts';
 	import { DiskfilePath } from './diskfile_types.ts';
 	import { to_file_bytes_url } from './file_bytes.ts';
 	import {
@@ -41,6 +41,14 @@
 	const app = frontend_context.get();
 	const { diskfiles } = app;
 
+	// loads the content on view
+	$effect(() => {
+		void diskfiles.ensure_content(diskfile);
+	});
+
+	const loading = $derived(
+		diskfile.content_status === 'unrequested' || diskfile.content_status === 'loading'
+	);
 	const transcript = $derived(parse_transcript(diskfile.content));
 	const source_path = $derived(
 		transcript
@@ -83,7 +91,11 @@
 	};
 </script>
 
-{#if transcript}
+{#if loading}
+	<DiskfileContextmenu {diskfile}>
+		<p class="p_md text_50">{DISKFILE_CONTENT_LOADING_MESSAGE}</p>
+	</DiskfileContextmenu>
+{:else if transcript}
 	<DiskfileContextmenu {diskfile}>
 		<!-- a stacking context, so the details drawer's z-index (over the segments it slides across)
 		stays inside the view, under the desk menu's overlay -->

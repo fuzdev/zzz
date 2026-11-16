@@ -30,9 +30,11 @@
 	<ContextmenuSubmenu icon={icon_turn}>
 		turn
 		{#snippet menu()}
-			{#if turn.content}
+			<!-- its file parts' contents are loaded on click when they aren't yet -->
+			{#if turn.content || turn.content_loading}
 				<ContextmenuEntryCopyToClipboard
 					content={turn.content}
+					load_content={turn.content_loading ? () => turn.load_content() : undefined}
 					label="copy content"
 					preview={turn.content}
 				/>

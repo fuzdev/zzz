@@ -3,6 +3,8 @@ import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import type { Model } from './model.svelte.ts';
 import { Turn, create_turn_from_text } from './turn.svelte.ts';
+import type { PartUnion } from './part.svelte.ts';
+import { are_parts_loading, ensure_parts_content, find_failed_file_part } from './part_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { ThreadJson } from './thread_types.ts';
 import { CompletionRequest } from './completion_types.ts';
@@ -49,6 +51,17 @@ export class Thread extends Cell<typeof ThreadJson> {
 	readonly length: number = $derived(render_messages_length(this.turns.by_id.values()));
 	readonly token_count: number = $derived(estimate_token_count_from_length(this.length));
 	readonly content_preview: string = $derived(to_preview(this.content));
+
+	/** Whether a turn's file part is still loading, so `content` lacks it for now. */
+	readonly content_loading: boolean = $derived(
+		Array.from(this.turns.by_id.values()).some((turn) => turn.content_loading)
+	);
+
+	/** Loads every file part's content in the turns, then returns `content`. */
+	async load_content(): Promise<string> {
+		await ensure_parts_content(Array.from(this.turns.by_id.values()).flatMap((turn) => turn.parts));
+		return this.content;
+	}
 
 	/** The ids of the parts of every turn. */
 	get part_ids(): Array<Uuid> {
@@ -159,6 +172,14 @@ export class Thread extends Cell<typeof ThreadJson> {
 	 * Send a message to the AI and create corresponding turns.
 	 * Returns null if a send is already in flight, or if the model or provider
 	 * is unavailable (defensive checks - UI should prevent these).
+	 *
+	 * The turns are created and `pending` set synchronously. A file part in
+	 * the history whose content is still on its way is awaited before the
+	 * request is built (`ensure_parts_content`); cancelling meanwhile sends
+	 * nothing. A file part whose read failed (`Diskfile.content_error`) stops
+	 * the send: nothing is sent and the assistant turn takes the error. One
+	 * whose file can't load as text (over 4 MiB, not UTF-8) is left out of
+	 * the request, as its `Turn.content` leaves it out.
 	 */
 	async send_message(content: string): Promise<Turn | null> {
 		// TODO rethink this API with the completion request/response (see OpenAI/MCP/A2A)
@@ -184,23 +205,36 @@ export class Thread extends Cell<typeof ThreadJson> {
 			return null; // No turn created - UI already shows error
 		}
 
-		const completion_messages = render_completion_messages(this.turns.by_id.values());
+		const history = Array.from(this.turns.by_id.values());
+		// the parts the request is built from — `render_completion_messages` skips
+		// disabled turns (and errored ones, which hold no file parts)
+		const history_parts = (): Array<PartUnion> =>
+			history.filter((turn) => turn.enabled).flatMap((turn) => turn.parts);
+		const history_waits =
+			are_parts_loading(history_parts()) || !!find_failed_file_part(history_parts());
 
 		const user_turn = this.add_user_turn(content);
 
-		const completion_request = parse_or_throw(CompletionRequest, {
-			created: user_turn.created,
-			provider_name: model.provider_name,
-			model: model.name,
-			prompt: content,
-			completion_messages
-		});
+		const create_request = (): CompletionRequest =>
+			parse_or_throw(CompletionRequest, {
+				created: user_turn.created,
+				provider_name: model.provider_name,
+				model: model.name,
+				prompt: content,
+				completion_messages: render_completion_messages(history)
+			});
+
+		// built now unless the history waits on file contents, or one failed to read
+		let completion_request = history_waits ? null : create_request();
 
 		// Create assistant turn with the request info so streaming updates can find it
-		const assistant_turn = this.add_assistant_turn('', { request: completion_request });
+		const assistant_turn = this.add_assistant_turn(
+			'',
+			completion_request ? { request: completion_request } : undefined
+		);
 
 		// Update the user turn with the request
-		user_turn.request = completion_request;
+		if (completion_request) user_turn.request = completion_request;
 
 		// Send the prompt with thread history. Attach an AbortController so the
 		// user can stop long streams mid-flight — the server's completion handler
@@ -211,6 +245,20 @@ export class Thread extends Cell<typeof ThreadJson> {
 		this.#pending_turn = assistant_turn;
 		this.pending = true;
 		try {
+			if (!completion_request) {
+				await ensure_parts_content(history_parts());
+				// cancelled while the contents loaded — nothing was sent
+				if (controller.signal.aborted) return assistant_turn;
+				// a file the history needs couldn't be read — sending without it would mislead
+				const failed = find_failed_file_part(history_parts());
+				if (failed) {
+					assistant_turn.error_message = `couldn't load ${failed.path}: ${failed.diskfile?.content_error}`;
+					return assistant_turn;
+				}
+				completion_request = create_request();
+				assistant_turn.request = completion_request;
+				user_turn.request = completion_request;
+			}
 			await this.app.api.completion_create(
 				{
 					completion_request,

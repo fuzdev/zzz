@@ -14,6 +14,7 @@ import { reorder_list } from './list_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { format_prompt_content } from './prompt_helpers.ts';
+import { are_parts_loading, ensure_parts_content } from './part_helpers.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 
 export interface PromptMessage {
@@ -41,7 +42,15 @@ export class Prompt extends Cell<typeof PromptJson> {
 	name: string = $state.raw()!;
 	parts: Array<PartUnion> = $state()!;
 
+	/**
+	 * The parts formatted as the prompt's text. A file part still loading
+	 * shows a placeholder here (see `format_prompt_content`) — `load_content`
+	 * is the text to send or copy.
+	 */
 	readonly content: string = $derived(format_prompt_content(this.parts));
+
+	/** Whether a file part's content is still on its way, so `content` holds a placeholder for it. */
+	readonly content_loading: boolean = $derived(are_parts_loading(this.parts));
 
 	readonly length: number = $derived(this.content.length);
 	readonly token_count: number = $derived(estimate_token_count(this.content));
@@ -59,6 +68,15 @@ export class Prompt extends Cell<typeof PromptJson> {
 		};
 
 		this.init();
+	}
+
+	/**
+	 * Loads every file part's content, then returns the formatted prompt —
+	 * `content` with no loading placeholder in it.
+	 */
+	async load_content(): Promise<string> {
+		await ensure_parts_content(this.parts);
+		return format_prompt_content(this.parts);
 	}
 
 	/**

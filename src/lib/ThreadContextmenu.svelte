@@ -40,9 +40,11 @@
 	<ContextmenuSubmenu icon={icon_thread}>
 		thread
 		{#snippet menu()}
-			{#if thread.content}
+			<!-- its file parts' contents are loaded on click when they aren't yet -->
+			{#if thread.content || thread.content_loading}
 				<ContextmenuEntryCopyToClipboard
 					content={thread.content}
+					load_content={thread.content_loading ? () => thread.load_content() : undefined}
 					label="copy conversation"
 					preview={thread.content_preview}
 				/>

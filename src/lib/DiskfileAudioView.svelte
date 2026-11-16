@@ -17,6 +17,7 @@
 	import { to_file_bytes_url } from './file_bytes.ts';
 	import { format_recording_duration } from './recording_helpers.ts';
 	import {
+		find_transcript_candidates,
 		find_transcripts,
 		to_transcript_copy_path,
 		transcript_to_text
@@ -61,8 +62,21 @@
 		if (!result.ok) finalize_error = result.error.message;
 	};
 
-	// the transcripts on disk, one per model, and the job writing another
-	const transcripts = $derived(find_transcripts(diskfiles.items.values, diskfile.path));
+	// the transcripts on disk, one per model, and the job writing another — named
+	// like one, a file's content says whether it's this audio's, so they load on view
+	const transcript_candidates = $derived(
+		find_transcript_candidates(diskfiles.items.values, diskfile.path)
+	);
+	$effect(() => {
+		for (const candidate of transcript_candidates) void diskfiles.ensure_content(candidate);
+	});
+	const transcripts = $derived(find_transcripts(transcript_candidates, diskfile.path));
+	const transcripts_loading = $derived(
+		transcript_candidates.some(
+			(candidate) =>
+				candidate.content_status === 'unrequested' || candidate.content_status === 'loading'
+		)
+	);
 	// picked by the sidecar's path: two files can claim the same model
 	let selected_path: string | null = $state.raw(null);
 	const selected = $derived(
@@ -211,6 +225,8 @@
 						{:else}
 							<p class="text_50">no speech was recognized</p>
 						{/if}
+					{:else if transcripts_loading}
+						<p class="text_50">loading the transcripts</p>
 					{:else}
 						<div class="row_wrap gap_sm">
 							<PendingButton

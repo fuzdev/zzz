@@ -10,12 +10,45 @@ import type { Diskfile } from './diskfile.svelte.ts';
 import type { Diskfiles } from './diskfiles.svelte.ts';
 
 /**
- * Why a diskfile's content can be missing: the backend indexes a file's
- * content only when it's a UTF-8 text file of at most 4 MiB that it could
- * read, and sends `contents: null` otherwise.
+ * Why a diskfile's content can be missing: it loads only when it's a UTF-8
+ * text file of at most 4 MiB that the backend could read. Said when the
+ * reason isn't known — `to_diskfile_unloaded_message` is more specific when
+ * it is.
  */
 export const DISKFILE_CONTENT_NOT_LOADED_MESSAGE =
 	'content not loaded — the file is over 4 MiB, not UTF-8 text, or unreadable';
+
+/** Said while a diskfile's content is on its way (`content_status` `unrequested` or `loading`). */
+export const DISKFILE_CONTENT_LOADING_MESSAGE = 'loading the content';
+
+/**
+ * What to say about a diskfile's missing content: that it's loading, or why
+ * it can't load — the reason or error its read gave, when there was one.
+ *
+ * @returns the message, `null` when the content is loaded
+ */
+export const to_diskfile_unloaded_message = (
+	diskfile: Pick<Diskfile, 'content_status' | 'unloaded_reason' | 'content_error'>
+): string | null => {
+	switch (diskfile.content_status) {
+		case 'loaded':
+			return null;
+		case 'unrequested':
+		case 'loading':
+			return DISKFILE_CONTENT_LOADING_MESSAGE;
+		case 'unloadable':
+			if (diskfile.unloaded_reason === 'too_large') {
+				return 'content not loaded — the file is over 4 MiB';
+			}
+			if (diskfile.unloaded_reason === 'not_utf8') {
+				return "content not loaded — the file isn't UTF-8 text";
+			}
+			if (diskfile.content_error !== null) {
+				return `content not loaded — ${diskfile.content_error}`;
+			}
+			return DISKFILE_CONTENT_NOT_LOADED_MESSAGE;
+	}
+};
 
 /**
  * `data.reason` of the `invalid_params` refusing a path that isn't absolute
@@ -34,6 +67,14 @@ export const ERROR_CONTENT_NOT_LOADED = 'content_not_loaded';
  * dropping out.
  */
 export const DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER = `[${DISKFILE_CONTENT_NOT_LOADED_MESSAGE}]`;
+
+/**
+ * Stands in for a file part's content in a formatted prompt while the file's
+ * content is loading — what a preview shows until it arrives. Sending or
+ * copying awaits the content instead (`ensure_parts_content`), so neither
+ * carries this.
+ */
+export const DISKFILE_CONTENT_LOADING_PLACEHOLDER = `[${DISKFILE_CONTENT_LOADING_MESSAGE}]`;
 
 // TODO probably extract to `@fuzdev/fuz_util/path.ts`
 export const is_path_absolute = (path: string): boolean => path[0] === '/';
@@ -228,7 +269,7 @@ export const disknode_to_diskfile_json = (
 		id: existing_id,
 		source_dir: disknode.source_dir,
 		path: disknode.id, // notice the Disknode `id` is a path
-		content: disknode.contents, // notice `contents` -> `content`
+		content: disknode.contents ?? null, // notice `contents` -> `content`, absent until loaded
 		size: disknode.size,
 		mtime: disknode.mtime,
 		created,

@@ -1,5 +1,8 @@
 import type { PartUnion } from './part.svelte.ts';
-import { DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER } from './diskfile_helpers.ts';
+import {
+	DISKFILE_CONTENT_LOADING_PLACEHOLDER,
+	DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER
+} from './diskfile_helpers.ts';
 
 /**
  * The XML attributes `format_prompt_content` sets on a file part's tag to say
@@ -17,9 +20,12 @@ export const DISKFILE_PART_STATUS_ATTRIBUTES: ReadonlySet<string> = new Set([
  * Formats a collection of parts into a prompt string,
  * applying XML tags and attributes where specified.
  *
- * A file part whose file content wasn't loaded (over 4 MiB, not UTF-8 text, or
- * unreadable) contributes `DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER` in its
- * place, so the prompt shows the file is missing rather than dropping it.
+ * A file part whose file content can't be loaded (over 4 MiB, not UTF-8 text,
+ * or unreadable) contributes `DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER` in its
+ * place, so the prompt shows the file is missing rather than dropping it. One
+ * whose content is still on its way contributes
+ * `DISKFILE_CONTENT_LOADING_PLACEHOLDER` — fine for a preview, so what sends
+ * or copies the result awaits `ensure_parts_content` first (`Prompt.load_content`).
  *
  * A file part sends the file's unsaved draft when it has one
  * (`DiskfilePart.draft_status`); its XML tag then says so with `unsaved="true"`,
@@ -34,10 +40,12 @@ export const format_prompt_content = (parts: Array<PartUnion>): string => {
 	for (const part of parts) {
 		if (!part.enabled) continue;
 
-		// a file whose content wasn't loaded is marked, never silently dropped
+		// a file whose content isn't loaded is marked, never silently dropped
 		const content =
 			part.type === 'diskfile' && part.content === null
-				? DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER
+				? part.content_status === 'unloadable'
+					? DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER
+					: DISKFILE_CONTENT_LOADING_PLACEHOLDER
 				: part.content?.trim();
 		if (!content) continue;
 

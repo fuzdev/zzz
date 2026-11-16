@@ -551,7 +551,7 @@ commands):
   memory under workspaces containing large lockfiles or build outputs.
   The cross-backend integration tests don't exercise files >4 MiB. The
   frontend treats such a file (and any other `contents: None` — non-UTF-8 or
-  unreadable) as not loaded: read-only, never saved over (see
+  unreadable) as `unloadable`: read-only, never saved over (see
   ./architecture.md § Known Limitations). A loaded file's save fits the 16 MiB RPC
   message cap except in the worst case (JSON escapes each control character
   to 6 bytes), where the client guard refuses it cleanly.

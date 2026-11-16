@@ -1,5 +1,12 @@
 import { Cell, type CellOptions } from './cell.svelte.ts';
-import { DiskfileDirectoryPath, DiskfileJson, type DiskfilePath } from './diskfile_types.ts';
+import {
+	DiskfileDirectoryPath,
+	DiskfileJson,
+	type DiskfileContentStatus,
+	type DiskfilePath,
+	type DiskfileUnloadedReason,
+	type DiskfileUnloadedStatus
+} from './diskfile_types.ts';
 import { to_preview } from './helpers.ts';
 import type { PartUnion } from './part.svelte.ts';
 
@@ -11,7 +18,39 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	path: DiskfilePath = $state.raw()!;
 	source_dir: DiskfileDirectoryPath = $state.raw()!;
 
+	/** The file's text, `null` until it's loaded — see `content_status`. */
 	content: string | null = $state.raw()!;
+
+	/**
+	 * Where the content stands while `content` is `null` — `content_status`
+	 * then. Transient client state, not serialized; written by `Diskfiles`,
+	 * which loads contents on demand (`Diskfiles.ensure_content`).
+	 */
+	unloaded_status: DiskfileUnloadedStatus = $state.raw('unrequested');
+
+	/**
+	 * Why a read found no text to load (over 4 MiB, not UTF-8), when it said.
+	 * `null` otherwise, including for a file the backend sent as unloadable
+	 * without a reason.
+	 */
+	unloaded_reason: DiskfileUnloadedReason | null = $state.raw(null);
+
+	/**
+	 * The error of the last read that failed, `null` once one succeeds. A
+	 * failed first read makes the file `unloadable`; a failed re-read keeps
+	 * the content it had.
+	 */
+	content_error: string | null = $state.raw(null);
+
+	/**
+	 * Where the content stands: `loaded` whenever `content` holds it, else
+	 * `unloaded_status` — not asked for yet, on its way, or not loadable. A
+	 * loaded file stays `loaded` while it's read again after a change on disk,
+	 * keeping its content until the new one lands.
+	 */
+	readonly content_status: DiskfileContentStatus = $derived(
+		this.content !== null ? 'loaded' : this.unloaded_status
+	);
 
 	size: number | null = $state.raw()!;
 
@@ -35,14 +74,13 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	);
 
 	/**
-	 * Whether the file's content was loaded. `false` when the backend sent
-	 * `contents: null` — the file is over the 4 MiB index cap, not UTF-8 text,
-	 * or unreadable — so `content` says nothing about what's on disk: it can't
-	 * be edited or saved over (see `DISKFILE_CONTENT_NOT_LOADED_MESSAGE`).
+	 * Whether the file's content is loaded (`content_status`). While it isn't
+	 * — not yet, or not loadable — `content` says nothing about what's on
+	 * disk: the file can't be edited or saved over (see
+	 * `to_diskfile_unloaded_message`).
 	 */
 	readonly content_loaded: boolean = $derived(this.content !== null);
 
-	readonly content_length: number = $derived(this.content?.length ?? 0);
 	readonly content_preview: string = $derived(to_preview(this.content));
 
 	constructor(options: DiskfileOptions) {

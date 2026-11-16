@@ -355,8 +355,10 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
   50 sockets per account; no batch JSON-RPC.
 - **Message caps** — 16 MiB per JSON-RPC message, 32 MiB outbound queue per
   socket; terminal output is paced by acks.
-- **Every indexed file's contents** ship on open and resync; files over
-  4 MiB or not UTF-8 arrive unloaded and read-only.
+- **Every indexed file's contents** ship on open and resync, though the
+  frontend doesn't need them: it reads a file's content on demand
+  (`diskfile_read`) to show, send, or copy it; files over 4 MiB or not
+  UTF-8 don't load and are read-only.
 - **No persistent undo**; symlinks are invisible; file watching can degrade
   to polling past `max_user_watches`.
 - **The terminal emulator** lacks scrollback scrolling, IME, and mouse

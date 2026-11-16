@@ -5,6 +5,8 @@ import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount, type Component } from 'svelte';
 
 import DiskfileEditorView from '#lib/DiskfileEditorView.svelte';
+import DiskfileMarkdownView from '#lib/DiskfileMarkdownView.svelte';
+import { DISKFILE_CONTENT_LOADING_MESSAGE } from '#lib/diskfile_helpers.ts';
 import DiskfileCloseDialog from '#lib/DiskfileCloseDialog.svelte';
 import DiskfileListitem from '#lib/DiskfileListitem.svelte';
 import DiskfileTabListitem from '#lib/DiskfileTabListitem.svelte';
@@ -290,6 +292,74 @@ describe('DiskfileEditorView', () => {
 
 		click_button(view.target, 'keep the disk version');
 		assert.strictEqual(document.activeElement, view.textarea());
+	});
+});
+
+describe('a file whose content loads on view', () => {
+	/** A file seeded from metadata alone, with its read held by the test. */
+	const setup = () => {
+		const read = create_deferred<unknown>();
+		const read_paths: Array<string> = [];
+		(app as unknown as { api: unknown }).api = {
+			diskfile_read: ({ path }: { path: string }) => {
+				read_paths.push(path);
+				return read.promise;
+			}
+		};
+		app.diskfiles.add_initial([
+			{ id: PATH_A, source_dir: SOURCE_DIR, size: 4, ctime: 1, mtime: 1 }
+		]);
+		return { diskfile: app.diskfiles.get_by_path(PATH_A)!, read, read_paths };
+	};
+	const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+	for (const [name, component] of [
+		['DiskfileEditorView', DiskfileEditorView],
+		['DiskfileMarkdownView', DiskfileMarkdownView]
+	] as const) {
+		test(`${name} reads it, read-only with a loading notice until it lands`, async () => {
+			const { diskfile, read, read_paths } = setup();
+			const view = render(component, { diskfile });
+			assert.strictEqual(diskfile.content_status, 'loading');
+			assert.include(to_visible_text(view.target), DISKFILE_CONTENT_LOADING_MESSAGE);
+			assert.notInclude(to_visible_text(view.target), 'content not loaded');
+			assert.notInclude(
+				to_visible_text(view.target),
+				"can't be edited",
+				'not the notice of a file that can not load'
+			);
+			assert.isTrue(view.textarea().readOnly);
+			await flush();
+			assert.deepEqual(read_paths, [PATH_A]);
+
+			read.resolve({
+				ok: true,
+				value: { contents: 'text', unloaded_reason: null, size: 4, ctime: 1, mtime: 1 }
+			});
+			await flush();
+			flushSync();
+			assert.notInclude(to_visible_text(view.target), DISKFILE_CONTENT_LOADING_MESSAGE);
+			assert.strictEqual(view.textarea().value, 'text');
+			assert.isFalse(view.textarea().readOnly);
+			const editor_state = app.diskfiles.get_editor_state(diskfile);
+			assert.isFalse(editor_state.dirty, 'the first arrival is no change to save');
+			assert.isNull(view.alert(), 'nor a conflict');
+		});
+	}
+
+	test('a file that can not load says why, not that it is loading', async () => {
+		const { diskfile, read } = setup();
+		const view = render(DiskfileEditorView, { diskfile });
+		read.resolve({
+			ok: true,
+			value: { contents: null, unloaded_reason: 'too_large', size: 5_000_000, ctime: 1, mtime: 1 }
+		});
+		await flush();
+		flushSync();
+		const text = to_visible_text(view.target);
+		assert.include(text, 'over 4 MiB');
+		assert.notInclude(text, DISKFILE_CONTENT_LOADING_MESSAGE);
+		assert.isTrue(view.textarea().readOnly);
 	});
 });
 

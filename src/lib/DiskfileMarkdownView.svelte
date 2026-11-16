@@ -46,7 +46,10 @@
 	import DiskfileSaveErrorNotice from './DiskfileSaveErrorNotice.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
 	import Icon from './Icon.svelte';
-	import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
+	import {
+		DISKFILE_CONTENT_LOADING_MESSAGE,
+		to_diskfile_unloaded_message
+	} from './diskfile_helpers.ts';
 	import { lang_for_path } from './path_lang.ts';
 	import { handle_save_shortcut_keydown } from './save_shortcut.ts';
 	import {
@@ -88,6 +91,11 @@
 
 	// app-level, so switching tabs or remounting keeps the draft, selection, save state, and mode
 	const editor_state = $derived(app.diskfiles.get_editor_state(diskfile));
+
+	// loads the content on view — the editing state then keeps it current
+	$effect(() => {
+		void app.diskfiles.ensure_content(editor_state.diskfile);
+	});
 
 	const mode = $derived(editor_state.markdown_view_mode);
 	const lang = $derived(lang_for_path(diskfile.path) ?? 'md');
@@ -401,9 +409,13 @@
 					</button>
 				{/each}
 			</div>
-			{#if !editor_state.content_loaded}
+			{#if editor_state.content_loading}
+				<p class="px_md py_xs text_50">
+					{DISKFILE_CONTENT_LOADING_MESSAGE} — read-only until it arrives
+				</p>
+			{:else if !editor_state.content_loaded}
 				<p class="px_md py_xs color_c_60">
-					{DISKFILE_CONTENT_NOT_LOADED_MESSAGE} — read-only, it can't be edited or saved
+					{to_diskfile_unloaded_message(diskfile)} — read-only, it can't be edited or saved
 				</p>
 			{:else if diskfile.deleted_on_disk}
 				<p class="px_md py_xs color_c_60">
@@ -441,7 +453,9 @@
 							bind:pending_element_to_focus_key={app.ui.pending_element_to_focus_key}
 							placeholder={editor_state.content_loaded
 								? format_placeholder(diskfile.path_relative)
-								: '[content not loaded]'}
+								: editor_state.content_loading
+									? '[loading]'
+									: '[content not loaded]'}
 							readonly={!editor_state.can_edit}
 							wrapper_attrs={{ class: 'flex:1 min-height:0' }}
 							attrs={{ class: 'height:100% border-radius:0 resize:none' }}

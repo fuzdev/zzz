@@ -5,6 +5,7 @@ import { estimate_token_count_from_length } from './helpers.ts';
 import { joined_content_length } from './thread_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import type { PartUnion, TextPart } from './part.svelte.ts';
+import { are_parts_loading, ensure_parts_content } from './part_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import type { Thread } from './thread.svelte.ts';
 import { TurnJson } from './turn_types.ts';
@@ -41,11 +42,25 @@ export class Turn extends Cell<typeof TurnJson> {
 		}
 	}
 
+	/**
+	 * The parts' text joined, skipping a part without any — a file part whose
+	 * content isn't loaded included, so what sends or copies it awaits
+	 * `load_content` (or `ensure_parts_content` over the turns) first.
+	 */
 	get content(): string {
 		return this.parts
 			.map((part) => part.content)
 			.filter((c) => c != null)
 			.join('\n\n');
+	}
+
+	/** Whether a file part's content is still on its way, so `content` lacks it for now. */
+	readonly content_loading: boolean = $derived(are_parts_loading(this.parts));
+
+	/** Loads every file part's content, then returns `content`. */
+	async load_content(): Promise<string> {
+		await ensure_parts_content(this.parts);
+		return this.content;
 	}
 
 	/**

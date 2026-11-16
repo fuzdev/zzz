@@ -380,7 +380,9 @@ Prompt → parts: Array<Part>  (reusable content templates)
 ### Parts
 
 - Text (`TextPart`) — `content: string` stored directly
-- Diskfile (`DiskfilePart`) — `path: DiskfilePath | null` → reads from disk or editor state
+- Diskfile (`DiskfilePart`) — `path: DiskfilePath | null` → reads from disk or editor state;
+  attaching one loads the file's content and keeps it current (see
+  [Contents on demand](#file-editing))
 
 ### Turns
 
@@ -462,10 +464,11 @@ Container for multi-model comparison. Holds `thread_ids`, resolves to Thread ins
 ```
 User types message in Chat UI
   → Thread.send_message(content)
+    → Create user Turn with TextPart
+    → Create empty assistant Turn (progressToken = turn.id), `pending` set
+    → Await the history's file parts still loading (`ensure_parts_content`)
     → Build CompletionMessage[] from thread history (before the new message,
       which is sent as `prompt`)
-    → Create user Turn with TextPart
-    → Create empty assistant Turn (progressToken = turn.id)
     → app.api.completion_create(request)
       → ActionEvent send_request phase
         → Transport.send(JSON-RPC request)
@@ -1088,7 +1091,7 @@ These routes are outside the action system — they don't appear in the actions 
 
 ### Filer
 
-`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, contents, size, ctime, mtime}`: `id` is its path, `contents` its text or `null` when not loaded, and `size` its bytes from the `lstat` the filer read it after — known whether or not the contents are loaded, `null` only on a `delete`'s node. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. A change that moved an indexed file's metadata (its size or timestamps) and left the contents the index holds for it as they were (a `touch`, a rewrite of the same bytes) is a `touch`: its `disknode` is the file's metadata with no `contents` key (`DisknodeMetadata`), so the contents aren't sent again — a client holding the file keeps the content it has (`Diskfiles.touch`), and one that doesn't ignores it. The index holds no contents for a file it didn't load, so every change to such a file is a `touch`, and what shows it changed is its `size` and `mtime`. Every other change carries the whole disknode, where `contents: null` keeps its one meaning: not loaded. A touch folded into an unbroadcast `add` or `change` is sent as that change, contents included. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
+`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, contents, size, ctime, mtime}`: `id` is its path, `contents` its text or `null` when not loaded, and `size` its bytes from the `lstat` the filer read it after — known whether or not the contents are loaded, `null` only on a `delete`'s node. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. A change that moved an indexed file's metadata (its size or timestamps) and left the contents the index holds for it as they were (a `touch`, a rewrite of the same bytes) is a `touch`: its `disknode` is the file's metadata with no `contents` key (`DisknodeMetadata`), so the contents aren't sent again — a client holding the file reads it again if it holds it eagerly and otherwise drops its content to load on next access (`Diskfiles.touch`, see [File Editing](#file-editing)), and one that doesn't ignores it. The index holds no contents for a file it didn't load, so every change to such a file is a `touch`, and what shows it changed is its `size` and `mtime`. Every other change carries the whole disknode, where `contents: null` keeps its one meaning: not loadable as text. The frontend takes a disknode's `contents` as a read of the file, and a disknode without them as metadata (`SerializableDisknode.contents` is optional). A touch folded into an unbroadcast `add` or `change` is sent as that change, contents included. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
 
 Watches are per directory: the filer's own walk (on a blocking thread) adds one non-recursive watch to each directory it indexes — never inside ignored, symlinked, or non-UTF-8 directories — watching each before listing it, so nothing created in between is missed. A directory that appears gets watches for its subtree when it's synced; one that's removed or renamed away has them dropped (two paths sharing one inode, like a renamed directory's old and new path or a bind mount, share one kernel watch, removed only with its last path). An unreadable subdirectory is skipped and logged once, and picked up once it's readable again; one made unreadable later drops out of the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's indexed under it and retries. Rescans (`session_load`, overflow recovery) re-read only files whose `lstat` identity or change stamps moved, and trust a stamp only once the file has been still for two seconds (git's "racily clean" rule), since same-size writes within one timestamp tick look identical.
 
@@ -1109,8 +1112,8 @@ text editor (`DiskfileEditorView`). The markdown view is the text editor's
 twin over the same editing state: its source in `SourceEditor` (fuz_code's
 highlighted `CodeTextarea`) beside a live `MarkdownPreview`, or either alone —
 split, preview, or source, a mode chosen per file and kept on its
-`DiskfileEditorState`, defaulting to the split, or to the preview while the
-content isn't loaded. Ctrl+Shift+1, 2, and 3 switch to split, preview, and
+`DiskfileEditorState`, defaulting to the split, or to the preview when the
+content can't be loaded. Ctrl+Shift+1, 2, and 3 switch to split, preview, and
 source from anywhere on the page — the textarea included, since Ctrl+Shift
 types nothing — except an input or contenteditable outside the view, or while
 a modal dialog is open. The markdown view's details add the document's
@@ -1291,7 +1294,53 @@ editor; the main `/files` view also takes it from anywhere on the page, the
 markdown view included when its preview is shown alone and no editor is
 mounted.
 
-**Disk changes and drafts.** `Diskfiles.upsert` records every content change
+**Contents on demand.** A diskfile's content loads when something needs
+it, over `diskfile_read`. The backend's disknodes still carry contents,
+and the frontend takes a disknode's `contents` as a read; a disknode
+without them carries metadata only. `Diskfile.content_status` says where
+the content stands: `unrequested`, `loading`, `loaded`, or `unloadable` — a
+read found no text (`unloaded_reason`: over 4 MiB, or not UTF-8) or failed
+(`content_error`). `Diskfiles.ensure_content` is single-flight per file:
+callers share the read in flight, and a change on disk while it's in flight
+reads again, resolving with the newer content. Reads queue at most
+`DISKFILE_READ_CONCURRENCY` at once (JSON-RPC batches aren't supported),
+the selected tab's file first, then the other tabs'. A read never touches
+`size` or `mtime`, which stay the index's. What loads content:
+
+- **The editors** — text, markdown, transcript, and file-part editors —
+  on view. Until it lands an editor is read-only with a "loading" notice,
+  distinct from a file that can't load, and nothing saves
+  (`Diskfiles.update` refuses too). The first content to land seeds the
+  editing state's original entry: it's how the file was first seen, not a
+  disk change, and never a conflict.
+- **A `DiskfilePart`** as it attaches (`Diskfiles.track_part_path`), so its
+  content, length, and token counts follow; until then a formatted prompt
+  shows a `[loading the content]` placeholder for it.
+- **The audio view and the recordings page** load the files named like the
+  audio's transcript sidecars (`find_transcript_candidates`), whose contents
+  say which audio they were made from.
+- **Sending and copying** await what's missing: `Thread.send_message`
+  creates the turns and sets `pending` at once, then awaits the history's
+  file parts still loading before building the request (a cancel meanwhile
+  sends nothing). A part whose read failed (`content_error`) stops the send:
+  nothing is sent and the assistant turn shows the error. A part whose file
+  can't load as text is left out of the request, as `Turn.content` leaves
+  it out. The copy entries for a file, part, prompt, turn, and thread copy
+  loaded content at once, with no await before the clipboard write; content
+  still to load is loaded on click (`ensure_parts_content`,
+  `Prompt.load_content`), and if that wait cost the click's user activation
+  the entry stays open saying "loaded — copy again".
+
+A file is held eagerly while it has an editing state or a `DiskfilePart`
+references it. A change on disk that comes without contents — every
+`touch`, and any metadata-only disknode, a reconnect's snapshot entries
+included — re-reads an eagerly held file, keeping its content until the new
+one lands so its editor never turns read-only meanwhile, and drops any
+other file's content back to `unrequested`, to load again on next access. A
+re-read of unchanged text changes nothing (`check_disk_changes` compares
+strings), so a resync raises no spurious conflict.
+
+**Disk changes and drafts.** `Diskfiles` records every content change
 in the file's editing state, if it has one — whether or not an editor is
 mounted — so a file reopens on the disk content, never text a save would
 write back over an external change. A clean editor follows the disk. Editing
@@ -1825,16 +1874,20 @@ Population, per capability:
   while the flood lasts. Nothing times a stalled client out: a tab that stays
   connected and stops acking (its JavaScript frozen) keeps the terminals it
   alone shows blocked until it resumes or its socket closes
-- **Unloaded files are read-only** — the file index holds contents only for
-  UTF-8 files up to 4 MiB it could read; any other file arrives with
-  `contents: null` (`Diskfile.content_loaded` is `false`). The editor shows it
-  read-only and empty with a "content not loaded" notice (no stale earlier
-  text, no copy button) and never saves it (`DiskfileEditorState` ignores
-  edits and refuses `save_changes`; `Diskfiles.update` refuses to write over
-  it too, with `conflict` / `content_not_loaded`), since a save would
-  overwrite a file nobody has seen. A file part for it contributes a `[content
-  not loaded — …]` placeholder to a formatted prompt instead of silently
-  dropping out
+- **Unloadable files are read-only** — a file's content loads only when it's
+  UTF-8 text up to 4 MiB the backend could read; any other file is
+  `unloadable` (`Diskfile.content_status`). The editor shows it read-only and
+  empty with a "content not loaded" notice, saying why when the read did (no
+  stale earlier text, no copy entry), and never saves it
+  (`DiskfileEditorState` ignores edits and refuses `save_changes`;
+  `Diskfiles.update` refuses to write over it too, with `conflict` /
+  `content_not_loaded`), since a save would overwrite a file nobody has seen
+  — as for a file whose content is still loading. A file part for it
+  contributes a `[content not loaded — …]` placeholder to a formatted prompt
+  instead of silently dropping out, but a chat turn's request leaves it out
+  (as `Turn.content` does). A failed read settles a file unloadable until
+  its next change on disk — a send needing it stops with an error — and a
+  failed re-read keeps the content it had
 - **No persistent undo** — saves overwrite the file on disk; the editor keeps
   an in-memory per-file history (`DiskfileHistory`) you can restore from, lost
   on reload, as are unsaved drafts — leaving the page while any file has

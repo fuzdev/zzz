@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
+import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { get_datetime_now } from '#lib/datetime.ts';
@@ -10,7 +11,12 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 
 import { format_prompt_content } from '#lib/prompt_helpers.ts';
-import { DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER } from '#lib/diskfile_helpers.ts';
+import {
+	DISKFILE_CONTENT_LOADING_PLACEHOLDER,
+	DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER
+} from '#lib/diskfile_helpers.ts';
+import { Prompt } from '#lib/prompt.svelte.ts';
+import { Part } from '#lib/part.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
@@ -199,6 +205,8 @@ describe('DiskfilePart content access', () => {
 		assert.strictEqual(part.content, TEST_CONTENT.BASIC);
 		// the file's editor shows '' for an unloaded file
 		const editor_state = app.diskfiles.get_editor_state(diskfile);
+		// the file grew past what loads, say
+		diskfile.unloaded_status = 'unloadable';
 		diskfile.content = null;
 		assert.strictEqual(editor_state.current_content, '');
 
@@ -520,5 +528,48 @@ describe('DiskfilePart position markers', () => {
 
 		assert.strictEqual(part.start, 5);
 		assert.strictEqual(part.end, 15);
+	});
+});
+
+describe('DiskfilePart content still loading', () => {
+	const LAZY_PATH = parse_or_throw(DiskfilePath, TEST_DIR + 'lazy.txt');
+
+	/** A prompt with a file part whose content isn't loaded, its read held by the test. */
+	const setup = () => {
+		const read = create_deferred<unknown>();
+		(app as unknown as { api: unknown }).api = { diskfile_read: () => read.promise };
+		app.diskfiles.add_initial([
+			{ id: LAZY_PATH, source_dir: TEST_DIR, size: 4, ctime: 1, mtime: 1 }
+		]);
+		const prompt = new Prompt({ app });
+		prompt.add_part(Part.create(app, { type: 'diskfile', path: LAZY_PATH }));
+		return { prompt, read };
+	};
+
+	test('previews a loading placeholder, and load_content awaits the text', async () => {
+		const { prompt, read } = setup();
+		assert.include(prompt.content, DISKFILE_CONTENT_LOADING_PLACEHOLDER);
+		assert.notInclude(prompt.content, DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER);
+		assert.isTrue(prompt.content_loading);
+
+		const loading = prompt.load_content();
+		read.resolve({
+			ok: true,
+			value: { contents: 'lazy text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+		});
+		const content = await loading;
+		assert.include(content, 'lazy text');
+		assert.notInclude(content, DISKFILE_CONTENT_LOADING_PLACEHOLDER);
+		assert.isFalse(prompt.content_loading);
+	});
+
+	test('a file that can not load is marked as not loaded once its read says so', async () => {
+		const { prompt, read } = setup();
+		const loading = prompt.load_content();
+		read.resolve({
+			ok: true,
+			value: { contents: null, unloaded_reason: 'not_utf8', size: 9, ctime: 1, mtime: 1 }
+		});
+		assert.include(await loading, DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER);
 	});
 });

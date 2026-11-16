@@ -110,7 +110,11 @@
 						</small>
 					</div>
 					<div class="row gap_xs py_xs">
-						<CopyToClipboard text={app.prompts.selected.content} class="plain" />
+						<!-- disabled while a file part loads, so a copy never holds its placeholder -->
+						<CopyToClipboard
+							text={app.prompts.selected.content_loading ? null : app.prompts.selected.content}
+							class="plain"
+						/>
 						<div class="flex:1">
 							<PromptStats prompt={app.prompts.selected} />
 						</div>

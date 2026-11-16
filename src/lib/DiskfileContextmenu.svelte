@@ -98,9 +98,15 @@
 
 				<DiskfileCopyPathEntries path={diskfile.path} />
 
-				{#if diskfile.content}
+				<!-- loaded on click when it isn't yet; kept after a failed read, to say why -->
+				{#if (diskfile.content_status !== 'unloadable' || diskfile.content_error !== null) &&
+					diskfile.content !== ''
+				}
 					<ContextmenuEntryCopyToClipboard
-						content={diskfile.content}
+						content={diskfile.content ?? undefined}
+						load_content={diskfile.content_status === 'loaded'
+							? undefined
+							: () => diskfiles.load_content(diskfile)}
 						label="copy file content"
 						preview={diskfile.content_preview}
 					/>
@@ -148,7 +154,7 @@
 		{#if to_diskfile_content_kind(diskfile.path) === 'markdown'}
 			{@const current_mode =
 				diskfiles.find_editor_state(diskfile.id)?.markdown_view_mode ??
-				to_default_markdown_view_mode(diskfile.content_loaded)}
+				to_default_markdown_view_mode(diskfile.content_status !== 'unloadable')}
 			<!-- rendering only looks the editing state up: it's created on a choice, never by opening the menu -->
 			<ContextmenuSubmenu icon={icon_view}>
 				view

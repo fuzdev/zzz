@@ -16,7 +16,10 @@
 	import DiskfileConflictNotice from './DiskfileConflictNotice.svelte';
 	import DiskfileSaveErrorNotice from './DiskfileSaveErrorNotice.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
-	import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
+	import {
+		DISKFILE_CONTENT_LOADING_MESSAGE,
+		to_diskfile_unloaded_message
+	} from './diskfile_helpers.ts';
 
 	const {
 		diskfile,
@@ -30,6 +33,11 @@
 
 	// app-level, so switching tabs or remounting keeps the draft, selection, and save state
 	const editor_state = $derived(app.diskfiles.get_editor_state(diskfile));
+
+	// loads the content on view — the editing state then keeps it current
+	$effect(() => {
+		void app.diskfiles.ensure_content(editor_state.diskfile);
+	});
 
 	// Reference to the content editor component
 	let content_editor: { focus: () => void } | undefined = $state.raw();
@@ -54,9 +62,13 @@
 	inside the view, under the desk menu's overlay -->
 	<div class="flex height:100% isolation:isolate">
 		<div class="flex:1 width_atleast_sm height:100% column">
-			{#if !editor_state.content_loaded}
+			{#if editor_state.content_loading}
+				<p class="px_md py_xs text_50">
+					{DISKFILE_CONTENT_LOADING_MESSAGE} — read-only until it arrives
+				</p>
+			{:else if !editor_state.content_loaded}
 				<p class="px_md py_xs color_c_60">
-					{DISKFILE_CONTENT_NOT_LOADED_MESSAGE} — read-only, it can't be edited or saved
+					{to_diskfile_unloaded_message(diskfile)} — read-only, it can't be edited or saved
 				</p>
 			{:else if diskfile.deleted_on_disk}
 				<p class="px_md py_xs color_c_60">
@@ -93,7 +105,9 @@
 				token_count={editor_state.current_token_count}
 				placeholder={editor_state.content_loaded
 					? format_placeholder(diskfile.path_relative)
-					: '[content not loaded]'}
+					: editor_state.content_loading
+						? '[loading]'
+						: '[content not loaded]'}
 				readonly={!editor_state.can_edit}
 				attrs={{ class: 'height:100% border-radius:0' }}
 				save_shortcut="page"

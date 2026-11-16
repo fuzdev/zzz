@@ -6,6 +6,7 @@ import {
 	number,
 	object,
 	one_of,
+	optional,
 	pipe,
 	string,
 	with_default,
@@ -27,6 +28,10 @@ import { PathWithTrailingSlash } from './path_schemas.ts';
  *   again. The backend holds no contents for a file it didn't load
  *   (`contents: null`), so every change to such a file is a `touch`
  * - `delete` — it's gone
+ *
+ * The frontend treats a notification without contents — every `touch` —
+ * as a sign the file may have changed: a file it holds eagerly is read
+ * again, any other loses its loaded content (see `Diskfiles.upsert`).
  */
 export const DiskfileChangeType = one_of(['add', 'change', 'touch', 'delete']);
 export type DiskfileChangeType = Infer<typeof DiskfileChangeType>;
@@ -71,11 +76,17 @@ export type DiskfileUnloadedReason = Infer<typeof DiskfileUnloadedReason>;
  * whether or not its contents are loaded — `null` when the backend can't
  * say (a deleted file's node). `ctime` / `mtime` are milliseconds since the
  * epoch, `null` when the backend can't say.
+ *
+ * `contents` is optional: a node without it carries metadata only, and the
+ * frontend reads the contents when it needs them (`diskfile_read`). Present,
+ * it's a read the frontend takes as loaded — a string, or `null` for a file
+ * whose contents can't be loaded as text (over 4 MiB, not UTF-8, or
+ * unreadable).
  */
 export const SerializableDisknode = object({
 	id: DiskfilePath,
 	source_dir: DiskfileDirectoryPath,
-	contents: nullable(string),
+	contents: optional(nullable(string)),
 	size: nullable(number),
 	ctime: nullable(number),
 	mtime: nullable(number)
@@ -85,17 +96,31 @@ export type SerializableDisknode = Infer<typeof SerializableDisknode>;
 /**
  * A disknode without its contents — what a `touch` change carries. It has no
  * `contents` key, which is not `contents: null`: `null` says the file's
- * contents aren't loaded, and this says nothing about them — whoever holds
- * the file keeps the contents it has.
+ * contents can't be loaded, and this says nothing about them.
  */
 const { contents: _contents, ...disknode_metadata_entries } = SerializableDisknode.def;
 export const DisknodeMetadata = object(disknode_metadata_entries);
 export type DisknodeMetadata = Infer<typeof DisknodeMetadata>;
 
 /**
+ * Where a diskfile's content stands — see `Diskfile.content_status`:
+ *
+ * - `unrequested` — not loaded, and nothing asked for it yet
+ * - `loading` — a read is on its way
+ * - `loaded` — `Diskfile.content` holds it
+ * - `unloadable` — the read found no text to load (`Diskfile.unloaded_reason`)
+ *   or failed (`Diskfile.content_error`)
+ */
+export const DiskfileContentStatus = one_of(['unrequested', 'loading', 'loaded', 'unloadable']);
+export type DiskfileContentStatus = Infer<typeof DiskfileContentStatus>;
+
+/** `DiskfileContentStatus` without `loaded` — where the content stands while there's none. */
+export type DiskfileUnloadedStatus = Exclude<DiskfileContentStatus, 'loaded'>;
+
+/**
  * A file on disk. `path` and `source_dir` are required — a diskfile is
- * always for one file. `content` is `null` when it wasn't loaded (see
- * `Diskfile.content_loaded`).
+ * always for one file. `content` is `null` until it's loaded (see
+ * `Diskfile.content_status`).
  */
 export const DiskfileJson = cell_json_schema(
 	{
@@ -104,7 +129,9 @@ export const DiskfileJson = cell_json_schema(
 		content: with_default(nullable(string), null),
 		/**
 		 * The file's size on disk in bytes — `null` when the backend couldn't
-		 * say. Known whether or not `content` is loaded.
+		 * say. Known whether or not `content` is loaded, and taken from the
+		 * index alone: a content read (`diskfile_read`) doesn't change it, so a
+		 * read racing a write can leave it briefly apart from `content`'s length.
 		 */
 		size: with_default(nullable(number), null),
 		/**

@@ -67,9 +67,32 @@ export interface FoundTranscript<T extends TranscriptCandidate = TranscriptCandi
 }
 
 /**
+ * The files that could be transcript sidecars of the audio file at
+ * `source_path`, by name alone: the ones beside it named
+ * `<source name>.<model>.transcript.json`. Their contents settle which are
+ * (`find_transcripts`), so a caller loads these first.
+ *
+ * @param files - the files to look through
+ * @param source_path - the audio file's absolute path
+ */
+export const find_transcript_candidates = <T extends { readonly path: string }>(
+	files: Iterable<T>,
+	source_path: string
+): Array<T> => {
+	const prefix = source_path + '.';
+	const candidates: Array<T> = [];
+	for (const file of files) {
+		if (file.path.startsWith(prefix) && is_transcript_path(file.path)) candidates.push(file);
+	}
+	return candidates;
+};
+
+/**
  * Finds the transcript sidecars of the audio file at `source_path` among
  * `files`: the files beside it named `<source name>.<model>.transcript.json`
- * whose content says they were made from it. Sorted by model name.
+ * whose content says they were made from it. Sorted by model name. A
+ * candidate whose content isn't loaded isn't found — load the
+ * `find_transcript_candidates` first.
  *
  * @param files - the files to look through
  * @param source_path - the audio file's absolute path
@@ -78,11 +101,9 @@ export const find_transcripts = <T extends TranscriptCandidate>(
 	files: Iterable<T>,
 	source_path: string
 ): Array<FoundTranscript<T>> => {
-	const prefix = source_path + '.';
 	const source_name = to_name(source_path);
 	const found: Array<FoundTranscript<T>> = [];
-	for (const file of files) {
-		if (!file.path.startsWith(prefix) || !is_transcript_path(file.path)) continue;
+	for (const file of find_transcript_candidates(files, source_path)) {
 		const transcript = parse_transcript(file.content);
 		if (transcript?.source.name !== source_name) continue;
 		found.push({ file, transcript });

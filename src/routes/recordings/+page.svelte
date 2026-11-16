@@ -15,7 +15,7 @@
 	import JobStatusView from '#lib/JobStatusView.svelte';
 	import { icon_microphone, icon_record } from '#lib/media_icons.ts';
 	import { format_recording_duration, to_recordings_dir } from '#lib/recording_helpers.ts';
-	import { find_transcripts } from '#lib/transcript_helpers.ts';
+	import { find_transcript_candidates, find_transcripts } from '#lib/transcript_helpers.ts';
 	import PageFooter from '#routes/PageFooter.svelte';
 
 	const app = frontend_context.get();
@@ -41,6 +41,20 @@
 
 	const to_name = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 
+	/** The files that may be `diskfile`'s transcripts — their contents say which. */
+	const to_candidates = (diskfile: Diskfile): Array<Diskfile> =>
+		find_transcript_candidates(diskfiles.items.values, diskfile.path);
+
+	const is_loading = (diskfile: Diskfile): boolean =>
+		diskfile.content_status === 'unrequested' || diskfile.content_status === 'loading';
+
+	// the transcripts' contents say which recording they're of, so they load with the page
+	$effect(() => {
+		for (const recording of recordings) {
+			for (const candidate of to_candidates(recording)) void diskfiles.ensure_content(candidate);
+		}
+	});
+
 	const open = (diskfile: Diskfile): void => {
 		diskfiles.select(diskfile.id, true);
 		void goto(resolve('/files'));
@@ -59,7 +73,9 @@
 	const delete_recording = async (diskfile: Diskfile): Promise<void> => {
 		error_message = null;
 		try {
-			for (const { file } of find_transcripts(diskfiles.items.values, diskfile.path)) {
+			const candidates = to_candidates(diskfile);
+			await Promise.all(candidates.map((candidate) => diskfiles.ensure_content(candidate)));
+			for (const { file } of find_transcripts(candidates, diskfile.path)) {
 				await diskfiles.delete(file.path);
 			}
 			await diskfiles.delete(diskfile.path);
@@ -139,7 +155,9 @@
 	{:else}
 		<ul class="unstyled column gap_md">
 			{#each recordings as diskfile (diskfile.id)}
-				{@const transcripts = find_transcripts(diskfiles.items.values, diskfile.path)}
+				{@const candidates = to_candidates(diskfile)}
+				{@const transcripts = find_transcripts(candidates, diskfile.path)}
+				{@const transcripts_loading = candidates.some(is_loading)}
 				{@const job = jobs.latest_for_input(diskfile.path)}
 				{@const is_recording = recorder.path === diskfile.path}
 				<li class="panel p_md">
@@ -151,6 +169,8 @@
 							<small class="chip">recording</small>
 						{:else if job && !job.finished}
 							<!-- shown below -->
+						{:else if transcripts_loading}
+							<!-- the transcripts say so once they load -->
 						{:else if transcripts.length > 0}
 							<small class="text_50">
 								transcribed by {transcripts.map((t) => t.transcript.tool.model).join(', ')}

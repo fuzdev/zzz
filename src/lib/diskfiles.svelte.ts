@@ -11,6 +11,7 @@ import { untrack } from 'svelte';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
+import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import { jsonrpc_error_messages } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
@@ -32,6 +33,7 @@ import {
 	parse_new_diskfile_name,
 	to_file_directories,
 	to_innermost_root,
+	to_diskfile_unloaded_message,
 	to_relative_path,
 	to_unindexed_segment
 } from './diskfile_helpers.ts';
@@ -47,6 +49,30 @@ import { create_detached } from './reactive_helpers.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { DiskfileTreeIndex } from './diskfile_tree_state.svelte.ts';
 import type { ActionInputs, ActionOutputs } from './action_collections.ts';
+import { TaskQueue } from './task_queue.ts';
+
+/**
+ * How many `diskfile_read` requests `Diskfiles` keeps in flight — reads
+ * beyond it wait in a queue, the shown files first (JSON-RPC batches aren't
+ * supported, so each read is its own request).
+ */
+export const DISKFILE_READ_CONCURRENCY = 4;
+
+/** A content read in flight — see `Diskfiles.ensure_content`. */
+interface ContentLoad {
+	promise: Promise<void>;
+	/** The file changed on disk while the read was in flight, so it reads again. */
+	stale: boolean;
+	/**
+	 * Contents arrived on the wire while the read was in flight — maybe newer
+	 * than what it returns, so its result isn't applied over them.
+	 */
+	superseded: boolean;
+}
+
+/** What `Diskfiles` takes from a `diskfile_read`: its output, or why it failed. */
+type ContentReadResult =
+	{ ok: true; value: ActionOutputs['diskfile_read'] } | { ok: false; message: string };
 
 export const DiskfilesJson = cell_json_schema(
 	{
@@ -211,7 +237,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	handle_change(params: ActionInputs['filer_change']): void {
 		const { disknode } = params;
-		if (!('contents' in disknode)) {
+		if (params.change.type === 'touch') {
 			// recorded apart from the changes a snapshot in flight yields to
 			// (see `track_changes`), whether or not there's a diskfile to update
 			for (const tracker of this.#change_trackers) tracker.touches.set(disknode.id, disknode);
@@ -227,25 +253,37 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Applies a `touch`: the file's metadata changed on disk and the contents
-	 * the backend holds for it did not, so the diskfile keeps the content it
-	 * has — loaded or not — and takes the new `size` and `mtime`. For a file
-	 * whose content isn't loaded the backend holds none, so every change to it
-	 * arrives this way. Nothing else changes: no editor state is notified,
-	 * since there's no new content to weigh against a draft.
+	 * Applies a `touch`: the file's metadata changed on disk. It takes the new
+	 * `size` and `mtime`, and since a notification without contents can't say
+	 * whether the bytes moved, its content is treated as a change on disk
+	 * would be (see `upsert`): read again if the file is held eagerly, else
+	 * dropped until it's next needed. A read that lands on the same text
+	 * changes nothing (`DiskfileEditorState.check_disk_changes`).
 	 *
-	 * A path this client doesn't hold is left alone (there are no contents to
-	 * add it with — the next snapshot brings it), as is a diskfile kept after
-	 * its file was deleted, whose content is no longer the file's.
+	 * A path this client doesn't hold is left alone (the next snapshot brings
+	 * it), as is a diskfile kept after its file was deleted, whose content is
+	 * no longer the file's.
 	 *
 	 * @returns whether a diskfile was updated
 	 */
 	touch(metadata: DisknodeMetadata): boolean {
+		const existing = this.#apply_metadata(metadata);
+		if (!existing) return false;
+		this.#follow_disk_change(existing);
+		return true;
+	}
+
+	/**
+	 * Takes a touch's `size` and `mtime` — nothing else.
+	 *
+	 * @returns the diskfile updated, `undefined` for a path not held or a file deleted on disk
+	 */
+	#apply_metadata(metadata: DisknodeMetadata): Diskfile | undefined {
 		const existing = this.items.by_optional('by_path', metadata.id);
-		if (!existing || existing.deleted_on_disk) return false;
+		if (!existing || existing.deleted_on_disk) return undefined;
 		if (existing.size !== metadata.size) existing.size = metadata.size;
 		if (existing.mtime !== metadata.mtime) existing.mtime = metadata.mtime;
-		return true;
+		return existing;
 	}
 
 	/**
@@ -316,22 +354,58 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Adds a diskfile for `disknode`, or updates the existing one at the same
 	 * path in place — keeping its id, so tabs, selection, and parts stay attached.
 	 * A diskfile kept after a delete (see `remove_by_path`) is reattached this
-	 * way when its path reappears on disk. An existing diskfile whose content
-	 * and dependency data already match is left untouched but for its `size`
-	 * and `mtime`, so a resync that re-sends every file doesn't churn the
-	 * unchanged ones. A content change is recorded in the file's editing
-	 * state, if it has one (`DiskfileEditorState.check_disk_changes`).
+	 * way when its path reappears on disk.
+	 *
+	 * A disknode with `contents` is a read: the diskfile takes them as loaded
+	 * (`null` makes it `unloadable`). An existing diskfile whose content and
+	 * dependency data already match is left untouched but for its `size` and
+	 * `mtime`, so a resync that re-sends every file doesn't churn the unchanged
+	 * ones. A content change is recorded in the file's editing state, if it has
+	 * one (`DiskfileEditorState.check_disk_changes`).
+	 *
+	 * A disknode without `contents` carries metadata only, so for a diskfile
+	 * already held its content may be out of date: a file held eagerly — with
+	 * an editing state, or referenced by a `DiskfilePart` — is read again,
+	 * keeping its content until the new one lands, and any other drops its
+	 * content to `unrequested`, to be read when next needed
+	 * (`ensure_content`). A read in flight reads again instead. A new file
+	 * starts `unrequested`, and is read right away if a part references it.
 	 */
 	upsert(disknode: SerializableDisknode): Diskfile {
 		const existing = this.items.by_optional('by_path', disknode.id);
+		const { contents } = disknode;
 		if (!existing) {
-			return this.add(disknode_to_diskfile_json(disknode));
+			const diskfile = this.add(disknode_to_diskfile_json(disknode));
+			if (contents === null) {
+				diskfile.unloaded_status = 'unloadable';
+			} else if (contents === undefined && this.#is_held_eagerly(diskfile)) {
+				void this.#start_load(diskfile);
+			}
+			return diskfile;
+		}
+		if (contents === undefined) {
+			existing.deleted_on_disk = false;
+			if (existing.source_dir !== disknode.source_dir) existing.source_dir = disknode.source_dir;
+			if (existing.size !== disknode.size) existing.size = disknode.size;
+			if (existing.mtime !== disknode.mtime) existing.mtime = disknode.mtime;
+			// back on disk, and its root may have changed with a snapshot from another filer
+			this.#sync_directories(existing);
+			this.#follow_disk_change(existing);
+			return existing;
+		}
+		// a read in flight may have been served before this — it reads again,
+		// and its result isn't applied over these contents
+		const load = this.#loads.get(existing.id);
+		if (load) {
+			load.stale = true;
+			load.superseded = true;
 		}
 		if (!existing.deleted_on_disk && diskfile_matches(existing, disknode)) {
 			// the metadata a rewrite to the same content changes — and the only
 			// sign of a change to a file whose content isn't loaded
 			if (existing.size !== disknode.size) existing.size = disknode.size;
 			if (existing.mtime !== disknode.mtime) existing.mtime = disknode.mtime;
+			this.#settle_contents(existing, contents);
 			return existing;
 		}
 		existing.deleted_on_disk = false;
@@ -341,10 +415,243 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			created: existing.created, // Preserve original creation date
 			updated: get_datetime_now() // TODO @many probably rely on the db to bump `updated`
 		});
+		this.#settle_contents(existing, contents);
 		// back on disk, and its root may have changed with a snapshot from another filer
 		this.#sync_directories(existing);
 		untrack(() => this.#editor_states.get(existing.id))?.check_disk_changes();
 		return existing;
+	}
+
+	/**
+	 * Settles the content status of a diskfile that took `contents` from a
+	 * disknode: a string is loaded, `null` unloadable for a reason not given.
+	 */
+	#settle_contents(diskfile: Diskfile, contents: string | null): void {
+		if (contents === null && diskfile.unloaded_status !== 'unloadable') {
+			diskfile.unloaded_status = 'unloadable';
+		}
+		if (diskfile.unloaded_reason !== null) diskfile.unloaded_reason = null;
+		if (diskfile.content_error !== null) diskfile.content_error = null;
+	}
+
+	/**
+	 * Follows a change on disk that came without contents (see `upsert`): a
+	 * read in flight reads again, a file held eagerly is read, and any other
+	 * held content is dropped.
+	 */
+	#follow_disk_change(diskfile: Diskfile): void {
+		const load = this.#loads.get(diskfile.id);
+		if (load) {
+			load.stale = true;
+			return;
+		}
+		if (this.#is_held_eagerly(diskfile)) {
+			void this.#start_load(diskfile);
+			return;
+		}
+		if (diskfile.content_status === 'loaded' || diskfile.content_status === 'unloadable') {
+			diskfile.unloaded_status = 'unrequested';
+			diskfile.unloaded_reason = null;
+			diskfile.content_error = null;
+			diskfile.content = null;
+		}
+	}
+
+	/**
+	 * Whether `diskfile`'s content is kept current as it changes on disk: it
+	 * has an editing state (an editor shows it, or did — conflicts are caught
+	 * against it) or a `DiskfilePart` references it (prompts and turns read
+	 * it). Other files load on demand and drop their content on a change.
+	 */
+	#is_held_eagerly(diskfile: Diskfile): boolean {
+		return (
+			untrack(() => this.#editor_states.has(diskfile.id)) ||
+			(this.#part_paths.get(diskfile.path) ?? 0) > 0
+		);
+	}
+
+	/** Content reads in flight, by diskfile id — see `ensure_content`. Not reactive. */
+	readonly #loads: Map<Uuid, ContentLoad> = new Map();
+
+	readonly #read_queue: TaskQueue = new TaskQueue(DISKFILE_READ_CONCURRENCY);
+
+	/** How many `DiskfilePart`s reference each path — see `track_part_path`. Not reactive. */
+	readonly #part_paths: Map<string, number> = new Map();
+
+	/**
+	 * Loads `diskfile`'s content (`diskfile_read`) unless it's settled —
+	 * `loaded`, or `unloadable` — and resolves once it is. Single-flight:
+	 * callers share the read in flight, which reads again when the file
+	 * changes on disk meanwhile, resolving with the newer content. Reads are
+	 * queued, at most `DISKFILE_READ_CONCURRENCY` at once, the selected
+	 * file's first, then those open in tabs. Never rejects: a failed read
+	 * settles the file with `content_error`.
+	 *
+	 * Writes state when it starts a read, so call it from an event handler,
+	 * an `$effect`, or async code — not a `$derived` or a template expression.
+	 */
+	ensure_content(diskfile: Diskfile): Promise<void> {
+		// read first, so an `$effect` calling this keeps tracking the status
+		// while a read is in flight — and asks again once it drops to `unrequested`
+		const status = diskfile.content_status;
+		const load = this.#loads.get(diskfile.id);
+		if (load) return load.promise;
+		// a file deleted on disk keeps what it had, and one gone from the
+		// collection has nothing to read — reading it would only loop
+		if (status === 'loaded' || status === 'unloadable' || !this.#is_live(diskfile)) {
+			return Promise.resolve();
+		}
+		return this.#start_load(diskfile);
+	}
+
+	/**
+	 * Loads `diskfile`'s content (`ensure_content`) and returns it — for what
+	 * copies it, which shows why when it can't. Unlike `ensure_content`, it
+	 * rejects rather than leave the caller to read the status, and it retries
+	 * a read that failed (`content_error`): it's an explicit ask, where
+	 * `ensure_content` runs in effects that would loop on a failure.
+	 *
+	 * @throws Error saying why the content can't be loaded
+	 */
+	async load_content(diskfile: Diskfile): Promise<string> {
+		if (
+			diskfile.content_status === 'unloadable' &&
+			diskfile.content_error !== null &&
+			this.#is_live(diskfile)
+		) {
+			// synchronous through `ensure_content` starting the read or joining the
+			// one in flight, so an effect rerunning on this shares that read
+			diskfile.content_error = null;
+			diskfile.unloaded_reason = null;
+			diskfile.unloaded_status = 'unrequested';
+		}
+		await this.ensure_content(diskfile);
+		const { content } = diskfile;
+		if (content === null) {
+			throw new Error(
+				diskfile.content_status === 'unloadable'
+					? (to_diskfile_unloaded_message(diskfile) ?? DISKFILE_CONTENT_NOT_LOADED_MESSAGE)
+					: 'content not loaded — the file is gone'
+			);
+		}
+		return content;
+	}
+
+	#start_load(diskfile: Diskfile): Promise<void> {
+		if (diskfile.content_status === 'unrequested') diskfile.unloaded_status = 'loading';
+		const load: ContentLoad = { promise: Promise.resolve(), stale: false, superseded: false };
+		this.#loads.set(diskfile.id, load);
+		load.promise = this.#run_load(diskfile, load);
+		return load.promise;
+	}
+
+	/**
+	 * Reads until a read lands with no change on disk reported meanwhile.
+	 * Each result is applied as it lands — so a file written more often than
+	 * a read takes still shows its content — unless contents arrived on the
+	 * wire meanwhile, which may be newer; a failure is applied only when it's
+	 * the last read.
+	 */
+	async #run_load(diskfile: Diskfile, load: ContentLoad): Promise<void> {
+		try {
+			do {
+				const result = await this.#read_queue.run(
+					() => {
+						// reset as the read starts, not while it waits for a slot — a change
+						// reported while it waits is one this read already sees
+						load.stale = false;
+						load.superseded = false;
+						return this.#read(diskfile.path);
+					},
+					() => this.#read_priority(diskfile)
+				);
+				if (!load.superseded && (result.ok || !load.stale)) this.#apply_read(diskfile, result);
+			} while (load.stale && this.#is_live(diskfile));
+		} finally {
+			if (this.#loads.get(diskfile.id) === load) this.#loads.delete(diskfile.id);
+			// stopped for a file deleted meanwhile, maybe with its last result skipped
+			if (!this.#is_live(diskfile) && diskfile.unloaded_status === 'loading') {
+				diskfile.unloaded_status = 'unrequested';
+			}
+		}
+	}
+
+	async #read(path: DiskfilePath): Promise<ContentReadResult> {
+		try {
+			const result = await this.app.api.diskfile_read({ path });
+			return result.ok ? result : { ok: false, message: result.error.message };
+		} catch (error) {
+			return { ok: false, message: to_error_message(error, 'read failed') };
+		}
+	}
+
+	/**
+	 * Takes a read's contents. They don't touch `size` or `mtime`: those come
+	 * from the index's disknodes alone, so the two can't disagree over which
+	 * is newer. A read for a diskfile that left the collection, or whose file
+	 * was deleted meanwhile, is dropped.
+	 */
+	#apply_read(diskfile: Diskfile, result: ContentReadResult): void {
+		if (!this.#is_live(diskfile)) {
+			if (diskfile.unloaded_status === 'loading') diskfile.unloaded_status = 'unrequested';
+			return;
+		}
+		if (!result.ok) {
+			console.error(`[diskfiles] reading ${diskfile.path} failed:`, result.message);
+			// a re-read that failed keeps the content it had; without content, the
+			// error is why it's unloadable now — an earlier read's reason no longer holds
+			if (diskfile.content === null) {
+				diskfile.unloaded_status = 'unloadable';
+				diskfile.unloaded_reason = null;
+			}
+			diskfile.content_error = result.message;
+			return;
+		}
+		const { contents, unloaded_reason } = result.value;
+		if (contents === null) diskfile.unloaded_status = 'unloadable';
+		diskfile.unloaded_reason = contents === null ? unloaded_reason : null;
+		diskfile.content_error = null;
+		diskfile.content = contents;
+		untrack(() => this.#editor_states.get(diskfile.id))?.check_disk_changes();
+	}
+
+	#is_live(diskfile: Diskfile): boolean {
+		return this.items.by_id.get(diskfile.id) === diskfile && !diskfile.deleted_on_disk;
+	}
+
+	/** Shown files read first: the selected tab's, then any open tab's, then the rest. */
+	#read_priority(diskfile: Diskfile): number {
+		return untrack(() => {
+			if (this.editor.tabs.selected_diskfile_id === diskfile.id) return 0;
+			if (this.editor.tabs.by_diskfile_id.has(diskfile.id)) return 1;
+			return 2;
+		});
+	}
+
+	/**
+	 * Counts a `DiskfilePart` moving from `previous` to `next` — a file a part
+	 * references is held eagerly (see `upsert`), and is read when the part
+	 * attaches, in a microtask so a part constructed anywhere can call this.
+	 */
+	track_part_path(previous: DiskfilePath | null, next: DiskfilePath | null): void {
+		if (previous === next) return;
+		if (previous !== null) {
+			const count = (this.#part_paths.get(previous) ?? 0) - 1;
+			if (count > 0) {
+				this.#part_paths.set(previous, count);
+			} else {
+				this.#part_paths.delete(previous);
+			}
+		}
+		if (next !== null) {
+			this.#part_paths.set(next, (this.#part_paths.get(next) ?? 0) + 1);
+			queueMicrotask(() => {
+				// a part detached meanwhile no longer needs it
+				if (!this.#part_paths.has(next)) return;
+				const diskfile = this.get_by_path(next);
+				if (diskfile && !diskfile.deleted_on_disk) void this.ensure_content(diskfile);
+			});
+		}
 	}
 
 	/**
@@ -374,8 +681,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	#apply_touches(changes: DiskfileSnapshotChanges | undefined): void {
 		if (!changes) return;
+		// metadata only — each touch already re-read or dropped its file's content when it arrived
 		for (const [path, metadata] of changes.touches) {
-			if (!changes.paths.has(path)) this.touch(metadata);
+			if (!changes.paths.has(path)) this.#apply_metadata(metadata);
 		}
 	}
 
@@ -490,10 +798,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Writes `content` to the file at `path`. The local `Diskfile` changes only
 	 * when the resulting `filer_change` broadcast arrives, not from the response.
 	 *
-	 * Refuses, without sending, to write over a known file whose content wasn't
-	 * loaded (`Diskfile.content_loaded` — over 4 MiB, not UTF-8 text, or
-	 * unreadable): nobody has seen what it would overwrite. Fails with
-	 * `conflict` (`data.reason` `content_not_loaded`).
+	 * Refuses, without sending, to write over a known file whose content isn't
+	 * loaded (`Diskfile.content_loaded` — not yet, or not loadable): nobody has
+	 * seen what it would overwrite. Fails with `conflict` (`data.reason`
+	 * `content_not_loaded`).
 	 *
 	 * @returns the RPC result — on failure, callers surface `error` themselves
 	 */
@@ -506,7 +814,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			return Promise.resolve({
 				ok: false,
 				error: jsonrpc_error_messages.conflict(
-					`refusing to overwrite ${path}: ${DISKFILE_CONTENT_NOT_LOADED_MESSAGE}`,
+					`refusing to overwrite ${path}: ${to_diskfile_unloaded_message(existing)}`,
 					{ reason: ERROR_CONTENT_NOT_LOADED }
 				)
 			});

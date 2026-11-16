@@ -5,8 +5,8 @@ import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 
 import { estimate_token_count } from './helpers.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
-import type { DiskfilePath } from './diskfile_types.ts';
-import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
+import type { DiskfileContentStatus, DiskfilePath } from './diskfile_types.ts';
+import { to_diskfile_unloaded_message } from './diskfile_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import { DiskfileHistory, type HistoryEntry } from './diskfile_history.svelte.ts';
 import { to_default_markdown_view_mode, type MarkdownViewMode } from './markdown_view_mode.ts';
@@ -76,9 +76,13 @@ export interface DiskfileSaveOptions {
  * own it.
  *
  * It holds the file's `DiskfileHistory`, and records every change of the
- * file's content on disk into it (`Diskfiles.upsert` calls
- * `check_disk_changes`), whether or not an editor shows it:
+ * file's content on disk into it (`Diskfiles` calls `check_disk_changes`
+ * whenever new content lands), whether or not an editor shows it — having
+ * an editing state keeps a file's content current (see `Diskfiles.upsert`):
  *
+ * - The content loads on demand: the views call `Diskfiles.ensure_content`.
+ *   Until it lands the editor is read-only, and its first arrival seeds the
+ *   history's original state — it's not a change on disk.
  * - The editor shows the selected history entry (`current_content`), or the
  *   disk content when none is selected. A clean editor follows the disk.
  * - Editing keeps the file's one draft: a single unsaved-edit entry, updated
@@ -158,17 +162,28 @@ export class DiskfileEditorState {
 	readonly original_content: string | null = $derived.by(() => this.diskfile.content);
 	readonly path: DiskfilePath = $derived.by(() => this.diskfile.path);
 	/**
-	 * Whether the file's content was loaded (see `Diskfile.content_loaded`).
-	 * When it wasn't, the editor is read-only: edits are ignored and nothing
-	 * can be saved, since a save would overwrite a file nobody has seen.
+	 * Whether the file's content is loaded (see `Diskfile.content_loaded`).
+	 * While it isn't — still loading, or not loadable — the editor is
+	 * read-only: edits are ignored and nothing can be saved, since a save
+	 * would overwrite a file nobody has seen.
 	 */
 	readonly content_loaded: boolean = $derived(this.original_content !== null);
+	/** The file's `Diskfile.content_status`. */
+	readonly content_status: DiskfileContentStatus = $derived.by(() => this.diskfile.content_status);
+	/**
+	 * Whether the content is on its way (`unrequested` or `loading`) — read-only
+	 * until it lands, which the views say apart from content that can't load.
+	 */
+	readonly content_loading: boolean = $derived(
+		this.content_status === 'unrequested' || this.content_status === 'loading'
+	);
 	/**
 	 * The mode the markdown view shows this file in: the user's choice, else
-	 * `split`, or `preview` while the content isn't loaded (read-only).
+	 * `split`, or `preview` when the content can't be loaded (read-only).
 	 */
 	readonly markdown_view_mode: MarkdownViewMode = $derived(
-		this.markdown_view_mode_choice ?? to_default_markdown_view_mode(this.content_loaded)
+		this.markdown_view_mode_choice ??
+			to_default_markdown_view_mode(this.content_status !== 'unloadable')
 	);
 	readonly has_changes = $derived.by(() => {
 		// an unloaded file has no baseline to differ from, and can't be edited
@@ -307,12 +322,18 @@ export class DiskfileEditorState {
 		this.history = new DiskfileHistory({ app: this.app, json: { path: this.diskfile.path } });
 
 		const { content } = this.diskfile;
+		if (content !== null) this.#seed(content);
+	}
+
+	/**
+	 * Takes the file's first loaded content as its original state — at
+	 * construction, or when it lands later (see `check_disk_changes`).
+	 */
+	#seed(content: string): void {
 		this.last_seen_disk_content = content;
-		if (content !== null) {
-			this.selected_history_entry_id = this.history.add_entry(content, {
-				is_original_state: true
-			}).id;
-		}
+		this.selected_history_entry_id = this.history.add_entry(content, {
+			is_original_state: true
+		}).id;
 	}
 
 	/** Disposes the history. Called by `Diskfiles` when the diskfile goes away. */
@@ -401,9 +422,13 @@ export class DiskfileEditorState {
 
 	/**
 	 * Records the diskfile's content in the history if it changed on disk
-	 * since last seen. `Diskfiles.upsert` calls it for every content change, so
+	 * since last seen. `Diskfiles` calls it whenever new content lands, so
 	 * the history tracks the disk whether or not an editor shows the file;
-	 * calling it again is a no-op.
+	 * calling it again is a no-op — a re-read of the same text changes nothing.
+	 *
+	 * The first content to land for a state made before the file loaded seeds
+	 * the original state instead: it's the file as first seen, not a change
+	 * on disk, so it never reads as a conflict.
 	 *
 	 * A clean editor moves to the new disk content. An editor showing the
 	 * user's content keeps it, and the change becomes a `disk_conflict` —
@@ -414,6 +439,11 @@ export class DiskfileEditorState {
 	check_disk_changes(): void {
 		const disk_content = this.diskfile.content;
 		if (disk_content === null || disk_content === this.last_seen_disk_content) return;
+		// never loaded until now (nothing can be edited before), so nothing to weigh it against
+		if (this.last_seen_disk_content === null && this.history.entries.length === 0) {
+			this.#seed(disk_content);
+			return;
+		}
 		this.last_seen_disk_content = disk_content;
 
 		const { history } = this;
@@ -468,7 +498,7 @@ export class DiskfileEditorState {
 	 *
 	 * Refuses, writing nothing, while `has_conflict` — unless `overwrite` — so
 	 * a change made on disk under the edit is never overwritten silently. A
-	 * file whose content wasn't loaded is never saved: this sets `save_error`.
+	 * file whose content isn't loaded is never saved: this sets `save_error`.
 	 *
 	 * @returns whether the content was written — for a queued follow-up with
 	 * nothing left to write, whether the in-flight save succeeded
@@ -476,10 +506,10 @@ export class DiskfileEditorState {
 	save_changes(options?: DiskfileSaveOptions): Promise<boolean> {
 		// choosing to overwrite shows the content being written
 		if (options?.overwrite) this.#show_disk = false;
-		// never write over a file whose content wasn't loaded
+		// never write over a file whose content isn't loaded
 		// (`Diskfiles.update` refuses it too)
 		if (!this.content_loaded) {
-			this.save_error = DISKFILE_CONTENT_NOT_LOADED_MESSAGE;
+			this.save_error = to_diskfile_unloaded_message(this.diskfile);
 			return Promise.resolve(false);
 		}
 		const in_flight = this.#in_flight_save;

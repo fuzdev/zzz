@@ -3,12 +3,14 @@
 	import ContextmenuEntry from '@fuzdev/fuz_ui/ContextmenuEntry.svelte';
 	import type { Thunk } from '@fuzdev/fuz_util/function.ts';
 	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
+	import type { ContextmenuActivateResult } from '@fuzdev/fuz_ui/contextmenu_state.svelte.ts';
 
 	import { icon_copy } from '@fuzdev/fuz_ui/icons.ts';
 	import { to_preview } from './helpers.ts';
 
 	const {
 		content,
+		load_content,
 		label = 'copy',
 		preview,
 		preview_limit,
@@ -17,6 +19,16 @@
 		...rest
 	}: OmitStrict<ComponentProps<typeof ContextmenuEntry>, 'run' | 'children'> & {
 		content: string | Thunk<string> | undefined;
+		/**
+		 * Given only while `content` isn't ready (a file's content still to
+		 * load): a click awaits it and copies what it resolves to, `''`
+		 * included, nothing for `null` or `undefined`; a rejection's message
+		 * shows on the entry, which stays open. `content` and `preview` then
+		 * only preview. Without it a click copies `content` at once, with no
+		 * await before the write, so the browser still sees the click's user
+		 * activation.
+		 */
+		load_content?: (() => Promise<string | null | undefined>) | undefined;
 		label?: string | undefined;
 		preview?: string | undefined;
 		preview_limit?: number | undefined;
@@ -30,13 +42,37 @@
 		show_preview ? to_preview(preview ?? read_content(), preview_limit) : undefined
 	);
 
-	const copy_to_clipboard = async (): Promise<void> => {
+	const copy_to_clipboard = (): ContextmenuActivateResult | Promise<ContextmenuActivateResult> => {
+		if (load_content) return copy_loaded(load_content);
 		const c = read_content();
 		if (!c) return;
 		try {
-			await navigator.clipboard.writeText(c);
+			// no await before the write — see `load_content`
+			return navigator.clipboard.writeText(c).then(
+				() => undefined,
+				(error: unknown) => {
+					console.error('failed to copy text: ', error);
+				}
+			);
 		} catch (error) {
 			console.error('failed to copy text: ', error);
+		}
+	};
+
+	const copy_loaded = async (
+		load: () => Promise<string | null | undefined>
+	): Promise<ContextmenuActivateResult> => {
+		// a rejection is the menu's to show — it keeps the menu open with the message
+		const c = await load();
+		// an empty file copies as empty — only no content at all copies nothing
+		if (c == null) return;
+		try {
+			await navigator.clipboard.writeText(c);
+		} catch (error) {
+			// the wait can outlast the click's user activation — loaded now, so
+			// the menu stays open and a second click copies at once
+			console.error('failed to copy text: ', error);
+			return { ok: false, message: 'loaded — copy again' };
 		}
 	};
 </script>

@@ -13,7 +13,10 @@
 	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
 	import { format_placeholder } from './helpers.ts';
-	import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
+	import {
+		DISKFILE_CONTENT_LOADING_MESSAGE,
+		to_diskfile_unloaded_message
+	} from './diskfile_helpers.ts';
 
 	const {
 		diskfile_part,
@@ -30,6 +33,11 @@
 	// the file's app-level editing state, shared with its other views — disk changes
 	// reach it while this is unmounted, and the part reads its content from it
 	const editor_state = $derived(diskfile ? app.diskfiles.get_editor_state(diskfile) : undefined);
+
+	// loads the content on view — the editing state then keeps it current
+	$effect(() => {
+		if (editor_state) void app.diskfiles.ensure_content(editor_state.diskfile);
+	});
 
 	// Keep track of the content editor for focusing
 	let content_editor: { focus: () => void } | undefined = $state.raw();
@@ -65,9 +73,13 @@
 
 {#if diskfile && editor_state}
 	<div>
-		{#if !editor_state.content_loaded}
+		{#if editor_state.content_loading}
+			<p class="mb_xs text_50">
+				<small>{DISKFILE_CONTENT_LOADING_MESSAGE} — read-only until it arrives</small>
+			</p>
+		{:else if !editor_state.content_loaded}
 			<p class="mb_xs color_c_60">
-				<small>{DISKFILE_CONTENT_NOT_LOADED_MESSAGE} — read-only</small>
+				<small>{to_diskfile_unloaded_message(diskfile)} — read-only</small>
 			</p>
 		{:else if diskfile.deleted_on_disk}
 			<p class="mb_xs color_c_60">
@@ -102,7 +114,9 @@
 				token_count={editor_state.current_token_count}
 				placeholder={editor_state.content_loaded
 					? format_placeholder(diskfile.path_relative)
-					: '[content not loaded]'}
+					: editor_state.content_loading
+						? '[loading]'
+						: '[content not loaded]'}
 				show_stats={false}
 				readonly={!editor_state.can_edit}
 				onsave={save}

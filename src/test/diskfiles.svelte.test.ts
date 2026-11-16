@@ -154,7 +154,7 @@ describe('upsert by path', () => {
 		assert.strictEqual(diskfile.content, 'two');
 	});
 
-	test('a touch moves the mtime and keeps the content', () => {
+	test('a touch moves the mtime and drops the content nothing holds', () => {
 		filer_change('add', PATH_A, 'one');
 		const diskfile = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(diskfile);
@@ -163,10 +163,11 @@ describe('upsert by path', () => {
 		filer_touch(PATH_A, 7);
 
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile);
-		assert.strictEqual(diskfile.content, 'one', 'no contents key is not `contents: null`');
-		assert.ok(diskfile.content_loaded);
+		// no contents key is not `contents: null` — the content is unknown, not unloadable
+		assert.strictEqual(diskfile.content_status, 'unrequested');
+		assert.isNull(diskfile.content);
 		assert.strictEqual(diskfile.mtime, 7);
-		assert.strictEqual(diskfile.updated, updated, 'nothing but the mtime changed');
+		assert.strictEqual(diskfile.updated, updated, 'nothing but the mtime and content changed');
 	});
 
 	test('a touch moves the mtime of a file whose content is not loaded', () => {
@@ -341,7 +342,8 @@ describe('a touch while a snapshot is in flight', () => {
 		reconcile([snapshot_node(PATH_A, 'snapshot', 5)], tracker);
 
 		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.strictEqual(diskfile?.content, 'changed');
+		// the touch dropped the content nothing holds, and the snapshot's older contents weren't taken
+		assert.strictEqual(diskfile?.content_status, 'unrequested');
 		assert.strictEqual(diskfile?.mtime, 9);
 	});
 

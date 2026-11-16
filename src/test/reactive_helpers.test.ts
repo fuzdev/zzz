@@ -60,12 +60,12 @@ describe('create_detached', () => {
 						})
 				);
 				// evaluated while mounted
-				assert.strictEqual(diskfile.content_length, 3);
+				assert.strictEqual(diskfile.content_preview, 'abc');
 			});
 
 			diskfile.content = 'abcdef';
 
-			assert.strictEqual(diskfile.content_length, 6);
+			assert.strictEqual(diskfile.content_preview, 'abcdef');
 		});
 	}
 
