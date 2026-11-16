@@ -2104,6 +2104,51 @@ impl FilerManager {
         Ok(())
     }
 
+    /// How much of its root the filer on `path` indexes, and its lifetime —
+    /// `None` with no filer there.
+    pub async fn depth_of(&self, path: &str) -> Option<(FilerDepth, FilerLifetime)> {
+        self.filers
+            .read()
+            .await
+            .get(path)
+            .map(|entry| (entry.depth, entry.lifetime))
+    }
+
+    /// [`Self::replace_filer`] only where there's something to narrow: a
+    /// project-scoped filer on `path` indexing its whole tree. Any other —
+    /// none, a permanent one, one already at its top level — is left as it
+    /// is, with no scan.
+    ///
+    /// Returns whether a filer was replaced.
+    ///
+    /// # Errors
+    ///
+    /// The root can't be listed (see [`start_filer`]); the old filer stays.
+    pub async fn narrow_filer(
+        &self,
+        path: &str,
+        app: Arc<App>,
+        config: FilerConfig,
+    ) -> io::Result<bool> {
+        if self.depth_of(path).await != Some((FilerDepth::Tree, FilerLifetime::Project)) {
+            return Ok(false);
+        }
+        self.replace_filer(path, app, config).await?;
+        Ok(true)
+    }
+
+    /// Every project-scoped filer's root and depth.
+    #[cfg(test)]
+    pub(crate) async fn project_filers(&self) -> BTreeMap<String, FilerDepth> {
+        self.filers
+            .read()
+            .await
+            .iter()
+            .filter(|(_, entry)| entry.lifetime == FilerLifetime::Project)
+            .map(|(root, entry)| (root.clone(), entry.depth))
+            .collect()
+    }
+
     /// Stop and remove a filer for the given path. Only stops project-scoped
     /// filers — permanent filers are preserved.
     ///
@@ -2174,14 +2219,17 @@ impl FilerManager {
             .map_or(WatchStatus::Full, |e| e.filer.watch_status())
     }
 
-    /// Every active filer's root and indexed files, as one snapshot. Used by
-    /// `session_load` to return the complete file listing.
+    /// The root and indexed files of every permanent filer and every
+    /// project-scoped one `keep` names, as one snapshot. Used by
+    /// `session_load` to return the complete file listing — of the open
+    /// projects as published, so a filer an open or focus in flight started isn't in
+    /// it before its project is.
     ///
     /// The roots and file indexes are taken under one read of the filer map,
     /// so `roots` names exactly the filers `files` comes from: a file under a
     /// root that's missing from `files` isn't on disk (or isn't indexed —
     /// ignored, a symlink, non-UTF-8).
-    pub async fn snapshot(&self) -> FilerSnapshot {
+    pub async fn snapshot(&self, keep: &BTreeSet<String>) -> FilerSnapshot {
         // Collect Arc handles under the outer lock, then release it before
         // awaiting the inner per-filer locks — avoids holding the manager
         // lock across await points (which would block start_filer/stop_filer).
@@ -2189,6 +2237,7 @@ impl FilerManager {
             let filers = self.filers.read().await;
             filers
                 .iter()
+                .filter(|(root, e)| e.lifetime == FilerLifetime::Permanent || keep.contains(*root))
                 .map(|(root, e)| (root.clone(), Arc::clone(&e.filer.files)))
                 .unzip()
         };
@@ -4542,7 +4591,9 @@ mod tests {
         std::fs::write(a.path("a.txt"), "a").unwrap();
         std::fs::write(b.path("b.txt"), "b").unwrap();
         let manager = FilerManager::new();
-        let snapshot = manager.snapshot().await;
+        let none = BTreeSet::new();
+        let kept = BTreeSet::from([b.root()]);
+        let snapshot = manager.snapshot(&kept).await;
         assert!(snapshot.roots.is_empty() && snapshot.files.is_empty());
 
         for (tmp, lifetime) in [(&a, FilerLifetime::Permanent), (&b, FilerLifetime::Project)] {
@@ -4556,7 +4607,11 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let snapshot = manager.snapshot().await;
+        // a project-scoped filer only when it's named, a permanent one always
+        let snapshot = manager.snapshot(&none).await;
+        assert_eq!(snapshot.roots, vec![a.root()]);
+        assert_eq!(snapshot.files.len(), 1);
+        let snapshot = manager.snapshot(&kept).await;
         let mut roots = vec![a.root(), b.root()];
         roots.sort_unstable();
         assert_eq!(snapshot.roots, roots);
@@ -4568,7 +4623,7 @@ mod tests {
 
         // a stopped filer leaves both
         assert!(manager.stop_filer(&b.root()).await);
-        let snapshot = manager.snapshot().await;
+        let snapshot = manager.snapshot(&kept).await;
         assert_eq!(snapshot.roots, vec![a.root()]);
         assert_eq!(snapshot.files.len(), 1);
     }

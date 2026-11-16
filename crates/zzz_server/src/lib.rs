@@ -27,6 +27,7 @@ pub mod job_manager;
 pub mod media;
 mod origin_allowlist;
 pub mod project;
+pub mod project_manager;
 pub mod provider;
 pub mod pty_manager;
 pub mod root_policy;
@@ -1760,7 +1761,10 @@ mod config_paths {
         let app = Arc::new(app);
 
         start_permanent_filers(&app).await;
-        let snapshot = app.filer_manager.snapshot().await;
+        let snapshot = app
+            .filer_manager
+            .snapshot(&std::collections::BTreeSet::new())
+            .await;
         assert_eq!(snapshot.roots, vec![zzz_dir, dir("dev")]);
         let ids: Vec<&str> = snapshot.files.iter().map(|f| f.id.as_str()).collect();
         assert_eq!(ids, vec![home.join("dev/a.txt").to_str().unwrap()]);

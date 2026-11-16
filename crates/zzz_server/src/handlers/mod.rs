@@ -8,16 +8,15 @@
 //! `App.action_registry` via `crate::zzz_action_specs::build_*_specs`, which
 //! own the `Arc<App>` and clone it into each per-spec handler closure — the
 //! source of the zzz-specific deps (`PtyManager`, `FilerManager`,
-//! `ProviderManager`, the projects map) that don't live on `ActionContext`.
+//! `ProviderManager`, `ProjectManager`) that don't live on `ActionContext`.
 //!
 //! Auth, dispatch, and the JSON-RPC / WS routes come from the spine
 //! (`fuz_actions::perform_action` plus the route states built in `main.rs`).
 //! `App.realtime` is the sole connection-tracking surface; it drives the
-//! `broadcast` shim called from `filer.rs` and `project.rs`, and
+//! `broadcast` shim called from `filer.rs` and `project_manager.rs`, and
 //! `pty_manager.rs`, `job_manager.rs`, and `transcription/` send a terminal's
 //! and a job's notifications through it to the owning account only
-//! (`send_to_account`). `ProjectInfo` is the value type
-//! consumed by `project` and `core`.
+//! (`send_to_account`).
 
 pub mod core;
 pub mod filesystem;
@@ -27,16 +26,14 @@ pub mod project;
 pub mod provider;
 pub mod terminal;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use deadpool_postgres::Pool;
-use parking_lot::RwLock;
-use serde::Serialize;
 
 use crate::file_trust::TrustedOwner;
 use crate::filer::FilerManager;
 use crate::job_manager::JobManager;
+use crate::project_manager::ProjectManager;
 use crate::provider::{CompletionOptions, ProviderManager};
 use crate::pty_manager::PtyManager;
 use crate::root_policy::RootPolicy;
@@ -60,16 +57,10 @@ pub struct App {
     /// `server_instance_id`, so a client that sees it change knows the daemon
     /// restarted (its terminals and open projects are gone).
     pub instance_id: Uuid,
-    /// The open projects, keyed by root (trailing `/`).
-    pub projects: RwLock<HashMap<String, ProjectInfo>>,
-    /// Serializes `project_open` / `project_close` / `repo_focus` /
-    /// `repo_unfocus`. Each spans the
-    /// `projects` map, `ScopedFs`, and the project's filers across await
-    /// points; interleaved, an open could re-add scope and watchers for a
-    /// project a concurrent close just removed. An open's initial scans run
-    /// before `project_open` takes it, so a large tree doesn't hold up other
-    /// opens and closes.
-    pub project_lifecycle: tokio::sync::Mutex<()>,
+    /// The open projects, and the one path that changes them — and with
+    /// them the project filers and the runtime `ScopedFs` roots
+    /// ([`ProjectManager`]).
+    pub projects: ProjectManager,
     /// Whose registry files and directories `project_open` trusts — the
     /// daemon's own user, read once at boot ([`TrustedOwner::current`]).
     pub trusted_owner: TrustedOwner,
@@ -154,8 +145,7 @@ impl App {
     ) -> Self {
         Self {
             instance_id: Uuid::new_v4(),
-            projects: RwLock::new(HashMap::new()),
-            project_lifecycle: tokio::sync::Mutex::new(()),
+            projects: ProjectManager::new(),
             trusted_owner: TrustedOwner::current(),
             git: fuz_git::Git::with_clean_env(
                 crate::pty_manager::terminal_env(std::env::vars_os()),
@@ -182,7 +172,8 @@ impl App {
     ///
     /// Shim over `App.realtime`. The spine WS handler registers
     /// connections in `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`);
-    /// call sites (`filer::app_broadcast`, `project::broadcast_project_changed`)
+    /// call sites (`filer::app_broadcast`,
+    /// `project_manager::broadcast_project_changed`)
     /// broadcast through this shim. Terminal output and job state are
     /// per-account, so `pty_manager` and `job_manager` use
     /// `realtime.send_to_account` instead.
@@ -231,67 +222,4 @@ pub fn not_found_error(message: &str, reason: &str) -> JsonrpcError {
         message: message.to_owned(),
         data: Some(serde_json::json!({ "reason": reason })),
     }
-}
-
-// -- Domain types -------------------------------------------------------------
-
-/// An open project — twin of `ProjectInfoJson` in `project.svelte.ts`.
-#[derive(Debug, Clone, Serialize)]
-pub struct ProjectInfo {
-    /// The root, canonical, with a trailing `/` — the project's identity.
-    pub root: String,
-    /// The root's basename.
-    pub name: String,
-    /// When it was first opened (RFC 3339).
-    pub opened_at: String,
-    pub kind: ProjectInfoKind,
-    /// The registry file as found at the root, for a registry project.
-    pub registry_path: Option<String>,
-    /// A registry's entries, in its order; empty for other kinds.
-    pub entries: Vec<ProjectEntryInfo>,
-    /// The focused directories (trailing `/`), sorted — each indexed whole.
-    /// A checkout's or plain directory's root is its one; a registry's are
-    /// its present entries an open or `repo_focus` focused.
-    pub focused: Vec<String>,
-}
-
-/// Which rule rooted a project ([`crate::project::ProjectKind`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProjectInfoKind {
-    Registry,
-    GitRepo,
-    PlainDir,
-}
-
-/// A registry entry of an open project — twin of `ProjectEntryJson`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ProjectEntryInfo {
-    /// The entry's key in its table.
-    pub key: String,
-    pub kind: EntryInfoKind,
-    /// Where its checkout is (trailing `/`): canonical when present, else
-    /// the declared dir under the root.
-    pub dir: String,
-    pub state: EntryState,
-    /// Why it's refused (`EntryRefusal::reason`), for a refused entry.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<&'static str>,
-}
-
-/// A registry's two tables.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EntryInfoKind {
-    Repo,
-    Reference,
-}
-
-/// Where an entry's checkout stands ([`crate::project::EntryDir`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EntryState {
-    Present,
-    Missing,
-    Refused,
 }

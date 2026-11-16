@@ -373,12 +373,12 @@ crates/zzz_server/src/
 ├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle over `fuz_actions::server`: config (command line + env), the spine core (`create_app_backend`: keyring, READ COMMITTED guard, migrations, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry` compile, file watchers, route composition, `serve_until_shutdown` (the auth cleanup beside the server, the 1001 close of every live WebSocket and the end of every audit stream before the drain), then jobs and PTYs torn down
 ├── main.rs           # Thin production entry — parses the command line, constructs `Argon2idHasher`, calls `run_app`
 ├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `project_open`, `repo_focus`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
-│   ├── mod.rs        # `App` long-lived state (projects, `project_lifecycle`, `trusted_owner`, `git`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
+│   ├── mod.rs        # `App` long-lived state (`ProjectManager`, `trusted_owner`, `git`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_read (+ its bounded text read, `read_text_contents`, and the bytes' `hash`), diskfile_update (+ its `expected_hash` compare-and-swap), diskfile_create, diskfile_delete, directory_create
 │   ├── job.rs        # job_cancel
 │   ├── media.rs      # media_finalize, transcription_create (+ `tool_error`, the `ToolError` → JSON-RPC mapping)
-│   ├── project.rs    # project_list, project_open, project_close, repo_focus, repo_unfocus (+ project_changed broadcast): the resolve, focus, the filers a project keeps (`filers_of`), and their release
+│   ├── project.rs    # project_list, project_open, project_close, repo_focus, repo_unfocus: the resolve and what an open focuses, each change handed to `ProjectManager`, its refusals mapped to the wire (`lifecycle_error`)
 │   ├── provider.rs   # provider_load_status, completion_create
 │   └── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_ack, terminal_close
 ├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by `run_app`'s `ActionRegistry::compile`; each captures `Arc<App>` and calls the matching `handlers::*` fn
@@ -403,6 +403,7 @@ crates/zzz_server/src/
 ├── file_bytes.rs     # Byte routes for files (`/api/files/bytes`): ranged read with a response-header lockdown, exclusive create, offset-checked append — hand-written axum handlers with their own auth + scope gates
 ├── file_trust.rs     # Whether discovered config is the daemon user's alone to write — Debian sshd's rule: owned by the user or root, never `o+w`, `g+w` only by the user's private group (`TrustedOwner`, NSS read once by `current`)
 ├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered, stat-only file index (events are hints, `lstat` decides; no file is read), change by `lstat` stamp with git's racily-clean rule, per-directory watches from the filer's own walk (degraded polling past the watch limit), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped; a whole tree, or a registry root's top level alone (`FilerDepth`)
+├── project_manager.rs # The open projects and the one path that changes them (`ProjectManager`): an open, close, focus, or unfocus computes the next state and `commit`s it under the state's lock — ensuring the filers it needs (`desired_filers`: each directory at the deepest any open project indexes it), stopping or narrowing the ones it doesn't (`release`), setting the runtime `ScopedFs` roots, publishing the snapshot `project_list` and `session_load` read, and broadcasting `project_changed`; scans run before the lock
 ├── project.rs        # Resolving an opened path to its project: a registry (`repos.toml`, found by `fuz_repos`'s bounded discovery — strictly below `$HOME` or within an allowlisted root — each candidate trusted, confined, and outside protected directories, or the open is refused), else the nearest `.git`, else the directory; entries canonicalized and confined to the root, refused one by one (`resolve_project`, `ProjectError` / `EntryRefusal` reasons)
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── root_policy.rs    # Which directories can be roots: strictly inside `$HOME` or in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor, or under `/proc` / `/sys` / `/dev` (`RootPolicy`, held by `App` and the boot checks)
@@ -443,9 +444,9 @@ way, moved into its typed output rather than copied into a `Value`.
 **App + dispatch**: `App` (in `handlers/mod.rs`) holds zzz's long-lived,
 non-spine state — `instance_id` (a UUID minted at boot, returned by
 `session_load` as `server_instance_id` so clients can tell a restart),
-`projects` (`RwLock<HashMap>`, keyed by root), `project_lifecycle`
-(the `tokio::sync::Mutex` serializing `project_open` / `project_close` /
-`repo_focus` / `repo_unfocus`),
+`projects` (the `ProjectManager`: the open projects behind the
+`tokio::sync::Mutex` every `project_open` / `project_close` / `repo_focus`
+/ `repo_unfocus` commits under, and the snapshot readers take without it),
 `trusted_owner` (whose registries are trusted — `TrustedOwner::current`,
 read once at boot), `git` (the resolver's git runner over the terminal
 environment, version-checked once at boot),

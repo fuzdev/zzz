@@ -17,8 +17,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::filer::{FilerSnapshot, SerializableDisknode, disknodes_json_size_hint};
-use crate::handlers::{App, ProjectInfo, caller_account_id};
+use crate::handlers::{App, caller_account_id};
 use crate::job_manager::JobSnapshot;
+use crate::project_manager::ProjectInfo;
 
 #[derive(Serialize)]
 struct PingResult {
@@ -95,8 +96,9 @@ pub async fn ping(
 /// refuses any declared key before this runs.
 ///
 /// Returns the cross-domain snapshot the frontend loads at boot and reloads
-/// after a reconnect: open projects, every filer's file tree (rescanned for
-/// consistency) with its roots, `scoped_dirs`, provider status, the caller's
+/// after a reconnect: open projects, the file tree of every permanent filer
+/// and every one those projects keep (rescanned for consistency) with its
+/// root, `scoped_dirs`, provider status, the caller's
 /// live terminal ids, and `App::instance_id`.
 ///
 /// The response carries every indexed file's metadata — not its contents,
@@ -113,7 +115,11 @@ pub async fn session_load(
     app: Arc<App>,
 ) -> Result<ActionOutput, JsonrpcError> {
     let owner = caller_account_id(&ctx)?;
-    let projects: Vec<ProjectInfo> = app.projects.read().values().cloned().collect();
+    // the projects and the filers they keep, as one commit left them: a
+    // filer an open or focus in flight started isn't listed before its
+    // project's change is
+    let published = app.projects.published();
+    let projects: Vec<ProjectInfo> = published.projects.clone();
 
     // Rescan each watched directory before reading the index — notify events
     // are eventually consistent, so a file written immediately before
@@ -125,7 +131,7 @@ pub async fn session_load(
     // to every connection, like any other change; concurrent session_loads
     // share one rescan per filer.
     app.filer_manager.rescan_all().await;
-    let FilerSnapshot { roots, files } = app.filer_manager.snapshot().await;
+    let FilerSnapshot { roots, files } = app.filer_manager.snapshot(&published.filers).await;
     let terminal_ids = app.pty_manager.terminal_ids_for_account(owner).await;
     let jobs = app.job_manager.jobs_for_account(owner);
 
@@ -211,7 +217,7 @@ mod tests {
                     root: "/w/".to_owned(),
                     name: "w".to_owned(),
                     opened_at: "2026-01-01T00:00:00Z".to_owned(),
-                    kind: crate::handlers::ProjectInfoKind::PlainDir,
+                    kind: crate::project_manager::ProjectInfoKind::PlainDir,
                     registry_path: None,
                     entries: vec![],
                     focused: vec!["/w/".to_owned()],

@@ -1490,8 +1490,9 @@ runs inside an effect too). Such state is created with `create_detached`
 `App` itself, and the route-cached `Projects` / `Browser`.
 
 The initial file listing comes from `session_load` (the backend rescans and
-flattens every active filer's index, and lists the filers' roots as
-`file_roots`), and `project_open` returns the index of every filer of the
+flattens the index of every permanent filer and every filer the open
+projects keep, and lists their roots as `file_roots` — a filer an open or
+focus still in flight started isn't listed before its project's change is), and `project_open` returns the index of every filer of the
 opened project so the new tree appears immediately. `Frontend.load_session` runs `session_load`
 and retries a failure with backoff (1s doubling to 30s) until it succeeds,
 tracking progress in `session_status` / `session_error`; `Projects.open`
@@ -1723,7 +1724,7 @@ concerns":
   keyed by canonical path, so two entries resolving to one directory share
   one. The root is one `ScopedFs` root, writable whole.
 
-  The filers start before the project lifecycle lock is taken (a root or
+  The filers start before the project manager's lock is taken (a root or
   focused directory that can't be listed fails the open, with nothing
   registered, and concurrent opens of one path share a scan), then, under
   the lock, the project is recorded — merged into an open one with the
@@ -1744,8 +1745,8 @@ concerns":
   filer as an open's narrowing does — stopped unless another open project
   keeps it, narrowed to a top-level one if that's all one keeps (a nested
   registry's root) — then broadcasts `update`. `project_close` reverses
-  an open, stopping the filers no
-  other open project keeps — except that the boot-time app directory and
+  an open, stopping the filers no other open project keeps and narrowing
+  a whole-tree one another keeps at its top level alone — except that the boot-time app directory and
   `PUBLIC_ZZZ_SCOPED_DIRS` keep their permanent filers and `ScopedFs`
   roots, so closing a project that overlaps one never revokes its access.
   Backend state is an in-memory map — a restart forgets all projects, and

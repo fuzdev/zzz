@@ -293,11 +293,10 @@ pub struct ScopedFs {
     /// operation — the lossy conversion happens once at insert time.
     permanent_paths: Vec<String>,
     /// Roots added at runtime (open projects), same normalization. One
-    /// entry per root: the caller (`project_open` / `project_close`,
-    /// serialized by `App::project_lifecycle`) keeps these in lockstep
-    /// with its own one-entry-per-path map, so no refcount is needed —
-    /// overlapping roots are separate entries, and removing one leaves any
-    /// other root that covers the same paths in place.
+    /// entry per root: [`crate::project_manager::ProjectManager`] sets these
+    /// from its one-entry-per-root state at each commit, so no refcount is
+    /// needed — overlapping roots are separate entries, and removing one
+    /// leaves any other root that covers the same paths in place.
     dynamic_paths: RwLock<Vec<String>>,
     /// Serializes [`Self::append_file`]'s size check and write, so two
     /// appends can't both pass the check and interleave. One lock for every
@@ -372,6 +371,18 @@ impl ScopedFs {
             .position(|p| p == &normalized)
             .map(|index| paths.remove(index))
             .is_some()
+    }
+
+    /// The roots added at runtime, each with a trailing `/`, in the order
+    /// they were added.
+    pub fn runtime_roots(&self) -> Vec<String> {
+        self.dynamic_paths.read().clone()
+    }
+
+    /// Whether `root` (trailing `/`) is itself a root, permanent or runtime.
+    pub fn has_root(&self, root: &str) -> bool {
+        self.permanent_paths.iter().any(|p| p == root)
+            || self.dynamic_paths.read().iter().any(|p| p == root)
     }
 
     /// Check if a path falls under one of the allowed directories.

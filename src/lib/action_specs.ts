@@ -98,10 +98,11 @@ export const SessionLoadData = object({
 	scoped_dirs: array(DiskfileDirectoryPath),
 	files: array(SerializableDisknode),
 	/**
-	 * The roots of the backend's filers, each covered by `files` as deep as
-	 * its filer indexes — a whole tree, or a registry root's top level alone.
-	 * A known file under one of them that `files` lacks is no longer indexed:
-	 * gone from disk, or in a repo under a registry root that isn't focused.
+	 * The roots of the backend's permanent filers and the ones the open
+	 * projects keep, each covered by `files` as deep as its filer indexes — a
+	 * whole tree, or a registry root's top level alone. A known file under one
+	 * of them that `files` lacks is no longer indexed: gone from disk, or in a
+	 * repo under a registry root that isn't focused.
 	 */
 	file_roots: array(DiskfileDirectoryPath),
 	provider_status: array(ProviderStatus),

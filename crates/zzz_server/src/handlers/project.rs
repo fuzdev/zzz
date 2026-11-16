@@ -1,10 +1,10 @@
 //! Project handlers — `project_open`, `project_close`, `project_list`,
-//! `repo_focus`, `repo_unfocus`, and the `project_changed` notification.
+//! `repo_focus`, and `repo_unfocus`.
 //!
-//! Spine signature `(Value, ActionContext<'_>, Arc<App>)`; the
-//! closure-captured `Arc<App>` carries the zzz-specific deps the spine
-//! `ActionContext` doesn't (`projects` map, `FilerManager`, `ScopedFs`,
-//! `ConnectionRegistry`-backed broadcast).
+//! Spine signature `(Value, ActionContext<'_>, Arc<App>)`. Each parses its
+//! input, hands the change to [`crate::project_manager::ProjectManager`] —
+//! which owns the open projects, their filers, their `ScopedFs` roots, and
+//! the `project_changed` broadcasts — and maps what comes back to the wire.
 //!
 //! An open path resolves to its project ([`crate::project::resolve_project`]):
 //! a registry's root, a git checkout, or the directory itself. The project's
@@ -18,7 +18,7 @@
 //! its subdirectories are its repos, and an unfocused one isn't indexed at
 //! all.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -27,21 +27,19 @@ use fuz_http::{
     JsonrpcError, JsonrpcErrorCode, forbidden, internal_error_with_source, invalid_params,
     parse_strict_params,
 };
-use fuz_realtime::notify_to_string;
 use fuz_repos::registry::EntryKind;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::filer::{
-    FilerConfig, FilerDepth, FilerLifetime, SerializableDisknode, WatchStatus,
-    disknodes_json_size_hint,
-};
+use crate::filer::{SerializableDisknode, WatchStatus, disknodes_json_size_hint};
 use crate::handlers::filesystem::{ERROR_INVALID_PATH, ERROR_PERMISSION_DENIED};
-use crate::handlers::{
-    App, EntryInfoKind, EntryState, ProjectEntryInfo, ProjectInfo, ProjectInfoKind, not_found_error,
-};
+use crate::handlers::{App, not_found_error};
 use crate::project::{
     EntryDir, Project, ProjectError, ProjectKind, ResolveOptions, resolve_project,
+};
+use crate::project_manager::{
+    EntryInfoKind, EntryState, Filers, LifecycleError, ProjectEntryInfo, ProjectInfo,
+    ProjectInfoKind,
 };
 
 /// `project_close` of a root that isn't an open project (`invalid_params`)
@@ -96,27 +94,6 @@ struct ProjectCloseInput {
 struct RepoInput {
     root: String,
     dir: String,
-}
-
-// -- Notification params -----------------------------------------------------
-
-/// What a `project_changed` notification reports.
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum ProjectChange {
-    /// Newly open.
-    Open,
-    /// Already open, and now different: a new focus, or the registry's
-    /// entries as resolved again.
-    Update,
-    Close,
-}
-
-#[derive(Serialize)]
-struct ProjectChangedParams<'a> {
-    #[serde(rename = "type")]
-    change_type: ProjectChange,
-    project: &'a ProjectInfo,
 }
 
 // -- Typed response structs --------------------------------------------------
@@ -239,6 +216,51 @@ fn filer_error(failed: &str, dir: &str, error: &std::io::Error) -> JsonrpcError 
     }
 }
 
+/// The JSON-RPC error for a change the project manager refused, carrying
+/// its reason as `data.reason` where there is one (an internal error — a
+/// filer that fails for no nameable cause, a notification that can't be
+/// built — has none). `failed` names what failed (`open project`, `focus
+/// repo`, …); `focusing` is the directory a focus asked for, whose vanishing
+/// since the registry was resolved is `repo_not_present`, as a missing entry
+/// is.
+fn lifecycle_error(failed: &str, error: &LifecycleError, focusing: Option<&str>) -> JsonrpcError {
+    match error {
+        LifecycleError::NotOpen { .. } => {
+            invalid_params(&error.to_string(), Some(ERROR_PROJECT_NOT_OPEN))
+        }
+        LifecycleError::NotRegistry { .. } => invalid_params(
+            &format!("failed to {failed}: {error}"),
+            Some(ERROR_PROJECT_NOT_REGISTRY),
+        ),
+        LifecycleError::RepoNotInProject { .. } => invalid_params(
+            &format!("failed to {failed}: {error}"),
+            Some(ERROR_REPO_NOT_IN_PROJECT),
+        ),
+        LifecycleError::RepoMissing { .. } => not_found_error(
+            &format!("failed to {failed}: {error}"),
+            ERROR_REPO_NOT_PRESENT,
+        ),
+        LifecycleError::RepoRefused { .. } => forbidden(
+            &format!("failed to {failed}: {error}"),
+            Some(ERROR_REPO_NOT_PRESENT),
+        ),
+        LifecycleError::Filer { dir, source }
+            if focusing == Some(dir.as_str()) && source.kind() == std::io::ErrorKind::NotFound =>
+        {
+            not_found_error(
+                &format!(
+                    "failed to {failed}: {dir} is gone since the registry was resolved (opening the project again resolves it): {source}"
+                ),
+                ERROR_REPO_NOT_PRESENT,
+            )
+        }
+        LifecycleError::Filer { dir, source } => filer_error(failed, dir, source),
+        LifecycleError::Notify(source) => {
+            internal_error_with_source("notification params serialize failed", source)
+        }
+    }
+}
+
 /// The directory an open of `project` focuses: the deepest present registry
 /// entry holding the opened directory — none for the root itself, a
 /// directory in no entry, or an opened worktree outside the root — or the
@@ -321,81 +343,9 @@ fn to_project_info(
     })
 }
 
-/// The filers a project keeps, each a directory key and what it indexes: a
-/// registry's root at its top level, and every focused directory whole.
-/// The root of a checkout or plain directory is its one focused directory.
-fn filers_of(project: &ProjectInfo) -> BTreeMap<String, FilerDepth> {
-    let mut filers: BTreeMap<String, FilerDepth> = project
-        .focused
-        .iter()
-        .map(|dir| (dir.clone(), FilerDepth::Tree))
-        .collect();
-    filers
-        .entry(project.root.clone())
-        .or_insert(FilerDepth::TopLevel);
-    filers
-}
-
-/// `existing` updated by a fresh resolve of the same root: the fresh kind
-/// and entries, and the focused directories of both that the fresh resolve
-/// still supports — a present entry's dir for a registry, the root for a
-/// checkout or plain directory. So a focus outlives no change of kind (a
-/// plain `~/dev` focused on its root, then a registry there) and no entry
-/// removed or gone missing.
-fn merge_project(existing: &ProjectInfo, fresh: &ProjectInfo) -> ProjectInfo {
-    let supported = |dir: &&String| match fresh.kind {
-        ProjectInfoKind::Registry => fresh
-            .entries
-            .iter()
-            .any(|entry| entry.state == EntryState::Present && &entry.dir == *dir),
-        ProjectInfoKind::GitRepo | ProjectInfoKind::PlainDir => **dir == fresh.root,
-    };
-    let focused: BTreeSet<&String> = existing
-        .focused
-        .iter()
-        .filter(supported)
-        .chain(&fresh.focused)
-        .collect();
-    ProjectInfo {
-        focused: focused.into_iter().cloned().collect(),
-        opened_at: existing.opened_at.clone(),
-        ..fresh.clone()
-    }
-}
-
-/// Start the filer on `dir` (a directory key), or find the one already
-/// running.
-async fn ensure_filer(app: &Arc<App>, dir: &str, depth: FilerDepth) -> std::io::Result<bool> {
-    let config = match depth {
-        FilerDepth::Tree => FilerConfig::tree(dir, &app.zzz_dir),
-        FilerDepth::TopLevel => FilerConfig::top_level(dir, &app.zzz_dir),
-    };
-    app.filer_manager
-        .start_filer(dir, Arc::clone(app), config, FilerLifetime::Project)
-        .await
-}
-
-/// Start every filer in `filers`, failing at the first that can't.
-/// `failed` names what fails with it ([`filer_error`]).
-async fn ensure_filers(
-    app: &Arc<App>,
-    filers: &BTreeMap<String, FilerDepth>,
-    failed: &str,
-) -> Result<(), JsonrpcError> {
-    for (dir, depth) in filers {
-        ensure_filer(app, dir, *depth)
-            .await
-            .map_err(|e| filer_error(failed, dir, &e))?;
-    }
-    Ok(())
-}
-
 /// The index of every filer in `filers`, deduplicated by path, and whether
 /// each has every directory watched.
-async fn files_of(
-    app: &App,
-    filers: &BTreeMap<String, FilerDepth>,
-) -> (Vec<SerializableDisknode>, WatchStatus) {
+async fn files_of(app: &App, filers: &Filers) -> (Vec<SerializableDisknode>, WatchStatus) {
     let mut files: BTreeMap<String, SerializableDisknode> = BTreeMap::new();
     let mut watch_status = WatchStatus::Full;
     for dir in filers.keys() {
@@ -407,97 +357,6 @@ async fn files_of(
         }
     }
     (files.into_values().collect(), watch_status)
-}
-
-/// What the open projects keep of each directory: the deepest any of them
-/// indexes it.
-fn kept_filers(app: &App) -> BTreeMap<String, FilerDepth> {
-    let mut kept: BTreeMap<String, FilerDepth> = BTreeMap::new();
-    for project in app.projects.read().values() {
-        for (dir, depth) in filers_of(project) {
-            let entry = kept.entry(dir).or_insert(depth);
-            if depth == FilerDepth::Tree {
-                *entry = FilerDepth::Tree;
-            }
-        }
-    }
-    kept
-}
-
-/// Stop each filer in `dirs` that no open project keeps
-/// ([`FilerManager::stop_filer`](crate::filer::FilerManager::stop_filer)
-/// never stops a permanent one).
-///
-/// The `_lifecycle` guard is proof the caller holds `App::project_lifecycle`.
-async fn stop_unkept_filers<'a>(
-    app: &App,
-    dirs: impl IntoIterator<Item = &'a String>,
-    _lifecycle: &tokio::sync::MutexGuard<'_, ()>,
-) {
-    let kept = kept_filers(app);
-    for dir in dirs {
-        if !kept.contains_key(dir) {
-            app.filer_manager.stop_filer(dir).await;
-        }
-    }
-}
-
-/// After `previous` became `project` (a merge, [`merge_project`]) and the
-/// project's filers are ensured, release what `previous` kept that no open
-/// project needs any more: a focus the merge dropped is stopped, and a
-/// whole-tree filer on a root now indexed at its top level alone is replaced
-/// by a top-level one ([`FilerManager::replace_filer`](crate::filer::FilerManager::replace_filer)
-/// — the manager never narrows a filer on a start). Neither can fail the
-/// open: a replacement that can't start leaves the whole-tree filer, which
-/// indexes more than needed, not less.
-async fn release_narrowed_filers(
-    app: &Arc<App>,
-    previous: &ProjectInfo,
-    lifecycle: &tokio::sync::MutexGuard<'_, ()>,
-) {
-    let kept = kept_filers(app);
-    let mut dropped = Vec::new();
-    for (dir, depth) in filers_of(previous) {
-        match kept.get(&dir) {
-            None => dropped.push(dir),
-            Some(FilerDepth::TopLevel) if depth == FilerDepth::Tree => {
-                let config = FilerConfig::top_level(&dir, &app.zzz_dir);
-                if let Err(e) = app
-                    .filer_manager
-                    .replace_filer(&dir, Arc::clone(app), config)
-                    .await
-                {
-                    tracing::warn!(
-                        path = %dir,
-                        error = %fuz_sys::cli::format_error_chain(&e),
-                        "failed to narrow a root's filer to its top level; it stays whole"
-                    );
-                }
-            }
-            Some(_) => {}
-        }
-    }
-    stop_unkept_filers(app, &dropped, lifecycle).await;
-}
-
-/// Broadcast a `project_changed`. The `_lifecycle` guard is proof the
-/// caller holds `App::project_lifecycle`, so notifications for one root go
-/// out in the order its opens and closes took effect — a close's `close`
-/// can't land after a racing open's `open`.
-fn broadcast_project_changed(
-    app: &App,
-    change: ProjectChange,
-    project: &ProjectInfo,
-    _lifecycle: &tokio::sync::MutexGuard<'_, ()>,
-) -> Result<(), JsonrpcError> {
-    let params_value = serde_json::to_value(ProjectChangedParams {
-        change_type: change,
-        project,
-    })
-    .map_err(|e| internal_error_with_source("notification params serialize failed", &e))?;
-    let notification = notify_to_string("project_changed", &params_value);
-    app.broadcast(&notification);
-    Ok(())
 }
 
 // -- Handlers ----------------------------------------------------------------
@@ -521,7 +380,7 @@ pub async fn project_list(
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    let projects: Vec<ProjectInfo> = app.projects.read().values().cloned().collect();
+    let projects = app.projects.published().projects.clone();
     serde_json::to_value(ProjectListResult { projects })
         .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
@@ -530,11 +389,11 @@ pub async fn project_list(
 /// holding it (see the module docs).
 ///
 /// The path may name a file (its parent opens) or a directory. It's resolved
-/// on a blocking thread ([`resolve_project`]). Side-effects: starts the
-/// filers the project now needs, adds its root to `ScopedFs`, records it in
-/// the in-memory map, and broadcasts `project_changed` — `open` for a new
-/// project, `update` for an open one this changed (a new focus, or its
-/// registry's entries as resolved again).
+/// on a blocking thread ([`resolve_project`]), then opened by the project
+/// manager ([`crate::project_manager::ProjectManager::open`]): the filers the
+/// project now needs start, its root enters `ScopedFs`, and `project_changed`
+/// is broadcast — `open` for a new project, `update` for an open one this
+/// changed (a new focus, or its registry's entries as resolved again).
 ///
 /// Returns the project, the directory this open focused, and the file index
 /// of every filer of the project — on the idempotent path too, so a client
@@ -590,72 +449,21 @@ pub async fn project_open(
         .map_err(|e| internal_error_with_source("failed to open project", &e))?
 }
 
-/// The body of `project_open` once the path is resolved: start the filers
-/// this open needs, then record the project.
+/// The body of `project_open` once the path is resolved.
 async fn open_project(
     app: Arc<App>,
     fresh: ProjectInfo,
     focus: Option<String>,
 ) -> Result<ActionOutput, JsonrpcError> {
-    // Start (or find) the filers before taking the lifecycle lock: their
-    // initial scans walk, watch, and stat whole trees, and opens and closes
-    // of other projects shouldn't wait on them. A directory that can't be
-    // listed fails the open here, before anything is recorded.
-    let wanted = filers_of(&fresh);
-    if let Err(error) = ensure_filers(&app, &wanted, OPEN_PROJECT).await {
-        let lifecycle = app.project_lifecycle.lock().await;
-        stop_unkept_filers(&app, wanted.keys(), &lifecycle).await;
-        return Err(error);
-    }
-
-    // Held across the map, scope, and filer steps so a concurrent close can't
-    // interleave (see `App::project_lifecycle`).
-    let lifecycle = app.project_lifecycle.lock().await;
-
-    let previous = app.projects.read().get(&fresh.root).cloned();
-    let project = previous
-        .as_ref()
-        .map_or_else(|| fresh.clone(), |existing| merge_project(existing, &fresh));
-    app.projects
-        .write()
-        .insert(project.root.clone(), project.clone());
-
-    // A close that ran between the starts above and the lock stopped the
-    // filers it alone kept, so ensure them again — dedup hits otherwise.
-    // `start_filer` only returns once a registered filer has finished its
-    // initial scan, so the returned files always come from completed scans.
-    let filers = filers_of(&project);
-    if let Err(error) = ensure_filers(&app, &filers, OPEN_PROJECT).await {
-        {
-            let mut projects = app.projects.write();
-            match &previous {
-                Some(previous) => projects.insert(previous.root.clone(), previous.clone()),
-                None => projects.remove(&project.root),
-            };
-        }
-        stop_unkept_filers(&app, filers.keys(), &lifecycle).await;
-        return Err(error);
-    }
-    // only once the open can't fail, so a rollback restores `previous` with
-    // every filer it kept still running
-    if let Some(previous) = &previous {
-        release_narrowed_filers(&app, previous, &lifecycle).await;
-    }
-    app.scoped_fs.add_path(Path::new(&project.root));
-
-    match &previous {
-        None => broadcast_project_changed(&app, ProjectChange::Open, &project, &lifecycle)?,
-        Some(previous) if !previous.same_as(&project) => {
-            broadcast_project_changed(&app, ProjectChange::Update, &project, &lifecycle)?;
-        }
-        Some(_) => {}
-    }
-    drop(lifecycle);
-
-    let (files, watch_status) = files_of(&app, &filers).await;
+    let landed = app
+        .projects
+        .open(&app, fresh)
+        .await
+        .map_err(|e| lifecycle_error(OPEN_PROJECT, &e, None))?;
+    let (files, watch_status) = files_of(&app, &landed.filers).await;
     let size_hint = disknodes_json_size_hint(&files) + PROJECT_OPEN_OVERHEAD;
     let result = ProjectOpenResult {
-        project,
+        project: landed.project,
         focus,
         files,
         watch_status,
@@ -673,7 +481,8 @@ const OPEN_PROJECT: &str = "open project";
 /// What fails when a focus's filer can't start ([`filer_error`]).
 const FOCUS_REPO: &str = "focus repo";
 
-/// `project_close` — close an open project.
+/// `project_close` — close an open project
+/// ([`crate::project_manager::ProjectManager::close`]).
 ///
 /// `root` is matched against the open projects as given (plus a trailing
 /// `/`), then canonicalized — so a non-canonical spelling of an open root
@@ -699,117 +508,17 @@ pub async fn project_close(
         ));
     }
     // Run to completion in its own task: the spine cancels a socket's
-    // in-flight handlers when it closes, and a close dropped between its map
-    // removal and its filer stops would leave filers nothing ever stops.
-    tokio::spawn(close_project(app, root))
+    // in-flight handlers when it closes, and a close dropped partway would
+    // leave the project's filers running with nothing to stop them.
+    tokio::spawn(async move { app.projects.close(&app, &root).await })
         .await
-        .map_err(|e| internal_error_with_source("failed to close project", &e))??;
+        .map_err(|e| internal_error_with_source("failed to close project", &e))?
+        .map_err(|e| lifecycle_error("close project", &e, None))?;
     Ok(Value::Null)
 }
 
-/// The body of `project_close` once `root` is known absolute.
-async fn close_project(app: Arc<App>, root: String) -> Result<(), JsonrpcError> {
-    let mut key = with_trailing_slash(root.clone());
-    // resolved before the lock — only consulted if `key` itself isn't open
-    let canonical_key = tokio::fs::canonicalize(&root)
-        .await
-        .ok()
-        .and_then(|canonical| to_dir_key(&canonical));
-
-    let lifecycle = app.project_lifecycle.lock().await;
-
-    let is_open = app.projects.read().contains_key(&key);
-    if !is_open && let Some(canonical_key) = canonical_key {
-        key = canonical_key;
-    }
-
-    let Some(project) = release_project(&app, &key, &lifecycle).await else {
-        return Err(not_open_error(&root));
-    };
-    let broadcast = broadcast_project_changed(&app, ProjectChange::Close, &project, &lifecycle);
-    drop(lifecycle);
-    broadcast
-}
-
-/// The error for a root that names no open project.
-fn not_open_error(root: &str) -> JsonrpcError {
-    invalid_params(
-        &format!("project not open: {root}"),
-        Some(ERROR_PROJECT_NOT_OPEN),
-    )
-}
-
-/// The entry of `project` whose checkout is `dir` — refused when `project`
-/// isn't a registry or has no such entry. `failed` names what fails.
-fn entry_of<'a>(
-    project: &'a ProjectInfo,
-    dir: &str,
-    failed: &str,
-) -> Result<&'a ProjectEntryInfo, JsonrpcError> {
-    if project.kind != ProjectInfoKind::Registry {
-        return Err(invalid_params(
-            &format!(
-                "failed to {failed}: {} isn't a registry project — its root is its one focus",
-                project.root
-            ),
-            Some(ERROR_PROJECT_NOT_REGISTRY),
-        ));
-    }
-    project
-        .entries
-        .iter()
-        .find(|entry| entry.dir == dir)
-        .ok_or_else(|| {
-            invalid_params(
-                &format!(
-                    "failed to {failed}: {dir} is none of the registry entries of {}",
-                    project.root
-                ),
-                Some(ERROR_REPO_NOT_IN_PROJECT),
-            )
-        })
-}
-
-/// The error for a repo whose filer can't start: one gone since the registry
-/// was last resolved is `repo_not_present` (`not_found`), as a missing entry
-/// is; anything else as an open's ([`filer_error`]).
-fn focus_filer_error(dir: &str, error: &std::io::Error) -> JsonrpcError {
-    if error.kind() == std::io::ErrorKind::NotFound {
-        return not_found_error(
-            &format!(
-                "failed to focus repo: {dir} is gone since the registry was resolved (opening the project again resolves it): {error}"
-            ),
-            ERROR_REPO_NOT_PRESENT,
-        );
-    }
-    filer_error(FOCUS_REPO, dir, error)
-}
-
-/// Check that `dir` is a present registry entry of `project` — what
-/// `repo_focus` can focus.
-fn check_focusable(project: &ProjectInfo, dir: &str) -> Result<(), JsonrpcError> {
-    let entry = entry_of(project, dir, FOCUS_REPO)?;
-    match entry.state {
-        EntryState::Present => Ok(()),
-        EntryState::Missing => Err(not_found_error(
-            &format!(
-                "failed to focus repo: registry entry {} isn't cloned at {dir} (opening a path in it resolves the registry again)",
-                entry.key
-            ),
-            ERROR_REPO_NOT_PRESENT,
-        )),
-        EntryState::Refused => Err(forbidden(
-            &format!(
-                "failed to focus repo: registry entry {} at {dir} is refused: {}",
-                entry.key,
-                entry.reason.unwrap_or("unknown")
-            ),
-            Some(ERROR_REPO_NOT_PRESENT),
-        )),
-    }
-}
-
-/// `repo_focus` — focus a registry entry of an open project.
+/// `repo_focus` — focus a registry entry of an open project
+/// ([`crate::project_manager::ProjectManager::focus`]).
 ///
 /// Its whole tree is then indexed and watched, as opening a path in it would
 /// do, without resolving the registry again: the entry must be present as the
@@ -844,82 +553,29 @@ pub async fn repo_focus(
         .map_err(|e| internal_error_with_source("failed to focus repo", &e))?
 }
 
-/// The body of `repo_focus`: check, start the repo's filer, then record it.
+/// The body of `repo_focus`.
 async fn focus_repo(
     app: Arc<App>,
     root: String,
     dir: String,
 ) -> Result<ActionOutput, JsonrpcError> {
-    // checked before the scan, so a refused focus starts nothing
-    {
-        let projects = app.projects.read();
-        let project = projects.get(&root).ok_or_else(|| not_open_error(&root))?;
-        check_focusable(project, &dir)?;
-    }
-    // the scan runs before the lifecycle lock, as an open's does
-    if let Err(error) = ensure_filer(&app, &dir, FilerDepth::Tree).await {
-        let lifecycle = app.project_lifecycle.lock().await;
-        stop_unkept_filers(&app, [&dir], &lifecycle).await;
-        return Err(focus_filer_error(&dir, &error));
-    }
-
-    let lifecycle = app.project_lifecycle.lock().await;
-
-    // closed meanwhile, or opened again with the entry no longer present
-    let checked = app
+    let landed = app
         .projects
-        .read()
-        .get(&root)
-        .cloned()
-        .ok_or_else(|| not_open_error(&root))
-        .and_then(|project| check_focusable(&project, &dir).map(|()| project));
-    let previous = match checked {
-        Ok(previous) => previous,
-        Err(error) => {
-            // TODO a filer the start above widened from a top level to a whole
-            // tree — a nested registry's root, which that project keeps at its
-            // top level — stays whole here, since this only stops what no
-            // project keeps; narrowing it back needs `release_narrowed_filers`'
-            // replace
-            stop_unkept_filers(&app, [&dir], &lifecycle).await;
-            return Err(error);
-        }
-    };
-    let mut project = previous.clone();
-    if !project.focused.contains(&dir) {
-        project.focused.push(dir.clone());
-        project.focused.sort();
-    }
-    app.projects
-        .write()
-        .insert(project.root.clone(), project.clone());
-
-    // an unfocus or close that ran between the start above and the lock
-    // stopped the filer, so ensure it again — dedup hits otherwise
-    let filers = filers_of(&project);
-    if let Err(error) = ensure_filers(&app, &filers, FOCUS_REPO).await {
-        app.projects
-            .write()
-            .insert(previous.root.clone(), previous.clone());
-        stop_unkept_filers(&app, filers.keys(), &lifecycle).await;
-        return Err(error);
-    }
-    if !previous.same_as(&project) {
-        broadcast_project_changed(&app, ProjectChange::Update, &project, &lifecycle)?;
-    }
-    drop(lifecycle);
-
-    let (files, watch_status) = files_of(&app, &filers).await;
+        .focus(&app, &root, &dir)
+        .await
+        .map_err(|e| lifecycle_error(FOCUS_REPO, &e, Some(&dir)))?;
+    let (files, watch_status) = files_of(&app, &landed.filers).await;
     let size_hint = disknodes_json_size_hint(&files) + PROJECT_OPEN_OVERHEAD;
     let result = RepoFocusResult {
-        project,
+        project: landed.project,
         files,
         watch_status,
     };
     Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
 }
 
-/// `repo_unfocus` — drop a registry entry from an open project's focus.
+/// `repo_unfocus` — drop a registry entry from an open project's focus
+/// ([`crate::project_manager::ProjectManager::unfocus`]).
 ///
 /// Its filer stops unless another open project keeps it (a nested registry
 /// keeping it at its top level narrows it to that), and its files leave the
@@ -948,103 +604,32 @@ pub async fn repo_unfocus(
     // Run to completion in its own task: the spine cancels a socket's
     // in-flight handlers when it closes, and an unfocus dropped mid-release
     // would leave the focus gone, its filer running, and nothing broadcast.
-    let project = tokio::spawn(async move { unfocus_repo(&app, &root, &dir).await })
+    let project = tokio::spawn(async move { app.projects.unfocus(&app, &root, &dir).await })
         .await
-        .map_err(|e| internal_error_with_source("failed to unfocus repo", &e))??;
+        .map_err(|e| internal_error_with_source("failed to unfocus repo", &e))?
+        .map_err(|e| lifecycle_error("unfocus repo", &e, None))?;
     serde_json::to_value(RepoUnfocusResult { project })
         .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
-/// The body of `repo_unfocus`, returning the project as it's left.
-async fn unfocus_repo(app: &Arc<App>, root: &str, dir: &str) -> Result<ProjectInfo, JsonrpcError> {
-    let lifecycle = app.project_lifecycle.lock().await;
-
-    let previous = app
-        .projects
-        .read()
-        .get(root)
-        .cloned()
-        .ok_or_else(|| not_open_error(root))?;
-    entry_of(&previous, dir, "unfocus repo")?;
-    let mut project = previous.clone();
-    project.focused.retain(|focused| focused != dir);
-    let broadcast = if previous.same_as(&project) {
-        Ok(())
-    } else {
-        app.projects
-            .write()
-            .insert(project.root.clone(), project.clone());
-        release_narrowed_filers(app, &previous, &lifecycle).await;
-        broadcast_project_changed(app, ProjectChange::Update, &project, &lifecycle)
-    };
-    drop(lifecycle);
-    broadcast.map(|()| project)
-}
-
-/// Close every open project through the same path as `project_close`.
-///
-/// Each project's filers are stopped, its `ScopedFs` root removed, and a
-/// `project_changed` close broadcast — restoring the boot-time scope
-/// (`zzz_dir` + `scoped_dirs`). Used by the test binary's `_testing_reset`.
+/// Close every open project through the same path as `project_close` —
+/// restoring the boot-time scope (`zzz_dir` + `scoped_dirs`). Used by the
+/// test binary's `_testing_reset`.
 ///
 /// Returns the closed projects.
 ///
 /// # Errors
 ///
-/// Returns a JSON-RPC internal error if a notification fails to serialize;
-/// every project is released before any broadcast, so the scope is restored
-/// regardless.
-pub async fn project_close_all(app: &App) -> Result<Vec<ProjectInfo>, JsonrpcError> {
-    let lifecycle = app.project_lifecycle.lock().await;
-    let keys: Vec<String> = app.projects.read().keys().cloned().collect();
-    let mut closed = Vec::with_capacity(keys.len());
-    for key in keys {
-        if let Some(project) = release_project(app, &key, &lifecycle).await {
-            closed.push(project);
-        }
-    }
-    // every project is released before any broadcast, and every broadcast
-    // goes out under the lock (see `project_close`)
-    let broadcast = closed.iter().try_for_each(|project| {
-        broadcast_project_changed(app, ProjectChange::Close, project, &lifecycle)
-    });
-    drop(lifecycle);
-    broadcast?;
-    Ok(closed)
-}
-
-/// Remove the project at `key` (a root, trailing `/`) from the open map and
-/// release its `ScopedFs` root and the filers no other open project keeps.
-/// `None` if it isn't open.
-///
-/// Unconditional on purpose: `FilerManager::stop_filer` keeps permanent
-/// filers and `ScopedFs::remove_path` never removes a permanent root, so a
-/// project rooted at `zzz_dir` or a scoped dir — or nested in or containing
-/// one — can't revoke the access that root grants.
-///
-/// The `lifecycle` guard is proof the caller holds `App::project_lifecycle`,
-/// keeping the map, scope, and filers in lockstep.
-async fn release_project(
-    app: &App,
-    key: &str,
-    lifecycle: &tokio::sync::MutexGuard<'_, ()>,
-) -> Option<ProjectInfo> {
-    let project = app.projects.write().remove(key)?;
-    stop_unkept_filers(app, filers_of(&project).keys(), lifecycle).await;
-    app.scoped_fs.remove_path(Path::new(key));
-    Some(project)
-}
-
-impl ProjectInfo {
-    /// Whether `other` reports the same project state — the open time aside,
-    /// which a merge keeps.
-    fn same_as(&self, other: &Self) -> bool {
-        self.root == other.root
-            && self.kind == other.kind
-            && self.registry_path == other.registry_path
-            && self.entries == other.entries
-            && self.focused == other.focused
-    }
+/// A JSON-RPC internal error if a notification fails to serialize; every
+/// project is closed regardless.
+pub async fn project_close_all(app: &Arc<App>) -> Result<Vec<ProjectInfo>, JsonrpcError> {
+    // in its own task, like every other change: a caller dropped mid-close
+    // can't leave the projects half released
+    let closing = Arc::clone(app);
+    tokio::spawn(async move { closing.projects.close_all(&closing).await })
+        .await
+        .map_err(|e| internal_error_with_source("failed to close projects", &e))?
+        .map_err(|e| lifecycle_error("close project", &e, None))
 }
 
 #[cfg(test)]
@@ -1054,7 +639,9 @@ mod tests {
     use fuz_repos::registry::ValidRegistry;
 
     use super::*;
+    use crate::filer::FilerDepth;
     use crate::project::{EntryRefusal, ProjectEntry};
+    use crate::project_manager::{filers_of, merge_project};
 
     const REGISTRY: &str = r#"owners = ["me"]
 
@@ -1369,6 +956,17 @@ purpose = "a reference"
         }
     }
 
+    /// The focus of the open project at `root`.
+    fn focused_of(app: &App, root: &str) -> Vec<String> {
+        app.projects
+            .published()
+            .projects
+            .iter()
+            .find(|project| project.root == root)
+            .map(|project| project.focused.clone())
+            .unwrap()
+    }
+
     /// `open_project`'s result as JSON.
     async fn open(app: &Arc<App>, info: ProjectInfo, focus: Option<String>) -> Value {
         let output = open_project(Arc::clone(app), info, focus).await.unwrap();
@@ -1433,7 +1031,7 @@ purpose = "a reference"
                 tmp.key("w/site/s.txt")
             ]
         );
-        assert_eq!(app.projects.read().len(), 1);
+        assert_eq!(app.projects.published().projects.len(), 1);
 
         // a plain-dir project inside it shares the focused repo's filer
         let mut nested = to_project_info(
@@ -1449,11 +1047,12 @@ purpose = "a reference"
         nested.name = "app".to_owned();
         open(&app, nested, Some(app_dir.clone())).await;
 
-        let lifecycle = app.project_lifecycle.lock().await;
-        let closed = release_project(&app, &root, &lifecycle).await.unwrap();
+        let closed = app.projects.close(&app, &root).await.unwrap();
         assert_eq!(closed.root, root);
-        assert!(release_project(&app, &root, &lifecycle).await.is_none());
-        drop(lifecycle);
+        assert!(matches!(
+            app.projects.close(&app, &root).await,
+            Err(LifecycleError::NotOpen { .. })
+        ));
         // the registry's filers stopped, the one the nested project keeps not
         assert!(app.filer_manager.files_for(&root).await.is_empty());
         assert!(app.filer_manager.files_for(&site_dir).await.is_empty());
@@ -1474,7 +1073,7 @@ purpose = "a reference"
 
         assert_eq!(project_close_all(&app).await.unwrap().len(), 1);
         assert!(app.filer_manager.files_for(&app_dir).await.is_empty());
-        assert!(app.projects.read().is_empty());
+        assert!(app.projects.published().projects.is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1524,7 +1123,7 @@ purpose = "a reference"
             .err()
             .unwrap();
         assert_eq!(error.code, JsonrpcErrorCode::NotFound);
-        assert!(app.projects.read().is_empty());
+        assert!(app.projects.published().projects.is_empty());
         assert!(app.filer_manager.files_for(&tmp.key("w/")).await.is_empty());
         assert!(
             app.scoped_fs
@@ -1532,6 +1131,18 @@ purpose = "a reference"
                 .await
                 .is_err()
         );
+    }
+
+    /// `repo_unfocus`'s body, its refusal as the handler maps it.
+    async fn unfocus_repo(
+        app: &Arc<App>,
+        root: &str,
+        dir: &str,
+    ) -> Result<ProjectInfo, JsonrpcError> {
+        app.projects
+            .unfocus(app, root, dir)
+            .await
+            .map_err(|e| lifecycle_error("unfocus repo", &e, None))
     }
 
     /// `focus_repo`'s result as JSON.
@@ -1578,10 +1189,7 @@ purpose = "a reference"
             project_changes(&mut rx),
             [("update".to_owned(), serde_json::json!([app_dir]))]
         );
-        assert_eq!(
-            app.projects.read()[&root].focused,
-            std::slice::from_ref(&app_dir)
-        );
+        assert_eq!(focused_of(&app, &root), std::slice::from_ref(&app_dir));
 
         // again: the same reply, nothing changed or broadcast
         let again = focus(&app, &root, &app_dir).await.unwrap();
@@ -1768,7 +1376,7 @@ purpose = "a reference"
             assert!(unfocus_repo(&app, root, dir).await.is_ok(), "{dir}");
         }
         assert_eq!(
-            app.projects.read()[&plain_root].focused,
+            focused_of(&app, &plain_root),
             std::slice::from_ref(&plain_root)
         );
         assert!(project_changes(&mut rx).is_empty(), "nothing broadcast");
@@ -1793,7 +1401,7 @@ purpose = "a reference"
             "{}",
             error.message
         );
-        assert!(app.projects.read()[&root].focused.is_empty());
+        assert!(focused_of(&app, &root).is_empty());
         assert!(project_changes(&mut rx).is_empty());
     }
 
@@ -1905,5 +1513,31 @@ purpose = "a reference"
             filer_error(OPEN_PROJECT, "/x/", &other).code,
             JsonrpcErrorCode::InternalError
         );
+    }
+
+    #[test]
+    fn a_focused_repo_that_vanished_is_not_present_and_any_other_dir_is_not_found() {
+        let gone = |dir: &str| LifecycleError::Filer {
+            dir: dir.to_owned(),
+            source: std::io::Error::from(std::io::ErrorKind::NotFound),
+        };
+        // the directory the focus asked for, whenever its filer fails
+        let error = lifecycle_error(FOCUS_REPO, &gone("/w/app/"), Some("/w/app/"));
+        assert_eq!(error.code, JsonrpcErrorCode::NotFound);
+        assert_eq!(reason(&error), Some(ERROR_REPO_NOT_PRESENT));
+        assert!(
+            error.message.contains("/w/app/ is gone"),
+            "{}",
+            error.message
+        );
+        // another directory of the project, or an open's
+        for focusing in [Some("/w/site/"), None] {
+            let error = lifecycle_error(FOCUS_REPO, &gone("/w/app/"), focusing);
+            assert_eq!(error.code, JsonrpcErrorCode::NotFound);
+            assert_eq!(
+                reason(&error),
+                Some(crate::handlers::filesystem::ERROR_PATH_NOT_FOUND)
+            );
+        }
     }
 }

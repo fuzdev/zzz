@@ -48,7 +48,7 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   bundle). zzz's reset closure ignores the in-tx
   `ActionDb` handle (its domain state is in-memory, not in PG) — it closes
   every zzz project through the production close path
-  (`handlers::project::project_close_all` — filers stopped, `ScopedFs`
+  (`ProjectManager::close_all` — filers stopped, `ScopedFs`
   roots removed, `project_changed` broadcast, restoring the boot-time
   scope), calls `pty_manager.kill_all()` (non-destructive — manager stays
   usable across tests), stops and forgets every job
@@ -1032,10 +1032,15 @@ commands):
   resolves its project on `spawn_blocking` (stats, a registry read, at most
   a few git calls through the `App::git` runner, built over the terminal
   environment and version-checked once at boot), and it, `project_close`,
-  `repo_focus`, and `repo_unfocus` serialize on `App::project_lifecycle`
-  (a `tokio::sync::Mutex`), since each
-  spans the projects map, `ScopedFs`, and the project's filers across await
-  points. Each runs in its own task — the spine cancels a socket's
+  `repo_focus`, and `repo_unfocus` serialize on the `ProjectManager`'s lock
+  (a `tokio::sync::Mutex` around the open projects, so holding it is the
+  only way to change them), since each spans that state, `ScopedFs`, and
+  the filers across await points. Each computes the next state and commits
+  it in one place (`ProjectManager::commit`), which derives the filers to
+  ensure, stop, or narrow and the roots to set from the two states — no
+  operation does that bookkeeping itself — then publishes the snapshot
+  `project_list` and `session_load` read without the lock. Each runs in its
+  own task — the spine cancels a socket's
   in-flight handlers when it closes, and a dropped caller can't abandon one
   halfway. `project_open` starts the filers — the initial walks and
   watches — before taking the lock, then re-ensures them under the lock (a
@@ -1045,15 +1050,18 @@ commands):
   lock. A filer is stopped only when no
   open project keeps it; one an open project no longer needs whole — a
   root that turned into a registry's, indexed at its top level — is
-  replaced by a top-level one (`FilerManager::replace_filer`, the old one
-  running until the new one has scanned), once nothing can fail the open,
-  so a rollback finds every filer the project had kept; a start never
-  narrows a filer. `repo_unfocus` releases its repo's filer the same way.
-  Every `project_changed` is broadcast under the lock (the broadcast takes
-  the guard), so one root's notifications go out in the order its opens,
-  focuses, and closes took effect.
-- **`parking_lot::RwLock`** for short synchronous sections (the projects
-  map, `ScopedFs` roots); no poisoning. The async managers (filer index,
+  replaced by a top-level one (`FilerManager::narrow_filer`, the old one
+  running until the new one has scanned), once the next state is in effect
+  and nothing can fail it; a start never narrows a filer. A close, an
+  unfocus, and an operation that fails after its scan release filers the
+  same way — the one release, comparing what was kept or started with what
+  the open projects keep. Every `project_changed` is broadcast by the
+  commit, under the lock, so one root's notifications go out in the order
+  its opens, focuses, and closes took effect. Debug builds check after each
+  commit that every kept directory has a filer deep enough and that the
+  runtime `ScopedFs` roots are the open projects' roots.
+- **`parking_lot::RwLock`** for short synchronous sections (the published
+  projects snapshot, `ScopedFs` roots); no poisoning. The async managers (filer index,
   PTY terminals, providers) use `tokio::sync::RwLock` — scope sync guards
   before await points.
 - **PTY terminals**: `fuz_pty` as a native crate dependency (no FFI
