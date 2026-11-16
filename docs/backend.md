@@ -396,7 +396,9 @@ commands):
   `workspace_changed` broadcast on
   open/close (no broadcast on an idempotent open).
 - **`filesystem.cross.test.ts`** — `diskfile_read` (a text file whole with
-  its size and `mtime`, a file in the app dir, over the size limit →
+  its size and `mtime`, read through to the disk — a same-length rewrite read
+  at once, a file in an ignored directory the filer never indexes — a file
+  in the app dir, over the size limit →
   `too_large` and not UTF-8 → `not_utf8` with `contents: null`, not found,
   out of scope, a `.zzz` home refused however it's spelled and whether or not
   the file exists, a symlink to the file or along its path, a directory, a
@@ -418,7 +420,8 @@ commands):
   closes the socket on WS), and `filer_change`
   broadcasts in an open workspace (file create; rename → `delete` of the old
   path + `add` of the new; an mtime-only change, a rewrite of the same
-  bytes, and new contents each → a `change` with the new metadata, each
+  bytes (with and without a `utimes`), and new contents each → a `change`
+  with the new metadata, each
   parsed against the TS spec, no disknode — broadcast, `workspace_open`, or
   `session_load` — carrying a `contents` key, each disknode's `size` the
   file's bytes, and the contents read back with `diskfile_read`).
@@ -548,13 +551,13 @@ commands):
   from hanging the scan and keeps files outside the watched root out of the
   index. A symlinked file or directory inside a workspace is invisible in
   the file tree.
-- **filer file-size cap** — `filer::MAX_INDEXED_FILE_SIZE`
-  (4 MiB, in `crates/zzz_server/src/filer.rs`) caps the in-memory index: files
-  over 4 MiB are indexed by their metadata and their contents aren't read.
-  This bounds memory under workspaces containing large lockfiles or build
-  outputs. The index never sends contents; `diskfile_read` applies the same
-  cap. The frontend treats a file whose read finds no text (over the cap,
-  not UTF-8) or fails as `unloadable`: read-only, never saved over (see
+- **text read cap** — the filer reads no file: its index is metadata only
+  (identity, size, timestamps, the `lstat` stamp), so its memory scales with
+  the number of files, not their bytes. `diskfile_read` returns text up to
+  4 MiB (`MAX_TEXT_READ_SIZE` in `crates/zzz_server/src/handlers/filesystem.rs`);
+  a larger file, or one not UTF-8, comes back with `contents: null` and its
+  `unloaded_reason`. The frontend treats a file whose read finds no text or
+  fails as `unloadable`: read-only, never saved over (see
   ./architecture.md § Known Limitations). A loaded file's save fits the 16 MiB RPC
   message cap except in the worst case (JSON escapes each control character
   to 6 bytes), where the client guard refuses it cleanly.
@@ -599,13 +602,30 @@ commands):
   the workspaces page and in the desk menu). A limit hit stops watch attempts
   until the next rescan. A filer that degrades or recovers after
   `workspace_open` returns is only logged — no notification carries the
-  change. Rescans (`session_load`, overflow, degraded polling) reuse a
-  file's indexed node when its `lstat` identity and change stamps
-  (`filer::FileStat`: dev, inode, size, mtime, ctime) are unchanged, so they
-  re-read only changed files; following git's "racily clean" rule, a stamp
-  is only recorded once the file has been still for `RACY_STAT_MARGIN` (2s)
-  and the read saw the stat's size, since same-size writes inside one
-  timestamp tick (coarse on tmpfs) leave every stamp unchanged.
+  change. **Change by stamp**: watch events and rescans (`session_load`,
+  overflow, degraded polling) alike decide from a file's `lstat` stamp
+  (`filer::FileStat`: dev, inode, size, mtime, and `st_ctime`, the inode
+  change time — not the wire `ctime`, which is the birth time) — a file
+  whose stamp matches its indexed one is unchanged and not broadcast, any
+  other is a `change` (a `touch` and a rewrite of the same bytes included,
+  and a chmod, chown, xattr write, or new hard link, which move only
+  `st_ctime` and so broadcast unchanged wire metadata — accepted). Following
+  git's "racily clean" rule, a stamp is only trusted when its `st_ctime` lay
+  more than `RACY_STAT_MARGIN` (3s) before it was taken (the clock is read
+  before the `lstat`), since same-size writes inside one timestamp tick leave
+  every stamp unchanged — a tick is often a jiffy, whole seconds on some
+  filesystems (ext3, some FUSE and network ones), two seconds on FAT, and
+  inode times come from a coarse clock that lags the wall clock by up to a
+  jiffy. Only `st_ctime` counts: every write, truncate, and `utimes` moves
+  it and userspace can't set it (on a kernel-managed filesystem), so an
+  `mtime` in the future (`touch -d`, `cp -p`, an archive from a clock ahead)
+  doesn't keep a file untrusted. A
+  file indexed under an untrusted stamp is a `change` the next time an event
+  or a rescan looks at it, whether or not the stamp moved; that look takes a
+  trusted stamp once `st_ctime` is past the margin. A spurious `change`
+  costs a client holding the file one `diskfile_read` that finds the same
+  text. A write the stamp can't see goes unnoticed until it next moves (see
+  ./architecture.md § Known Limitations).
   `FilerManager::start_filer` gates starts per path, so concurrent opens of
   one directory share a single initial scan. On macOS `FSEvents` each watch
   call restarts notify's stream, so per-directory watching is slow there on
@@ -725,15 +745,16 @@ commands):
 - **Text reads**: `diskfile_read` answers from one handle.
   `ScopedFs::open_file` opens it `O_NOFOLLOW | O_NONBLOCK` and `fstat`s it
   (a directory, FIFO, socket, or device node is refused without blocking),
-  and `filer::read_text_contents` — the same bounded read the index uses —
-  reads it: a file over `filer::MAX_INDEXED_FILE_SIZE` (4 MiB) when opened
-  isn't read, the read stops one byte past the limit for one that grew
-  since, and bytes that aren't UTF-8 are dropped; either way `contents` is
-  `null` and `unloaded_reason` says which (`too_large`, `not_utf8`). The
-  timestamps come from the `fstat` taken before the read, so a write racing
-  the read leaves them older than the contents, never newer, and `size` is
-  the contents' length when they're loaded, so the two agree.
-  Any regular file in scope is readable, indexed or not, except one in a
+  and a bounded read (`read_text_contents`, beside the handler) reads it,
+  with nothing cached — every read is of the disk as it is now, whether or
+  not the filer has seen the latest write: a file over `MAX_TEXT_READ_SIZE`
+  (4 MiB) when opened isn't read, the read stops one byte past the limit for
+  one that grew since, and bytes that aren't UTF-8 are dropped; either way
+  `contents` is `null` and `unloaded_reason` says which (`too_large`,
+  `not_utf8`). The timestamps come from the `fstat` taken before the read,
+  so a write racing the read leaves them older than the contents, never
+  newer, and `size` is the contents' length when they're loaded, so the two
+  agree. Any regular file in scope is readable, indexed or not, except one in a
   `.zzz` home, which `ScopedFs` refuses (Filesystem errors above).
 - **File byte routes**: `file_bytes.rs` mounts `GET` / `HEAD` / `POST` /
   `PATCH` on `/api/files/bytes` (`file_bytes::FILE_BYTES_PATH`), taking the

@@ -81,8 +81,8 @@ pub fn session_cookie_name_for_port(port: u16) -> String {
 /// since an oversized WebSocket message closes the socket rather than getting
 /// an error reply; the cross-backend filesystem suite pins the two together.
 ///
-/// 16 MiB, above the spine's 1 MiB default, so saving a file the filer loads
-/// (at most 4 MiB) fits in all but pathological cases — JSON escapes a
+/// 16 MiB, above the spine's 1 MiB default, so saving a file `diskfile_read`
+/// loads (at most 4 MiB) fits in all but pathological cases — JSON escapes a
 /// control character to 6 bytes, so a file dense with them can exceed the
 /// cap, and the client guard then refuses the save cleanly — and so a long
 /// `completion_create` history fits.

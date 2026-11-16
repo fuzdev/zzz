@@ -1073,11 +1073,11 @@ The allowed roots are the permanent boot-time set (the app directory + scoped di
 
 ### Reading Files
 
-`diskfile_read` reads one file as text: `{contents, unloaded_reason, size, ctime, mtime}`. Any regular file in scope can be read, whether the filer indexes it or not — except a file in a protected directory — a credential directory, or a `.zzz` directory other than the app dir (`forbidden` / `protected_dir_not_allowed`, refused whether or not the file exists). It shares the index's limits: a file over 4 MiB or not valid UTF-8 comes back with `contents: null` and an `unloaded_reason` (`too_large`, `not_utf8`), and its `size`. The timestamps come from the handle the contents were read from, taken before the read, so a write racing the read leaves them older than the contents, never newer; `size` is the contents' length when they're loaded. Errors carry the file actions' reasons (`path_not_found`, `path_not_allowed`, `symlink_not_allowed`, `is_a_directory`, `not_a_regular_file`, …). Larger files and bytes go over the byte routes below.
+`diskfile_read` reads one file as text: `{contents, unloaded_reason, size, ctime, mtime}`. Any regular file in scope can be read, whether the filer indexes it or not — except a file in a protected directory — a credential directory, or a `.zzz` directory other than the app dir (`forbidden` / `protected_dir_not_allowed`, refused whether or not the file exists). It reads the disk as it is now — nothing is cached, and the filer's index holds no contents — so it returns what's there even before the filer has seen the latest write. A file over 4 MiB or not valid UTF-8 comes back with `contents: null` and an `unloaded_reason` (`too_large`, `not_utf8`), and its `size`. The timestamps come from the handle the contents were read from, taken before the read, so a write racing the read leaves them older than the contents, never newer; `size` is the contents' length when they're loaded. Errors carry the file actions' reasons (`path_not_found`, `path_not_allowed`, `symlink_not_allowed`, `is_a_directory`, `not_a_regular_file`, …). Larger files and bytes go over the byte routes below.
 
 ### File Bytes
 
-The file actions (`diskfile_update`, `diskfile_create`) carry contents as UTF-8 strings inside one JSON-RPC message, and the file index holds contents only for UTF-8 files under its size limit. Bytes have their own path: plain HTTP routes at `/api/files/bytes?path=<absolute path>` (Rust: `crates/zzz_server/src/file_bytes.rs`; `src/lib/file_bytes.ts` builds the URLs).
+The file actions carry contents as UTF-8 strings inside one JSON-RPC message (`diskfile_update`, `diskfile_create`), and `diskfile_read` returns text only for UTF-8 files under its size limit. Bytes have their own path: plain HTTP routes at `/api/files/bytes?path=<absolute path>` (Rust: `crates/zzz_server/src/file_bytes.rs`; `src/lib/file_bytes.ts` builds the URLs).
 
 - **Read** — `GET` returns the file's bytes and honors one `Range: bytes=` range (206, or 416 past the end), which is what a media element needs to seek. The URL works directly as an `<audio>` or `<img>` `src`: the request carries the session cookie.
 - **Create** — `POST` creates the file exclusively from the request body, like `diskfile_create`.
@@ -1091,9 +1091,9 @@ These routes are outside the action system — they don't appear in the actions 
 
 ### Filer
 
-`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, size, ctime, mtime}` — metadata only: `id` is its path and `size` its bytes from the `lstat` the filer read it after, `null` only on a `delete`'s node. No disknode carries contents; a client reads them with `diskfile_read` (see [File Editing](#file-editing)). Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. The index still reads and holds each indexed file's text (UTF-8, at most 4 MiB), so a rescan can tell an unchanged file from a changed one; any move of what it holds for a file — the text, the `size`, or the timestamps (a `touch`, a rewrite of the same bytes) — is a `change` carrying the new metadata. A client holding the file's content reads it again if it holds it eagerly and otherwise drops it, to load on next access (`Diskfiles.upsert`), and a re-read of the same text changes nothing. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
+`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, size, ctime, mtime}` — metadata only: `id` is its path and `size` its bytes from the filer's `lstat`, `null` only on a `delete`'s node. No disknode carries contents; a client reads them with `diskfile_read` (see [File Editing](#file-editing)). Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. The index is stat-only — the filer reads no file — and a file is unchanged only when its `lstat` stamp (device, inode, size, mtime, ctime) matches the indexed one; any other is a `change` carrying the new metadata, a `touch` and a rewrite of the same bytes included. The stamp's `ctime` is the inode change time (`st_ctime`), which every write, chmod, and `utimes` moves and userspace can't set on a kernel-managed filesystem; the wire `ctime` is the birth time. So a chmod, chown, or new hard link is a `change` too, with the same wire metadata as before. A stamp is trusted only when its inode change time lay more than three seconds before it was taken (git's "racily clean" rule: same-size writes within one timestamp tick look identical), so a file indexed while it might still have been written is a `change` the next time an event or a rescan looks at it, even with its stamp unmoved. An `mtime` in the future (`touch -d`, `cp -p`) doesn't matter. A client holding the file's content reads it again if it holds it eagerly and otherwise drops it, to load on next access (`Diskfiles.upsert`), and a re-read of the same text changes nothing. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
 
-Watches are per directory: the filer's own walk (on a blocking thread) adds one non-recursive watch to each directory it indexes — never inside ignored, symlinked, or non-UTF-8 directories — watching each before listing it, so nothing created in between is missed. A directory that appears gets watches for its subtree when it's synced; one that's removed or renamed away has them dropped (two paths sharing one inode, like a renamed directory's old and new path or a bind mount, share one kernel watch, removed only with its last path). An unreadable subdirectory is skipped and logged once, and picked up once it's readable again; one made unreadable later drops out of the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's indexed under it and retries. Rescans (`session_load`, overflow recovery) re-read only files whose `lstat` identity or change stamps moved, and trust a stamp only once the file has been still for two seconds (git's "racily clean" rule), since same-size writes within one timestamp tick look identical.
+Watches are per directory: the filer's own walk (on a blocking thread) adds one non-recursive watch to each directory it indexes — never inside ignored, symlinked, or non-UTF-8 directories — watching each before listing it, so nothing created in between is missed. A directory that appears gets watches for its subtree when it's synced; one that's removed or renamed away has them dropped (two paths sharing one inode, like a renamed directory's old and new path or a bind mount, share one kernel watch, removed only with its last path). An unreadable subdirectory is skipped and logged once, and picked up once it's readable again; one made unreadable later drops out of the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's indexed under it and retries. A walk or a rescan (`session_load`, overflow recovery) costs one `lstat` per file and reads none, and broadcasts only the files whose stamps moved or weren't trusted yet.
 
 When the OS runs out of watches (inotify's `max_user_watches`), or no watcher can be created at all (`max_user_instances`), the filer runs **degraded**: the index still comes from the scan, and the directories without a watch are rescanned every 5 seconds or more (retrying their watches each time), so changes there show up late. `workspace_open` returns this as `watch_status` (`'full'` or `'degraded'`), which the tab that opened it keeps on its `Workspace` cell and shows on the workspaces page and in the desk menu. It's reported at open time only (another tab or a reload shows `'full'`) — a filer that degrades or recovers later is just logged. A workspace root that can't be listed fails `workspace_open` (`forbidden` / `permission_denied`, or `not_found`); a running filer whose root disappears polls it until it's back.
 
@@ -1844,12 +1844,12 @@ Population, per capability:
   WebSocket message, so the frontend's `Socket` refuses any request over the
   cap before sending (`invalid_request`, `data.reason` `payload_too_large`;
   `src/lib/rpc_message_limit.ts`) — a huge save or a very long completion
-  history fails cleanly instead of dropping the socket. Saving any file the
-  filer loads (at most 4 MiB) fits, except in the worst case: JSON escapes a
-  control character to 6 bytes, so a file dense with them can exceed the cap,
-  and that save is refused the same clean way. The cap isn't confined to
-  authenticated callers on HTTP (see ../crates/CLAUDE.md), which is acceptable
-  only because the bind is loopback
+  history fails cleanly instead of dropping the socket. Saving any file
+  `diskfile_read` loads (at most 4 MiB) fits, except in the worst case: JSON
+  escapes a control character to 6 bytes, so a file dense with them can
+  exceed the cap, and that save is refused the same clean way. The cap isn't
+  confined to authenticated callers on HTTP (see ../crates/CLAUDE.md), which
+  is acceptable only because the bind is loopback
 - **32 MiB outbound queue per socket** — what the server has queued for a
   WebSocket and not yet written is bounded at 32 MiB
   (`WS_OUTBOUND_QUEUE_BYTES`); past it the server closes the socket (code
@@ -1939,9 +1939,22 @@ Population, per capability:
   another tab or a reload shows `'full'`), and the directories without a watch
   are rescanned every 5 seconds or more (retrying their watches each time), so
   changes there show up late. A workspace that degrades or recovers after it
-  opened isn't re-announced — only the daemon log says so. Rescans re-read
-  only files whose `lstat` changed, trusting a stamp only after the file has
-  been still for 2 seconds
+  opened isn't re-announced — only the daemon log says so. A file is
+  re-announced as changed when its `lstat` stamp moves (a `touch` or a
+  chmod included, so clients holding it read it again), and once more at
+  the next look after a change seen within 3 seconds of its inode change
+  time (a stamp that fresh isn't trusted)
+- **Change detection is by stat stamp** — the filer reads no file, so a
+  write that doesn't move the file's `lstat` stamp goes unnoticed until the
+  stamp next moves: an `mmap` store to an already-dirty page, or a remote or
+  FUSE filesystem whose server clock lags this machine's by more than the
+  3-second margin, or a FUSE filesystem that reports `st_ctime` as the
+  `mtime` (sshfs), where a `touch -r` after a same-size rewrite hides it. A
+  wall clock stepped back by more than the margin can hide a write that
+  lands in the same timestamp tick as the stored stamp. An inode change time
+  in the future (a clock stepped back, a remote server's clock ahead) is
+  never trusted, so the file is a `change` on every look until the clock
+  passes it
 - **Workspace scope** — opening a workspace makes its directory a writable
   `ScopedFs` root with its own filer until it's closed; closing never revokes
   the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). A
@@ -2063,8 +2076,8 @@ Population, per capability:
   pause and stop shows on every page (`RecorderIndicator` in the root layout),
   leaving the page asks first, and a session that ends (logout, or a recheck
   finding it revoked) closes it with the App. One recording at a time, per
-  tab. The filer sees the file grow: it re-reads and broadcasts it on each
-  chunk while it's under the index's size limit. An upload that fails for good
+  tab. The filer sees the file grow: it broadcasts a `change` with the new
+  size on each chunk. An upload that fails for good
   — the session ended, the file changed on disk — ends the recording and says
   why; the file keeps what landed. See § Recording
 - **Transcription** — batch, not live: the transcript is made from the
@@ -2082,7 +2095,7 @@ Population, per capability:
   detected unless given. The model loads on every job. Word timings are
   whisper.cpp's own estimates. A transcript isn't checked against its audio
   afterward — if the audio's bytes change, the sidecar still shows (its
-  recorded hash no longer matches). A sidecar over the file index's 4 MiB
+  recorded hash no longer matches). A sidecar over `diskfile_read`'s 4 MiB
   limit wouldn't load in the UI. One job runs at a time; jobs and their
   history are lost on a daemon restart, and a crash mid-transcription can
   leave a `.zzz-tmp-*` scratch directory in the app directory's `cache/`

@@ -370,7 +370,7 @@ crates/zzz_server/src/
 ├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `workspace_open`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
 │   ├── mod.rs        # `App` long-lived state (workspaces, `workspace_lifecycle`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
-│   ├── filesystem.rs # diskfile_read, diskfile_update, diskfile_create, diskfile_delete, directory_create
+│   ├── filesystem.rs # diskfile_read (+ its bounded text read, `read_text_contents`), diskfile_update, diskfile_create, diskfile_delete, directory_create
 │   ├── job.rs        # job_cancel
 │   ├── media.rs      # media_finalize, transcription_create (+ `tool_error`, the `ToolError` → JSON-RPC mapping)
 │   ├── provider.rs   # provider_load_status, completion_create
@@ -396,7 +396,7 @@ crates/zzz_server/src/
 │   ├── openai.rs     # OpenAiProvider — Chat Completions API with SSE streaming
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
 ├── file_bytes.rs     # Byte routes for files (`/api/files/bytes`): ranged read with a response-header lockdown, exclusive create, offset-checked append — hand-written axum handlers with their own auth + scope gates
-├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered file index (events are hints, `lstat` decides), per-directory watches from the filer's own walk (degraded polling past the watch limit), stat-reusing rescans, debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
+├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered, stat-only file index (events are hints, `lstat` decides; no file is read), change by `lstat` stamp with git's racily-clean rule, per-directory watches from the filer's own walk (degraded polling past the watch limit), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── root_policy.rs    # Which directories can be roots: strictly inside `$HOME` or in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor, or under `/proc` / `/sys` / `/dev` (`RootPolicy`, held by `App` and the boot checks)
 ├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, protected directories (credential directories, `.zzz` directories other than the app dir) refused under every root (`protected_dir`), symlink rejection, atomic writes (temp file + fsync + rename), exclusive create, offset-checked append, open-for-read
@@ -420,8 +420,8 @@ revocation is the spine `RealtimeCloser` over the WS and SSE registries
 **Large responses**: `session_load` and `workspace_open` carry every
 indexed file's metadata (never its contents — those come by `diskfile_read`),
 so a large tree is a large response, and they skip the `serde_json::Value`
-round trip: a snapshot clones the index's nodes, whose contents are shared
-`Arc<String>`s (pointers, not text), the handler returns its typed result as a
+round trip: a snapshot clones the index's nodes (metadata only — the index
+holds no file text), the handler returns its typed result as a
 `fuz_actions::ActionOutput` (registered with `ActionSpec::new_output`, sized
 up front from the nodes' paths), and the spine serializes it once, straight
 into the response body — so an
@@ -536,9 +536,10 @@ joined after the drain, before PTY teardown.
   can't drop an existing file, rename-aware (old path `delete`, new path
   `add`), metadata only — each `disknode` is `{id, source_dir, size, ctime,
   mtime}`, never contents, which clients read with `diskfile_read`; the
-  index still reads and holds each loaded file's text, and any move of the
-  text, `size`, or timestamps it holds for a file (a `touch` included) is a
-  `change`), ignored paths filtered before the bounded
+  index is stat-only — it reads no file — and a file whose `lstat` stamp
+  moved, or whose indexed stamp was too fresh to trust (git's racily-clean
+  rule, ../docs/backend.md § Known Issues → Filer watches), is a `change`, a
+  `touch` included), ignored paths filtered before the bounded
   event channel with a coalesced root rescan on overflow, per-watcher ignore
   config, in-memory file index returned (as metadata) by `session_load` and
   `workspace_open`, symlinks skipped; ignores
@@ -602,7 +603,7 @@ joined after the drain, before PTY teardown.
   `/api/ws` inbound message and frame (`max_message_bytes` of the
   `fuz_actions::ActionWsOptions` passed to `register_action_ws_with_options`;
   the spine default is 1 MiB, tungstenite's own 64 MiB / 16 MiB). It's above
-  the spine's 1 MiB so saving a file the filer loads (≤ 4 MiB) fits — except
+  the spine's 1 MiB so saving a file `diskfile_read` loads (≤ 4 MiB) fits — except
   in the worst case, where JSON's 6-byte escape of each control character
   pushes a file dense with them past the cap and the client guard refuses the
   save cleanly — and so long completion histories fit. **The larger buffer

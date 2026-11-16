@@ -35,23 +35,27 @@
 //!   comes from the scan; the directories left without a watch are rescanned
 //!   periodically instead ([`WatchStatus::Degraded`]), retrying their watches
 //!   each time.
-//! - **Cheap rescans.** A rescan reuses a file's indexed node when its `lstat`
-//!   identity and change stamps ([`FileStat`]) are unchanged, so rescans
-//!   (`session_load`, overflow recovery, degraded polling) re-read only files
-//!   that changed — trusting a stamp only once the file has been still for a
-//!   while ([`reusable_stat`]).
+//! - **Stat-only.** The index holds each file's identity, size, timestamps,
+//!   and `lstat` stamp ([`FileStat`]) — never its contents. A scan or an
+//!   event costs an `lstat` per file and reads nothing; a client reads a
+//!   file's contents from the disk with `diskfile_read`, and `filer_change`,
+//!   `session_load`, and `workspace_open` send the metadata alone.
+//! - **Change by stamp.** A file whose fresh stamp matches its indexed one is
+//!   unchanged, and nothing is broadcast; any other is a `change` with the
+//!   new metadata — a `touch` and a rewrite of the same bytes included — and
+//!   a client holding the file's contents reads them again. A stamp is
+//!   trusted only once its inode change time is a while old
+//!   ([`reusable_stat`], git's "racily clean" rule), so a file looked at
+//!   while it might still be written is a `change` the next time too,
+//!   whether or not its stamp moved ([`is_unchanged`]). A write the stamp
+//!   can't see (an `mmap` store to an already-dirty page, a remote
+//!   filesystem whose server clock lags by more than the margin) goes
+//!   unnoticed until the stamp next moves.
 //! - **Debounce coalescing.** Broadcasts are debounced per path
 //!   ([`coalesce_change`]): a `delete` followed by an `add` inside the window
 //!   becomes `change`, and an `add` followed by a `delete` becomes a bare
 //!   `delete` (a no-op for clients that never saw the add). A path that
 //!   keeps changing still broadcasts at least every [`DEBOUNCE_MAX_WAIT`].
-//! - **Metadata on the wire.** The index holds each loaded file's contents,
-//!   but `filer_change`, `session_load`, and `workspace_open` send a node's
-//!   identity, size, and timestamps only — a client reads contents with
-//!   `diskfile_read`. Any move of what the index holds for a file — its
-//!   contents, size, or timestamps (`touch`, a rewrite of the same bytes) —
-//!   is broadcast as a `change` with the new metadata ([`disknode_change`]),
-//!   and a client holding the file's contents reads them again.
 //! - **Overflow recovery.** Paths under ignored directories are filtered in
 //!   the notify callback, before the bounded channel. If the channel is
 //!   still full, or notify reports a rescan (inotify queue overflow), the
@@ -65,9 +69,9 @@
 //!   (`up -> ..`, a Wine prefix's `dosdevices/z: -> /`) from hanging the
 //!   scan, and keeps files outside the watched root out of the index.
 //!
-//! The walk and the watch calls block (directory reads, a round trip to
-//! notify's watcher thread per watch), so they run on a blocking thread
-//! (`spawn_blocking`), never on an async worker.
+//! The walk and the watch calls block (directory reads and `lstat`s, a round
+//! trip to notify's watcher thread per watch), so they run on a blocking
+//! thread (`spawn_blocking`), never on an async worker.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io;
@@ -77,7 +81,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
-use futures_util::{StreamExt, stream};
 use notify::event::{ModifyKind, RenameMode};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
@@ -90,28 +93,15 @@ use crate::scoped_fs::{ProtectedDir, ZZZ_DIR_NAME, protected_dir};
 
 // -- Indexing limits ----------------------------------------------------------
 
-/// Max bytes of file content held in the in-memory index. Anything above
-/// this skips the read and stores `contents: None`. Protects RSS
-/// against lockfiles, generated artifacts, or large binaries that the
-/// watcher otherwise would happily pull into memory.
-///
-/// TODO @parity: align with `fuz_app`'s equivalent cap when it lands.
-pub(crate) const MAX_INDEXED_FILE_SIZE: u64 = 4 * 1024 * 1024;
-
-/// Cap on concurrent file reads during a directory scan.
-/// File reads block on disk + utf-8 validation; without a cap a large
-/// tree would unbound the in-flight set and exhaust fd budgets on small
-/// workstations.
-const MAX_CONCURRENT_FILE_READS: usize = 32;
-
 /// Capacity of the notify → event-loop channel. Ignored paths are filtered
 /// before the send, so this only has to absorb bursts in indexed paths; on
 /// overflow the filer falls back to a coalesced rescan of its root.
 const EVENT_CHANNEL_CAPACITY: usize = 1024;
 
-/// Capacity of the walker → reader channel of a scan. The blocking walker
-/// runs ahead of the reads by at most this many files, keeping a scan's
-/// memory flat in tree size.
+/// Capacity of the walker → scan channel. The blocking walker sends each
+/// file's `lstat` ahead of the scan that compares it with the index by at
+/// most this many files, and stops once the scan is dropped (its filer
+/// stopped) and the channel closes.
 const WALK_CHANNEL_CAPACITY: usize = 256;
 
 /// Shortest interval between rescans of the directories a degraded filer
@@ -124,11 +114,17 @@ const DEGRADED_RESCAN_INTERVAL: Duration = Duration::from_secs(5);
 /// the next one — at most ~10% of a thread spent polling.
 const DEGRADED_RESCAN_COST_FACTOR: u32 = 10;
 
-/// How long a file must have been still (by `mtime` and `ctime`) before its
-/// [`FileStat`] is trusted to reuse its contents — see [`reusable_stat`].
-/// Covers filesystems with coarse timestamps (a jiffy on tmpfs, whole seconds
-/// on some others).
-const RACY_STAT_MARGIN: Duration = Duration::from_secs(2);
+/// How long before a stamp was taken the file's inode change time must lie
+/// for the stamp to be trusted to say the file is unchanged — see
+/// [`reusable_stat`]. Strictly longer than the coarsest timestamp tick a
+/// filesystem keeps (often a jiffy, whole seconds on some, two seconds on
+/// FAT) plus the lag of the coarse clock inode times are taken from behind
+/// the wall clock (up to a jiffy).
+const RACY_STAT_MARGIN: Duration = Duration::from_secs(3);
+
+/// The wall clock a filer judges stamps against ([`reusable_stat`]):
+/// `SystemTime::now`, or a test's.
+type Clock = fn() -> SystemTime;
 
 // -- Notification params ------------------------------------------------------
 
@@ -156,8 +152,8 @@ struct DiskfileChange {
 enum ChangeType {
     /// Newly indexed.
     Add,
-    /// Indexed, and its indexed contents or its metadata (size or
-    /// timestamps) differ — see [`disknode_change`].
+    /// Indexed, and not known to be unchanged — its `lstat` stamp moved, or
+    /// the indexed one wasn't trusted (see [`is_unchanged`]).
     Change,
     Delete,
 }
@@ -165,27 +161,18 @@ enum ChangeType {
 /// Matches `SerializableDisknode` from `diskfile_types.ts`: the file's
 /// identity, size, and timestamps — never its contents, which a client reads
 /// with `diskfile_read`.
-///
-/// `contents` is the index's own: what the walk or a watch event read, for
-/// telling a change from a rescan's re-read. It's shared, so cloning a node
-/// out of the index (a snapshot for `session_load`, a queued broadcast)
-/// doesn't copy the file's text.
 #[derive(Serialize, Clone, Debug)]
 pub struct SerializableDisknode {
     pub id: String,
     pub source_dir: String,
-    /// `None` for a file the index didn't load (too large, not UTF-8,
-    /// unreadable). Not part of the wire shape.
-    #[serde(skip)]
-    pub contents: Option<Arc<String>>,
-    /// The file's size in bytes, from the `lstat` the node was read after —
-    /// known whether or not its contents are loaded. `None` for a `delete`'s
-    /// node, which is identity only.
+    /// The file's size in bytes, from the `lstat` the node was made from.
+    /// `None` for a `delete`'s node, which is identity only.
     pub size: Option<u64>,
     pub ctime: Option<f64>,
     pub mtime: Option<f64>,
-    /// The `lstat` this node was read after — lets a rescan reuse the node
-    /// while the file is unchanged. Not part of the wire shape.
+    /// The stamp of the `lstat` the node was made from, when it's trusted
+    /// ([`reusable_stat`]) — a later `lstat` with the same stamp means the
+    /// file is unchanged ([`is_unchanged`]). Not part of the wire shape.
     #[serde(skip)]
     stat: Option<FileStat>,
 }
@@ -206,19 +193,10 @@ pub fn disknodes_json_size_hint(nodes: &[SerializableDisknode]) -> usize {
 
 #[cfg(test)]
 impl SerializableDisknode {
-    /// A node with the given identity, contents, and timestamps — for tests
-    /// outside this module, which can't name `stat`. Its `size` is the
-    /// contents' length, or unknown without them.
-    pub(crate) fn for_test(id: &str, contents: Option<&str>, mtime: Option<f64>) -> Self {
-        make_disknode(
-            id.to_owned(),
-            "/w/",
-            contents.map(|c| Arc::new(c.to_owned())),
-            contents.map(|c| c.len() as u64),
-            mtime,
-            mtime,
-            None,
-        )
+    /// A node with the given identity, size, and timestamps — for tests
+    /// outside this module, which can't name `stat`.
+    pub(crate) fn for_test(id: &str, size: Option<u64>, mtime: Option<f64>) -> Self {
+        make_disknode(id.to_owned(), "/w/", size, mtime, mtime, None)
     }
 }
 
@@ -338,12 +316,17 @@ pub(crate) fn system_time_to_ms(t: SystemTime) -> Option<f64> {
 
 /// A regular file's identity and change stamps from `lstat`.
 ///
-/// A rescan that finds a file's `FileStat` unchanged reuses its indexed node
-/// instead of re-reading it. The stamp is taken before the read, so a write
-/// racing the read leaves a stale stamp, which only costs one more read. The
-/// inode change time (`st_ctime`) moves on every write, truncate, chmod, and
-/// rename and can't be set from userspace, so a rewrite that keeps the size
-/// and restores `mtime` (`touch -r`) is still re-read.
+/// An indexed file whose fresh `FileStat` equals its trusted indexed one is
+/// unchanged ([`is_unchanged`]). `change_time` is `st_ctime`, the inode
+/// change time — not the disknode's wire `ctime`, which is the birth time.
+/// It moves on every write, truncate, `utimes`, chmod, chown, xattr write,
+/// link, and rename, and can't be set from userspace on a kernel-managed
+/// filesystem (a FUSE one may report `mtime` instead — see
+/// `docs/architecture.md` § Known Limitations), so a rewrite that keeps the
+/// size and restores `mtime` (`touch -r`) still moves the stamp — and so
+/// does a metadata-only change, which broadcasts a `change` whose
+/// wire metadata is the same as before (accepted: a client re-reads and
+/// finds the same text).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FileStat {
     dev: u64,
@@ -372,35 +355,53 @@ fn stamp_nanos((secs, nanos): (i64, i64)) -> i128 {
     i128::from(secs) * 1_000_000_000 + i128::from(nanos)
 }
 
-/// The stamp to record for a file whose contents were read after `stat`
-/// was taken — or `None` when a later rescan mustn't trust it, git's
-/// "racily clean" rule.
+/// The stamp to index for a file `lstat`ed at `observed_at` — or `None`
+/// when a later look mustn't trust it, git's "racily clean" rule.
 ///
-/// Timestamps have filesystem granularity (a jiffy on tmpfs, whole seconds on
-/// some filesystems), so two same-size writes inside one tick can leave size,
-/// `mtime`, and `ctime` all unchanged; a stamp is only recorded once the file
-/// has been still for [`RACY_STAT_MARGIN`] as of `now` (after the read). A
-/// read that got a different number of bytes than the stat's size
-/// (`bytes_read`, when the contents were read) raced a write outright. An
-/// unrecorded stamp just means the next rescan reads the file again.
-fn reusable_stat(stat: FileStat, bytes_read: Option<usize>, now: SystemTime) -> Option<FileStat> {
-    if bytes_read.is_some_and(|len| u64::try_from(len).ok() != Some(stat.size)) {
-        return None;
-    }
-    let now = now
+/// Timestamps have filesystem granularity (often a jiffy, whole seconds on
+/// some filesystems, two seconds on FAT), so a write inside the same tick as
+/// the one before it can leave the size, `mtime`, and `ctime` all as they
+/// were. A stamp is trusted only when its inode change time (`st_ctime`)
+/// lies more than [`RACY_STAT_MARGIN`] before `observed_at`, which the
+/// caller reads before the `lstat`: any write after the `lstat` then sets a
+/// change time in a later tick, and moves the stamp. Only the change time
+/// counts — every write, truncate, and `utimes` moves it, and userspace
+/// can't set it on a kernel-managed filesystem — so an `mtime` in the future (an archive from a clock
+/// ahead, `touch -d tomorrow`, `cp -p`) doesn't keep a still file untrusted.
+/// An untrusted stamp makes the next look at the file a `change` whatever
+/// it finds ([`is_unchanged`]).
+fn reusable_stat(stat: FileStat, observed_at: SystemTime) -> Option<FileStat> {
+    let observed_at = observed_at
         .duration_since(std::time::UNIX_EPOCH)
         .ok()
         .and_then(|d| i128::try_from(d.as_nanos()).ok())?;
     let margin = i128::try_from(RACY_STAT_MARGIN.as_nanos()).ok()?;
-    let newest = stamp_nanos(stat.mtime).max(stamp_nanos(stat.change_time));
-    (now - newest >= margin).then_some(stat)
+    (observed_at - stamp_nanos(stat.change_time) > margin).then_some(stat)
 }
 
-/// Construct a `SerializableDisknode` from pre-read components.
+/// Whether an indexed file whose node holds `indexed` (its trusted stamp, or
+/// `None`) is unchanged on disk, by a fresh `lstat`'s `stat`.
+///
+/// Only a trusted stamp that matches exactly says so. A moved stamp is a
+/// change — a `touch` and a rewrite of the same bytes too, since the stamp
+/// can't tell them from a real edit — and so is any untrusted one, even
+/// matching, since a same-size write inside the timestamp tick it was taken
+/// in leaves it as it was. Either way a `change` costs a client holding the
+/// file a re-read that finds the same text. Rescans and watch events alike
+/// decide by this; a matching trusted stamp on an event is a stale or
+/// duplicate report, and nothing is broadcast.
+///
+/// TODO: hashing a file's bytes when its stamp moves could tell a touch from
+/// an edit and spare clients a touch storm's `change`s — only if one is
+/// measured to matter.
+fn is_unchanged(indexed: Option<FileStat>, stat: FileStat) -> bool {
+    indexed == Some(stat)
+}
+
+/// Construct a `SerializableDisknode` from its components.
 fn make_disknode(
     id: String,
     source_dir: &str,
-    contents: Option<Arc<String>>,
     size: Option<u64>,
     ctime: Option<f64>,
     mtime: Option<f64>,
@@ -409,7 +410,6 @@ fn make_disknode(
     SerializableDisknode {
         id,
         source_dir: source_dir.to_owned(),
-        contents,
         size,
         ctime,
         mtime,
@@ -417,174 +417,27 @@ fn make_disknode(
     }
 }
 
-/// The disknode broadcast with a `delete` — identity only, no contents.
+/// The disknode broadcast with a `delete` — identity only.
 fn deleted_disknode(node: SerializableDisknode) -> SerializableDisknode {
-    make_disknode(node.id, &node.source_dir, None, None, None, None, None)
+    make_disknode(node.id, &node.source_dir, None, None, None, None)
 }
 
-/// Why a regular file's contents aren't held or served as text — twin of
-/// `DiskfileUnloadedReason` in `diskfile_types.ts`.
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum UnloadedReason {
-    /// Over [`MAX_INDEXED_FILE_SIZE`] bytes.
-    TooLarge,
-    /// Not valid UTF-8.
-    NotUtf8,
-}
-
-/// An open regular file's contents read as text by [`read_text_contents`].
-#[derive(Debug, PartialEq, Eq)]
-pub enum TextContents {
-    /// The whole file, valid UTF-8, of at most [`MAX_INDEXED_FILE_SIZE`]
-    /// bytes.
-    Loaded(String),
-    /// Not read as text, and why. `size` is the file's size in bytes as far
-    /// as the read saw it: the bytes read for one that isn't UTF-8, and for
-    /// one too large the larger of its size when opened and the bytes read
-    /// (it may have grown past the limit since).
-    Unloaded { reason: UnloadedReason, size: u64 },
-}
-
-impl TextContents {
-    /// The file's size in bytes: the length of the loaded text, or the size
-    /// the unloaded file was read at.
-    #[must_use]
-    pub const fn size(&self) -> u64 {
-        match self {
-            Self::Loaded(text) => text.len() as u64,
-            Self::Unloaded { size, .. } => *size,
-        }
-    }
-}
-
-/// Read an open regular file's contents as text, bounded by
-/// [`MAX_INDEXED_FILE_SIZE`] — the one text read behind the index and
-/// `diskfile_read`.
-///
-/// `opened_size` is the handle's size when it was opened (`fstat`): one over
-/// the limit isn't read at all. Otherwise the read is sized from it (one past
-/// it, to see the end, so the buffer doesn't grow by doubling) and bounded
-/// regardless of it, so a file that grew past the limit since is
-/// [`UnloadedReason::TooLarge`] after reading at most one byte over.
-///
-/// The caller opens `file` and checks it's a regular file: `O_NOFOLLOW`, so
-/// a symlink swapped in after an `lstat` is refused, and `O_NONBLOCK`, so a
-/// FIFO swapped in can't block the open. Blocking — call it on a blocking
-/// thread.
-///
-/// # Errors
-///
-/// The read's I/O error.
-pub fn read_text_contents(file: std::fs::File, opened_size: u64) -> io::Result<TextContents> {
-    use std::io::Read;
-
-    if opened_size > MAX_INDEXED_FILE_SIZE {
-        return Ok(TextContents::Unloaded {
-            reason: UnloadedReason::TooLarge,
-            size: opened_size,
-        });
-    }
-    let expected = usize::try_from(opened_size).map_err(io::Error::other)?;
-    let mut bytes = Vec::with_capacity(expected + 1);
-    file.take(MAX_INDEXED_FILE_SIZE + 1)
-        .read_to_end(&mut bytes)?;
-    let read = bytes.len() as u64;
-    if read > MAX_INDEXED_FILE_SIZE {
-        return Ok(TextContents::Unloaded {
-            reason: UnloadedReason::TooLarge,
-            size: read.max(opened_size),
-        });
-    }
-    Ok(String::from_utf8(bytes).map_or(
-        TextContents::Unloaded {
-            reason: UnloadedReason::NotUtf8,
-            size: read,
-        },
-        TextContents::Loaded,
-    ))
-}
-
-/// Read a file's contents for the index, or `None` if it's not an indexable
-/// UTF-8 regular file of at most [`MAX_INDEXED_FILE_SIZE`] bytes.
-///
-/// The path was `lstat`ed before this is called, but it can be swapped in
-/// between, so the open itself refuses to follow a symlink (`O_NOFOLLOW`) or
-/// block on a FIFO (`O_NONBLOCK`), the opened handle is re-checked to be a
-/// regular file, and the read is bounded regardless of the earlier size
-/// ([`read_text_contents`]).
-async fn read_indexable_contents(path: PathBuf) -> Option<Arc<String>> {
-    tokio::task::spawn_blocking(move || {
-        use std::os::unix::fs::OpenOptionsExt;
-
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-            .open(&path)
-            .ok()?;
-        let meta = file.metadata().ok()?;
-        if !meta.is_file() {
-            return None;
-        }
-        match read_text_contents(file, meta.len()).ok()? {
-            TextContents::Loaded(text) => Some(Arc::new(text)),
-            TextContents::Unloaded { .. } => None,
-        }
-    })
-    .await
-    .ok()
-    .flatten()
-}
-
-/// Read a regular file's disknode given its (non-following) metadata.
-///
-/// Honours [`MAX_INDEXED_FILE_SIZE`]: oversized files keep their metadata
-/// but store `contents: None`. Unreadable or non-UTF-8 files also store
-/// `contents: None`.
-async fn read_disknode(
-    path: &Path,
+/// A regular file's disknode from its (non-following) metadata, `lstat`ed
+/// at `observed_at` (see [`reusable_stat`]).
+fn stat_disknode(
     path_str: String,
     source_dir: &str,
     meta: &std::fs::Metadata,
+    observed_at: SystemTime,
 ) -> SerializableDisknode {
-    let ctime = meta.created().ok().and_then(system_time_to_ms);
-    let mtime = meta.modified().ok().and_then(system_time_to_ms);
-    let contents = if meta.len() > MAX_INDEXED_FILE_SIZE {
-        None
-    } else {
-        read_indexable_contents(path.to_path_buf()).await
-    };
-    let stat = reusable_stat(
-        FileStat::of(meta),
-        contents.as_deref().map(String::len),
-        SystemTime::now(),
-    );
     make_disknode(
         path_str,
         source_dir,
-        contents,
         Some(meta.len()),
-        ctime,
-        mtime,
-        stat,
+        meta.created().ok().and_then(system_time_to_ms),
+        meta.modified().ok().and_then(system_time_to_ms),
+        reusable_stat(FileStat::of(meta), observed_at),
     )
-}
-
-/// Whether an indexed file's node `old` differs from the one just read for
-/// the same path: [`ChangeType::Change`] when its indexed contents (loaded
-/// text, or loaded vs. not) or its metadata (size or timestamps) differ,
-/// `None` when neither does.
-///
-/// A move of the metadata alone (`touch`, a rewrite of the same bytes) is a
-/// change too: clients get the new size and timestamps, and one holding the
-/// file's contents reads them again and finds them the same. The contents
-/// still count, for a rewrite inside one timestamp tick that keeps the size.
-fn disknode_change(old: &SerializableDisknode, new: &SerializableDisknode) -> Option<ChangeType> {
-    (old.contents != new.contents
-        || old.size != new.size
-        || old.mtime.map(f64::to_bits) != new.mtime.map(f64::to_bits)
-        || old.ctime.map(f64::to_bits) != new.ctime.map(f64::to_bits))
-    .then_some(ChangeType::Change)
 }
 
 // -- Event classification -----------------------------------------------------
@@ -696,22 +549,22 @@ const fn coalesce_change(prev: Option<ChangeType>, next: ChangeType) -> ChangeTy
     }
 }
 
-/// One file found by a scan: re-read, or unchanged since it was indexed
-/// (its [`FileStat`] matched, so the indexed node stands).
+/// One file found by a scan: unchanged since it was indexed (its trusted
+/// [`FileStat`] matched, so the indexed node stands — [`is_unchanged`]), or
+/// its node from this scan's `lstat` — new, or not known to be unchanged.
 #[derive(Debug)]
 enum ScannedFile {
     Unchanged,
-    Read(Box<SerializableDisknode>),
+    Updated(Box<SerializableDisknode>),
 }
 
 /// The files a scan found, keyed like the index.
 type ScanIndex = BTreeMap<String, ScannedFile>;
 
 /// Replace the index entries under `prefix` with `fresh` (a scan of that
-/// subtree), returning the resulting changes. Unchanged entries produce
-/// nothing; a re-read file whose contents and metadata match only has its
-/// stored [`FileStat`] refreshed, so the next rescan can reuse it, and one
-/// whose metadata alone moved is a `change` ([`disknode_change`]).
+/// subtree), returning the resulting changes: nothing for an unchanged
+/// entry, a `change` for an updated one, an `add` for a new one, and a
+/// `delete` for one the scan didn't find.
 ///
 /// @mutates index - entries under `prefix` are inserted, replaced, or removed to match `fresh`
 fn apply_subtree(
@@ -728,16 +581,9 @@ fn apply_subtree(
     for key in old_keys {
         match fresh.remove(&key) {
             Some(ScannedFile::Unchanged) => {}
-            Some(ScannedFile::Read(node)) => {
-                let Some(old) = index.get_mut(&key) else {
-                    continue;
-                };
-                if let Some(change) = disknode_change(old, &node) {
-                    old.clone_from(&node);
-                    changes.push((key, change, *node));
-                } else {
-                    old.stat = node.stat;
-                }
+            Some(ScannedFile::Updated(node)) => {
+                index.insert(key.clone(), (*node).clone());
+                changes.push((key, ChangeType::Change, *node));
             }
             None => {
                 if let Some(node) = index.remove(&key) {
@@ -748,7 +594,7 @@ fn apply_subtree(
     }
     for (key, scanned) in fresh {
         // `Unchanged` is only reported for an indexed key, all handled above
-        if let ScannedFile::Read(node) = scanned {
+        if let ScannedFile::Updated(node) = scanned {
             index.insert(key.clone(), (*node).clone());
             changes.push((key, ChangeType::Add, *node));
         }
@@ -1160,7 +1006,8 @@ impl DirWatches {
 
 /// Walk `prefix` (a directory, [`dir_prefix`] form) on the calling blocking
 /// thread: watch each directory, then list it, sending every regular file
-/// found to `jobs` and descending into real subdirectories. Finishes with
+/// found to `jobs` with its `lstat` (taken after reading `clock`, see
+/// [`reusable_stat`]) and descending into real subdirectories. Finishes with
 /// [`DirWatches::reconcile`] over the directories it listed. `reset_watches`
 /// first replaces the watcher ([`DirWatches::reset`]).
 ///
@@ -1175,8 +1022,8 @@ impl DirWatches {
 /// Only regular files are yielded and only real directories are descended
 /// into (and watched) — entry types come from `DirEntry::file_type`, which
 /// does not follow symlinks, so symlinks (and link loops) are skipped
-/// entirely, as are FIFOs, sockets, and devices (reading a FIFO would block
-/// the scan). Ignored and non-UTF-8 names are skipped with their subtrees.
+/// entirely, as are FIFOs, sockets, and devices. Ignored and non-UTF-8 names
+/// are skipped with their subtrees.
 ///
 /// Returns the directories whose listing failed transiently
 /// ([`is_transient_list_error`]) — the caller keeps what's indexed under
@@ -1187,6 +1034,7 @@ fn walk_blocking(
     ignored_dirs: &[PathBuf],
     watches: &mut DirWatches,
     reset_watches: bool,
+    clock: Clock,
     jobs: &mpsc::Sender<FileJob>,
 ) -> io::Result<Vec<String>> {
     if reset_watches {
@@ -1257,16 +1105,16 @@ fn walk_blocking(
                 // symlink, FIFO, socket, device
                 continue;
             }
+            // the clock before the `lstat`, never after: a stamp is trusted
+            // against a time no later than it was taken (see `reusable_stat`)
+            let observed_at = clock();
             // `DirEntry::metadata` is an `lstat` — never follows a link
             let Ok(meta) = entry.metadata() else {
                 continue;
             };
-            let job = FileJob {
-                path,
-                path_str,
-                ctime: meta.created().ok().and_then(system_time_to_ms),
-                mtime: meta.modified().ok().and_then(system_time_to_ms),
-                stat: FileStat::of(&meta),
+            // swapped for a symlink, FIFO, or directory since the listing
+            let Some(job) = file_job(path_str, &meta, observed_at) else {
+                continue;
             };
             if jobs.blocking_send(job).is_err() {
                 // the scan was dropped (its filer stopped) — a partial walk
@@ -1461,8 +1309,8 @@ fn watcher_factory(
 /// Start watching a directory, perform an initial file scan, and return a `Filer`.
 ///
 /// `path` is the root in [`dir_prefix`] form. The initial scan (walk,
-/// watches, reads) populates the file index before returning, so callers can
-/// immediately read it; it runs on blocking threads. The background task
+/// watches, `lstat`s) populates the file index before returning, so callers
+/// can immediately read it; it runs on blocking threads. The background task
 /// then keeps the index updated and broadcasts changes.
 ///
 /// # Errors
@@ -1505,6 +1353,7 @@ pub async fn start_filer(
         &config.ignored_dirs,
         &watches,
         false,
+        SystemTime::now,
         None,
     )
     .await?;
@@ -1522,6 +1371,7 @@ pub async fn start_filer(
         watches: Arc::clone(&watches),
         unwatched_count: Arc::clone(&unwatched_count),
         degraded_rescan_interval: config.degraded_rescan_interval,
+        clock: SystemTime::now,
     };
     let task = tokio::spawn(filer_event_loop(state, rx, rescan_rx, signal, broadcast));
 
@@ -1535,29 +1385,47 @@ pub async fn start_filer(
     })
 }
 
-/// One file discovered by the walk — input to the read phase.
+/// One file found by the walk, with its `lstat`.
+#[derive(Debug)]
 struct FileJob {
-    path: PathBuf,
     path_str: String,
     ctime: Option<f64>,
     mtime: Option<f64>,
     stat: FileStat,
+    /// The clock's reading just before the `lstat` (see [`reusable_stat`]).
+    observed_at: SystemTime,
+}
+
+/// The walk's job for `path_str` by its `lstat` (`meta`, taken after
+/// `observed_at`) — `None` unless it's still a regular file, since the
+/// listing's entry type is older than the `lstat`.
+fn file_job(
+    path_str: String,
+    meta: &std::fs::Metadata,
+    observed_at: SystemTime,
+) -> Option<FileJob> {
+    meta.is_file().then(|| FileJob {
+        path_str,
+        ctime: meta.created().ok().and_then(system_time_to_ms),
+        mtime: meta.modified().ok().and_then(system_time_to_ms),
+        stat: FileStat::of(meta),
+        observed_at,
+    })
 }
 
 /// Scan `prefix` (a directory, [`dir_prefix`] form): walk it on a blocking
-/// thread — adding watches as it goes, see [`walk_blocking`] — while reading
-/// the files it finds concurrently.
+/// thread — adding watches and taking each file's `lstat` as it goes, see
+/// [`walk_blocking`] — while comparing each file with `known`.
 ///
-/// The walker streams `FileJob`s through a bounded channel and
-/// `buffer_unordered` fans out up to [`MAX_CONCURRENT_FILE_READS`] reads at a
-/// time (see [`read_indexable_contents`]), so the walk and the reads overlap
-/// and peak memory stays flat in tree size. Files over
-/// [`MAX_INDEXED_FILE_SIZE`] skip the read and store `contents: None`. A file
-/// whose `known` node has the same [`FileStat`] isn't read at all
-/// ([`ScannedFile::Unchanged`]).
+/// The walker streams `FileJob`s through a bounded channel; nothing is read.
+/// A file whose `known` node holds its stamp, trusted, is
+/// [`ScannedFile::Unchanged`] ([`is_unchanged`]); any other gets a node from
+/// its `lstat`.
 ///
 /// Called by `start_filer` (cold path) and by the event loop's subtree
-/// syncs and rescans (hot path — `session_load` rescans every filer).
+/// syncs and rescans (hot path — `session_load` rescans every filer). The
+/// event loop is the index's only writer, so holding `known` for the scan
+/// blocks nobody but itself.
 ///
 /// Returns the files found plus the directories whose listing failed
 /// transiently (see [`walk_blocking`]).
@@ -1571,9 +1439,10 @@ async fn scan_directory(
     ignored_dirs: &[PathBuf],
     watches: &Arc<Mutex<DirWatches>>,
     reset_watches: bool,
+    clock: Clock,
     known: Option<&RwLock<FileIndex>>,
 ) -> io::Result<(ScanIndex, Vec<String>)> {
-    let (job_tx, job_rx) = mpsc::channel::<FileJob>(WALK_CHANNEL_CAPACITY);
+    let (job_tx, mut job_rx) = mpsc::channel::<FileJob>(WALK_CHANNEL_CAPACITY);
     let walk = {
         let prefix = prefix.to_owned();
         let ignored_dirs = ignored_dirs.to_vec();
@@ -1584,67 +1453,45 @@ async fn scan_directory(
                 &ignored_dirs,
                 &mut watches.lock(),
                 reset_watches,
+                clock,
                 &job_tx,
             )
         })
     };
-    let jobs = stream::unfold(job_rx, |mut rx| async move {
-        rx.recv().await.map(|job| (job, rx))
-    });
-    let reads = jobs
-        .map(|job| scan_file(job, source_dir, known))
-        .buffer_unordered(MAX_CONCURRENT_FILE_READS);
-    // `stream::unfold`'s state future is `!Unpin`, so the composed stream
-    // needs pinning before `.next()`. `std::pin::pin!` puts it on the local
-    // stack — no heap allocation.
-    let mut reads = std::pin::pin!(reads);
-
     let mut fresh = ScanIndex::new();
-    while let Some((path_str, scanned)) = reads.next().await {
-        fresh.insert(path_str, scanned);
+    {
+        let known = match known {
+            Some(known) => Some(known.read().await),
+            None => None,
+        };
+        while let Some(job) = job_rx.recv().await {
+            let (path_str, scanned) = scan_file(job, source_dir, known.as_deref());
+            fresh.insert(path_str, scanned);
+        }
     }
     let kept = walk.await.map_err(io::Error::other)??;
     Ok((fresh, kept))
 }
 
-/// Read one walked file, or report it unchanged when `known` indexes it
-/// with the same [`FileStat`].
-async fn scan_file(
-    job: FileJob,
-    source_dir: &str,
-    known: Option<&RwLock<FileIndex>>,
-) -> (String, ScannedFile) {
-    let unchanged = match known {
-        Some(known) => known
-            .read()
-            .await
-            .get(&job.path_str)
-            .is_some_and(|node| node.stat == Some(job.stat)),
-        None => false,
-    };
+/// One walked file as a scan finds it: unchanged when `known` indexes it with
+/// its stamp, trusted ([`is_unchanged`]), else its node from the walk's
+/// `lstat`.
+fn scan_file(job: FileJob, source_dir: &str, known: Option<&FileIndex>) -> (String, ScannedFile) {
+    let unchanged = known
+        .and_then(|known| known.get(&job.path_str))
+        .is_some_and(|node| is_unchanged(node.stat, job.stat));
     if unchanged {
         return (job.path_str, ScannedFile::Unchanged);
     }
-    let contents = if job.stat.size > MAX_INDEXED_FILE_SIZE {
-        None
-    } else {
-        read_indexable_contents(job.path).await
-    };
-    let stat = reusable_stat(
-        job.stat,
-        contents.as_deref().map(String::len),
-        SystemTime::now(),
-    );
     let node = make_disknode(
         job.path_str.clone(),
         source_dir,
-        contents,
         Some(job.stat.size),
         job.ctime,
         job.mtime,
-        stat,
+        reusable_stat(job.stat, job.observed_at),
     );
-    (job.path_str, ScannedFile::Read(Box::new(node)))
+    (job.path_str, ScannedFile::Updated(Box::new(node)))
 }
 
 // -- Event loop ---------------------------------------------------------------
@@ -1661,6 +1508,8 @@ struct FilerState {
     /// `DirWatches::unwatched_count`, readable without the lock.
     unwatched_count: Arc<AtomicUsize>,
     degraded_rescan_interval: Duration,
+    /// What a stamp's trust is judged against (see [`reusable_stat`]).
+    clock: Clock,
 }
 
 impl FilerState {
@@ -1690,11 +1539,13 @@ impl FilerState {
         // The path's type may have changed since it was indexed (a directory
         // replaced by a file or vice versa), so each branch also clears what
         // the other type would have left behind.
+        // the clock before the `lstat`, never after: a stamp is trusted
+        // against a time no later than it was taken (see `reusable_stat`)
+        let observed_at = (self.clock)();
         match tokio::fs::symlink_metadata(path).await {
             Ok(meta) if meta.is_file() => {
                 self.remove_children(&path_str).await;
-                let node = read_disknode(path, path_str.clone(), &self.source_dir, &meta).await;
-                self.upsert(path_str, node).await;
+                self.upsert(path_str, &meta, observed_at).await;
             }
             Ok(meta) if meta.is_dir() => {
                 self.remove_entry(&path_str).await;
@@ -1717,32 +1568,23 @@ impl FilerState {
         }
     }
 
-    /// Insert or update one file, queueing `add` (newly indexed) or `change`
-    /// (indexed, and its contents or metadata differ — see
-    /// [`disknode_change`]). An unchanged file only has its stored
-    /// [`FileStat`] refreshed.
-    async fn upsert(&mut self, path: String, node: SerializableDisknode) {
-        let change = {
+    /// Index one regular file by its `lstat` (`meta`, taken after
+    /// `observed_at`), queueing `add` (newly indexed) or `change` (indexed,
+    /// and not known to be unchanged — see [`is_unchanged`]). An unchanged
+    /// file is left as it is.
+    async fn upsert(&mut self, path: String, meta: &std::fs::Metadata, observed_at: SystemTime) {
+        let (change, node) = {
             let mut index = self.files.write().await;
-            match index.get_mut(&path) {
-                None => {
-                    index.insert(path.clone(), node.clone());
-                    Some(ChangeType::Add)
-                }
-                Some(old) => {
-                    let change = disknode_change(old, &node);
-                    if change.is_some() {
-                        *old = node.clone();
-                    } else {
-                        old.stat = node.stat;
-                    }
-                    change
-                }
-            }
+            let change = match index.get(&path) {
+                None => ChangeType::Add,
+                Some(old) if is_unchanged(old.stat, FileStat::of(meta)) => return,
+                Some(_) => ChangeType::Change,
+            };
+            let node = stat_disknode(path.clone(), &self.source_dir, meta, observed_at);
+            index.insert(path.clone(), node.clone());
+            (change, node)
         };
-        if let Some(change) = change {
-            self.queue(path, change, node);
-        }
+        self.queue(path, change, node);
     }
 
     /// Remove `path` and every file indexed under it, with any watches.
@@ -1796,6 +1638,7 @@ impl FilerState {
             &self.ignored_dirs,
             &self.watches,
             reset_watches,
+            self.clock,
             Some(&*self.files),
         )
         .await;
@@ -1912,7 +1755,7 @@ async fn filer_event_loop(
             Some(reply) = rescan_rx.recv() => {
                 // Every request already queued was sent before this scan
                 // starts, so one scan answers them all (concurrent
-                // `session_load`s share it instead of re-reading the tree
+                // `session_load`s share it instead of walking the tree
                 // once each).
                 let mut replies = vec![reply];
                 while let Ok(reply) = rescan_rx.try_recv() {
@@ -2164,9 +2007,9 @@ impl FilerManager {
     /// consistent snapshot — notify events are eventually consistent, so a
     /// just-written file may not yet be in the index when the event loop is
     /// still draining. A direct filesystem walk sidesteps that race; files
-    /// whose `lstat` is unchanged aren't re-read. The rescans run on each
-    /// filer's event loop, so they serialize with event handling instead of
-    /// racing it.
+    /// whose trusted `lstat` stamp is unchanged aren't broadcast
+    /// ([`is_unchanged`]). The rescans run on each filer's event loop, so
+    /// they serialize with event handling instead of racing it.
     pub async fn rescan_all(&self) {
         // Snapshot the request senders under the outer lock, then rescan
         // without holding it — the outer lock blocks start_filer/stop_filer.
@@ -2332,52 +2175,35 @@ mod tests {
     }
 
     #[test]
-    fn disknode_change_counts_contents_and_metadata_alike() {
-        let base = node("/w/f", "text", 1.0);
-        assert_eq!(disknode_change(&base, &node("/w/f", "text", 1.0)), None);
-        // equal text in another allocation is still the same contents
-        assert_eq!(
-            disknode_change(&base, &node("/w/f", &String::from("text"), 1.0)),
-            None
-        );
-        // timestamps alone
-        assert_eq!(
-            disknode_change(&base, &node("/w/f", "text", 2.0)),
-            Some(ChangeType::Change)
-        );
-        let mut created = node("/w/f", "text", 1.0);
-        created.ctime = Some(5.0);
-        assert_eq!(disknode_change(&base, &created), Some(ChangeType::Change));
-        // contents, whatever the timestamps did — the same length inside one
-        // tick included
-        for other in ["text and more", "te", "", "tex!"] {
-            assert_eq!(
-                disknode_change(&base, &node("/w/f", other, 1.0)),
-                Some(ChangeType::Change),
-                "{other:?}"
-            );
-            assert_eq!(
-                disknode_change(&node("/w/f", other, 2.0), &base),
-                Some(ChangeType::Change),
-                "{other:?}"
-            );
+    fn only_a_matching_trusted_stamp_is_unchanged() {
+        let stat = FileStat {
+            dev: 1,
+            ino: 2,
+            size: 4,
+            mtime: (1_000, 0),
+            change_time: (1_000, 500),
+        };
+        assert!(is_unchanged(Some(stat), stat));
+        // an untrusted stamp says nothing, even matching — a same-size write
+        // inside its tick would look just like this
+        assert!(!is_unchanged(None, stat));
+        // any part of the stamp moved: a touch, a rewrite of the same bytes,
+        // `touch -r` after a write (only the ctime moves), a replaced inode
+        for moved in [
+            FileStat { dev: 9, ..stat },
+            FileStat { ino: 9, ..stat },
+            FileStat { size: 5, ..stat },
+            FileStat {
+                mtime: (1_000, 1),
+                ..stat
+            },
+            FileStat {
+                change_time: (1_000, 501),
+                ..stat
+            },
+        ] {
+            assert!(!is_unchanged(Some(stat), moved), "{moved:?}");
         }
-        // loaded vs. not loaded, both ways
-        let mut unloaded = node("/w/f", "text", 1.0);
-        unloaded.contents = None;
-        assert_eq!(disknode_change(&base, &unloaded), Some(ChangeType::Change));
-        assert_eq!(disknode_change(&unloaded, &base), Some(ChangeType::Change));
-        // a file that was never loaded changes by its metadata
-        assert_eq!(disknode_change(&unloaded, &unloaded.clone()), None);
-        let mut unloaded_later = unloaded.clone();
-        unloaded_later.mtime = Some(3.0);
-        assert_eq!(
-            disknode_change(&unloaded, &unloaded_later),
-            Some(ChangeType::Change)
-        );
-        let mut grown = unloaded.clone();
-        grown.size = Some(5_000_000);
-        assert_eq!(disknode_change(&unloaded, &grown), Some(ChangeType::Change));
     }
 
     /// The `params` of the `filer_change` notification for a pending change.
@@ -2396,34 +2222,26 @@ mod tests {
 
     #[test]
     fn a_notification_carries_metadata_and_no_contents() {
-        // loaded or not, every change sends the node's metadata — never a
-        // `contents` key
-        let mut unloaded = node("/w/f", "text", 2.0);
-        unloaded.contents = None;
-        for disknode in [node("/w/f", "text", 2.0), unloaded] {
-            for (change_type, wire) in [(ChangeType::Add, "add"), (ChangeType::Change, "change")] {
-                assert_eq!(
-                    notification_params(change_type, disknode.clone()),
-                    serde_json::json!({
-                        "change": { "type": wire, "path": "/w/f" },
-                        "disknode": {
-                            "id": "/w/f",
-                            "source_dir": "/w/",
-                            "size": 4,
-                            "ctime": null,
-                            "mtime": 2.0,
-                        },
-                    }),
-                    "{change_type:?}"
-                );
-            }
+        // every change sends the node's metadata — never a `contents` key
+        for (change_type, wire) in [(ChangeType::Add, "add"), (ChangeType::Change, "change")] {
+            assert_eq!(
+                notification_params(change_type, node("/w/f", 4, 2.0)),
+                serde_json::json!({
+                    "change": { "type": wire, "path": "/w/f" },
+                    "disknode": {
+                        "id": "/w/f",
+                        "source_dir": "/w/",
+                        "size": 4,
+                        "ctime": null,
+                        "mtime": 2.0,
+                    },
+                }),
+                "{change_type:?}"
+            );
         }
         // a delete's node is identity only
         assert_eq!(
-            notification_params(
-                ChangeType::Delete,
-                deleted_disknode(node("/w/f", "text", 2.0)),
-            ),
+            notification_params(ChangeType::Delete, deleted_disknode(node("/w/f", 4, 2.0))),
             serde_json::json!({
                 "change": { "type": "delete", "path": "/w/f" },
                 "disknode": {
@@ -2437,101 +2255,55 @@ mod tests {
         );
     }
 
-    #[test]
-    fn apply_subtree_reports_a_timestamp_only_change_as_a_change() {
-        let mut index = FileIndex::new();
-        for n in [
-            node("/w/d/touched", "t", 1.0),
-            node("/w/d/edited", "old", 1.0),
-            node("/w/d/same", "s", 1.0),
-        ] {
-            index.insert(n.id.clone(), n);
-        }
-        let mut fresh = ScanIndex::new();
-        for n in [
-            node("/w/d/touched", "t", 2.0),
-            node("/w/d/edited", "new", 2.0),
-            node("/w/d/same", "s", 1.0),
-        ] {
-            fresh.insert(n.id.clone(), ScannedFile::Read(Box::new(n)));
-        }
-        let mut changes: Vec<(String, ChangeType, Option<f64>)> =
-            apply_subtree(&mut index, "/w/d/", fresh)
-                .into_iter()
-                .map(|(path, change, node)| (path, change, node.mtime))
-                .collect();
-        changes.sort_by(|a, b| a.0.cmp(&b.0));
-        assert_eq!(
-            changes,
-            vec![
-                ("/w/d/edited".to_owned(), ChangeType::Change, Some(2.0)),
-                ("/w/d/touched".to_owned(), ChangeType::Change, Some(2.0)),
-            ]
-        );
-        assert_eq!(index["/w/d/touched"].mtime, Some(2.0), "the index moved");
-    }
-
-    fn node(path: &str, contents: &str, mtime: f64) -> SerializableDisknode {
-        make_disknode(
-            path.to_owned(),
-            "/w/",
-            Some(Arc::new(contents.to_owned())),
-            Some(contents.len() as u64),
-            None,
-            Some(mtime),
-            None,
-        )
+    fn node(path: &str, size: u64, mtime: f64) -> SerializableDisknode {
+        make_disknode(path.to_owned(), "/w/", Some(size), None, Some(mtime), None)
     }
 
     #[test]
     fn apply_subtree_diffs_only_under_prefix() {
         let mut index = FileIndex::new();
         for n in [
-            node("/w/d/same", "s", 1.0),
-            node("/w/d/edited", "old", 1.0),
-            node("/w/d/gone", "g", 1.0),
-            node("/w/d2/sibling", "x", 1.0),
-            node("/w/top", "t", 1.0),
+            node("/w/d/same", 1, 1.0),
+            node("/w/d/touched", 1, 1.0),
+            node("/w/d/gone", 1, 1.0),
+            node("/w/d2/sibling", 1, 1.0),
+            node("/w/top", 1, 1.0),
         ] {
             index.insert(n.id.clone(), n);
         }
         let mut fresh = ScanIndex::new();
-        for n in [
-            node("/w/d/same", "s", 1.0),
-            node("/w/d/edited", "new", 2.0),
-            node("/w/d/new", "n", 1.0),
-        ] {
-            fresh.insert(n.id.clone(), ScannedFile::Read(Box::new(n)));
+        fresh.insert("/w/d/same".to_owned(), ScannedFile::Unchanged);
+        for n in [node("/w/d/touched", 1, 2.0), node("/w/d/new", 1, 1.0)] {
+            fresh.insert(n.id.clone(), ScannedFile::Updated(Box::new(n)));
         }
 
-        let mut changes: Vec<(String, ChangeType)> = apply_subtree(&mut index, "/w/d/", fresh)
-            .into_iter()
-            .map(|(path, change, _)| (path, change))
-            .collect();
+        let mut changes: Vec<(String, ChangeType, Option<f64>)> =
+            apply_subtree(&mut index, "/w/d/", fresh)
+                .into_iter()
+                .map(|(path, change, node)| (path, change, node.mtime))
+                .collect();
         changes.sort_by(|a, b| a.0.cmp(&b.0));
+        // an updated file is a change with its new metadata, whatever moved
         assert_eq!(
             changes,
             vec![
-                ("/w/d/edited".to_owned(), ChangeType::Change),
-                ("/w/d/gone".to_owned(), ChangeType::Delete),
-                ("/w/d/new".to_owned(), ChangeType::Add),
+                ("/w/d/gone".to_owned(), ChangeType::Delete, None),
+                ("/w/d/new".to_owned(), ChangeType::Add, Some(1.0)),
+                ("/w/d/touched".to_owned(), ChangeType::Change, Some(2.0)),
             ]
         );
         let keys: Vec<&str> = index.keys().map(String::as_str).collect();
         assert_eq!(
             keys,
             vec![
-                "/w/d/edited",
                 "/w/d/new",
                 "/w/d/same",
+                "/w/d/touched",
                 "/w/d2/sibling",
                 "/w/top"
             ]
         );
-        assert_eq!(
-            index["/w/d/edited"].contents.as_deref().map(String::as_str),
-            Some("new")
-        );
+        assert_eq!(index["/w/d/touched"].mtime, Some(2.0), "the index moved");
     }
 
     // -- filesystem: walker + event loop state --------------------------------
@@ -2593,15 +2365,23 @@ mod tests {
         )))
     }
 
-    /// The initial scan of `root`, as `start_filer` runs it.
+    /// A clock an hour ahead, so every stamp a filer takes is trusted, as
+    /// for files that have been still a while — tests on it move a stamp on
+    /// purpose (a new size, `set_mtime`, or a wait past the timestamp tick).
+    fn settled() -> SystemTime {
+        SystemTime::now() + Duration::from_hours(1)
+    }
+
+    /// The initial scan of `root`, as `start_filer` runs it, on `clock`.
     async fn scan_into(
         root: &str,
         ignored_dirs: &[PathBuf],
         watches: &Arc<Mutex<DirWatches>>,
+        clock: Clock,
     ) -> FileIndex {
         let fresh = tokio::time::timeout(
             Duration::from_secs(10),
-            scan_directory(root, root, ignored_dirs, watches, false, None),
+            scan_directory(root, root, ignored_dirs, watches, false, clock, None),
         )
         .await
         .expect("scan must terminate")
@@ -2613,7 +2393,7 @@ mod tests {
     }
 
     async fn scan_with(root: &str, ignored_dirs: &[PathBuf]) -> FileIndex {
-        scan_into(root, ignored_dirs, &watches_for(root, None)).await
+        scan_into(root, ignored_dirs, &watches_for(root, None), settled).await
     }
 
     async fn scan(root: &str) -> FileIndex {
@@ -2621,16 +2401,15 @@ mod tests {
     }
 
     async fn state_with(tmp: &TempDir, ignored_dirs: Vec<PathBuf>) -> FilerState {
-        state_watched_by(tmp, ignored_dirs, watches_for(&tmp.root(), None)).await
+        state_on(tmp, ignored_dirs, settled).await
     }
 
-    async fn state_watched_by(
-        tmp: &TempDir,
-        ignored_dirs: Vec<PathBuf>,
-        watches: Arc<Mutex<DirWatches>>,
-    ) -> FilerState {
+    /// The event-loop state of a filer on `tmp` whose stamps are judged by
+    /// `clock`.
+    async fn state_on(tmp: &TempDir, ignored_dirs: Vec<PathBuf>, clock: Clock) -> FilerState {
         let root = tmp.root();
-        let files = scan_into(&root, &ignored_dirs, &watches).await;
+        let watches = watches_for(&root, None);
+        let files = scan_into(&root, &ignored_dirs, &watches, clock).await;
         watches.lock().poll_missing_root = true;
         let unwatched_count = Arc::clone(&watches.lock().unwatched_count);
         FilerState {
@@ -2641,9 +2420,11 @@ mod tests {
             watches,
             unwatched_count,
             degraded_rescan_interval: DEGRADED_RESCAN_INTERVAL,
+            clock,
         }
     }
 
+    /// The event-loop state of a filer on `tmp`, on the [`settled`] clock.
     async fn state_for(tmp: &TempDir) -> FilerState {
         state_with(tmp, vec![]).await
     }
@@ -2851,21 +2632,15 @@ mod tests {
         let tmp = TempDir::new();
         // multi-byte UTF-8: the size counts bytes, not characters
         std::fs::write(tmp.path("text.txt"), "héllo").unwrap();
-        // not UTF-8, so not loaded — its size is still known
+        // not UTF-8 — the index doesn't care
         std::fs::write(tmp.path("bytes.bin"), [0xff, 0xfe, 0x00]).unwrap();
         let mut state = state_for(&tmp).await;
 
         // the walk's nodes, as `session_load` and `workspace_open` send them:
-        // the size, and no contents whether the index holds them or not
+        // the size, and no contents
         {
             let index = state.files.read().await;
-            let text_node = &index[&tmp.key("text.txt")];
-            assert_eq!(
-                text_node.contents.as_deref().map(String::as_str),
-                Some("héllo"),
-                "the index still holds the text"
-            );
-            let text = serde_json::to_value(text_node).unwrap();
+            let text = serde_json::to_value(&index[&tmp.key("text.txt")]).unwrap();
             assert_eq!(text["size"], 6);
             assert!(
                 !text.as_object().unwrap().contains_key("contents"),
@@ -2879,7 +2654,7 @@ mod tests {
             );
         }
 
-        // a change's node carries the new size, loaded or not
+        // a change's node carries the new size
         std::fs::write(tmp.path("text.txt"), "héllo, world").unwrap();
         let frames = modified(&mut state, &tmp.path("text.txt")).await;
         assert_eq!(frames[0]["change"]["type"], "change");
@@ -2929,16 +2704,8 @@ mod tests {
         let frames = modified(&mut state, &path).await;
         assert_eq!(frames[0]["change"]["type"], "change");
         assert_eq!(metadata(&frames[0]), (5.into(), 4_000_000.0.into()));
-        assert_eq!(
-            state.files.read().await[&key]
-                .contents
-                .as_deref()
-                .map(String::as_str),
-            Some("three"),
-            "the index holds the new text"
-        );
 
-        // nothing moved: no broadcast
+        // nothing moved, and the stamp is trusted: no broadcast
         assert!(modified(&mut state, &path).await.is_empty());
 
         // first sighting: an add, metadata only
@@ -3149,13 +2916,6 @@ mod tests {
             pending_of(&state),
             vec![(tmp.key("f.txt"), ChangeType::Change)]
         );
-        assert_eq!(
-            state.files.read().await[&tmp.key("f.txt")]
-                .contents
-                .as_deref()
-                .map(String::as_str),
-            Some("two")
-        );
     }
 
     #[tokio::test]
@@ -3179,9 +2939,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unchanged_modify_is_not_broadcast() {
+    async fn a_modify_with_a_trusted_unmoved_stamp_is_not_broadcast() {
         let tmp = TempDir::new();
         std::fs::write(tmp.path("f.txt"), "one").unwrap();
+        // settled: the stamp the scan took is trusted
         let mut state = state_for(&tmp).await;
 
         state
@@ -3496,7 +3257,7 @@ mod tests {
     async fn take_ready_respects_deadlines() {
         let tmp = TempDir::new();
         let mut state = state_for(&tmp).await;
-        state.queue(tmp.key("x"), ChangeType::Add, node(&tmp.key("x"), "x", 1.0));
+        state.queue(tmp.key("x"), ChangeType::Add, node(&tmp.key("x"), 1, 1.0));
         assert!(state.take_ready(Instant::now()).is_empty());
         let ready = state.take_ready(Instant::now() + DEBOUNCE_DURATION);
         assert_eq!(ready.len(), 1);
@@ -3531,17 +3292,19 @@ mod tests {
     #[tokio::test]
     async fn flush_yields_so_a_read_connection_outlasts_its_budget() {
         const CHANGES: usize = 32;
-        const TEXT_BYTES: usize = 1024;
-        // room for a few frames, a fraction of the batch
-        const BUDGET: usize = 4 * TEXT_BYTES;
+        const NAME_BYTES: usize = 1024;
+        // room for a few frames (each carries its path twice), a fraction of
+        // the batch
+        const BUDGET: usize = 8 * NAME_BYTES;
 
         let tmp = TempDir::new();
         let mut state = state_for(&tmp).await;
         let now = Instant::now();
-        let text = "x".repeat(TEXT_BYTES);
+        // long names make the frames big enough for the budget to matter
+        let name = "x".repeat(NAME_BYTES - 16);
         for i in 0..CHANGES {
-            let key = tmp.key(&format!("{i}.txt"));
-            state.queue_at(now, key.clone(), ChangeType::Add, node(&key, &text, 1.0));
+            let key = format!("{}{i}/{name}", tmp.root());
+            state.queue_at(now, key.clone(), ChangeType::Add, node(&key, 1, 1.0));
         }
         let (registry, connection, mut rx, broadcast) = one_connection(BUDGET);
         // the connection's writer — takes a frame whenever it gets a turn,
@@ -3571,23 +3334,11 @@ mod tests {
         let tmp = TempDir::new();
         let mut state = state_for(&tmp).await;
         let now = Instant::now();
-        // a file at the cap, every byte a control character JSON escapes to 6
-        // — the frame that would be largest if contents travelled
-        let dense = "\u{1}".repeat(usize::try_from(MAX_INDEXED_FILE_SIZE).unwrap());
-        let dense_key = tmp.key("dense.txt");
-        state.queue_at(
-            now,
-            dense_key.clone(),
-            ChangeType::Add,
-            node(&dense_key, &dense, 1.0),
-        );
-        let small_key = tmp.key("small.txt");
-        state.queue_at(
-            now,
-            small_key.clone(),
-            ChangeType::Change,
-            node(&small_key, "x", 1.0),
-        );
+        // a file far over what a frame could carry, and a tiny one
+        for (rel, size) in [("big.bin", u64::MAX / 2), ("small.txt", 1)] {
+            let key = tmp.key(rel);
+            state.queue_at(now, key.clone(), ChangeType::Change, node(&key, size, 1.0));
+        }
         // nothing takes a frame during the flush, as when the writer is busy
         // with an earlier one
         let (registry, connection, mut rx, broadcast) =
@@ -3599,7 +3350,7 @@ mod tests {
         assert!(registry.is_registered(connection.id));
         for _ in 0..2 {
             let frame = rx.try_recv().unwrap();
-            // the envelope, the paths, and the metadata — none of the text
+            // the envelope, the paths, and the metadata
             assert!(
                 frame.as_str().len() < 512 + 2 * tmp.root().len(),
                 "{}",
@@ -3625,7 +3376,7 @@ mod tests {
         // written every 50ms — never quiet for a full debounce window
         let mut t = t0;
         while t < t0 + DEBOUNCE_MAX_WAIT {
-            state.queue_at(t, key.clone(), ChangeType::Change, node(&key, "x", 1.0));
+            state.queue_at(t, key.clone(), ChangeType::Change, node(&key, 1, 1.0));
             assert!(state.take_ready(t).is_empty(), "not ready at {:?}", t - t0);
             t += Duration::from_millis(50);
         }
@@ -3633,7 +3384,7 @@ mod tests {
         assert_eq!(ready.len(), 1, "flushed by the max wait");
         // the next run starts fresh
         let t1 = t0 + DEBOUNCE_MAX_WAIT;
-        state.queue_at(t1, key.clone(), ChangeType::Change, node(&key, "y", 2.0));
+        state.queue_at(t1, key.clone(), ChangeType::Change, node(&key, 1, 2.0));
         assert_eq!(state.next_deadline(), Some(t1 + DEBOUNCE_DURATION));
         assert_eq!(
             debounce_deadline(t0 + Duration::from_millis(10), t0),
@@ -3707,99 +3458,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn contents_reads_refuse_links_fifos_and_oversize() {
-        use std::os::unix::fs::symlink;
-
-        let tmp = TempDir::new();
-        std::fs::write(tmp.path("ok.txt"), "ok").unwrap();
-        symlink(tmp.path("ok.txt"), tmp.path("link.txt")).unwrap();
-        let big = vec![b'x'; usize::try_from(MAX_INDEXED_FILE_SIZE).unwrap() + 1];
-        std::fs::write(tmp.path("big.txt"), &big).unwrap();
-        std::fs::write(tmp.path("bin"), [0xff, 0xfe]).unwrap();
-        let fifo = std::process::Command::new("mkfifo")
-            .arg(tmp.path("fifo"))
-            .status()
-            .is_ok_and(|s| s.success());
-
-        let read = |rel: &str| {
-            tokio::time::timeout(
-                Duration::from_secs(5),
-                read_indexable_contents(tmp.path(rel)),
-            )
-        };
-        assert_eq!(
-            read("ok.txt").await.unwrap().as_deref().map(String::as_str),
-            Some("ok")
-        );
-        assert_eq!(read("link.txt").await.unwrap(), None);
-        assert_eq!(read("big.txt").await.unwrap(), None);
-        assert_eq!(read("bin").await.unwrap(), None);
-        if fifo {
-            assert_eq!(read("fifo").await.expect("must not block"), None);
-        }
-    }
-
-    #[test]
-    fn text_reads_say_why_they_declined() {
-        use std::io::Write as _;
-
-        let tmp = TempDir::new();
-        let max = usize::try_from(MAX_INDEXED_FILE_SIZE).unwrap();
-        std::fs::write(tmp.path("ok.txt"), "ok").unwrap();
-        std::fs::write(tmp.path("empty"), "").unwrap();
-        std::fs::write(tmp.path("at_limit.txt"), vec![b'x'; max]).unwrap();
-        std::fs::write(tmp.path("big.txt"), vec![b'x'; max + 10]).unwrap();
-        std::fs::write(tmp.path("bin"), [0xff, 0xfe]).unwrap();
-
-        let read = |rel: &str| {
-            let file = std::fs::File::open(tmp.path(rel)).unwrap();
-            let size = file.metadata().unwrap().len();
-            read_text_contents(file, size).unwrap()
-        };
-        assert_eq!(read("ok.txt"), TextContents::Loaded("ok".to_owned()));
-        assert_eq!(read("empty"), TextContents::Loaded(String::new()));
-        let at_limit = read("at_limit.txt");
-        assert!(matches!(at_limit, TextContents::Loaded(_)));
-        assert_eq!(at_limit.size(), MAX_INDEXED_FILE_SIZE);
-        // over the limit when opened: not read, its size as opened
-        assert_eq!(
-            read("big.txt"),
-            TextContents::Unloaded {
-                reason: UnloadedReason::TooLarge,
-                size: MAX_INDEXED_FILE_SIZE + 10,
-            }
-        );
-        assert_eq!(
-            read("bin"),
-            TextContents::Unloaded {
-                reason: UnloadedReason::NotUtf8,
-                size: 2,
-            }
-        );
-
-        // grown past the limit after the open's size was taken: the read
-        // stops one byte over and says so
-        let mut grown = std::fs::File::create(tmp.path("grown.txt")).unwrap();
-        grown.write_all(b"x").unwrap();
-        let file = std::fs::File::open(tmp.path("grown.txt")).unwrap();
-        grown.write_all(&vec![b'x'; max + 10]).unwrap();
-        assert_eq!(
-            read_text_contents(file, 1).unwrap(),
-            TextContents::Unloaded {
-                reason: UnloadedReason::TooLarge,
-                size: MAX_INDEXED_FILE_SIZE + 1,
-            }
-        );
-
-        // the wire names
-        assert_eq!(
-            serde_json::to_value([UnloadedReason::TooLarge, UnloadedReason::NotUtf8]).unwrap(),
-            serde_json::json!(["too_large", "not_utf8"])
-        );
-    }
-
     #[tokio::test]
     async fn directory_replaced_by_file_drops_its_children() {
         let tmp = TempDir::new();
@@ -3856,7 +3514,7 @@ mod tests {
             .files
             .write()
             .await
-            .insert(tmp.key("x"), node(&tmp.key("x"), "stale", 1.0));
+            .insert(tmp.key("x"), node(&tmp.key("x"), 5, 1.0));
         state.pending.clear();
         state
             .handle_event(event(EventKind::Modify(ModifyKind::Any), &[tmp.path("x")]))
@@ -3868,29 +3526,21 @@ mod tests {
     // -- stat reuse -----------------------------------------------------------
 
     #[tokio::test]
-    async fn rescans_reuse_unchanged_files_and_reread_changed_ones() {
+    async fn rescans_skip_unchanged_files_and_report_moved_stamps() {
         let tmp = TempDir::new();
         std::fs::write(tmp.path("f.txt"), "one").unwrap();
-        // a stamp is only trusted once the file has been still for a while
-        tokio::time::sleep(RACY_STAT_MARGIN + Duration::from_millis(100)).await;
         let mut state = state_for(&tmp).await;
         let key = tmp.key("f.txt");
         assert!(state.files.read().await[&key].stat.is_some());
 
-        // an unchanged stat keeps the indexed node — the file isn't re-read
-        state.files.write().await.get_mut(&key).unwrap().contents =
-            Some(Arc::new("sentinel".to_owned()));
+        // a trusted, unmoved stamp keeps the indexed node as it is
+        state.files.write().await.get_mut(&key).unwrap().mtime = Some(-1.0);
         state.rescan(false).await;
         assert!(state.pending.is_empty());
-        assert_eq!(
-            state.files.read().await[&key]
-                .contents
-                .as_deref()
-                .map(String::as_str),
-            Some("sentinel")
-        );
+        assert_eq!(state.files.read().await[&key].mtime, Some(-1.0));
 
         // a same-size rewrite that restores the mtime still moves the ctime
+        // (past the timestamp tick, so the settled clock can't hide it)
         let mtime = std::fs::metadata(tmp.path("f.txt"))
             .unwrap()
             .modified()
@@ -3906,11 +3556,9 @@ mod tests {
         state.rescan(false).await;
         assert_eq!(pending_of(&state), vec![(key.clone(), ChangeType::Change)]);
         assert_eq!(
-            state.files.read().await[&key]
-                .contents
-                .as_deref()
-                .map(String::as_str),
-            Some("two")
+            state.files.read().await[&key].mtime,
+            system_time_to_ms(mtime),
+            "the index took the new node"
         );
     }
 
@@ -4275,51 +3923,136 @@ mod tests {
             ino: 2,
             size: 4,
             mtime: (1_000, 0),
-            change_time: (1_000, 500),
+            change_time: (1_000, 500_000_000),
         };
         let at = |secs: u64, millis: u64| {
             std::time::UNIX_EPOCH + Duration::from_secs(secs) + Duration::from_millis(millis)
         };
-        // still for the whole margin — trusted
-        assert_eq!(reusable_stat(stat, Some(4), at(1_002, 1)), Some(stat));
-        assert_eq!(reusable_stat(stat, None, at(1_002, 1)), Some(stat));
-        // changed within the margin of the read (by ctime) — not trusted
-        assert_eq!(reusable_stat(stat, Some(4), at(1_002, 0)), None);
-        assert_eq!(reusable_stat(stat, Some(4), at(1_000, 0)), None);
-        // the read saw a different size than the stat — raced a write
-        assert_eq!(reusable_stat(stat, Some(5), at(9_999, 0)), None);
+        // the change time (1_000.5 s) more than the margin (3 s) back — trusted
+        assert_eq!(reusable_stat(stat, at(1_003, 501)), Some(stat));
+        assert_eq!(reusable_stat(stat, at(9_999, 0)), Some(stat));
+        // exactly the margin back, or less — not trusted
+        assert_eq!(reusable_stat(stat, at(1_003, 500)), None);
+        assert_eq!(reusable_stat(stat, at(1_000, 0)), None);
+        // a clock behind the stamp — not trusted
+        assert_eq!(reusable_stat(stat, at(999, 0)), None);
+        // an mtime in the future (an archive from a clock ahead, `touch -d
+        // tomorrow`) doesn't matter: the change time decides
+        let future = FileStat {
+            mtime: (90_000, 0),
+            ..stat
+        };
+        assert_eq!(reusable_stat(future, at(1_004, 0)), Some(future));
+        // and a later write is still a change — it moves the change time
+        let written = FileStat {
+            change_time: (1_010, 0),
+            ..future
+        };
+        assert!(!is_unchanged(reusable_stat(future, at(1_004, 0)), written));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_walk_indexes_only_what_its_lstat_says_is_a_regular_file() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = TempDir::new();
+        std::fs::write(tmp.path("f.txt"), "f").unwrap();
+        symlink(tmp.path("f.txt"), tmp.path("link")).unwrap();
+        std::fs::create_dir(tmp.path("dir")).unwrap();
+        let job = |rel: &str| {
+            let meta = std::fs::symlink_metadata(tmp.path(rel)).unwrap();
+            file_job(tmp.key(rel), &meta, SystemTime::now())
+        };
+        assert!(job("f.txt").is_some());
+        // what the listing said was a file, swapped since
+        assert!(job("link").is_none());
+        assert!(job("dir").is_none());
     }
 
     #[tokio::test]
-    async fn same_tick_rewrites_are_never_served_stale() {
+    async fn same_tick_rewrites_are_never_missed() {
         use std::io::{Seek, SeekFrom, Write};
 
         let tmp = TempDir::new();
-        std::fs::write(tmp.path("f.txt"), "AAAA").unwrap();
-        let mut state = state_for(&tmp).await;
+        let path = tmp.path("f.txt");
+        std::fs::write(&path, "AAAA").unwrap();
+        // the real clock: every write here is too recent to trust its stamp
+        let mut state = state_on(&tmp, vec![], SystemTime::now).await;
         let key = tmp.key("f.txt");
         for i in 0..50 {
             let (a, b) = (format!("{:04}", i * 2), format!("{:04}", i * 2 + 1));
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .open(tmp.path("f.txt"))
-                .unwrap();
+            let mut file = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
             file.write_all(a.as_bytes()).unwrap();
             state.rescan(false).await;
-            // a second same-size write, likely inside the same timestamp tick
+            state.pending.clear();
+            // a second same-size write, likely inside the same timestamp
+            // tick, so likely leaving the stamp as the rescan saw it
             file.seek(SeekFrom::Start(0)).unwrap();
             file.write_all(b.as_bytes()).unwrap();
             drop(file);
             state.rescan(false).await;
             assert_eq!(
-                state.files.read().await[&key]
-                    .contents
-                    .as_deref()
-                    .map(String::as_str),
-                Some(b.as_str()),
+                pending_of(&state),
+                vec![(key.clone(), ChangeType::Change)],
                 "iteration {i}"
             );
+            state.pending.clear();
         }
+    }
+
+    #[tokio::test]
+    async fn a_file_dated_in_the_future_is_not_a_change_on_every_look() {
+        let tmp = TempDir::new();
+        let path = tmp.path("f.txt");
+        std::fs::write(&path, "one").unwrap();
+        // `touch -d tomorrow`, an archive from a clock ahead: an mtime past
+        // even the settled clock
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(SystemTime::now() + Duration::from_hours(24))
+            .unwrap();
+        let mut state = state_for(&tmp).await;
+        assert!(state.files.read().await[&tmp.key("f.txt")].stat.is_some());
+        state.rescan(false).await;
+        assert!(state.pending.is_empty(), "{:?}", pending_of(&state));
+        assert!(modified(&mut state, &path).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_racy_stamp_is_a_change_until_it_settles() {
+        let tmp = TempDir::new();
+        let path = tmp.path("f.txt");
+        let key = tmp.key("f.txt");
+        std::fs::write(&path, "one").unwrap();
+        // just written: the scan's stamp isn't trusted
+        let mut state = state_on(&tmp, vec![], SystemTime::now).await;
+        assert!(state.files.read().await[&key].stat.is_none());
+
+        // nothing moved, but the stamp can't say so: an event is a change
+        let frames = modified(&mut state, &path).await;
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0]["change"]["type"], "change");
+        // and so is a rescan
+        state.rescan(false).await;
+        assert_eq!(pending_of(&state), vec![(key.clone(), ChangeType::Change)]);
+        flushed(&mut state).await;
+
+        // once its change time is past the margin, the next look is a
+        // change still (the indexed stamp is the untrusted one), and trusts
+        // what it finds
+        state.clock = settled;
+        let frames = modified(&mut state, &path).await;
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0]["change"]["type"], "change");
+        assert!(state.files.read().await[&key].stat.is_some());
+
+        // from then on an unmoved stamp is no change, by event or rescan
+        assert!(modified(&mut state, &path).await.is_empty());
+        state.rescan(false).await;
+        assert!(state.pending.is_empty(), "{:?}", pending_of(&state));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -4386,6 +4119,7 @@ mod tests {
             watches: Arc::clone(&watches),
             unwatched_count,
             degraded_rescan_interval: DEGRADED_RESCAN_INTERVAL,
+            clock: settled,
         };
         state.rescan(reset_watches).await;
         assert_eq!(
@@ -4558,7 +4292,7 @@ mod tests {
 
     #[test]
     fn disknode_serializes_to_its_wire_shape() {
-        let node = SerializableDisknode::for_test("/w/a.txt", Some("say \"hi\"\n"), Some(2.5));
+        let node = SerializableDisknode::for_test("/w/a.txt", Some(9), Some(2.5));
         assert_eq!(
             serde_json::to_value(&node).unwrap(),
             serde_json::json!({
@@ -4569,10 +4303,9 @@ mod tests {
                 "mtime": 2.5,
             })
         );
-        let mut unloaded = SerializableDisknode::for_test("/w/big.bin", None, None);
-        unloaded.size = Some(5_000_000);
+        let big = SerializableDisknode::for_test("/w/big.bin", Some(5_000_000), None);
         assert_eq!(
-            serde_json::to_value(&unloaded).unwrap(),
+            serde_json::to_value(&big).unwrap(),
             serde_json::json!({
                 "id": "/w/big.bin",
                 "source_dir": "/w/",
@@ -4587,13 +4320,11 @@ mod tests {
     fn disknodes_size_hint_tracks_the_rendered_size() {
         let nodes: Vec<SerializableDisknode> = (0..10)
             .map(|i| {
-                let mut node = SerializableDisknode::for_test(
+                SerializableDisknode::for_test(
                     &format!("/w/dir/file_{i}.txt"),
-                    None,
+                    Some(10_000),
                     Some(1_700_000_000_000.25),
-                );
-                node.size = Some(10_000);
-                node
+                )
             })
             .collect();
         let rendered = serde_json::to_string(&nodes).unwrap().len();
@@ -4603,15 +4334,5 @@ mod tests {
             "hint {hint} off rendered {rendered} by over 10%"
         );
         assert_eq!(disknodes_json_size_hint(&[]), "[]".len());
-    }
-
-    #[test]
-    fn a_cloned_node_shares_its_contents() {
-        let node = SerializableDisknode::for_test("/w/a.txt", Some("text"), None);
-        let clone = node.clone();
-        assert!(Arc::ptr_eq(
-            node.contents.as_ref().unwrap(),
-            clone.contents.as_ref().unwrap()
-        ));
     }
 }

@@ -119,6 +119,15 @@ describe('filesystem cross-backend', () => {
 			const text_stat = await stat(text_path);
 			assert.ok(text.mtime !== null && Math.abs(text.mtime - text_stat.mtimeMs) < 1, 'mtime');
 
+			// read through to the disk, whatever the filer has seen: a same-length
+			// rewrite read at once, and a file in an ignored directory, which the
+			// filer never indexes or watches
+			await writeFile(text_path, 'hallo!', 'utf-8');
+			assert.equal((await read_ok(text_path)).contents, 'hallo!');
+			await mkdir(join(dir, 'node_modules'));
+			await writeFile(join(dir, 'node_modules', 'x.txt'), 'never indexed', 'utf-8');
+			assert.equal((await read_ok(join(dir, 'node_modules', 'x.txt'))).contents, 'never indexed');
+
 			await writeFile(join(dir, 'empty.txt'), '', 'utf-8');
 			const empty = await read_ok(join(dir, 'empty.txt'));
 			assert.equal(empty.contents, '');
@@ -933,11 +942,14 @@ describe('filesystem cross-backend', () => {
 
 				/**
 				 * The next `filer_change` for `path` after message `from`, parsed
-				 * against the spec — the next one whose disknode carries `mtime`,
-				 * when given, since a write and a later `utimes` can land in one
-				 * debounce window or in two.
+				 * against the spec — the next one whose disknode's `mtime` passes
+				 * `accept_mtime`, when given, since a write and a later `utimes`
+				 * can land in one debounce window or in two.
 				 */
-				const next_change = async (from: number, mtime?: number): Promise<FilerChangeInput> => {
+				const next_change = async (
+					from: number,
+					accept_mtime?: (mtime: unknown) => boolean
+				): Promise<FilerChangeInput> => {
 					const msg = await ws.wait_for<Record<string, unknown>>((m) => {
 						if (ws.messages.indexOf(m) < from) return false;
 						const rec = m as Record<string, unknown> | null;
@@ -945,8 +957,8 @@ describe('filesystem cross-backend', () => {
 						const params = rec.params as Record<string, unknown> | undefined;
 						const change = params?.change as Record<string, unknown> | undefined;
 						if (change?.path !== path) return false;
-						if (mtime === undefined) return true;
-						return (params?.disknode as Record<string, unknown> | undefined)?.mtime === mtime;
+						if (accept_mtime === undefined) return true;
+						return accept_mtime((params?.disknode as Record<string, unknown> | undefined)?.mtime);
 					}, 10_000);
 					return parse_or_throw(FilerChangeInput, msg.params);
 				};
@@ -954,7 +966,7 @@ describe('filesystem cross-backend', () => {
 				// an mtime-only change: a `change` with the new metadata, no contents key
 				let from = ws.messages.length;
 				await utimes(path, new Date(1_000_000), new Date(1_000_000));
-				const touched = await next_change(from, 1_000_000);
+				const touched = await next_change(from, (mtime) => mtime === 1_000_000);
 				assert.equal(touched.change.type, 'change');
 				assert.notProperty(touched.disknode, 'contents');
 				assert.equal(touched.disknode.mtime, 1_000_000);
@@ -965,9 +977,20 @@ describe('filesystem cross-backend', () => {
 				await writeFile(path, 'unchanged', 'utf-8');
 				await utimes(path, new Date(2_000_000), new Date(2_000_000));
 				// the frame carrying the `utimes` — the write's own may come first
-				const rewritten = await next_change(from, 2_000_000);
+				const rewritten = await next_change(from, (mtime) => mtime === 2_000_000);
 				assert.equal(rewritten.change.type, 'change');
 				assert.notProperty(rewritten.disknode, 'contents');
+
+				// and so is a plain rewrite of the same bytes — the daemon holds no
+				// contents to compare, and the write moved the file's stamp
+				from = ws.messages.length;
+				await writeFile(path, 'unchanged', 'utf-8');
+				const rewritten_plain = await next_change(
+					from,
+					(mtime) => typeof mtime === 'number' && mtime > 2_000_000
+				);
+				assert.equal(rewritten_plain.change.type, 'change');
+				assert.equal(rewritten_plain.disknode.size, 'unchanged'.length);
 
 				// new contents too: the size in bytes, not characters, and the
 				// contents only by a read

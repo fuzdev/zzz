@@ -507,7 +507,7 @@ mod tests {
                     opened_at: "2026-01-01T00:00:00Z".to_owned(),
                 },
                 files: vec![
-                    SerializableDisknode::for_test("/w/a.txt", Some("a"), Some(1.5)),
+                    SerializableDisknode::for_test("/w/a.txt", Some(1), Some(1.5)),
                     SerializableDisknode::for_test("/w/b.bin", None, None),
                 ],
                 watch_status,

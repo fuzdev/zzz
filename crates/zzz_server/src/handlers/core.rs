@@ -196,15 +196,14 @@ mod tests {
     use super::*;
 
     /// A `session_load` result, serialized straight from the structs, has the
-    /// shape `SessionLoadData` declares — its files' metadata, without the
-    /// contents the index holds.
+    /// shape `SessionLoadData` declares — its files' metadata, no contents.
     #[test]
     fn session_load_result_serializes_to_its_wire_shape() {
         let result = SessionLoadResult {
             data: SessionLoadData {
                 files: vec![SerializableDisknode::for_test(
                     "/s/a.txt",
-                    Some("a"),
+                    Some(1),
                     Some(1.5),
                 )],
                 file_roots: vec!["/s/".to_owned()],

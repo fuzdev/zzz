@@ -355,10 +355,12 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
   50 sockets per account; no batch JSON-RPC.
 - **Message caps** — 16 MiB per JSON-RPC message, 32 MiB outbound queue per
   socket; terminal output is paced by acks.
-- **The daemon reads and holds every indexed file's contents** (UTF-8,
-  up to 4 MiB each), though the wire carries only metadata and the frontend
-  reads a file's content on demand (`diskfile_read`) to show, send, or copy
-  it; files over 4 MiB or not UTF-8 don't load and are read-only.
+- **The file index is metadata only, and all of it ships** on open and
+  resync — a large tree is a large response. The daemon holds no file
+  text: the frontend reads a file's content on demand (`diskfile_read`,
+  from the disk) to show, send, or copy it; files over 4 MiB or not UTF-8
+  don't load and are read-only. A moved `lstat` stamp is a change, so a
+  `touch` makes clients holding the file read it again.
 - **No persistent undo**; symlinks are invisible; file watching can degrade
   to polling past `max_user_watches`.
 - **The terminal emulator** lacks scrollback scrolling, IME, and mouse
