@@ -103,7 +103,7 @@ fn resolve_target(raw: &str, cwd: &Path) -> Result<String, CliError> {
 fn build_url(port: u16, path: Option<&str>) -> String {
     let mut url = format!("http://localhost:{port}");
     if let Some(path) = path {
-        url.push_str("/workspaces?project=");
+        url.push_str("/projects?project=");
         url.push_str(&encode_uri_component(path));
     }
     url
@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(build_url(4460, None), "http://localhost:4460");
         assert_eq!(
             build_url(4460, Some("/home/a b/")),
-            "http://localhost:4460/workspaces?project=%2Fhome%2Fa%20b%2F"
+            "http://localhost:4460/projects?project=%2Fhome%2Fa%20b%2F"
         );
     }
 

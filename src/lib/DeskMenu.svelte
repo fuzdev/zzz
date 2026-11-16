@@ -8,10 +8,10 @@
 <script lang="ts">
 	import type { Attachment } from 'svelte/attachments';
 
+	import { resolve } from '$app/paths';
+	import { icon_pin, icon_project } from '@fuzdev/fuz_ui/icons.ts';
+
 	import { frontend_context } from './frontend.svelte.ts';
-	import EditableText from './EditableText.svelte';
-	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
-	import { icon_add, icon_delete, icon_pin, icon_space } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
 	import { click_outside } from './click_outside.svelte.ts';
 	import { PROJECT_DEGRADED_NOTICE } from './project_helpers.ts';
@@ -54,104 +54,53 @@
 		{@attach manage_focus}
 		{@attach app.ui.desk_pinned ? null : click_outside(() => app.ui.toggle_desk_menu(false))}
 	>
-		<div>
-			<section class="mb_xl3">
-				<div class="row gap_sm mb_xl">
-					<h2 class="mt_0 flex:1">
-						<Icon data={icon_space} /> spaces
-					</h2>
-					<button
-						type="button"
-						class="icon-button sized_sm"
-						class:selected={app.ui.desk_pinned}
-						title={app.ui.desk_pinned ? 'unpin desk' : 'pin desk'}
-						onclick={() => app.ui.toggle_desk_pinned()}
-					>
-						<Icon data={icon_pin} />
-					</button>
-				</div>
+		<section>
+			<div class="row gap_sm mb_xl">
+				<h2 class="mt_0 flex:1">
+					<Icon data={icon_project} /> projects
+				</h2>
+				<button
+					type="button"
+					class="icon-button sized_sm"
+					class:selected={app.ui.desk_pinned}
+					title={app.ui.desk_pinned ? 'unpin desk' : 'pin desk'}
+					onclick={() => app.ui.toggle_desk_pinned()}
+				>
+					<Icon data={icon_pin} />
+				</button>
+			</div>
+			{#if app.projects.items.by_id.size > 0}
 				<ul class="unstyled">
-					{#each app.spaces.items.values as space (space.id)}
-						<li class="row gap_xs">
+					{#each app.projects.items.values as project (project.id)}
+						<li>
 							<button
 								type="button"
-								class="flex:1 gap_sm"
-								class:selected={space.id === app.spaces.active_id}
-								onclick={() => {
-									app.spaces.activate(space.id);
-								}}
+								class="width:100% gap_sm"
+								class:selected={project.id === app.projects.active_id}
+								aria-pressed={project.id === app.projects.active_id}
+								title={project.id === app.projects.active_id
+									? `${project.root} is the active project`
+									: `make ${project.root} the active project`}
+								onclick={() => app.projects.activate(project.id)}
 							>
-								<span class="flex:1 text-align:left">{space.name}</span>
-								<span class="text_50 font_size_sm">
-									{space.directory_count}
-									{space.directory_count === 1 ? 'dir' : 'dirs'}
+								<span class="flex:1 text-align:left">
+									<span class="block">{project.name}</span>
+									<span class="block font_size_sm font_family_mono text_50">
+										{project.root}
+									</span>
 								</span>
+								{#if project.watch_status === 'degraded'}
+									<small class="text_50" title={PROJECT_DEGRADED_NOTICE}>polled</small>
+								{/if}
 							</button>
-							{#if space !== app.spaces.scratchpad}
-								<ConfirmButton
-									onconfirm={() => app.spaces.remove(space.id)}
-									class="icon-button sized_sm plain deselectable"
-									title="delete space"
-								>
-									<Icon data={icon_delete} />
-								</ConfirmButton>
-							{/if}
 						</li>
 					{/each}
 				</ul>
-				<button
-					type="button"
-					class="plain width:100%"
-					title="create new space"
-					onclick={() => {
-						const space = app.spaces.add();
-						app.spaces.activate(space.id);
-					}}
-				>
-					<Icon data={icon_add} /> new space
-				</button>
-			</section>
-
-			{#if app.spaces.active}
-				<section>
-					<h3 class="mt_0 mb_md row gap_sm">
-						<EditableText bind:value={app.spaces.active.name} />
-						<span class="text_50 font_size_sm">directories</span>
-					</h3>
-					{#if app.projects.items.by_id.size > 0}
-						<ul class="unstyled">
-							{#each app.projects.items.values as project (project.id)}
-								{@const included = app.spaces.active.directory_paths.includes(project.root)}
-								<li>
-									<button
-										type="button"
-										class="width:100% gap_sm"
-										class:selected={included}
-										onclick={() => {
-											// the list is open projects, so each is already open on the backend
-											if (included) {
-												app.spaces.active!.remove_directory(project.root);
-											} else {
-												app.spaces.active!.add_directory(project.root);
-											}
-										}}
-									>
-										<span class="flex:1 font_size_sm text-align:left font_family_mono">
-											{project.root}
-										</span>
-										{#if project.watch_status === 'degraded'}
-											<small class="text_50" title={PROJECT_DEGRADED_NOTICE}>polled</small>
-										{/if}
-									</button>
-								</li>
-							{/each}
-						</ul>
-					{:else}
-						<p class="text_50">no projects open</p>
-					{/if}
-				</section>
+			{:else}
+				<p class="text_50">no projects open</p>
 			{/if}
-		</div>
+			<p><a href={resolve('/projects')}>open and close projects</a></p>
+		</section>
 	</aside>
 {/if}
 

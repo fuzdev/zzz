@@ -29,7 +29,6 @@ import { CellRegistry } from './cell_registry.svelte.ts';
 import { Prompts } from './prompts.svelte.ts';
 import { Parts } from './parts.svelte.ts';
 import { Time } from './time.svelte.ts';
-import { Spaces } from './spaces.svelte.ts';
 import { Projects } from './projects.svelte.ts';
 import type { ProjectInfoJson } from './project.svelte.ts';
 import { Terminals } from './terminals.svelte.ts';
@@ -190,7 +189,6 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly actions: Actions;
 	readonly socket: Socket;
 	readonly capabilities: Capabilities;
-	readonly spaces: Spaces;
 	readonly projects: Projects;
 	readonly terminals: Terminals;
 	readonly terminal_presets: TerminalPresets;
@@ -334,7 +332,6 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.actions = new Actions({ app: this });
 		this.socket = new Socket({ app: this });
 		this.capabilities = new Capabilities({ app: this });
-		this.spaces = new Spaces({ app: this });
 		this.projects = new Projects({ app: this });
 		this.terminals = new Terminals({ app: this });
 		this.terminal_presets = new TerminalPresets({ app: this });

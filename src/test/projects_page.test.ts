@@ -8,7 +8,7 @@ import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
 import type { ProjectInfoJson } from '#lib/project.svelte.ts';
-import WorkspacesPage from '#routes/workspaces/+page.svelte';
+import ProjectsPage from '#routes/projects/+page.svelte';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
@@ -16,7 +16,7 @@ import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
 /** The projects page's per-entry focus and unfocus buttons for a registry project. */
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn(() => Promise.resolve()) }));
-vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/workspaces') } }));
+vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/projects') } }));
 // the footer reads the site context, which isn't the page's concern here
 vi.mock('#routes/PageFooter.svelte', () => ({ default: () => undefined }));
 
@@ -71,7 +71,7 @@ beforeEach(() => {
 	document.body.append(target);
 	mounted = mount(FrontendContextHarness, {
 		target,
-		props: { app, component: WorkspacesPage, props: {} }
+		props: { app, component: ProjectsPage, props: {} }
 	});
 	flushSync();
 });

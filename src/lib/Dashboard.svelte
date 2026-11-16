@@ -7,13 +7,7 @@
 	import Icon from './Icon.svelte';
 	import { slide } from 'svelte/transition';
 
-	import {
-		icon_arrow_left,
-		icon_arrow_right,
-		icon_desk,
-		icon_project,
-		icon_tab
-	} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_arrow_left, icon_arrow_right, icon_desk, icon_tab } from '@fuzdev/fuz_ui/icons.ts';
 
 	import { logo_zzz } from './logos.ts';
 	import NavLink from './NavLink.svelte';
@@ -59,11 +53,6 @@
 			const main_section = nav_items.find((s) => s.group === 'main');
 			if (main_section) {
 				main_section.items.unshift({ label: 'tabs', href: resolve('/tabs'), icon: icon_tab });
-				main_section.items.push({
-					label: 'projects mock',
-					href: resolve('/projects'),
-					icon: icon_project
-				});
 			}
 		}
 
@@ -174,7 +163,7 @@
 			type="button"
 			class="fixed top:0 right:0 icon-button plain border-radius:0 border_bottom_left_radius_md"
 			aria-label="desk menu"
-			title="desk menu — switch spaces [~]"
+			title="desk menu — switch projects [~]"
 			onclick={() => app.ui.toggle_desk_menu()}
 			{@attach (el) => {
 				if (app.ui.pending_element_to_focus_key === DESK_MENU_BUTTON_FOCUS_KEY) {

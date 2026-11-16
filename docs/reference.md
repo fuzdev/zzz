@@ -42,6 +42,6 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `transcription_create` — Queue a transcription of an audio file by the local speech model, and return its job. The transcript is written beside the file as `<name>.<model>.transcript.json`; fails with `conflict` (`already_exists`) if that model's transcript is already there. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `transcription_progress` — Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds. Kind: remote_notification. Initiator: backend. Auth: public
 
-## Cell classes (36)
+## Cell classes (34)
 
-`Action`, `Actions`, `Capabilities`, `Chat`, `Chats`, `Diskfile`, `DiskfileHistory`, `DiskfilePart`, `Diskfiles`, `DiskfilesEditor`, `DiskfileTab`, `DiskfileTabs`, `Job`, `Jobs`, `Model`, `Models`, `Parts`, `Project`, `Projects`, `Prompt`, `Prompts`, `Provider`, `Providers`, `Recorder`, `Space`, `Spaces`, `Terminal`, `TerminalPreset`, `TerminalPresets`, `Terminals`, `TextPart`, `Thread`, `Threads`, `Time`, `Turn`, `Ui`
+`Action`, `Actions`, `Capabilities`, `Chat`, `Chats`, `Diskfile`, `DiskfileHistory`, `DiskfilePart`, `Diskfiles`, `DiskfilesEditor`, `DiskfileTab`, `DiskfileTabs`, `Job`, `Jobs`, `Model`, `Models`, `Parts`, `Project`, `Projects`, `Prompt`, `Prompts`, `Provider`, `Providers`, `Recorder`, `Terminal`, `TerminalPreset`, `TerminalPresets`, `Terminals`, `TextPart`, `Thread`, `Threads`, `Time`, `Turn`, `Ui`

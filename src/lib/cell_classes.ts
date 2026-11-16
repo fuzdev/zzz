@@ -26,8 +26,6 @@ import { Turn } from './turn.svelte.ts';
 import { Thread } from './thread.svelte.ts';
 import { Threads } from './threads.svelte.ts';
 import { Time } from './time.svelte.ts';
-import { Space } from './space.svelte.ts';
-import { Spaces } from './spaces.svelte.ts';
 import { Terminal } from './terminal.svelte.ts';
 import { TerminalPreset } from './terminal_preset.svelte.ts';
 import { TerminalPresets } from './terminal_presets.svelte.ts';
@@ -65,8 +63,6 @@ export const cell_classes = {
 	Provider,
 	Providers,
 	Recorder,
-	Space,
-	Spaces,
 	Terminal,
 	TerminalPreset,
 	TerminalPresets,

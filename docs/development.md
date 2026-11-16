@@ -388,12 +388,12 @@ non-UTF-8 one, an invalid port, a bad `config.json`, missing env, no `zzzd` —
 exits 2 before anything runs; `--help` exits 0.
 
 `zzz <path>` expands `~`, resolves the path against the current directory,
-and canonicalizes it before building the `/workspaces?project=<path>` URL —
+and canonicalizes it before building the `/projects?project=<path>` URL —
 a directory with a trailing `/`, a file as itself; a missing path is an
 error. The page opens it with `project_open`: the daemon resolves the
 project holding it (a file, its parent's) — a trusted `repos.toml` above
 it, else its git checkout, else the directory — and focuses the repo
-holding the path (./architecture.md § Spaces and Projects). The file
+holding the path (./architecture.md § Projects). The file
 itself isn't opened in a tab yet — the page opens its project. The daemon
 holds the opened directory and the project's root to its root rules
 (§ Environment Variables → `ZZZ_ROOTS_OUTSIDE_HOME`): `zzz ~`, a file directly in `~`,

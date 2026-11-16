@@ -497,7 +497,7 @@ mod tests {
             program: PathBuf::from("/opt/app"),
             args: vec!["--flag".to_owned(), "a b".to_owned()],
         };
-        let url = "http://localhost:4460/workspaces?project=%2Fa%20b%2F";
+        let url = "http://localhost:4460/projects?project=%2Fa%20b%2F";
         let command = opener.command(url);
         assert_eq!(command.get_program(), "/opt/app");
         let args: Vec<&OsStr> = command.get_args().collect();

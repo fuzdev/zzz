@@ -1,6 +1,6 @@
 # Architecture
 
-Core systems: actions, cells, content model, data flow, terminals and fuz_terminal, recording, indexed collections, the app directory, filesystem, file editing, spaces and projects, the auth gate, security posture, capabilities, and known limitations.
+Core systems: actions, cells, content model, data flow, terminals and fuz_terminal, recording, indexed collections, the app directory, filesystem, file editing, projects, the auth gate, security posture, capabilities, and known limitations.
 
 ## Action System
 
@@ -354,8 +354,6 @@ is not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 - `Turn` (`turn.svelte.ts`) — Single conversation message
 - `Thread` (`thread.svelte.ts`) — Linear conversation with one model
 - `Threads` (`threads.svelte.ts`) — Collection of threads
-- `Space` (`space.svelte.ts`) — Named grouping of project roots
-- `Spaces` (`spaces.svelte.ts`) — Collection of spaces
 - `Terminal` (`terminal.svelte.ts`) — PTY terminal run: status, buffered output, ordered input
 - `Terminals` (`terminals.svelte.ts`) — App-level terminal runs; routes output/exit notifications
 - `TerminalPreset` (`terminal_preset.svelte.ts`) — Saved terminal command config
@@ -1577,7 +1575,7 @@ broadcast reattaches it (same id). It's forgotten once nothing holds it — no
 draft (discarded from the editor's notice or a "don't save") and no tab
 (`Diskfiles.release_if_unneeded`). A file that leaves the index because its
 repo was unfocused isn't deleted: it's forgotten, unless it has a draft or
-a tab, which keep it as it is, unflagged (§ Spaces and Projects).
+a tab, which keep it as it is, unflagged (§ Projects).
 The explorer lists it for its draft
 (`Diskfiles.listed`); pickers don't (`on_disk`); a `DiskfilePart` shows and
 sends the draft, marked deleted. Tabs, history, and editor state are
@@ -1625,7 +1623,7 @@ key (or Shift+F10) opens the active row's menu. Focus stays on the tree, which
 names the active row by `aria-activedescendant`, so it survives the row
 scrolling away. A click previews a file, a double click opens it, and a click
 toggles a folder. A registry's repos that aren't focused show as lazy rows
-that expanding focuses (§ Spaces and Projects).
+that expanding focuses (§ Projects).
 
 **The explorer's contextmenus.** A file's menu (`DiskfileContextmenu`, on list
 and tree rows, tabs, and the file views) copies the file's absolute path, its
@@ -1675,12 +1673,12 @@ would shift the rows under a double click — and a file there isn't waited for.
 (`Diskfiles.create_file_at`) is revealed the same way, an audio or transcript
 view's "edit a copy" included.
 
-## Spaces and Projects
+## Projects
 
-Two layers of directory scoping on top of the Filesystem section's "two
-separate concerns":
+Directory scoping on top of the Filesystem section's "two separate
+concerns":
 
-- **Project** (backend-tracked) — the root a path opens, which the server
+- **Project** — the root a path opens, which the server
   serves and indexes in part. `project_open` takes a file or directory and
   resolves its project on a blocking thread (`crates/zzz_server/src/project.rs`,
   `resolve_project` — a file opens its parent):
@@ -1756,16 +1754,11 @@ separate concerns":
   projects: they're the operator-configured always-on layer; projects are
   the user-opened runtime layer. A scoped dir (or the app directory) can
   still be opened, and closing it leaves its permanent access in place.
-- **Space** (frontend-only) — a named grouping of directory paths
-  (`Space.directory_paths`) with no backend counterpart (no `space_*`
-  actions). `active_directory_paths` derives to only the paths that are a
-  currently open project's root. `Spaces` auto-creates and protects a
-  `scratchpad` space, identified by `Spaces.scratchpad_id` so renaming it
-  keeps it the protected default. Space state is in-memory (DB persistence
-  is planned).
 
-The two meet in `DeskMenu.svelte`, which lists the open projects to toggle
-into the active Space. Opening happens on `/workspaces`, the projects page
+One open project is the **active** one on each client (`Projects.active`):
+new files and folders default into it (`Project.new_files_dir` — its last
+open's focus while that's still focused, else its root). `DeskMenu.svelte` lists the open
+projects to switch it. Opening happens on `/projects`, the projects page
 (path input → `project_open`; the `?project=<path>` query param
 auto-opens — this is how the CLI's `zzz <path>` lands the browser on a
 project). It lists each open project with its kind, and a registry's
@@ -2242,7 +2235,7 @@ Population, per capability:
   checked out alongside this repo (path dep).
 - **Recording** — two places record, over the same `Recorder`: the files
   page's record button (beside new file and new folder; disabled without an
-  open project) records to the active project's root, and the recordings page
+  open project) records in the active project (`Diskfiles.new_files_dir`), and the recordings page
   (`/recordings`: a record button, a level meter, and the recordings with
   their transcripts) records to `recordings/` in the app directory, which
   needs no project and keeps voice notes out of a repository. Deleting on

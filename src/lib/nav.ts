@@ -66,7 +66,7 @@ export const main_nav_items_default: Array<NavItem> = [
 			{ label: 'chats', href: resolve('/chats'), icon: icon_chat },
 			{ label: 'prompts', href: resolve('/prompts'), icon: icon_prompt },
 			{ label: 'files', href: resolve('/files'), icon: icon_file },
-			{ label: 'projects', href: resolve('/workspaces'), icon: icon_project },
+			{ label: 'projects', href: resolve('/projects'), icon: icon_project },
 			{ label: 'terminals', href: resolve('/terminals'), icon: icon_terminal },
 			{ label: 'recordings', href: resolve('/recordings'), icon: icon_microphone },
 			{ label: 'jobs', href: resolve('/jobs'), icon: icon_list }

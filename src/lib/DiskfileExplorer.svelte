@@ -75,7 +75,7 @@
 				</small>
 			{:else}
 				<small class="ellipsis">
-					<a href={resolve('/workspaces')}>open a project</a> to create files
+					<a href={resolve('/projects')}>open a project</a> to create files
 				</small>
 			{/if}
 			<div class="flex gap_xs2">
