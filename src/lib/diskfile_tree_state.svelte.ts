@@ -235,7 +235,7 @@ export interface DiskfileTreeDirRow extends DiskfileTreeRowBase {
 	readonly chain: ReadonlyArray<string>;
 	/**
 	 * Whether the row is expanded: a root unless collapsed, a folder row when
-	 * its outermost folder (`chain[0]`) is — see `DiskfileTreeState.set_expanded`.
+	 * every folder in its chain is — see `DiskfileTreeState.set_expanded`.
 	 */
 	readonly expanded: boolean;
 }
@@ -296,7 +296,10 @@ export interface DiskfileTreeSource {
 	get_children: (dir: string) => DiskfileTreeChildren;
 	/** The one child folder of `dir` when it holds nothing else, else `null`. */
 	get_only_child_dir: (dir: string) => string | null;
-	/** Whether the root or folder at `path` shows its children. */
+	/**
+	 * Whether the root or folder at `path` is expanded — a compact row shows
+	 * its children only when every folder in its chain is.
+	 */
 	is_expanded: (path: string, kind: 'root' | 'dir') => boolean;
 	/**
 	 * Whether `child`, a folder in `dir`, is one the file index never enters
@@ -322,8 +325,8 @@ export const to_diskfile_tree_create_key = (root: string, dir: string): string =
  * however often `roots` lists it), then — while it's expanded — its folders
  * and files, depth first, folders before files. A chain of folders that each
  * hold only the next one shows as one row labeled `a/b/c`, whose path is the
- * innermost; it's expanded when its outermost folder is. Walks only expanded
- * folders.
+ * innermost; it's expanded when every folder in its chain is. Walks only
+ * expanded folders.
  *
  * A folder the file index never enters from the root around it (the source's
  * `is_ignored_dir`) isn't shown under that root: its files can only come from
@@ -387,7 +390,7 @@ const push_children = (
 			chain.push(only);
 		}
 		const key = to_diskfile_tree_row_key(root, path);
-		const expanded = source.is_expanded(child, 'dir');
+		const expanded = chain.every((folder) => source.is_expanded(folder, 'dir'));
 		rows.push({
 			kind: 'dir',
 			key,
@@ -601,13 +604,14 @@ export class DiskfileTreeState {
 
 	/**
 	 * Expands or collapses a root or folder row. A compact row expands or
-	 * collapses every folder in its chain, and reads expanded by its outermost
-	 * folder alone, so a compact row opened as one stays open when its chain
-	 * splits (`a/b/c` becomes `a/b` over `c`, when `a/b` gains a file) or
-	 * grows (`a` becomes `a/b`, when `b` becomes all `a` holds), and a deeper
-	 * folder left expanded inside it — collapsing `a` keeps `b` expanded, as
-	 * VS Code does — never reopens it. A row opened before it grew (`a`, now
-	 * `a/b`) holds only `a` in the set, so a later split shows `b` collapsed.
+	 * collapses every folder in its chain, and reads expanded only when every
+	 * one is in `expanded`, so a row shows open only what the user opened:
+	 * one opened as one stays open when its chain splits (`a/b/c` becomes
+	 * `a/b` over `c`, when `a/b` gains a file); one that grows a folder never
+	 * opened (`x` becomes `x/a/b`, when `a/b` becomes all `x` holds) shows
+	 * collapsed; and a deeper folder left expanded when an outer one was
+	 * collapsed — collapsing `a` keeps `b` expanded, as VS Code does — never
+	 * reopens the row they merge into.
 	 */
 	set_expanded(row: DiskfileTreeDirRow, expanded: boolean): void {
 		if (row.kind === 'root') {

@@ -1530,7 +1530,10 @@ tree (`DiskfileTree`), switched by the folder toggle in its header
 directory, each scoped directory, each open workspace — labeled with the root's
 path, and under it folders before files, each sorted by name (case-insensitive,
 numbers by value), with names relative to their folder. A chain of folders that
-each hold only the next shows as one row, `a/b/c`, expanded or collapsed as one.
+each hold only the next shows as one row, `a/b/c`, expanded or collapsed as one,
+and expanded only while every folder in it is, so a row that joins a folder
+below it (`x` and `a/b` become `x/a/b` when `x`'s other files go) never opens
+one the user didn't.
 Folders come from the files (`Diskfiles.tree_index`, kept in step as files come
 and go), so an empty folder doesn't show — except one created from the tree,
 which it keeps until a reload (`DiskfileTreeState.created_dirs`; one deleted

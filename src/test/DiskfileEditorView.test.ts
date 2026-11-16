@@ -756,6 +756,26 @@ describe('DiskfileListitem', () => {
 		assert.include(item.getAttribute('aria-label'), 'unsaved changes');
 	});
 
+	test('Space and a click preview, Enter and a double click open, like the tree', async () => {
+		const a = await disk.load(PATH_A, 'v1');
+		const calls: Array<boolean> = [];
+		const view = render(DiskfileListitem, {
+			diskfile: a,
+			onselect: (_diskfile: Diskfile, open_not_preview: boolean) => calls.push(open_not_preview)
+		});
+		const item = view.target.querySelector('[role="button"]');
+		assert.ok(item);
+		const key = (k: string): void => {
+			item.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+		};
+		key(' ');
+		key('Enter');
+		key('a'); // ignored
+		item.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+		item.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 }));
+		assert.deepEqual(calls, [false, true, false, true]);
+	});
+
 	test('only the path truncates, so its markers show past a long path', async () => {
 		app.zzz_dir = '/w/'; // so the path shows relative, as `a.txt`
 		const a = await disk.load(PATH_A, 'v1');

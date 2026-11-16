@@ -154,7 +154,7 @@ describe('to_diskfile_tree_rows', () => {
 	};
 
 	test('folders before files, a chain of single folders as one row, collapsed folders unwalked', () => {
-		const source = create_source(CHILDREN, ['/w/', '/w/a/']);
+		const source = create_source(CHILDREN, ['/w/', '/w/a/', '/w/a/b/', '/w/a/b/c/']);
 		const rows = to_diskfile_tree_rows(['/w/', '/s/', '/w/'], source);
 		assert.deepEqual(outline(rows), [
 			'- /w/',
@@ -168,14 +168,28 @@ describe('to_diskfile_tree_rows', () => {
 	});
 
 	test('a compact row is keyed by its innermost folder and carries its chain', () => {
-		const rows = to_diskfile_tree_rows(['/w/'], create_source(CHILDREN, ['/w/', '/w/a/']));
+		const rows = to_diskfile_tree_rows(
+			['/w/'],
+			create_source(CHILDREN, ['/w/', '/w/a/', '/w/a/b/', '/w/a/b/c/'])
+		);
 		const compact = rows[1]!;
 		assert(compact.kind === 'dir');
 		assert.strictEqual(compact.path, '/w/a/b/c/');
 		assert.deepEqual(compact.chain, ['/w/a/', '/w/a/b/', '/w/a/b/c/']);
-		assert.isTrue(compact.expanded, 'by its outermost folder');
+		assert.isTrue(compact.expanded, 'every folder in its chain is');
 		assert.strictEqual(compact.key, to_diskfile_tree_row_key('/w/', '/w/a/b/c/'));
 		assert.strictEqual(rows[2]!.parent_key, compact.key);
+	});
+
+	test('a compact row is collapsed unless every folder in its chain is expanded', () => {
+		for (const expanded of [
+			['/w/', '/w/a/'],
+			['/w/', '/w/a/b/c/'],
+			['/w/', '/w/a/', '/w/a/b/']
+		]) {
+			const rows = to_diskfile_tree_rows(['/w/'], create_source(CHILDREN, expanded));
+			assert.deepEqual(outline(rows).slice(0, 2), ['- /w/', '  + a/b/c'], expanded.join(' '));
+		}
 	});
 
 	test('rows carry their level, their position among siblings, and their parent', () => {
@@ -468,17 +482,28 @@ describe('DiskfileTreeState', () => {
 		assert.strictEqual(tree.active_row?.label, 'x.md', 'the active file still shows');
 	});
 
-	test('an expanded folder stays open when it grows into a compact row', () => {
-		write('/w/a/x.md');
+	test('a folder that merges with a collapsed row below it shows collapsed', () => {
+		write('/w/x/a/b/f.md');
+		write('/w/x/g.md');
 		const { tree } = app.diskfiles.editor;
-		const a = tree.rows.find((row) => row.label === 'a');
-		assert.ok(a && a.kind === 'dir');
-		tree.set_expanded(a, true);
-		assert.deepEqual(outline(tree.rows), ['- /w/', '  - a', '    x.md']);
+		const x = tree.rows.find((row) => row.label === 'x');
+		assert.ok(x && x.kind === 'dir');
+		tree.set_expanded(x, true);
+		assert.deepEqual(outline(tree.rows), ['- /w/', '  - x', '    + a/b', '    g.md']);
 
-		write('/w/a/b/z.md');
-		delete_on_disk('/w/a/x.md');
-		assert.deepEqual(outline(tree.rows), ['- /w/', '  - a/b', '    z.md']);
+		delete_on_disk('/w/x/g.md'); // `x` now holds only `a`: the compact row `x/a/b`
+		assert.deepEqual(
+			outline(tree.rows),
+			['- /w/', '  + x/a/b'],
+			'never shows what the user didn’t open'
+		);
+
+		// opened as one, then split again: both rows stay open
+		const merged = tree.rows.find((row) => row.label === 'x/a/b');
+		assert.ok(merged && merged.kind === 'dir');
+		tree.set_expanded(merged, true);
+		write('/w/x/g.md');
+		assert.deepEqual(outline(tree.rows), ['- /w/', '  - x', '    - a/b', '      f.md', '    g.md']);
 	});
 
 	test('a stale deeper entry doesn’t reopen a row the user collapsed', () => {

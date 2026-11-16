@@ -22,8 +22,9 @@
 		reveal_in_tree?: boolean | undefined;
 		attrs?: Record<string, unknown>;
 		/**
-		 * `open_not_preview` indicates a "open_not_preview select"
-		 * like a doubleclick or enter keypress.
+		 * Called on a click or Space with `open_not_preview` false (a preview),
+		 * and on a double click or Enter with it true (a permanent tab), as the
+		 * tree's rows do.
 		 */
 		onselect?: (diskfile: Diskfile, open_not_preview: boolean) => void;
 	} = $props();
@@ -52,7 +53,7 @@
 			? (e) => {
 					if (e.key === 'Enter' || e.key === ' ') {
 						swallow(e);
-						onselect(diskfile, true);
+						onselect(diskfile, e.key === 'Enter');
 					}
 				}
 			: undefined}
