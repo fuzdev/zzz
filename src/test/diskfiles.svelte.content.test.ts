@@ -21,6 +21,7 @@ import {
 import { HISTORY_LABEL_DISK_CHANGE } from '#lib/diskfile_editor_state.svelte.ts';
 
 import { run_in_effect } from './reactive_test_helpers.svelte.ts';
+import { content_hash } from './diskfile_test_helpers.ts';
 
 /**
  * Contents on demand: a diskfile seeded from a disknode (metadata only) is
@@ -50,6 +51,7 @@ type ReadResult =
 			value: {
 				contents: string | null;
 				unloaded_reason: DiskfileUnloadedReason | null;
+				hash: string | null;
 				size: number;
 				ctime: number | null;
 				mtime: number | null;
@@ -88,7 +90,14 @@ const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 
 const read_ok = (contents: string | null, unloaded_reason: DiskfileUnloadedReason | null = null) =>
 	({
 		ok: true,
-		value: { contents, unloaded_reason, size: contents?.length ?? 0, ctime: 1, mtime: 1 }
+		value: {
+			contents,
+			unloaded_reason,
+			hash: contents === null ? null : content_hash(contents),
+			size: contents?.length ?? 0,
+			ctime: 1,
+			mtime: 1
+		}
 	}) as const;
 
 const read_error = (message: string) => ({ ok: false, error: { code: -32603, message } }) as const;
@@ -163,7 +172,14 @@ describe('metadata-only seeds', () => {
 		await flush();
 		await answer(PATH_A, {
 			ok: true,
-			value: { contents: 'text', unloaded_reason: null, size: 4, ctime: 9, mtime: 9 }
+			value: {
+				contents: 'text',
+				unloaded_reason: null,
+				hash: content_hash('text'),
+				size: 4,
+				ctime: 9,
+				mtime: 9
+			}
 		});
 		await loading;
 		assert.strictEqual(diskfile.size, 42);

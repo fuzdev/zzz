@@ -19,6 +19,7 @@ import { Prompt } from '#lib/prompt.svelte.ts';
 import { Part } from '#lib/part.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { content_hash, update_ok } from './diskfile_test_helpers.ts';
 
 const TEST_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/test/');
 
@@ -182,7 +183,7 @@ describe('DiskfilePart content access', () => {
 		const update_calls: Array<string> = [];
 		app.diskfiles.update = (_path, content) => {
 			update_calls.push(content);
-			return Promise.resolve({ ok: true, value: null });
+			return Promise.resolve(update_ok(content));
 		};
 
 		// a getter-only accessor throws on assignment in strict mode
@@ -565,7 +566,14 @@ describe('DiskfilePart content still loading', () => {
 		const loading = prompt.load_content();
 		read.resolve({
 			ok: true,
-			value: { contents: 'lazy text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+			value: {
+				contents: 'lazy text',
+				unloaded_reason: null,
+				hash: content_hash('lazy text'),
+				size: 9,
+				ctime: 1,
+				mtime: 1
+			}
 		});
 		const content = await loading;
 		assert.include(content, 'lazy text');
@@ -578,7 +586,14 @@ describe('DiskfilePart content still loading', () => {
 			{ ok: false, error: { code: -32603, message: 'connection lost' } },
 			{
 				ok: true,
-				value: { contents: 'lazy text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+				value: {
+					contents: 'lazy text',
+					unloaded_reason: null,
+					hash: content_hash('lazy text'),
+					size: 9,
+					ctime: 1,
+					mtime: 1
+				}
 			}
 		];
 		let reads = 0;
@@ -602,7 +617,14 @@ describe('DiskfilePart content still loading', () => {
 		const loading = prompt.load_content();
 		read.resolve({
 			ok: true,
-			value: { contents: null, unloaded_reason: 'not_utf8', size: 9, ctime: 1, mtime: 1 }
+			value: {
+				contents: null,
+				unloaded_reason: 'not_utf8',
+				hash: null,
+				size: 9,
+				ctime: 1,
+				mtime: 1
+			}
 		});
 		assert.include(await loading, "[content not loaded — the file isn't UTF-8 text]");
 	});

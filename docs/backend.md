@@ -399,7 +399,8 @@ commands):
   its size and `mtime`, read through to the disk — a same-length rewrite read
   at once, a file in an ignored directory the filer never indexes — a file
   in the app dir, over the size limit →
-  `too_large` and not UTF-8 → `not_utf8` with `contents: null`, not found,
+  `too_large` and not UTF-8 → `not_utf8` with `contents: null` and `hash:
+  null`, the BLAKE3 `hash` of a loaded file's bytes, not found,
   out of scope, a `.zzz` home refused however it's spelled and whether or not
   the file exists, a symlink to the file or along its path, a directory, a
   FIFO, a socket, strict inputs), scoped `diskfile_update` / `diskfile_delete`,
@@ -414,6 +415,13 @@ commands):
   permissions (a read-only file refused, a writable file in a read-only
   directory written in place, a new file there `directory_not_writable`),
   `diskfile_create` never overwriting (`conflict` / `already_exists`),
+  `diskfile_update`'s compare-and-swap (a write by another process just
+  after a read, before any filer event, refuses the stale `expected_hash`
+  with `conflict` / `disk_changed` and leaves the file and no staged file;
+  the matching hash writes and answers the written bytes' BLAKE3; a gone
+  file and one over the read limit are `disk_changed` with nothing created;
+  an off-form hash — uppercase, `blake3:`-prefixed, short, `null` — is
+  `invalid_params`), the written bytes' `hash` in every save's response,
   strict inputs, the 16 MiB RPC message cap on both transports (built from
   the frontend's `RPC_MESSAGE_MAX_BYTES`, pinning it to the backend's
   `RPC_MESSAGE_MAX_BYTES`: under it is written, over it is a 413 on HTTP and
@@ -661,9 +669,10 @@ commands):
   directory in a non-writable directory → `forbidden` (-32002; `path_not_allowed`,
   `symlink_not_allowed`, `permission_denied`, `directory_not_writable`); a
   missing path → `not_found` (-32003; `path_not_found`); `diskfile_create`
-  or `directory_create` over an existing path, or a save whose file was replaced mid-save →
-  `conflict` (-32004; `already_exists`, `replaced_during_save`, and the byte
-  routes' `offset_mismatch`); any other
+  or `directory_create` over an existing path, a save whose file was replaced mid-save, or a
+  save whose file no longer holds the bytes its `expected_hash` names →
+  `conflict` (-32004; `already_exists`, `replaced_during_save`,
+  `disk_changed`, and the byte routes' `offset_mismatch`); any other
   I/O failure → `internal_error` (-32603, no
   reason). Messages keep the `failed to … : …` prefix. `workspace_open` maps
   the same way (missing → `not_found`; not a directory → `invalid_params` /
@@ -728,6 +737,25 @@ commands):
   externally since the open fails with `conflict` / `replaced_during_save`
   rather than writing into an unreachable inode. A new file in a non-writable
   directory is `directory_not_writable`.
+  **Compare-and-swap:** a `diskfile_update` with an `expected_hash` (the
+  `hash` of the `diskfile_read` the edit is based on — BLAKE3, bare 64
+  lowercase hex, `handlers::filesystem::content_hash_hex`; an off-form value
+  is `invalid_params`, never case-folded) passes `ScopedFs::write_file` an
+  `ExpectedContent`. The file must exist (no parent directory is created),
+  and after the content is staged — right before the rename, and on the
+  in-place fallback right before the truncate — `check_unchanged` opens it
+  like a read (`O_NOFOLLOW | O_NONBLOCK`, regular files only), refuses one
+  over `MAX_TEXT_READ_SIZE` unread, and hashes at most one byte past it; a
+  mismatch, an over-size file, or a missing one removes the staged file and
+  fails `conflict` / `disk_changed` (`ScopedFsError::DiskChanged`). It reads
+  the disk, never the filer's index, so a write no `filer_change` has
+  reported yet is caught. The response is `{hash}`, the BLAKE3 of the bytes
+  written (hashed on the request's task — at most a message's worth, which
+  the spine parsed there too), so the client's next save has its base
+  without a read. A write landing between the compare and the rename (or
+  truncate) is still replaced: nothing locks against another process.
+  `diskfile_read`'s output carries the same `hash` of the bytes it read,
+  `null` with `contents`.
   Errors always name the target, never the temp file. A crash can orphan a
   staging file: the filer's walk deletes exact `.zzz-tmp-<32 hex>` names
   that are regular files last modified over an hour ago

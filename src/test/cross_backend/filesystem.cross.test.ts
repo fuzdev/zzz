@@ -35,8 +35,9 @@ import { create_ws_transport } from '@fuzdev/fuz_app/testing/transports/ws_trans
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import { raw_http_send_head } from '@fuzdev/fuz_app/testing/transports/raw_http.ts';
 import { TEST_ORIGIN } from '@fuzdev/fuz_app/testing/test_origin.ts';
+import { hash_blake3 } from '@fuzdev/fuz_util/hash_blake3.ts';
 
-import { DiskfileReadOutput, FilerChangeInput } from '#lib/action_specs.ts';
+import { DiskfileReadOutput, DiskfileUpdateOutput, FilerChangeInput } from '#lib/action_specs.ts';
 import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
 const handle = inject_backend_handle();
@@ -69,7 +70,8 @@ describe('filesystem cross-backend', () => {
 				headers: fixture.create_session_headers()
 			});
 			assert.ok(res.ok);
-			assert.equal(res.result, null);
+			// the written bytes' BLAKE3, bare lowercase hex
+			assert.deepEqual(res.result, { hash: hash_blake3(content) });
 
 			const actual = await readFile(file_path, 'utf-8');
 			assert.equal(actual, content);
@@ -115,6 +117,7 @@ describe('filesystem cross-backend', () => {
 			const text = await read_ok(text_path);
 			assert.equal(text.contents, 'héllo');
 			assert.isNull(text.unloaded_reason);
+			assert.equal(text.hash, hash_blake3('héllo'), "the bytes' BLAKE3");
 			assert.equal(text.size, Buffer.byteLength('héllo'));
 			const text_stat = await stat(text_path);
 			assert.ok(text.mtime !== null && Math.abs(text.mtime - text_stat.mtimeMs) < 1, 'mtime');
@@ -132,6 +135,7 @@ describe('filesystem cross-backend', () => {
 			const empty = await read_ok(join(dir, 'empty.txt'));
 			assert.equal(empty.contents, '');
 			assert.equal(empty.size, 0);
+			assert.equal(empty.hash, hash_blake3(''));
 
 			// a file the index doesn't hold, in the app dir: readable
 			await mkdir(zzz_dir, { recursive: true });
@@ -146,12 +150,14 @@ describe('filesystem cross-backend', () => {
 			assert.isNull(big.contents);
 			assert.equal(big.unloaded_reason, 'too_large');
 			assert.equal(big.size, limit + 1);
+			assert.isNull(big.hash);
 			const bin_path = join(dir, 'bin');
 			await writeFile(bin_path, Buffer.from([0xff, 0xfe]));
 			const bin = await read_ok(bin_path);
 			assert.isNull(bin.contents);
 			assert.equal(bin.unloaded_reason, 'not_utf8');
 			assert.equal(bin.size, 2);
+			assert.isNull(bin.hash);
 
 			// not found, out of scope, relative
 			await read_refused(join(dir, 'missing.txt'), JSONRPC_ERROR_CODES.not_found, 'path_not_found');
@@ -270,7 +276,7 @@ describe('filesystem cross-backend', () => {
 				headers: fixture.create_session_headers()
 			});
 			assert.ok(res.ok);
-			assert.equal(res.result, null);
+			assert.deepEqual(res.result, { hash: hash_blake3(content) });
 
 			const actual = await readFile(file_path, 'utf-8');
 			assert.equal(actual, content);
@@ -294,7 +300,7 @@ describe('filesystem cross-backend', () => {
 				headers: fixture.create_session_headers()
 			});
 			assert.ok(res.ok);
-			assert.equal(res.result, null);
+			assert.deepEqual(res.result, { hash: hash_blake3(content) });
 
 			const actual = await readFile(file_path, 'utf-8');
 			assert.equal(actual, content);
@@ -593,6 +599,94 @@ describe('filesystem cross-backend', () => {
 		}
 	});
 
+	test('diskfile_update_with_expected_hash_is_a_compare_and_swap', async () => {
+		const fixture = await setup_test();
+		const dir = join(scoped_dir, `cas_${randomUUID()}`);
+		await mkdir(dir, { recursive: true });
+		const call = (method: string, params: Record<string, unknown>) =>
+			rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method,
+				params,
+				headers: fixture.create_session_headers()
+			});
+		/** `diskfile_update` with `expected_hash`, expecting `conflict` / `disk_changed`. */
+		const update_refused = async (path: string, expected_hash: string): Promise<void> => {
+			const res = await call('diskfile_update', { path, content: 'mine', expected_hash });
+			assert.ok(!res.ok, `${path} should be refused`);
+			assert.equal(res.error.code, JSONRPC_ERROR_CODES.conflict, path);
+			assert.deepEqual(res.error.data, { reason: 'disk_changed' }, path);
+			assert.ok(
+				res.error.message.startsWith('failed to write file: '),
+				`unexpected message: ${res.error.message}`
+			);
+		};
+		try {
+			const path = join(dir, 'notes.txt');
+			await writeFile(path, 'base', 'utf-8');
+			const read = await call('diskfile_read', { path });
+			assert.ok(read.ok, JSON.stringify(read));
+			const base = parse_or_throw(DiskfileReadOutput, read.result).hash;
+			assert.equal(base, hash_blake3('base'));
+
+			// another process writes, and the save follows at once — before any
+			// filer event could be processed: the backend compares the disk itself
+			await writeFile(path, 'theirs', 'utf-8');
+			await update_refused(path, base!);
+			assert.equal(await readFile(path, 'utf-8'), 'theirs', 'untouched');
+			assert.deepEqual(await readdir(dir), ['notes.txt'], 'no staged temp file left');
+
+			// based on what is there: written, and the response hashes the written bytes
+			const content = 'mine — ünïcode';
+			const saved = await call('diskfile_update', {
+				path,
+				content,
+				expected_hash: hash_blake3('theirs')
+			});
+			assert.ok(saved.ok, JSON.stringify(saved));
+			const { hash } = parse_or_throw(DiskfileUpdateOutput, saved.result);
+			assert.equal(hash, hash_blake3(await readFile(path)));
+			assert.equal(await readFile(path, 'utf-8'), content);
+			// the next save's base, no read in between
+			const next = await call('diskfile_update', { path, content: 'next', expected_hash: hash });
+			assert.ok(next.ok, JSON.stringify(next));
+
+			// gone: a change too, and nothing is created — not the file, not its directory
+			const gone = join(dir, 'sub', 'gone.txt');
+			await update_refused(gone, hash_blake3(''));
+			assert.ok(!(await file_exists(join(dir, 'sub'))), 'nothing created');
+
+			// larger than a read returns as text: refused without being matched
+			const big = join(dir, 'big.txt');
+			const big_bytes = Buffer.alloc(4 * 1024 * 1024 + 1, 'x');
+			await writeFile(big, big_bytes);
+			await update_refused(big, hash_blake3(big_bytes));
+			assert.equal((await stat(big)).size, big_bytes.length, 'untouched');
+
+			// without one, written over whatever is there
+			await writeFile(path, 'theirs again', 'utf-8');
+			const plain = await call('diskfile_update', { path, content: 'overwrite' });
+			assert.ok(plain.ok, JSON.stringify(plain));
+			assert.equal(await readFile(path, 'utf-8'), 'overwrite');
+
+			// the hash's grammar is strict: refused, never folded
+			for (const expected_hash of [
+				hash_blake3('overwrite').toUpperCase(),
+				`blake3:${hash_blake3('overwrite')}`,
+				hash_blake3('overwrite').slice(1),
+				null
+			]) {
+				const res = await call('diskfile_update', { path, content: 'x', expected_hash });
+				assert.ok(!res.ok, `${String(expected_hash)} should fail`);
+				assert.equal(res.error.code, JSONRPC_ERROR_CODES.invalid_params, String(expected_hash));
+			}
+			assert.equal(await readFile(path, 'utf-8'), 'overwrite');
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	test('diskfile_update_replaces_atomically', async () => {
 		const fixture = await setup_test();
 		const dir = join(scoped_dir, `atomic_${randomUUID()}`);
@@ -709,6 +803,8 @@ describe('filesystem cross-backend', () => {
 		const path = join(scoped_dir, `strict_${randomUUID()}.txt`);
 		const cases: Array<[string, Record<string, unknown>]> = [
 			['diskfile_update', { path, content: 'x', extra: true }],
+			['diskfile_update', { path, content: 'x', expected_hash: null }],
+			['diskfile_create', { path, content: 'x', expected_hash: hash_blake3('') }],
 			['diskfile_update', { path, content: null }],
 			['diskfile_update', { path }],
 			['diskfile_delete', { path, recursive: true }],

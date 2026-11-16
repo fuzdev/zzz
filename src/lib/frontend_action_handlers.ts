@@ -4,6 +4,7 @@ import type { Frontend } from './frontend.svelte.ts';
 import type { FrontendActionHandlers } from './frontend_action_types.ts';
 import { Turn } from './turn.svelte.ts';
 import { to_completion_response_text } from './response_helpers.ts';
+import { ERROR_DISK_CHANGED } from './diskfile_helpers.ts';
 
 // TODO stubbing out a lot of these
 
@@ -100,6 +101,13 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 
 	diskfile_update: {
 		receive_error: ({ data: { input, error } }) => {
+			// a save based on content the file no longer holds — routine, and the
+			// editor follows it (`DiskfileEditorState.save_changes`)
+			const { reason } = (error.data ?? {}) as { reason?: unknown };
+			if (reason === ERROR_DISK_CHANGED) {
+				console.debug('[frontend_action_handlers] update file refused, disk changed:', input.path);
+				return;
+			}
 			console.error('[frontend_action_handlers] update file failed:', input.path, error);
 		}
 	},

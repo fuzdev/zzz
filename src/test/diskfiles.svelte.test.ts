@@ -15,7 +15,12 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import { confirm_unload_with_unsaved_changes, to_file_directories } from '#lib/diskfile_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	flush_reads,
+	install_fake_disk,
+	update_ok,
+	type FakeDisk
+} from './diskfile_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/ws/');
 const PATH_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
@@ -526,7 +531,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		const writes: Array<[string, string]> = [];
 		app.diskfiles.update = (path, content) => {
 			writes.push([path, content]);
-			return Promise.resolve({ ok: true, value: null });
+			return Promise.resolve(update_ok(content));
 		};
 		filer_change('delete', PATH_B);
 
@@ -642,7 +647,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		const writes: Array<[string, string]> = [];
 		app.diskfiles.update = (path, content) => {
 			writes.push([path, content]);
-			return Promise.resolve({ ok: true, value: null });
+			return Promise.resolve(update_ok(content));
 		};
 
 		filer_change('delete', PATH_B);

@@ -64,9 +64,13 @@ interface ContentLoad {
 	stale: boolean;
 }
 
-/** What `Diskfiles` takes from a `diskfile_read`: its output, or why it failed. */
+/**
+ * What `Diskfiles` takes from a `diskfile_read`: its output, or why it failed
+ * — the message, and the error's `data.reason` when it has one.
+ */
 type ContentReadResult =
-	{ ok: true; value: ActionOutputs['diskfile_read'] } | { ok: false; message: string };
+	| { ok: true; value: ActionOutputs['diskfile_read'] }
+	| { ok: false; message: string; reason: string | null };
 
 export const DiskfilesJson = cell_json_schema(
 	{
@@ -338,7 +342,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			diskfile.unloaded_status = 'unrequested';
 			diskfile.unloaded_reason = null;
 			diskfile.content_error = null;
+			diskfile.content_error_reason = null;
 			diskfile.content = null;
+			diskfile.content_hash = null;
 		}
 	}
 
@@ -435,6 +441,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			// synchronous through `ensure_content` starting the read or joining the
 			// one in flight, so an effect rerunning on this shares that read
 			diskfile.content_error = null;
+			diskfile.content_error_reason = null;
 			diskfile.unloaded_reason = null;
 			diskfile.unloaded_status = 'unrequested';
 		}
@@ -490,17 +497,23 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	async #read(path: DiskfilePath): Promise<ContentReadResult> {
 		try {
 			const result = await this.app.api.diskfile_read({ path });
-			return result.ok ? result : { ok: false, message: result.error.message };
+			if (result.ok) return result;
+			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
+			return {
+				ok: false,
+				message: result.error.message,
+				reason: typeof reason === 'string' ? reason : null
+			};
 		} catch (error) {
-			return { ok: false, message: to_error_message(error, 'read failed') };
+			return { ok: false, message: to_error_message(error, 'read failed'), reason: null };
 		}
 	}
 
 	/**
-	 * Takes a read's contents. They don't touch `size` or `mtime`: those come
-	 * from the index's disknodes alone, so the two can't disagree over which
-	 * is newer. A read for a diskfile that left the collection, or whose file
-	 * was deleted meanwhile, is dropped.
+	 * Takes a read's contents, with their hash. They don't touch `size` or
+	 * `mtime`: those come from the index's disknodes alone, so the two can't
+	 * disagree over which is newer. A read for a diskfile that left the
+	 * collection, or whose file was deleted meanwhile, is dropped.
 	 */
 	#apply_read(diskfile: Diskfile, result: ContentReadResult): void {
 		if (!this.#is_live(diskfile)) {
@@ -516,13 +529,16 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 				diskfile.unloaded_reason = null;
 			}
 			diskfile.content_error = result.message;
+			diskfile.content_error_reason = result.reason;
 			return;
 		}
-		const { contents, unloaded_reason } = result.value;
+		const { contents, unloaded_reason, hash } = result.value;
 		if (contents === null) diskfile.unloaded_status = 'unloadable';
 		diskfile.unloaded_reason = contents === null ? unloaded_reason : null;
 		diskfile.content_error = null;
+		diskfile.content_error_reason = null;
 		diskfile.content = contents;
+		diskfile.content_hash = hash;
 		untrack(() => this.#editor_states.get(diskfile.id))?.check_disk_changes();
 	}
 
@@ -691,7 +707,15 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 	/**
 	 * Writes `content` to the file at `path`. The local `Diskfile` changes only
-	 * when the resulting `filer_change` broadcast arrives, not from the response.
+	 * when the resulting `filer_change` broadcast arrives, not from the response
+	 * — which carries the written bytes' `hash`.
+	 *
+	 * With `expected_hash` — the hash of the disk content the edit is based on
+	 * (`DiskfileEditorState.last_seen_disk_hash`, from a read's
+	 * `Diskfile.content_hash` or a save's response) — the backend writes only
+	 * if the file still holds those bytes, else fails
+	 * with `conflict` (`data.reason` `disk_changed`, `ERROR_DISK_CHANGED`),
+	 * writing nothing. `null` writes over whatever is there.
 	 *
 	 * Refuses, without sending, to write over a known file whose content isn't
 	 * loaded (`Diskfile.content_loaded` — not yet, or not loadable): nobody has
@@ -702,7 +726,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	update(
 		path: DiskfilePath,
-		content: string
+		content: string,
+		expected_hash: string | null = null
 	): Promise<Result<{ value: ActionOutputs['diskfile_update'] }, { error: JsonrpcErrorObject }>> {
 		const existing = this.get_by_path(path);
 		if (existing && !existing.content_loaded) {
@@ -714,7 +739,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 				)
 			});
 		}
-		return this.app.api.diskfile_update({ path, content });
+		return this.app.api.diskfile_update(
+			expected_hash === null ? { path, content } : { path, content, expected_hash }
+		);
 	}
 
 	/**

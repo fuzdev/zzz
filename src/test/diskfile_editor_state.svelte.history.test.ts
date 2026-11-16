@@ -9,6 +9,7 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import { Diskfile } from '#lib/diskfile.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { answer_update, type HeldUpdateResult } from './diskfile_test_helpers.ts';
 
 // Constants for testing
 const TEST_PATH = parse_or_throw(DiskfilePath, '/path/to/test.txt');
@@ -407,11 +408,11 @@ describe('history clearing', () => {
 	});
 
 	test('saving a picked discarded edit records a saved state when an external write merges with it', async () => {
-		let finish_write!: (result: { ok: true; value: null }) => void;
-		app.diskfiles.update = () =>
-			new Promise((resolve) => {
+		let finish_write!: (result: HeldUpdateResult) => void;
+		app.diskfiles.update = (_path, content) =>
+			new Promise<HeldUpdateResult>((resolve) => {
 				finish_write = resolve;
-			});
+			}).then((result) => answer_update(content, result));
 		editor_state.current_content = 'mine';
 		const draft_id = editor_state.unsaved_edit_entry_id!;
 		editor_state.discard_draft();

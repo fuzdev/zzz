@@ -1,6 +1,8 @@
 import type { Frontend } from '#lib/frontend.svelte.ts';
 import type { DiskfilePath } from '#lib/diskfile_types.ts';
 
+import { content_hash, update_ok } from './diskfile_test_helpers.ts';
+
 // TODO improve this pattern
 /**
  * Applies testing-specific modifications to a Zzz instance.
@@ -13,8 +15,9 @@ export const monkeypatch_zzz_for_tests = <T extends Frontend>(app: T): T => {
 		const diskfile = app.diskfiles.get_by_path(path);
 		if (diskfile) {
 			diskfile.content = content;
+			diskfile.content_hash = content_hash(content);
 		}
-		return Promise.resolve({ ok: true, value: null });
+		return Promise.resolve(update_ok(content));
 	};
 
 	return app;

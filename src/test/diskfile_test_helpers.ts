@@ -1,5 +1,7 @@
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
+import { hash_blake3 } from '@fuzdev/fuz_util/hash_blake3.ts';
+import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 
 import {
 	DiskfilePath,
@@ -8,6 +10,32 @@ import {
 } from '#lib/diskfile_types.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import type { Frontend } from '#lib/frontend.svelte.ts';
+
+/**
+ * A file's content hash as the backend computes it (`diskfile_read`'s
+ * `hash`, `diskfile_update`'s): BLAKE3 of its UTF-8 bytes, bare lowercase hex.
+ */
+export const content_hash = (content: string): string => hash_blake3(content);
+
+/** A `diskfile_update` success as the backend answers it: the written bytes' hash. */
+export const update_ok = (content: string): { ok: true; value: { hash: string } } => ({
+	ok: true,
+	value: { hash: content_hash(content) }
+});
+
+/**
+ * What a test answers a held `diskfile_update` with — success, whose hash
+ * `answer_update` fills in from the content written, or the error.
+ */
+export type HeldUpdateResult =
+	{ ok: true; value?: unknown } | { ok: false; error: JsonrpcErrorObject };
+
+/** The `diskfile_update` result a held write of `content` answers with `result`. */
+export const answer_update = (
+	content: string,
+	result: HeldUpdateResult
+): { ok: true; value: { hash: string } } | { ok: false; error: JsonrpcErrorObject } =>
+	result.ok ? update_ok(content) : result;
 
 /** Lets queued content reads start and landed ones apply. */
 export const flush_reads = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -20,7 +48,8 @@ export const flush_reads = (): Promise<void> => new Promise((resolve) => setTime
 export interface FakeDisk {
 	/**
 	 * What each path reads as: its text, or `null` for a file that can't load
-	 * as text (read as not UTF-8). A read of a path missing here fails.
+	 * as text (read as not UTF-8). A read of a path missing here fails as the
+	 * backend's does (`not_found`, `path_not_found`).
 	 */
 	readonly files: Map<string, string | null>;
 	/** Every path read, in order. */
@@ -52,11 +81,28 @@ export interface FakeDisk {
 	 * read error would — each failure decided when the read answers.
 	 */
 	fail_reads: (count: number, message?: string) => void;
+	/**
+	 * Every `diskfile_update` the app sent, in order. The fake answers it as
+	 * the backend does — with `expected_hash`, only if the file still holds
+	 * those bytes (else `conflict` / `disk_changed`) — and writes `files`
+	 * without reporting the change: a test reports it (`write`) when the
+	 * filer would have.
+	 */
+	readonly updates: Array<{ path: string; content: string; expected_hash?: string }>;
+	/**
+	 * Holds every `diskfile_update` until the returned release is called — a
+	 * save in flight, for a test to change the disk before the backend's
+	 * compare. Each answers by what the disk holds at release.
+	 */
+	hold_updates: () => () => void;
 }
 
 /**
  * Puts a `FakeDisk` behind `app`: replaces `app.api` with one answering
- * `diskfile_read` from it — a test needing other methods adds them.
+ * `diskfile_read` and `diskfile_update` from it — a test needing other
+ * methods adds them. (`monkeypatch_zzz_for_tests` replaces
+ * `Diskfiles.update` itself, so a test saving through this disk deletes
+ * that stub.)
  */
 export const install_fake_disk = (
 	app: Frontend,
@@ -70,6 +116,8 @@ export const install_fake_disk = (
 	const sizes: Map<string, number> = new Map();
 	let held: Promise<void> | null = null;
 	const failures: Array<string> = [];
+	const updates: FakeDisk['updates'] = [];
+	let held_updates: Promise<void> | null = null;
 
 	const disknode = (path: string): SerializableDisknode => ({
 		id: parse_or_throw(DiskfilePath, path),
@@ -88,7 +136,15 @@ export const install_fake_disk = (
 				return { ok: false, error: { code: -32603, message: failure } };
 			}
 			if (!files.has(path)) {
-				return { ok: false, error: { code: -32602, message: 'not found' } };
+				// as the backend answers a missing file
+				return {
+					ok: false,
+					error: {
+						code: -32003,
+						message: `failed to read file: No such file or directory: ${path}`,
+						data: { reason: 'path_not_found' }
+					}
+				};
 			}
 			const contents = files.get(path)!;
 			return {
@@ -96,11 +152,34 @@ export const install_fake_disk = (
 				value: {
 					contents,
 					unloaded_reason: contents === null ? 'not_utf8' : null,
+					hash: contents === null ? null : content_hash(contents),
 					size: sizes.get(path) ?? 0,
 					ctime: 1,
 					mtime: mtimes.get(path) ?? 1
 				}
 			};
+		},
+		diskfile_update: async (input: { path: string; content: string; expected_hash?: string }) => {
+			updates.push(input);
+			if (held_updates) await held_updates;
+			const { path, content, expected_hash } = input;
+			if (expected_hash !== undefined) {
+				const current = files.get(path);
+				if (current == null || content_hash(current) !== expected_hash) {
+					return {
+						ok: false,
+						error: {
+							code: -32004,
+							message: `failed to write file: File changed on disk since it was read: ${path}`,
+							data: { reason: 'disk_changed' }
+						}
+					};
+				}
+			}
+			files.set(path, content);
+			sizes.set(path, new TextEncoder().encode(content).length);
+			mtimes.set(path, (mtimes.get(path) ?? 1) + 1);
+			return update_ok(content);
 		}
 	};
 
@@ -128,6 +207,15 @@ export const install_fake_disk = (
 			const diskfile = write(path, contents, type);
 			await app.diskfiles.ensure_content(diskfile);
 			return diskfile;
+		},
+		updates,
+		hold_updates: () => {
+			const deferred = create_deferred<void>();
+			held_updates = deferred.promise;
+			return () => {
+				held_updates = null;
+				deferred.resolve();
+			};
 		},
 		fail_reads: (count, message = 'read failed') => {
 			for (let i = 0; i < count; i++) failures.push(message);

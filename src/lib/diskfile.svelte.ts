@@ -22,6 +22,16 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	content: string | null = $state.raw()!;
 
 	/**
+	 * The BLAKE3 of `content`'s bytes as the read that brought it found them
+	 * (`diskfile_read`'s `hash`) — the base a save based on this content
+	 * sends (`DiskfileEditorState`), so the backend refuses it if the file
+	 * moved since. Set with `content` by `Diskfiles` alone, `null` with it,
+	 * and `null` for content that didn't come from a read (seeded from JSON),
+	 * whose save then can't be checked. Transient client state, not serialized.
+	 */
+	content_hash: string | null = $state.raw(null);
+
+	/**
 	 * Where the content stands while `content` is `null` — `content_status`
 	 * then. Transient client state, not serialized; written by `Diskfiles`,
 	 * which loads contents on demand (`Diskfiles.ensure_content`).
@@ -40,6 +50,14 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	 * the content it had.
 	 */
 	content_error: string | null = $state.raw(null);
+
+	/**
+	 * The `data.reason` the backend gave the failed read in `content_error`
+	 * (`path_not_found` — `ERROR_PATH_NOT_FOUND` — for a file gone from disk),
+	 * `null` when it gave none, or when no read failed. Set and cleared with
+	 * `content_error`.
+	 */
+	content_error_reason: string | null = $state.raw(null);
 
 	/**
 	 * Where the content stands: `loaded` whenever `content` holds it, else

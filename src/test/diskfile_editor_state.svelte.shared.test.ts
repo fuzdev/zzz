@@ -9,7 +9,14 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	answer_update,
+	flush_reads,
+	install_fake_disk,
+	update_ok,
+	type FakeDisk,
+	type HeldUpdateResult
+} from './diskfile_test_helpers.ts';
 
 /**
  * A file's editing state is app-level (`Diskfiles.get_editor_state`): it
@@ -223,7 +230,7 @@ describe('save_draft', () => {
 		const writes: Array<string> = [];
 		app.diskfiles.update = (_path, content) => {
 			writes.push(content);
-			return Promise.resolve({ ok: true, value: null });
+			return Promise.resolve(update_ok(content));
 		};
 
 		assert.isTrue(await editor_state.save_draft());
@@ -245,7 +252,7 @@ describe('save_draft', () => {
 		const writes: Array<string> = [];
 		app.diskfiles.update = (_path, content) => {
 			writes.push(content);
-			return Promise.resolve({ ok: true, value: null });
+			return Promise.resolve(update_ok(content));
 		};
 
 		assert.isTrue(await editor_state.save_draft({ overwrite: true }));
@@ -263,8 +270,9 @@ describe('saving a file deleted on disk', () => {
 		app.diskfiles.remove_by_path(PATH_A);
 		assert.isTrue(a.deleted_on_disk);
 		const { deferred } = (() => {
-			const d = create_deferred<Awaited<ReturnType<Frontend['diskfiles']['update']>>>();
-			app.diskfiles.update = () => d.promise;
+			const d = create_deferred<HeldUpdateResult>();
+			app.diskfiles.update = (_path, content) =>
+				d.promise.then((result) => answer_update(content, result));
 			return { deferred: d };
 		})();
 

@@ -2,6 +2,9 @@ import { describe, test, assert } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 import {
+	ERROR_DISK_CHANGED,
+	ERROR_INVALID_PATH,
+	ERROR_PATH_NOT_FOUND,
 	FILE_INDEX_IGNORED_DIR_NAMES,
 	FILE_INDEX_TEMP_FILE_PREFIX
 } from '#lib/diskfile_helpers.ts';
@@ -83,5 +86,12 @@ describe('the file index ignores what the backend filer ignores', () => {
 			'crate::scoped_fs::is_temp_file_name(name)',
 			'the filer ignores staging files by that check'
 		);
+	});
+
+	test('the file errors the frontend reads by reason match `handlers/filesystem.rs`', () => {
+		const source = read_crate_source('handlers/filesystem.rs');
+		assert.strictEqual(ERROR_INVALID_PATH, parse_str_const(source, 'ERROR_INVALID_PATH'));
+		assert.strictEqual(ERROR_PATH_NOT_FOUND, parse_str_const(source, 'ERROR_PATH_NOT_FOUND'));
+		assert.strictEqual(ERROR_DISK_CHANGED, parse_str_const(source, 'ERROR_DISK_CHANGED'));
 	});
 });

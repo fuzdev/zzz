@@ -141,6 +141,23 @@ pub fn protected_dir(path: &Path, zzz_dir: &Path) -> Option<ProtectedDir> {
         .then_some(ProtectedDir::ZzzHome)
 }
 
+// -- Saves --------------------------------------------------------------------
+
+/// What a save expects the file it replaces to hold.
+///
+/// The compare that makes [`ScopedFs::write_file`] a compare-and-swap: unless
+/// the file's bytes still hash to `hash`, nothing is written
+/// ([`ScopedFsError::DiskChanged`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExpectedContent {
+    /// BLAKE3 of the bytes the caller last read and based its write on.
+    pub hash: blake3::Hash,
+    /// The largest file those bytes can have come from: a larger one is
+    /// [`ScopedFsError::DiskChanged`] without being read, and the compare
+    /// reads at most one byte past it.
+    pub max_size: u64,
+}
+
 // -- Errors -------------------------------------------------------------------
 
 /// Errors from scoped filesystem operations.
@@ -183,6 +200,12 @@ pub enum ScopedFsError {
     /// nothing rather than into an unlinked inode.
     #[error("Path was replaced during the save: {0}")]
     ReplacedDuringSave(String),
+    /// A save that named the content it replaces ([`ExpectedContent`]) found
+    /// other bytes at the path, a file larger than that content could be, or
+    /// no file — the file changed on disk since the caller read it — and
+    /// wrote nothing.
+    #[error("File changed on disk since it was read: {0}")]
+    DiskChanged(String),
     /// An append found the file at a different size than the offset the
     /// caller expected, and wrote nothing. `size` is the file's current size.
     #[error("File size {size} differs from the expected offset: {path}")]
@@ -459,15 +482,32 @@ impl ScopedFs {
     /// the same path never interleave — each stages its own temp file, and
     /// the last rename wins — so no per-path lock is needed.
     ///
+    /// With `expected`, it's a compare-and-swap: the file must exist and its
+    /// bytes still hash to `expected.hash`, checked after the content is
+    /// staged, right before the rename (and again before an in-place
+    /// fallback's truncate), or nothing is written. No parent directory is
+    /// created then — the file must already be there. A write landing between
+    /// the compare and the rename is still replaced: the compare narrows the
+    /// window to that gap, it doesn't close it (no lock spans another
+    /// process's write).
+    ///
     /// # Errors
     ///
     /// The path-validation errors of every `ScopedFs` operation;
+    /// [`ScopedFsError::DiskChanged`] when `expected` doesn't hold;
     /// [`ScopedFsError::IsADirectory`] / [`ScopedFsError::NotARegularFile`]
     /// for an existing target that isn't a regular file; otherwise
     /// [`ScopedFsError::Io`].
-    pub async fn write_file(&self, path: &str, content: String) -> Result<(), ScopedFsError> {
+    pub async fn write_file(
+        &self,
+        path: &str,
+        content: String,
+        expected: Option<ExpectedContent>,
+    ) -> Result<(), ScopedFsError> {
         let safe_path = self.ensure_safe_path(path).await?;
-        if let Some(parent) = safe_path.parent() {
+        if expected.is_none()
+            && let Some(parent) = safe_path.parent()
+        {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|e| ScopedFsError::io(parent, e))?;
@@ -476,7 +516,9 @@ impl ScopedFs {
         // while, and the task finishes (renaming or cleaning up its temp
         // file) even if the request is dropped mid-write.
         tokio::task::spawn_blocking(move || {
-            write_file_atomic_with(&safe_path, |file| file.write_all(content.as_bytes()))
+            write_file_atomic_with(&safe_path, expected.as_ref(), |file| {
+                file.write_all(content.as_bytes())
+            })
         })
         .await
         .map_err(|e| ScopedFsError::io(Path::new(path), std::io::Error::other(e)))?
@@ -497,7 +539,7 @@ impl ScopedFs {
     ) -> Result<(), ScopedFsError> {
         let safe_path = self.ensure_safe_path(path).await?;
         tokio::task::spawn_blocking(move || {
-            write_file_atomic_with(&safe_path, |file| {
+            write_file_atomic_with(&safe_path, None, |file| {
                 // `&File` reads and seeks, so the closure can run again for
                 // the in-place fallback
                 let mut source = &source;
@@ -704,11 +746,23 @@ impl ScopedFs {
 ///
 /// `write` is called once on the atomic path, and again on the in-place
 /// fallback if a rename failure sends it there.
+///
+/// **Compare (`expected`).** A missing target is
+/// [`ScopedFsError::DiskChanged`] at once. Otherwise the target's current
+/// bytes are compared ([`check_unchanged`]) as late as each path allows:
+/// after the content is staged, right before the rename — the temp file
+/// removed if it fails — and on the in-place fallback right before the
+/// truncate. What remains is the gap between that compare and the rename
+/// (or the truncate): a write landing there is replaced unseen.
 fn write_file_atomic_with(
     path: &Path,
+    expected: Option<&ExpectedContent>,
     write: impl Fn(&mut std::fs::File) -> std::io::Result<()>,
 ) -> Result<(), ScopedFsError> {
     let existing = existing_regular_file(path)?;
+    if expected.is_some() && existing.is_none() {
+        return Err(ScopedFsError::DiskChanged(ScopedFsError::display(path)));
+    }
     let target = match &existing {
         Some(_) => Some(open_for_write_in_place(path)?),
         None => None,
@@ -738,7 +792,7 @@ fn write_file_atomic_with(
                         path,
                     )))
                 },
-                |target| write_in_place(target, &write, path),
+                |target| write_in_place(target, expected, &write, path),
             );
         }
         Err(e) => return Err(ScopedFsError::io(path, e)),
@@ -750,10 +804,18 @@ fn write_file_atomic_with(
         remove_temp_file(&temp_path);
         return Err(ScopedFsError::io(path, e));
     }
+    // the compare, as late as the atomic path allows: the content is staged
+    // and fsynced, so only the rename follows it
+    if let Some(expected) = expected
+        && let Err(e) = check_unchanged(path, expected)
+    {
+        remove_temp_file(&temp_path);
+        return Err(e);
+    }
     if let Err(e) = std::fs::rename(&temp_path, path) {
         remove_temp_file(&temp_path);
         return match target {
-            Some(target) if is_rename_refused(&e) => write_in_place(target, &write, path),
+            Some(target) if is_rename_refused(&e) => write_in_place(target, expected, &write, path),
             _ => Err(ScopedFsError::io(path, e)),
         };
     }
@@ -822,11 +884,20 @@ fn open_for_write_in_place(path: &Path) -> Result<std::fs::File, ScopedFsError> 
 /// and a failed rename — writing would land in an inode nobody can reach and
 /// still report success, so it fails with
 /// [`ScopedFsError::ReplacedDuringSave`] instead.
+///
+/// With `expected`, the path's current bytes are compared first
+/// ([`check_unchanged`]) — before that inode check, so the inode it confirms
+/// is the one the compare read, short of a file swapped out and back between
+/// the two.
 fn write_in_place(
     mut file: std::fs::File,
+    expected: Option<&ExpectedContent>,
     write: &impl Fn(&mut std::fs::File) -> std::io::Result<()>,
     path: &Path,
 ) -> Result<(), ScopedFsError> {
+    if let Some(expected) = expected {
+        check_unchanged(path, expected)?;
+    }
     if !is_still_at(&file, path).map_err(|e| ScopedFsError::io(path, e))? {
         return Err(ScopedFsError::ReplacedDuringSave(ScopedFsError::display(
             path,
@@ -837,6 +908,36 @@ fn write_in_place(
         .and_then(|()| write(&mut file))
         .and_then(|()| file.sync_all())
         .map_err(|e| ScopedFsError::io(path, e))
+}
+
+/// The compare of a save with [`ExpectedContent`]: `Ok` only when the regular
+/// file at `path` is at most `expected.max_size` bytes and they hash to
+/// `expected.hash`; [`ScopedFsError::DiskChanged`] when they don't, or when
+/// the file is gone. Opened like every read here (`O_NOFOLLOW |
+/// O_NONBLOCK`, regular files only — [`open_regular_file`]), so a symlink or
+/// special file swapped in keeps its own error. One over the size isn't read;
+/// one that grows past it during the read stops one byte over.
+fn check_unchanged(path: &Path, expected: &ExpectedContent) -> Result<(), ScopedFsError> {
+    use std::io::Read as _;
+
+    let changed = || ScopedFsError::DiskChanged(ScopedFsError::display(path));
+    let (file, meta) = match open_regular_file(path, false) {
+        Ok(opened) => opened,
+        Err(ScopedFsError::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
+            return Err(changed());
+        }
+        Err(e) => return Err(e),
+    };
+    if meta.len() > expected.max_size {
+        return Err(changed());
+    }
+    let mut hasher = blake3::Hasher::new();
+    let read = std::io::copy(&mut file.take(expected.max_size + 1), &mut hasher)
+        .map_err(|e| ScopedFsError::io(path, e))?;
+    if read > expected.max_size || hasher.finalize() != expected.hash {
+        return Err(changed());
+    }
+    Ok(())
 }
 
 /// Whether `path` still names `file`: the handle's `(dev, ino)` (`fstat`)
@@ -1329,7 +1430,7 @@ mod tests {
             std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode)).unwrap();
             let inode_before = std::fs::metadata(&file).unwrap().ino();
 
-            fs.write_file(file.to_str().unwrap(), "new".to_owned())
+            fs.write_file(file.to_str().unwrap(), "new".to_owned(), None)
                 .await
                 .unwrap();
 
@@ -1356,7 +1457,7 @@ mod tests {
                 continue; // the filesystem refused the bits (e.g. nosuid)
             }
 
-            fs.write_file(file.to_str().unwrap(), "new".to_owned())
+            fs.write_file(file.to_str().unwrap(), "new".to_owned(), None)
                 .await
                 .unwrap();
 
@@ -1370,7 +1471,7 @@ mod tests {
         let tmp = TempDir::new();
         let file = tmp.path("a/b/new.txt");
         tmp.fs()
-            .write_file(file.to_str().unwrap(), "hi".to_owned())
+            .write_file(file.to_str().unwrap(), "hi".to_owned(), None)
             .await
             .unwrap();
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "hi");
@@ -1383,7 +1484,7 @@ mod tests {
         std::fs::write(&file, "original").unwrap();
 
         // a write that fails midway, like ENOSPC or EFBIG after a partial write
-        let result = write_file_atomic_with(&file, |f| {
+        let result = write_file_atomic_with(&file, None, |f| {
             f.write_all(b"partial")?;
             Err(std::io::Error::other("simulated ENOSPC"))
         });
@@ -1410,7 +1511,7 @@ mod tests {
         // a FIFO would block the old `tokio::fs::write` until a reader appeared
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(5),
-            fs.write_file(fifo.to_str().unwrap(), "x".to_owned()),
+            fs.write_file(fifo.to_str().unwrap(), "x".to_owned(), None),
         )
         .await
         .expect("a FIFO target must not block");
@@ -1436,7 +1537,7 @@ mod tests {
         ))
         .unwrap();
         let result = fs
-            .write_file(socket.to_str().unwrap(), "x".to_owned())
+            .write_file(socket.to_str().unwrap(), "x".to_owned(), None)
             .await;
         assert!(
             matches!(result, Err(ScopedFsError::NotARegularFile(_))),
@@ -1445,7 +1546,9 @@ mod tests {
 
         let dir = tmp.path("dir");
         std::fs::create_dir(&dir).unwrap();
-        let result = fs.write_file(dir.to_str().unwrap(), "x".to_owned()).await;
+        let result = fs
+            .write_file(dir.to_str().unwrap(), "x".to_owned(), None)
+            .await;
         assert!(
             matches!(result, Err(ScopedFsError::IsADirectory(_))),
             "{result:?}"
@@ -1461,7 +1564,7 @@ mod tests {
         let link = tmp.path("link.txt");
         std::os::unix::fs::symlink(&target, &link).unwrap();
 
-        let result = write_file_atomic_with(&link, |f| f.write_all(b"x"));
+        let result = write_file_atomic_with(&link, None, |f| f.write_all(b"x"));
         assert!(
             matches!(result, Err(ScopedFsError::SymlinkNotAllowed(_))),
             "{result:?}"
@@ -1479,7 +1582,7 @@ mod tests {
         std::fs::hard_link(&file, &other).unwrap();
 
         tmp.fs()
-            .write_file(file.to_str().unwrap(), "new".to_owned())
+            .write_file(file.to_str().unwrap(), "new".to_owned(), None)
             .await
             .unwrap();
 
@@ -1499,7 +1602,7 @@ mod tests {
             let writes = [long.clone(), short.clone()].map(|content| {
                 let fs = Arc::clone(&fs);
                 let path = path.clone();
-                tokio::spawn(async move { fs.write_file(&path, content).await })
+                tokio::spawn(async move { fs.write_file(&path, content, None).await })
             });
             for write in writes {
                 write.await.unwrap().unwrap();
@@ -1519,15 +1622,15 @@ mod tests {
         let tmp = TempDir::new();
         let fs = tmp.fs();
         assert!(matches!(
-            fs.write_file("relative.txt", String::new()).await,
+            fs.write_file("relative.txt", String::new(), None).await,
             Err(ScopedFsError::InvalidPath(_))
         ));
         assert!(matches!(
-            fs.write_file("/tmp/a\0b", String::new()).await,
+            fs.write_file("/tmp/a\0b", String::new(), None).await,
             Err(ScopedFsError::InvalidPath(_))
         ));
         assert!(matches!(
-            fs.write_file("/definitely/not/in/scope.txt", String::new())
+            fs.write_file("/definitely/not/in/scope.txt", String::new(), None)
                 .await,
             Err(ScopedFsError::PathNotAllowed(_))
         ));
@@ -1575,7 +1678,7 @@ mod tests {
 
         let result = tmp
             .fs()
-            .write_file(file.to_str().unwrap(), "NEW".to_owned())
+            .write_file(file.to_str().unwrap(), "NEW".to_owned(), None)
             .await;
 
         match result {
@@ -1603,11 +1706,11 @@ mod tests {
         let fs = tmp.fs();
 
         let updated = fs
-            .write_file(file.to_str().unwrap(), "NEW".to_owned())
+            .write_file(file.to_str().unwrap(), "NEW".to_owned(), None)
             .await;
         let new_file = dir.join("new.txt");
         let created = fs
-            .write_file(new_file.to_str().unwrap(), "x".to_owned())
+            .write_file(new_file.to_str().unwrap(), "x".to_owned(), None)
             .await;
         let content = std::fs::read_to_string(&file).unwrap();
         let inode_after = std::fs::metadata(&file).unwrap().ino();
@@ -1643,7 +1746,7 @@ mod tests {
         std::fs::rename(&replacement, &file).unwrap();
         assert!(!is_still_at(&handle, &file).unwrap());
 
-        let result = write_in_place(handle, &|f| f.write_all(b"NEW"), &file);
+        let result = write_in_place(handle, None, &|f| f.write_all(b"NEW"), &file);
         assert!(
             matches!(result, Err(ScopedFsError::ReplacedDuringSave(_))),
             "{result:?}"
@@ -1653,7 +1756,7 @@ mod tests {
         // removed outright
         let handle = open_for_write_in_place(&file).unwrap();
         std::fs::remove_file(&file).unwrap();
-        let result = write_in_place(handle, &|f| f.write_all(b"NEW"), &file);
+        let result = write_in_place(handle, None, &|f| f.write_all(b"NEW"), &file);
         assert!(
             matches!(result, Err(ScopedFsError::ReplacedDuringSave(_))),
             "{result:?}"
@@ -1661,12 +1764,166 @@ mod tests {
         assert!(!file.exists());
     }
 
+    fn expect(content: &[u8], max_size: u64) -> ExpectedContent {
+        ExpectedContent {
+            hash: blake3::hash(content),
+            max_size,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_save_with_expected_content_is_a_compare_and_swap() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        let file = tmp.path("cas.txt");
+        let path = file.to_str().unwrap();
+        std::fs::write(&file, "old").unwrap();
+
+        // the bytes it was based on: written
+        fs.write_file(path, "new".to_owned(), Some(expect(b"old", 100)))
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "new");
+
+        // based on bytes the file no longer holds: refused, untouched
+        let stale = fs
+            .write_file(path, "mine".to_owned(), Some(expect(b"old", 100)))
+            .await;
+        assert!(
+            matches!(&stale, Err(ScopedFsError::DiskChanged(p)) if p == path),
+            "{stale:?}"
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "new");
+
+        // larger than the content could be: refused without matching the hash
+        let over = fs
+            .write_file(path, "mine".to_owned(), Some(expect(b"new", 2)))
+            .await;
+        assert!(
+            matches!(over, Err(ScopedFsError::DiskChanged(_))),
+            "{over:?}"
+        );
+        // at the size exactly: compared
+        fs.write_file(path, "at".to_owned(), Some(expect(b"new", 3)))
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "at");
+
+        // gone: refused, and nothing created — not the file, not its directory
+        let gone = tmp.path("sub/gone.txt");
+        let result = fs
+            .write_file(
+                gone.to_str().unwrap(),
+                "x".to_owned(),
+                Some(expect(b"", 100)),
+            )
+            .await;
+        assert!(
+            matches!(result, Err(ScopedFsError::DiskChanged(_))),
+            "{result:?}"
+        );
+        assert!(!tmp.path("sub").exists());
+
+        // no compare: written whatever is there, as before
+        fs.write_file(path, "plain".to_owned(), None).await.unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "plain");
+        assert!(tmp.temp_files().is_empty(), "{:?}", tmp.temp_files());
+    }
+
+    #[test]
+    fn the_compare_runs_after_staging_right_before_the_rename() {
+        let tmp = TempDir::new();
+        let file = tmp.path("late.txt");
+        std::fs::write(&file, "old").unwrap();
+        // an external write landing while the content is staged — after any
+        // earlier check would have passed
+        let result = write_file_atomic_with(&file, Some(&expect(b"old", 100)), |f| {
+            std::fs::write(&file, "theirs")?;
+            f.write_all(b"mine")
+        });
+        assert!(
+            matches!(result, Err(ScopedFsError::DiskChanged(_))),
+            "{result:?}"
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "theirs");
+        assert!(tmp.temp_files().is_empty(), "{:?}", tmp.temp_files());
+    }
+
+    #[test]
+    fn a_symlink_or_fifo_swapped_in_before_the_compare_keeps_its_own_error() {
+        let tmp = TempDir::new();
+        let file = tmp.path("swap.txt");
+        let other = tmp.path("other.txt");
+        std::fs::write(&other, "elsewhere").unwrap();
+
+        // a symlink swapped in while the content is staged: refused unfollowed
+        std::fs::write(&file, "old").unwrap();
+        let result = write_file_atomic_with(&file, Some(&expect(b"old", 100)), |f| {
+            std::fs::remove_file(&file)?;
+            std::os::unix::fs::symlink(&other, &file)?;
+            f.write_all(b"mine")
+        });
+        assert!(
+            matches!(result, Err(ScopedFsError::SymlinkNotAllowed(_))),
+            "{result:?}"
+        );
+        assert!(file.symlink_metadata().unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read_to_string(&other).unwrap(), "elsewhere");
+        assert!(tmp.temp_files().is_empty(), "{:?}", tmp.temp_files());
+
+        // a FIFO: refused without blocking the compare's open
+        std::fs::remove_file(&file).unwrap();
+        std::fs::write(&file, "old").unwrap();
+        let result = write_file_atomic_with(&file, Some(&expect(b"old", 100)), |f| {
+            std::fs::remove_file(&file)?;
+            make_fifo(&file);
+            f.write_all(b"mine")
+        });
+        assert!(
+            matches!(result, Err(ScopedFsError::NotARegularFile(_))),
+            "{result:?}"
+        );
+        assert!(file.symlink_metadata().unwrap().file_type().is_fifo());
+        assert!(tmp.temp_files().is_empty(), "{:?}", tmp.temp_files());
+    }
+
+    #[test]
+    fn the_in_place_fallback_compares_before_it_truncates() {
+        let tmp = TempDir::new();
+        let file = tmp.path("w.txt");
+        std::fs::write(&file, "orig").unwrap();
+
+        let handle = open_for_write_in_place(&file).unwrap();
+        std::fs::write(&file, "theirs").unwrap();
+        let result = write_in_place(
+            handle,
+            Some(&expect(b"orig", 100)),
+            &|f| f.write_all(b"NEW"),
+            &file,
+        );
+        assert!(
+            matches!(result, Err(ScopedFsError::DiskChanged(_))),
+            "{result:?}"
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "theirs");
+
+        let handle = open_for_write_in_place(&file).unwrap();
+        write_in_place(
+            handle,
+            Some(&expect(b"theirs", 100)),
+            &|f| f.write_all(b"NEW"),
+            &file,
+        )
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "NEW");
+    }
+
     #[test]
     fn errors_name_the_target_not_the_temp_file() {
         let tmp = TempDir::new();
         let file = tmp.path("keep.txt");
         std::fs::write(&file, "original").unwrap();
-        let result = write_file_atomic_with(&file, |_| Err(std::io::Error::other("boom")));
+        let result = write_file_atomic_with(&file, None, |_| Err(std::io::Error::other("boom")));
         match result {
             Err(error @ ScopedFsError::Io { .. }) => {
                 let message = error.to_string();
@@ -1993,7 +2250,7 @@ mod tests {
         let source = std::fs::File::open("/dev/null").unwrap();
         let p = path;
         assert_protected_refused(&fs.open_file(p).await, expected, "open_file", p);
-        let result = fs.write_file(p, "new".to_owned()).await;
+        let result = fs.write_file(p, "new".to_owned(), None).await;
         assert_protected_refused(&result, expected, "write_file", p);
         let result = fs.write_file_from(p, source).await;
         assert_protected_refused(&result, expected, "write_file_from", p);
@@ -2102,14 +2359,14 @@ mod tests {
         fs.create_dir(&format!("{app}/recordings")).await.unwrap();
         let file = format!("{app}/recordings/a.txt");
         fs.create_file(&file, b"a".to_vec()).await.unwrap();
-        fs.write_file(&file, "b".to_owned()).await.unwrap();
+        fs.write_file(&file, "b".to_owned(), None).await.unwrap();
         assert_eq!(fs.append_file(&file, 1, b"c".to_vec()).await.unwrap(), 2);
         let (mut opened, _) = fs.open_file(&file).await.unwrap();
         let mut content = String::new();
         std::io::Read::read_to_string(&mut opened, &mut content).unwrap();
         assert_eq!(content, "bc");
         fs.write_file_from(&file, opened).await.unwrap();
-        fs.write_file(&format!("{app}/recordings/../b.txt"), "x".to_owned())
+        fs.write_file(&format!("{app}/recordings/../b.txt"), "x".to_owned(), None)
             .await
             .unwrap();
         assert_eq!(
@@ -2204,7 +2461,7 @@ mod tests {
             fs.create_dir(&format!("{root}/{dir}")).await.unwrap();
             let file = format!("{root}/{dir}/a.txt");
             fs.create_file(&file, b"a".to_vec()).await.unwrap();
-            fs.write_file(&file, "b".to_owned()).await.unwrap();
+            fs.write_file(&file, "b".to_owned(), None).await.unwrap();
             fs.open_file(&file).await.unwrap();
             fs.rm(&file).await.unwrap();
         }
@@ -2301,7 +2558,7 @@ mod tests {
         fs.remove_path(&dir);
         let file = dir.join("a.txt");
         let result = fs
-            .write_file(file.to_str().unwrap(), "content".to_owned())
+            .write_file(file.to_str().unwrap(), "content".to_owned(), None)
             .await;
         let contents = std::fs::read_to_string(&file);
         std::fs::remove_dir_all(&dir).unwrap();

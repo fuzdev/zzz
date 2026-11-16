@@ -7,6 +7,7 @@ import { flushSync, mount, unmount, type Component } from 'svelte';
 import DiskfileEditorView from '#lib/DiskfileEditorView.svelte';
 import DiskfileMarkdownView from '#lib/DiskfileMarkdownView.svelte';
 import { DISKFILE_CONTENT_LOADING_MESSAGE } from '#lib/diskfile_helpers.ts';
+import { SAVE_ERROR_CHANGED_AGAIN } from '#lib/diskfile_editor_state.svelte.ts';
 import DiskfileCloseDialog from '#lib/DiskfileCloseDialog.svelte';
 import DiskfileListitem from '#lib/DiskfileListitem.svelte';
 import DiskfileTabListitem from '#lib/DiskfileTabListitem.svelte';
@@ -20,8 +21,16 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { create_reactive_props } from './reactive_test_helpers.svelte.ts';
 import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	answer_update,
+	content_hash,
+	flush_reads,
+	install_fake_disk,
+	type FakeDisk,
+	type HeldUpdateResult
+} from './diskfile_test_helpers.ts';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
+import { jsonrpc_error_messages } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 /**
  * The file editors are views over app-level state (`Diskfiles.get_editor_state`):
@@ -391,7 +400,14 @@ describe('a file whose content loads on view', () => {
 
 			read.resolve({
 				ok: true,
-				value: { contents: 'text', unloaded_reason: null, size: 4, ctime: 1, mtime: 1 }
+				value: {
+					contents: 'text',
+					unloaded_reason: null,
+					hash: content_hash('text'),
+					size: 4,
+					ctime: 1,
+					mtime: 1
+				}
 			});
 			await flush();
 			flushSync();
@@ -409,7 +425,14 @@ describe('a file whose content loads on view', () => {
 		const view = render(DiskfileEditorView, { diskfile });
 		read.resolve({
 			ok: true,
-			value: { contents: null, unloaded_reason: 'too_large', size: 5_000_000, ctime: 1, mtime: 1 }
+			value: {
+				contents: null,
+				unloaded_reason: 'too_large',
+				hash: null,
+				size: 5_000_000,
+				ctime: 1,
+				mtime: 1
+			}
 		});
 		await flush();
 		flushSync();
@@ -565,10 +588,76 @@ describe('the conflict notice showing the disk version', () => {
 		assert.isFalse(view.textarea().readOnly);
 	});
 
+	/**
+	 * Sets up a conflict whose overwrite the backend will refuse — a newer
+	 * version on disk before its `filer_change` — holding the refusal until
+	 * the returned release.
+	 */
+	const setup_refused_overwrite = async () => {
+		const setup_result = await setup();
+		disk.files.set(PATH_A, 'newer');
+		const refusal = create_deferred<void>();
+		app.diskfiles.update = async () => {
+			await refusal.promise;
+			return {
+				ok: false,
+				error: jsonrpc_error_messages.conflict(
+					'failed to write file: File changed on disk since it was read',
+					{ reason: 'disk_changed' }
+				)
+			};
+		};
+		const settle = async (): Promise<void> => {
+			refusal.resolve();
+			await flush_reads();
+			await flush_reads();
+			flushSync();
+		};
+		return { ...setup_result, settle };
+	};
+
+	test('a refused overwrite keeps the notice, takes the focus back to it, and says why', async () => {
+		const { a, view, editor_state, settle } = await setup_refused_overwrite();
+		const button = find_button(view.target, 'overwrite with your draft');
+		button.focus();
+		click_button(view.target, 'overwrite with your draft');
+		assert.isTrue(button.disabled, 'disabled while the save waits');
+		// the focus fixup a browser applies to a focused element that's disabled,
+		// which jsdom doesn't (nor blurs a disabled one) — it does reset the focus
+		// to `<body>` when the focused element is removed
+		const stand_in = document.createElement('input');
+		document.body.append(stand_in);
+		stand_in.focus();
+		stand_in.remove();
+		assert.strictEqual(document.activeElement, document.body);
+
+		await settle();
+
+		assert.strictEqual(a.content, 'newer', 'read again');
+		const notice = view.alert();
+		assert.ok(notice, 'the conflict stands');
+		assert.strictEqual(document.activeElement, notice, 'the focus is back on the notice');
+		assert.strictEqual(view.textarea().value, 'mine');
+		assert.strictEqual(editor_state.save_error, SAVE_ERROR_CHANGED_AGAIN);
+	});
+
+	test('a refused overwrite leaves the focus where the user moved it meanwhile', async () => {
+		const { view, settle } = await setup_refused_overwrite();
+		find_button(view.target, 'overwrite with your draft').focus();
+		click_button(view.target, 'overwrite with your draft');
+		view.textarea().focus();
+
+		await settle();
+
+		assert.ok(view.alert(), 'the conflict stands');
+		assert.strictEqual(document.activeElement, view.textarea());
+	});
+
 	test('the toggle waits while an overwrite is in flight', async () => {
 		const { view, editor_state } = await setup();
-		const deferred = create_deferred<Awaited<ReturnType<Frontend['diskfiles']['update']>>>();
-		app.diskfiles.update = () => deferred.promise;
+		const deferred = create_deferred<HeldUpdateResult>();
+		app.diskfiles.update = (_path, content) =>
+			deferred.promise.then((result) => answer_update(content, result));
 
 		click_button(view.target, 'overwrite with your draft');
 		assert.isTrue(editor_state.saving);
@@ -911,8 +1000,9 @@ describe('DiskfileCloseDialog', () => {
 
 	test('cancel while the save is in flight keeps the tab', async () => {
 		const { tab, view } = await setup_pending();
-		const deferred = create_deferred<Awaited<ReturnType<Frontend['diskfiles']['update']>>>();
-		app.diskfiles.update = () => deferred.promise;
+		const deferred = create_deferred<HeldUpdateResult>();
+		app.diskfiles.update = (_path, content) =>
+			deferred.promise.then((result) => answer_update(content, result));
 
 		click_button(view.target, 'save');
 		click_button(view.target, 'cancel');

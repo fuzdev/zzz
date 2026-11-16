@@ -57,8 +57,21 @@ export const to_diskfile_unloaded_message = (
  */
 export const ERROR_INVALID_PATH = 'invalid_path';
 
+/**
+ * `data.reason` of a file action's error for a path that doesn't exist —
+ * twin of `ERROR_PATH_NOT_FOUND` in the backend's filesystem handlers.
+ */
+export const ERROR_PATH_NOT_FOUND = 'path_not_found';
+
 /** `data.reason` of the error refusing to write over a file whose content wasn't loaded. */
 export const ERROR_CONTENT_NOT_LOADED = 'content_not_loaded';
+
+/**
+ * `data.reason` of the `conflict` a save based on content the file no longer
+ * holds gets (`diskfile_update`'s `expected_hash`) — twin of
+ * `ERROR_DISK_CHANGED` in the backend's filesystem handlers.
+ */
+export const ERROR_DISK_CHANGED = 'disk_changed';
 
 /**
  * Stands in for a file part's content in a formatted prompt while the file's

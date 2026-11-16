@@ -11,6 +11,7 @@ import { Diskfile } from '#lib/diskfile.svelte.ts';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { answer_update, type HeldUpdateResult } from './diskfile_test_helpers.ts';
 
 // Constants for testing
 const TEST_PATH = parse_or_throw(DiskfilePath, '/path/to/test.txt');
@@ -467,10 +468,10 @@ describe('saving failures and concurrent edits', () => {
 	/** Makes `app.diskfiles.update` wait for the returned deferred. */
 	const defer_update = () => {
 		const writes: Array<string> = [];
-		const deferred = create_deferred<Awaited<ReturnType<Frontend['diskfiles']['update']>>>();
+		const deferred = create_deferred<HeldUpdateResult>();
 		app.diskfiles.update = (_path, content) => {
 			writes.push(content);
-			return deferred.promise;
+			return deferred.promise.then((result) => answer_update(content, result));
 		};
 		return { writes, deferred };
 	};

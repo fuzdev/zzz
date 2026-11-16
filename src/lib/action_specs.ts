@@ -21,7 +21,7 @@ import {
 	with_default_fn,
 	type Infer
 } from '@fuzdev/fuz_schema/schema.ts';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { Blake3Hash, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import type {
 	LocalCallActionSpec,
@@ -146,7 +146,10 @@ export type DiskfileReadInput = Infer<typeof DiskfileReadInput>;
 
 /**
  * Output for `diskfile_read`. `contents` is `null` exactly when
- * `unloaded_reason` says why. `size` is in bytes: the contents' length when
+ * `unloaded_reason` says why, and `hash` is `null` with it: otherwise it's
+ * the BLAKE3 of the bytes read (bare lowercase hex) — what a save based on
+ * these contents sends back as `diskfile_update`'s `expected_hash`. `size`
+ * is in bytes: the contents' length when
  * they're loaded, the bytes read when they aren't UTF-8, and for a file too
  * large, its size when opened — or the limit plus one byte, a lower bound,
  * for one that grew past the limit during the read. `ctime` /
@@ -157,18 +160,37 @@ export type DiskfileReadInput = Infer<typeof DiskfileReadInput>;
 export const DiskfileReadOutput = object({
 	contents: nullable(string),
 	unloaded_reason: nullable(DiskfileUnloadedReason),
+	hash: nullable(Blake3Hash),
 	size: number,
 	ctime: nullable(number),
 	mtime: nullable(number)
 });
 export type DiskfileReadOutput = Infer<typeof DiskfileReadOutput>;
 
-/** Input for `diskfile_update`. */
+/**
+ * Input for `diskfile_update`. `expected_hash` makes the save a
+ * compare-and-swap: the `hash` of the `diskfile_read` the edit is based on,
+ * and the file is written only if it still holds those bytes — else
+ * `conflict` / `disk_changed`, nothing written. Omitted, the save writes
+ * whatever is on disk: recreating a deleted file, or forcing a write the
+ * client can't base on a read.
+ */
 export const DiskfileUpdateInput = object({
 	path: DiskfilePath,
-	content: string
+	content: string,
+	expected_hash: optional(Blake3Hash)
 });
 export type DiskfileUpdateInput = Infer<typeof DiskfileUpdateInput>;
+
+/**
+ * Output for `diskfile_update`: the BLAKE3 of the bytes written, in
+ * `diskfile_read`'s `hash` form — the base of the next save, with no read
+ * in between.
+ */
+export const DiskfileUpdateOutput = object({
+	hash: Blake3Hash
+});
+export type DiskfileUpdateOutput = Infer<typeof DiskfileUpdateOutput>;
 
 /** Input for `diskfile_create`. */
 export const DiskfileCreateInput = object({
@@ -462,7 +484,7 @@ export const diskfile_read_action_spec = {
 	output: DiskfileReadOutput,
 	async: true,
 	description:
-		"Read a file's contents as text, with its size and timestamps. Any regular file in scope, except in a credential directory or a `.zzz` directory other than the app dir (`forbidden` / `protected_dir_not_allowed`); one over the size limit or not UTF-8 has `contents: null` and an `unloaded_reason`."
+		"Read a file's contents as text, with their `hash`, its size, and timestamps. Any regular file in scope, except in a credential directory or a `.zzz` directory other than the app dir (`forbidden` / `protected_dir_not_allowed`); one over the size limit or not UTF-8 has `contents: null` and an `unloaded_reason`."
 } satisfies RequestResponseActionSpec;
 
 export const diskfile_update_action_spec = {
@@ -472,9 +494,10 @@ export const diskfile_update_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: DiskfileUpdateInput,
-	output: literal(null),
+	output: DiskfileUpdateOutput,
 	async: true,
-	description: 'Write new content to a file on disk.'
+	description:
+		"Write new content to a file on disk, returning the written bytes' `hash`. With `expected_hash` (a `diskfile_read` `hash`), only if the file still holds those bytes — else `conflict` (`disk_changed`), nothing written."
 } satisfies RequestResponseActionSpec;
 
 export const diskfile_create_action_spec = {

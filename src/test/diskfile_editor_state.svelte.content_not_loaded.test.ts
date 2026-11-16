@@ -52,7 +52,10 @@ describe('a file whose content was not loaded', () => {
 		assert.isNull(editor_state.unsaved_edit_entry_id);
 
 		assert.isFalse(await editor_state.save_changes());
-		assert.strictEqual(editor_state.save_error, DISKFILE_CONTENT_NOT_LOADED_MESSAGE);
+		assert.strictEqual(
+			editor_state.save_error,
+			`not saved — ${DISKFILE_CONTENT_NOT_LOADED_MESSAGE}`
+		);
 		assert.strictEqual(update.mock.calls.length, 0, 'never written');
 	});
 

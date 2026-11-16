@@ -10,7 +10,12 @@ import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import { DiskfilePart } from '#lib/part.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	flush_reads,
+	install_fake_disk,
+	update_ok,
+	type FakeDisk
+} from './diskfile_test_helpers.ts';
 
 /**
  * During a conflict the views can show the disk content (`showing_disk`,
@@ -41,7 +46,7 @@ const capture_writes = (): Array<string> => {
 	const writes: Array<string> = [];
 	app.diskfiles.update = (_path, content) => {
 		writes.push(content);
-		return Promise.resolve({ ok: true, value: null });
+		return Promise.resolve(update_ok(content));
 	};
 	return writes;
 };

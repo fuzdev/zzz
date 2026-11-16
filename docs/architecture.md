@@ -156,8 +156,8 @@ Defined in `src/lib/action_specs.ts`. A representative subset below — the `ter
 - `ping` — Health check. Kind: `request_response`. Initiator: `both`
 - `session_load` — Load the session snapshot, at boot and after each reconnect. Kind: `request_response`. Initiator: `frontend`
 - `filer_change` — File system change notification. Kind: `remote_notification`. Initiator: `backend`
-- `diskfile_read` — Read a file's contents as text, with its size and timestamps. Kind: `request_response`. Initiator: `frontend`
-- `diskfile_update` — Write file content. Kind: `request_response`. Initiator: `frontend`
+- `diskfile_read` — Read a file's contents as text, with their hash, its size, and timestamps. Kind: `request_response`. Initiator: `frontend`
+- `diskfile_update` — Write file content, only if the file still holds what the edit was based on (`expected_hash`). Kind: `request_response`. Initiator: `frontend`
 - `diskfile_delete` — Delete a file. Kind: `request_response`. Initiator: `frontend`
 - `directory_create` — Create a new directory (and missing parents); a taken name is `conflict`. Kind: `request_response`. Initiator: `frontend`
 - `completion_create` — Start AI completion. Kind: `request_response`. Initiator: `frontend`
@@ -993,6 +993,8 @@ The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 opener's `opener.log`).
 
 All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
+A save based on a read is a compare-and-swap (`expected_hash`, see § File
+Editing, "Conflicts").
 Saves are atomic: `diskfile_update` stages the content in a hidden
 `.zzz-tmp-<uuid>` file beside the target (never indexed or broadcast by the
 filer), fsyncs it, and renames it over the target, so a failed or concurrent
@@ -1273,8 +1275,9 @@ Save round trip:
 ```
 User edits → DiskfileEditorState.current_content setter
   → the file's draft (one unsaved-edit entry in its DiskfileHistory)
-Save → save_changes() → app.api.diskfile_update({path, content})
-  → ScopedFs::write_file (response is null — no content echo)
+Save → save_changes() → app.api.diskfile_update({path, content, expected_hash})
+  → ScopedFs::write_file (compares the file's bytes to expected_hash, then
+    writes; the response is the written bytes' hash — no content echo)
 → notify watcher fires → Filer updates its index immediately
   → debounced (80ms) filer_change broadcast to all sockets
     → Diskfiles.handle_change → upsert → existing Diskfile.set_json(...)
@@ -1284,8 +1287,10 @@ Save → save_changes() → app.api.diskfile_update({path, content})
 The confirmation is the broadcast, not the RPC response — a save and an
 external edit look identical to the frontend. The response still gates the
 editor: `save_changes()` runs one save per file at a time, and records the
-saved entry and clears the modified flag only when the write succeeds — a
-failure keeps the edit unsaved and sets `save_error`. If anything moves while
+saved entry, clears the modified flag, and takes the response's `hash` as
+the next save's base only when the write succeeds — a failure keeps the
+edit unsaved and sets `save_error` (a `disk_changed` refusal reads the file
+again instead; see "Conflicts" below). If anything moves while
 the write is in flight — more typing, another history entry picked, or an
 external edit landing after the save's own broadcast — the saved content is
 recorded in history but the editor keeps its content and selection, and an
@@ -1427,12 +1432,45 @@ are busy meanwhile (`save_pending`), and a conflict the wait uncovers takes
 the focus (unless the user moved on meanwhile). If the file's last read
 failed, the save reads it once more, and refuses ("couldn't check the file
 on disk") if that fails too — so short of an explicit overwrite, a change
-the frontend was told of is never written over unchecked. The check is
-still frontend-only: an external write the frontend hasn't heard of yet —
-one landing after that read, or after the backend received our save but
-before our broadcast arrives — is overwritten without a conflict. Closing
-that window needs the save to carry what it was based on (a hash of the
-content it edited) for the backend to compare.
+the frontend was told of is never written over unchecked.
+
+The backend checks too, for the write the frontend hasn't heard of yet. A
+read returns the BLAKE3 `hash` of the bytes it read (bare lowercase hex),
+and a save sends the hash of the disk content it's based on — the last disk
+content the editor recorded (`last_seen_disk_hash`), the same content
+`has_conflict` weighs the edit against — as `expected_hash`. `zzzd` stages
+the content, then reads the file again and writes only if its bytes still
+hash to it; otherwise nothing is written and the save fails `conflict` /
+`disk_changed` — a file changed, grown past the 4 MiB a read returns as
+text, or gone. The editor then reads the file again (`save_pending`
+meanwhile), so the change lands like any other: a conflict under the draft,
+its notice saying why the save stopped, or — when the disk now holds what
+was being saved — a save that's done. A failed re-read says so in
+`save_error`, the draft kept. The response to a save carries the hash of
+the bytes it wrote, which becomes the base at once, so a save queued behind
+it is based on what it wrote, not on the re-read its broadcast starts.
+
+An overwrite (**overwrite with your draft**) is checked the same way,
+against the disk version the conflict showed — the one the user chose to
+write over, its `last_seen_disk_hash` taken at the click, so a newer
+version whose read lands while the save waits for it doesn't move it. A
+newer write is refused and read, and shows as a new conflict rather than
+being replaced: the notice stays and takes the focus back (unless the user
+moved it elsewhere while the save waited), and `save_error` says the file
+changed on disk again, until the disk settles on the draft. When the file's last read had failed
+(`content_error`) at the click, there's no version the user can trust as
+shown, so the overwrite sends no hash and writes over whatever is there:
+the way to force a save. An overwrite queued behind a save in flight takes
+its base when it runs, after that save. Unchecked too:
+a save recreating a file deleted on disk, which has nothing to compare — so
+a file something else recreated before the filer reported it is replaced
+unseen (an "expect absent" compare would close that) — and a save of
+content that came without a read (seeded from JSON — no app path does).
+What remains for every checked save is the gap between the backend's
+compare and its rename (or, on the in-place fallback, its truncate): a
+write landing in it is replaced unseen. No lock spans another process's
+write, so the compare narrows the window to that gap rather than closing
+it.
 
 **Cells outlive components.** Svelte owns a `$derived` by the effect running
 when it was created and can stop recomputing it once that effect is
@@ -1918,9 +1956,16 @@ Population, per capability:
   changes are recorded with no editor open, a draft survives tab switches and
   keeps a file deleted on disk, closing a draft's last tab asks save / don't
   save / cancel, and a disk change under a draft pauses saving until you
-  overwrite or keep the disk version (see § File Editing). The conflict check is
-  frontend-only: an external write landing between the backend receiving a
-  save and its broadcast arriving is overwritten silently. Histories of files
+  overwrite or keep the disk version (see § File Editing). A save carries the
+  hash of the content it was based on and the backend refuses it if the file
+  moved (`disk_changed`) — an overwrite too, against the version the
+  conflict showed. Overwritten silently still: a write landing between that
+  compare and the rename, whatever an overwrite after a failed read replaces,
+  and a file recreated externally before its filer event when zzz recreates
+  it from a draft kept for a delete — an overwrite clicked while the file is
+  marked deleted and a read of it is pending included. A file rewritten faster than a read
+  round trip can't be overwritten from zzz: each overwrite is refused, read
+  again, and refused again. Histories of files
   you've opened stay in memory for the session (each capped by entries and
   size)
 - **Symlinks are invisible** — the filer never follows or indexes a symlink

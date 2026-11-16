@@ -22,7 +22,7 @@ use serde_json::Value;
 
 use crate::filer::system_time_to_ms;
 use crate::handlers::{App, not_found_error};
-use crate::scoped_fs::{ScopedFsError, normalize_path};
+use crate::scoped_fs::{ExpectedContent, ScopedFsError, normalize_path};
 
 // -- Error reasons (`error.data.reason`) --------------------------------------
 
@@ -42,6 +42,10 @@ pub const ERROR_ALREADY_EXISTS: &str = "already_exists";
 /// A save's in-place fallback found the file replaced or removed externally
 /// since it was opened, and wrote nothing (`conflict`).
 pub const ERROR_REPLACED_DURING_SAVE: &str = "replaced_during_save";
+/// A `diskfile_update` with an `expected_hash` found the file's bytes no
+/// longer hashing to it — changed, grown past the read limit, or gone — and
+/// wrote nothing (`conflict`).
+pub const ERROR_DISK_CHANGED: &str = "disk_changed";
 /// An append found the file at a different size than the expected offset,
 /// and wrote nothing (`conflict`).
 pub const ERROR_OFFSET_MISMATCH: &str = "offset_mismatch";
@@ -74,9 +78,9 @@ pub const ERROR_PROTECTED_DIR_NOT_ALLOWED: &str = "protected_dir_not_allowed";
 ///   refusals, and a non-writable directory for a new file or directory →
 ///   `forbidden` (-32002)
 /// - a missing path → `not_found` (-32003)
-/// - `diskfile_create` / `directory_create` over an existing path, or a save
-///   whose file was replaced mid-save, or an append at the wrong offset →
-///   `conflict` (-32004)
+/// - `diskfile_create` / `directory_create` over an existing path, a save
+///   whose file was replaced mid-save or no longer holds the bytes it
+///   expected, or an append at the wrong offset → `conflict` (-32004)
 /// - any other I/O failure → `internal_error` (-32603)
 ///
 /// Each carries its `ERROR_*` constant as `data.reason`, except
@@ -103,6 +107,7 @@ pub fn scoped_fs_error(action: &str, error: &ScopedFsError) -> JsonrpcError {
         ScopedFsError::ReplacedDuringSave(_) => {
             conflict(&message, Some(ERROR_REPLACED_DURING_SAVE))
         }
+        ScopedFsError::DiskChanged(_) => conflict(&message, Some(ERROR_DISK_CHANGED)),
         ScopedFsError::OffsetMismatch { .. } => conflict(&message, Some(ERROR_OFFSET_MISMATCH)),
         ScopedFsError::Io { source, .. } => match source.kind() {
             ErrorKind::NotFound => not_found_error(&message, ERROR_PATH_NOT_FOUND),
@@ -125,13 +130,61 @@ pub fn scoped_fs_error(action: &str, error: &ScopedFsError) -> JsonrpcError {
     }
 }
 
-/// Input for `diskfile_update` / `diskfile_create` — twin of
-/// `DiskfileUpdateInput` / `DiskfileCreateInput`.
+/// Input for `diskfile_update` — twin of `DiskfileUpdateInput`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DiskfileWriteInput {
+struct DiskfileUpdateInput {
     path: String,
     content: String,
+    /// The `hash` of the `diskfile_read` the edit is based on: when present,
+    /// the save writes only if the file still holds those bytes. Absent, it
+    /// writes whatever is there (recreating a deleted file, or forcing a
+    /// write the client can't base on a read).
+    #[serde(default, deserialize_with = "crate::handlers::present")]
+    expected_hash: Option<String>,
+}
+
+/// Output of `diskfile_update` — twin of `DiskfileUpdateOutput`.
+#[derive(Serialize, Debug)]
+struct DiskfileUpdateOutput {
+    /// [`content_hash_hex`] of the bytes written — the base of the caller's
+    /// next save, with no read in between.
+    hash: String,
+}
+
+/// Input for `diskfile_create` — twin of `DiskfileCreateInput`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DiskfileCreateInput {
+    path: String,
+    content: String,
+}
+
+/// A file's content hash on the wire: BLAKE3, bare 64 lowercase hex (a
+/// content digest, not a fact address — so no `blake3:` prefix). The `hash`
+/// of `diskfile_read` and `diskfile_update`, and the `expected_hash` a save
+/// sends back.
+fn content_hash_hex(hash: &blake3::Hash) -> String {
+    hash.to_hex().to_string()
+}
+
+/// Parse an `expected_hash`: exactly 64 lowercase hex characters, else
+/// `None` — never case-folded (`blake3::Hash::from_hex` alone would take
+/// uppercase).
+///
+/// The grammar of `fuz_crypto`'s `blake3_hex` adapter
+/// (`ContentHash::from_lower_hex`), kept local because using it would make
+/// `fuz_crypto` a direct dependency and add a conversion to `blake3::Hash`.
+fn parse_content_hash(hex: &str) -> Option<blake3::Hash> {
+    let well_formed = hex.len() == 64
+        && hex
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+    if well_formed {
+        blake3::Hash::from_hex(hex).ok()
+    } else {
+        None
+    }
 }
 
 /// Input for `diskfile_read` / `diskfile_delete` / `directory_create` — twin
@@ -196,6 +249,15 @@ impl TextContents {
             Self::Unloaded { size, .. } => *size,
         }
     }
+
+    /// BLAKE3 of the loaded text's bytes — exactly the bytes read — and
+    /// `None` for a file not loaded (one too large isn't read at all).
+    fn hash(&self) -> Option<blake3::Hash> {
+        match self {
+            Self::Loaded(text) => Some(blake3::hash(text.as_bytes())),
+            Self::Unloaded { .. } => None,
+        }
+    }
 }
 
 /// Read an open regular file's contents as text, bounded by
@@ -245,13 +307,16 @@ fn read_text_contents(file: std::fs::File, opened_size: u64) -> io::Result<TextC
 
 /// Output of `diskfile_read` — twin of `DiskfileReadOutput`.
 ///
-/// `contents` is `null` exactly when `unloaded_reason` isn't. `ctime` and
-/// `mtime` are a disknode's: milliseconds since the epoch, `null` when the
-/// OS can't say.
+/// `contents` is `null` exactly when `unloaded_reason` isn't, and `hash` is
+/// `null` with it — a file that isn't loaded can't be edited, so no save is
+/// based on it, and one too large isn't read at all. `ctime` and `mtime` are
+/// a disknode's: milliseconds since the epoch, `null` when the OS can't say.
 #[derive(Serialize, Debug)]
 struct DiskfileReadOutput {
     contents: Option<String>,
     unloaded_reason: Option<UnloadedReason>,
+    /// [`content_hash_hex`] of the bytes read — the `contents`, exactly.
+    hash: Option<String>,
     size: u64,
     ctime: Option<f64>,
     mtime: Option<f64>,
@@ -274,7 +339,9 @@ struct DiskfileReadOutput {
 /// whether or not the filer has seen the latest change. The timestamps come
 /// from that `fstat`, taken before the read, so a write racing the read
 /// leaves them older than the contents, never newer. `size` is the
-/// contents' length when they're loaded, so the two always agree.
+/// contents' length when they're loaded, so the two always agree, and
+/// `hash` is the BLAKE3 of the same bytes — what a save based on these
+/// contents sends back as its `expected_hash` (`diskfile_update`).
 ///
 /// Returned as an [`ActionOutput`], so the contents (up to 4 MiB) are
 /// serialized once, straight into the response, rather than copied into a
@@ -290,8 +357,8 @@ pub async fn diskfile_read(
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<ActionOutput, JsonrpcError> {
-    /// The keys, punctuation, and numbers around the contents.
-    const OUTPUT_OVERHEAD: usize = 128;
+    /// The keys, punctuation, numbers, and hash around the contents.
+    const OUTPUT_OVERHEAD: usize = 256;
     const ACTION: &str = "failed to read file";
 
     let PathInput { path } = parse_strict_params(params)?;
@@ -303,20 +370,25 @@ pub async fn diskfile_read(
         .await
         .map_err(|e| scoped_fs_error(ACTION, &e))?;
     let opened_size = meta.len();
-    let read = tokio::task::spawn_blocking(move || read_text_contents(file, opened_size))
-        .await
-        .map_err(|e| internal_error_with_source("diskfile_read", &e))?
-        .map_err(|source| {
-            scoped_fs_error(
-                ACTION,
-                &ScopedFsError::Io {
-                    path: normalize_path(Path::new(&path))
-                        .to_string_lossy()
-                        .into_owned(),
-                    source,
-                },
-            )
-        })?;
+    let (read, hash) = tokio::task::spawn_blocking(move || {
+        read_text_contents(file, opened_size).map(|read| {
+            let hash = read.hash();
+            (read, hash)
+        })
+    })
+    .await
+    .map_err(|e| internal_error_with_source("diskfile_read", &e))?
+    .map_err(|source| {
+        scoped_fs_error(
+            ACTION,
+            &ScopedFsError::Io {
+                path: normalize_path(Path::new(&path))
+                    .to_string_lossy()
+                    .into_owned(),
+                source,
+            },
+        )
+    })?;
 
     let size = read.size();
     let size_hint = match &read {
@@ -330,6 +402,7 @@ pub async fn diskfile_read(
     let output = DiskfileReadOutput {
         contents,
         unloaded_reason,
+        hash: hash.as_ref().map(content_hash_hex),
         size,
         ctime: meta.created().ok().and_then(system_time_to_ms),
         mtime: meta.modified().ok().and_then(system_time_to_ms),
@@ -337,25 +410,59 @@ pub async fn diskfile_read(
     Ok(ActionOutput::serialize(output).with_size_hint(size_hint))
 }
 
-/// `diskfile_update` — atomically replace (or create) a file.
+/// `diskfile_update` — atomically replace (or create) a file, returning the
+/// `hash` of the bytes written.
+///
+/// With an `expected_hash` (the `hash` of the `diskfile_read` the edit is
+/// based on), it's a compare-and-swap: the file must still be there, at most
+/// [`MAX_TEXT_READ_SIZE`] bytes (the largest a read returns as text), and
+/// hashing to it — compared after the content is staged, right before the
+/// rename ([`ScopedFs::write_file`](crate::scoped_fs::ScopedFs::write_file))
+/// — or nothing is written and it fails `conflict` / `disk_changed`. So a
+/// write by another process or tab since the caller's read is never
+/// replaced unseen, whether or not the filer has reported it yet; one
+/// landing between the compare and the rename still is. Without it the save
+/// writes whatever is there.
+///
+/// The hash of the content is taken on the request's task: it's at most a
+/// JSON-RPC message's worth of bytes, which the spine has already parsed on
+/// the same task.
 ///
 /// # Errors
 ///
-/// `invalid_params` for a malformed input; otherwise [`scoped_fs_error`].
+/// `invalid_params` for a malformed input — an `expected_hash` that isn't 64
+/// lowercase hex characters included; `conflict` / `disk_changed` as above;
+/// otherwise [`scoped_fs_error`].
 pub async fn diskfile_update(
     params: Value,
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    let input: DiskfileWriteInput = parse_strict_params(params)?;
+    let input: DiskfileUpdateInput = parse_strict_params(params)?;
     require_absolute(&input.path)?;
+    let expected = match input.expected_hash.as_deref() {
+        None => None,
+        Some(hex) => Some(ExpectedContent {
+            hash: parse_content_hash(hex).ok_or_else(|| {
+                invalid_params(
+                    "expected_hash must be 64 lowercase hex characters (a BLAKE3 hash)",
+                    None,
+                )
+            })?,
+            max_size: MAX_TEXT_READ_SIZE,
+        }),
+    };
 
+    let hash = blake3::hash(input.content.as_bytes());
     app.scoped_fs
-        .write_file(&input.path, input.content)
+        .write_file(&input.path, input.content, expected)
         .await
         .map_err(|e| scoped_fs_error("failed to write file", &e))?;
 
-    Ok(Value::Null)
+    let output = DiskfileUpdateOutput {
+        hash: content_hash_hex(&hash),
+    };
+    serde_json::to_value(output).map_err(|e| internal_error_with_source("diskfile_update", &e))
 }
 
 /// `diskfile_create` — create a new file, never replacing an existing one
@@ -370,7 +477,7 @@ pub async fn diskfile_create(
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<Value, JsonrpcError> {
-    let input: DiskfileWriteInput = parse_strict_params(params)?;
+    let input: DiskfileCreateInput = parse_strict_params(params)?;
     require_absolute(&input.path)?;
 
     app.scoped_fs
@@ -472,7 +579,9 @@ mod tests {
             read_text_contents(file, size).unwrap()
         };
         assert_eq!(read("ok.txt"), TextContents::Loaded("ok".to_owned()));
+        assert_eq!(read("ok.txt").hash(), Some(blake3::hash(b"ok")));
         assert_eq!(read("empty"), TextContents::Loaded(String::new()));
+        assert_eq!(read("empty").hash(), Some(blake3::hash(b"")));
         let at_limit = read("at_limit.txt");
         assert!(matches!(at_limit, TextContents::Loaded(_)));
         assert_eq!(at_limit.size(), MAX_TEXT_READ_SIZE);
@@ -491,6 +600,9 @@ mod tests {
                 size: 2,
             }
         );
+        // nothing loaded, nothing to base a save on
+        assert_eq!(read("bin").hash(), None);
+        assert_eq!(read("big.txt").hash(), None);
 
         // grown past the limit after the open's size was taken: the read
         // stops one byte over and says so
@@ -567,6 +679,11 @@ mod tests {
                 Some(ERROR_REPLACED_DURING_SAVE),
             ),
             (
+                ScopedFsError::DiskChanged("/x".to_owned()),
+                JsonrpcErrorCode::Conflict,
+                Some(ERROR_DISK_CHANGED),
+            ),
+            (
                 io(ErrorKind::ReadOnlyFilesystem),
                 JsonrpcErrorCode::Forbidden,
                 Some(ERROR_PERMISSION_DENIED),
@@ -617,25 +734,64 @@ mod tests {
 
     #[test]
     fn inputs_are_strict() {
-        let ok: DiskfileWriteInput =
+        let ok: DiskfileUpdateInput =
             parse_strict_params(json!({"path": "/a", "content": ""})).unwrap();
         assert_eq!(ok.path, "/a");
+        assert_eq!(ok.expected_hash, None);
+        let hex = "ab".repeat(32);
+        let ok: DiskfileUpdateInput =
+            parse_strict_params(json!({"path": "/a", "content": "", "expected_hash": hex}))
+                .unwrap();
+        assert_eq!(ok.expected_hash.as_deref(), Some(hex.as_str()));
         for params in [
             json!({"path": "/a", "content": "", "extra": 1}),
             json!({"path": "/a", "content": null}),
             json!({"path": "/a"}),
             json!({"path": 1, "content": ""}),
+            // a TS `optional` field: absent, never `null`
+            json!({"path": "/a", "content": "", "expected_hash": null}),
+            json!({"path": "/a", "content": "", "expected_hash": 1}),
         ] {
-            let e = parse_strict_params::<DiskfileWriteInput>(params.clone())
+            let e = parse_strict_params::<DiskfileUpdateInput>(params.clone())
                 .err()
                 .unwrap_or_else(|| panic!("accepted {params}"));
             assert_eq!(e.code, JsonrpcErrorCode::InvalidParams, "{params}");
         }
+        // create takes no compare
+        assert!(
+            parse_strict_params::<DiskfileCreateInput>(
+                json!({"path": "/a", "content": "", "expected_hash": hex})
+            )
+            .is_err()
+        );
         for params in [
             json!({"path": "/a", "recursive": true}),
             json!({"path": null}),
         ] {
             assert!(parse_strict_params::<PathInput>(params).is_err());
+        }
+    }
+
+    #[test]
+    fn content_hashes_are_bare_lowercase_hex() {
+        // BLAKE3 of the empty input, the published test vector
+        let empty = "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262";
+        assert_eq!(content_hash_hex(&blake3::hash(b"")), empty);
+        assert_eq!(parse_content_hash(empty), Some(blake3::hash(b"")));
+        let hash = blake3::hash("héllo".as_bytes());
+        assert_eq!(parse_content_hash(&content_hash_hex(&hash)), Some(hash));
+
+        // refused, never folded or trimmed
+        for off_form in [
+            empty.to_uppercase(),
+            format!("blake3:{empty}"),
+            format!("{empty} "),
+            format!("{empty}0"),
+            empty[..63].to_owned(),
+            format!("{}g", &empty[..63]),
+            String::new(),
+        ] {
+            assert_eq!(parse_content_hash(&off_form), None, "{off_form:?}");
         }
     }
 }

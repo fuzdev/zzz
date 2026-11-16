@@ -269,7 +269,13 @@ Details: ./docs/development.md § Adding a New Action.
   refuses one. `.env` files are ordinary files.
 - **Saves are atomic** (staged beside the target, fsynced, renamed),
   falling back to a non-atomic in-place write only when the rename can't
-  happen; new files and folders are created exclusively.
+  happen; new files and folders are created exclusively. A save based on a
+  read sends that read's BLAKE3 `hash` as `expected_hash`, and `zzzd`
+  refuses it (`disk_changed`) if the file no longer holds those bytes — an
+  overwrite too, against the version it was shown. Unchecked: an overwrite
+  after a failed read, recreating a file deleted on disk (one recreated
+  meanwhile is replaced unseen), and a write landing between the compare
+  and the rename.
 - **Byte routes** (`/api/files/bytes`) read, create, and append file bytes
   for media; serving never executes bytes.
 - **Local tools** (`ffmpeg`, whisper.cpp) are found once at boot and are

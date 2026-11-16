@@ -11,7 +11,7 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import DiskfileContextmenuHarness from './DiskfileContextmenuHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import { content_hash, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
@@ -123,7 +123,14 @@ describe('DiskfileContextmenu copy file content', () => {
 				read_paths.push(path);
 				return Promise.resolve({
 					ok: true,
-					value: { contents: 'lazy text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+					value: {
+						contents: 'lazy text',
+						unloaded_reason: null,
+						hash: content_hash('lazy text'),
+						size: 9,
+						ctime: 1,
+						mtime: 1
+					}
 				});
 			}
 		};
@@ -183,7 +190,14 @@ describe('DiskfileContextmenu copy file content', () => {
 			diskfile_read: () =>
 				Promise.resolve({
 					ok: true,
-					value: { contents: 'lazy text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+					value: {
+						contents: 'lazy text',
+						unloaded_reason: null,
+						hash: content_hash('lazy text'),
+						size: 9,
+						ctime: 1,
+						mtime: 1
+					}
 				})
 		};
 		const path = parse_or_throw(DiskfilePath, '/w/lazy.txt');
@@ -224,7 +238,14 @@ describe('DiskfileContextmenu copy file content', () => {
 						? { ok: false, error: { code: -32603, message: 'connection lost' } }
 						: {
 								ok: true,
-								value: { contents: 'lazy text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+								value: {
+									contents: 'lazy text',
+									unloaded_reason: null,
+									hash: content_hash('lazy text'),
+									size: 9,
+									ctime: 1,
+									mtime: 1
+								}
 							}
 				)
 		};

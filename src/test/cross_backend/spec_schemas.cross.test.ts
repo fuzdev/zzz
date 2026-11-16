@@ -36,6 +36,7 @@ import type {
 import { all_account_action_specs } from '@fuzdev/fuz_app/auth/account_action_specs.ts';
 import { is_void_schema } from '@fuzdev/fuz_app/http/schema_helpers.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { hash_blake3 } from '@fuzdev/fuz_util/hash_blake3.ts';
 
 import {
 	directory_create_action_spec,
@@ -389,7 +390,7 @@ describe('zzz spec schemas cross-backend', () => {
 			}
 		});
 
-		test('null-output actions resolve ok', async () => {
+		test('null and object outputs resolve ok', async () => {
 			const fixture = await setup_test();
 			const { client, api_result } = await open_client(fixture);
 			const dir = join(tmpdir(), `zzz_cross_schemas_ws_${randomUUID()}`);
@@ -403,7 +404,7 @@ describe('zzz spec schemas cross-backend', () => {
 					content: 'over ws'
 				});
 				assert.ok(update.ok, `diskfile_update over ws: ${JSON.stringify(update)}`);
-				assert.isNull(update.value);
+				assert.deepEqual(update.value, { hash: hash_blake3('over ws') });
 				assert.strictEqual(await readFile(file_path, 'utf-8'), 'over ws');
 
 				const close = await api_result.workspace_close({ path: `${dir}/` as never });

@@ -6,10 +6,23 @@ import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import { estimate_token_count } from './helpers.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 import type { DiskfileContentStatus, DiskfilePath } from './diskfile_types.ts';
-import { to_diskfile_unloaded_message } from './diskfile_helpers.ts';
+import {
+	ERROR_DISK_CHANGED,
+	ERROR_PATH_NOT_FOUND,
+	to_diskfile_unloaded_message
+} from './diskfile_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import { DiskfileHistory, type HistoryEntry } from './diskfile_history.svelte.ts';
 import { to_default_markdown_view_mode, type MarkdownViewMode } from './markdown_view_mode.ts';
+
+/** `save_error` for a save that found the file gone — its delete not reported yet. */
+export const SAVE_ERROR_DELETED_ON_DISK = 'not saved — the file was deleted on disk';
+
+/**
+ * `save_error` for an overwrite refused because a newer version than the one
+ * shown is on disk — cleared once the disk settles on the editor's content.
+ */
+export const SAVE_ERROR_CHANGED_AGAIN = 'not saved — the file changed on disk again';
 
 /** Label of the history entry holding a file's draft. */
 export const HISTORY_LABEL_UNSAVED_EDIT = 'Unsaved edit';
@@ -53,9 +66,23 @@ const remove_superseded_unsaved_entry = (
 const is_saved_state = (entry: HistoryEntry): boolean =>
 	!entry.is_unsaved_edit && !entry.is_discarded_edit;
 
+/** What an overwrite is checked against, taken when the user asks for it — see `save_changes`. */
+interface OverwriteBase {
+	/** The hash of the disk version shown, `null` to write unchecked (the last read had failed). */
+	readonly hash: string | null;
+}
+
 /** A `save_changes` write in flight: the content it writes, and its result. */
 interface InFlightSave {
 	readonly content: string;
+	/** Whether the user asked to overwrite a change on disk (`DiskfileSaveOptions.overwrite`). */
+	readonly overwrite: boolean;
+	/**
+	 * The hash of the disk content the write is based on, which the backend
+	 * compares before writing (`diskfile_update`'s `expected_hash`) — `null`
+	 * to write over whatever is there.
+	 */
+	readonly expected_hash: string | null;
 	saving: Promise<boolean>;
 }
 
@@ -63,7 +90,9 @@ interface InFlightSave {
 export interface DiskfileSaveOptions {
 	/**
 	 * Save even though the file changed on disk under the edit
-	 * (`has_conflict`) — the user chose to overwrite that change.
+	 * (`has_conflict`) — the user chose to overwrite that change: the disk
+	 * version they were shown, so a newer one they haven't seen still stops
+	 * the save (see `save_changes`).
 	 */
 	overwrite?: boolean;
 }
@@ -93,9 +122,11 @@ export interface DiskfileSaveOptions {
  *   kept and `has_conflict` is set: saving stops until the user chooses to
  *   overwrite (`save_changes({overwrite: true})`) or keep the disk version
  *   (`discard_draft`). Our own save's broadcast never counts — the disk
- *   then holds the edit, which settles it. The check is frontend-only: an
- *   external write landing after the backend received our save but before
- *   its broadcast reached us isn't seen as a conflict.
+ *   then holds the edit, which settles it. The backend checks too: a save
+ *   carries the hash of the disk content it's based on
+ *   (`last_seen_disk_hash`), so a write the frontend hasn't heard of yet
+ *   refuses it (`disk_changed`), and the file is read again to show that
+ *   change as a conflict like any other.
  * - During a conflict the views can show the disk content instead, read-only
  *   (`showing_disk`, `shown_content`), without touching the edit.
  */
@@ -113,6 +144,19 @@ export class DiskfileEditorState {
 
 	/** The disk content last recorded in the history. */
 	last_seen_disk_content: string | null = $state.raw(null);
+
+	/**
+	 * The hash of `last_seen_disk_content` (`Diskfile.content_hash`, or the
+	 * hash our own save's response returned) — the base a save sends, so the
+	 * backend writes only if the file still holds that content
+	 * (`diskfile_update`'s `expected_hash`). It moves with
+	 * `last_seen_disk_content`: when new content lands, and when our own
+	 * save lands — so a save queued behind it is based on what it wrote,
+	 * before the re-read its broadcast starts. `null` while the content is
+	 * unknown or came without a hash (seeded from JSON, not read), and a save
+	 * then writes unchecked.
+	 */
+	last_seen_disk_hash: string | null = $state.raw(null);
 
 	/**
 	 * The disk changed while the editor held the user's content (a draft, or a
@@ -331,16 +375,17 @@ export class DiskfileEditorState {
 		this.diskfile = options.diskfile;
 		this.history = new DiskfileHistory({ app: this.app, json: { path: this.diskfile.path } });
 
-		const { content } = this.diskfile;
-		if (content !== null) this.#seed(content);
+		const { content, content_hash } = this.diskfile;
+		if (content !== null) this.#seed(content, content_hash);
 	}
 
 	/**
 	 * Takes the file's first loaded content as its original state — at
 	 * construction, or when it lands later (see `check_disk_changes`).
 	 */
-	#seed(content: string): void {
+	#seed(content: string, content_hash: string | null): void {
 		this.last_seen_disk_content = content;
+		this.last_seen_disk_hash = content_hash;
 		this.selected_history_entry_id = this.history.add_entry(content, {
 			is_original_state: true
 		}).id;
@@ -447,14 +492,21 @@ export class DiskfileEditorState {
 	 * the save in flight (our own write, with typing continuing past it).
 	 */
 	check_disk_changes(): void {
-		const disk_content = this.diskfile.content;
-		if (disk_content === null || disk_content === this.last_seen_disk_content) return;
+		const { content: disk_content, content_hash } = this.diskfile;
+		if (disk_content === null) return;
+		if (disk_content === this.last_seen_disk_content) {
+			// the same text is the same bytes, so the same hash — taken when none
+			// was known, for content seeded without a read
+			this.last_seen_disk_hash ??= content_hash;
+			return;
+		}
 		// never loaded until now (nothing can be edited before), so nothing to weigh it against
 		if (this.last_seen_disk_content === null && this.history.entries.length === 0) {
-			this.#seed(disk_content);
+			this.#seed(disk_content, content_hash);
 			return;
 		}
 		this.last_seen_disk_content = disk_content;
+		this.last_seen_disk_hash = content_hash;
 
 		const { history } = this;
 		const draft = history.draft_entry;
@@ -483,6 +535,8 @@ export class DiskfileEditorState {
 			// the editor already shows what's now on disk, so nothing is unsaved in it
 			if (!this.selected_history_entry) this.selected_history_entry_id = disk_entry.id;
 			this.content_was_modified_by_user = false;
+			// a refused overwrite's error no longer holds — the disk has what it would have written
+			if (this.save_error === SAVE_ERROR_CHANGED_AGAIN) this.save_error = null;
 		} else if (!this.content_was_modified_by_user) {
 			this.selected_history_entry_id = disk_entry.id;
 		}
@@ -518,16 +572,53 @@ export class DiskfileEditorState {
 	 * writes without that retry. A file whose content isn't loaded is never
 	 * saved: this sets `save_error`.
 	 *
+	 * The backend checks as well, closing the window the frontend can't see —
+	 * a write it hasn't been told of yet: the save carries the hash of the
+	 * disk content it's based on (`last_seen_disk_hash`), and is refused,
+	 * writing nothing, if the file no longer holds it. The file is then read
+	 * again (`save_pending` meanwhile), so the change lands like any other —
+	 * a conflict under the user's content, whose notice says why it wasn't
+	 * saved. An `overwrite` is checked the same way, against the disk version
+	 * the user was shown and chose to write over — taken when it's asked for,
+	 * so a newer version whose read lands while the save waits for it is
+	 * refused, not written over unseen, and the refusal says so in
+	 * `save_error` (`SAVE_ERROR_CHANGED_AGAIN`). If the file's last read had
+	 * failed (`content_error`) when it's asked for, there's no version the
+	 * user can trust as shown, and the overwrite writes over whatever is
+	 * there, even once a read lands meanwhile. So does a save recreating a
+	 * file deleted on disk, which has nothing to compare. An overwrite queued
+	 * behind a save in flight takes its base when it runs, after that save:
+	 * the base moves with what that save wrote, and so with any change
+	 * recorded while it was in flight.
+	 *
 	 * @returns whether the content was written — for a queued follow-up with
-	 * nothing left to write, whether the in-flight save succeeded
+	 * nothing left to write, whether the in-flight save succeeded, and for a
+	 * save refused because the disk moved on, whether the disk now holds what
+	 * it would have written
 	 */
 	save_changes(options?: DiskfileSaveOptions): Promise<boolean> {
+		// an overwrite is of the version shown now, whatever lands while it waits
+		const overwrite_base: OverwriteBase | null = options?.overwrite
+			? { hash: this.#save_base(options) }
+			: null;
+		return this.#save_changes(options, overwrite_base);
+	}
+
+	/**
+	 * `save_changes`, with an overwrite's base taken when it was asked for
+	 * (`null` when it isn't an overwrite, or for a queued follow-up, which
+	 * takes its own).
+	 */
+	#save_changes(
+		options: DiskfileSaveOptions | undefined,
+		overwrite_base: OverwriteBase | null
+	): Promise<boolean> {
 		// choosing to overwrite shows the content being written
 		if (options?.overwrite) this.#show_disk = false;
 		// never write over a file whose content isn't loaded
 		// (`Diskfiles.update` refuses it too)
 		if (!this.content_loaded) {
-			this.save_error = to_diskfile_unloaded_message(this.diskfile);
+			this.save_error = `not saved — ${to_diskfile_unloaded_message(this.diskfile)}`;
 			return Promise.resolve(false);
 		}
 		const in_flight = this.#in_flight_save;
@@ -548,7 +639,7 @@ export class DiskfileEditorState {
 		// over a change it hasn't seen
 		const pending_read = this.app.diskfiles.pending_read(this.diskfile);
 		if (pending_read || this.#must_check_failed_read(options)) {
-			return this.#save_after_read(pending_read, options);
+			return this.#save_after_read(pending_read, options, overwrite_base);
 		}
 		if (!this.can_save) return Promise.resolve(false);
 		if (this.has_conflict && !options?.overwrite) return Promise.resolve(false);
@@ -557,11 +648,29 @@ export class DiskfileEditorState {
 		// settles `#save` before it returns, and its cleanup must find the entry
 		const in_flight_save: InFlightSave = {
 			content: this.current_content,
+			overwrite: !!options?.overwrite,
+			expected_hash: overwrite_base ? overwrite_base.hash : this.#save_base(options),
 			saving: Promise.resolve(false)
 		};
 		this.#in_flight_save = in_flight_save;
 		in_flight_save.saving = this.#save(in_flight_save);
 		return in_flight_save.saving;
+	}
+
+	/**
+	 * The hash a save sends as its base (`InFlightSave.expected_hash`): the
+	 * last disk content seen — what `has_conflict` weighs the edit against,
+	 * and what a conflict shows — even for an `overwrite`, which chose to
+	 * write over that version and no newer one. `null` writes over whatever is
+	 * there: for a file deleted on disk (recreated — nothing to compare), and
+	 * for an `overwrite` after a failed read (`content_error`), when the
+	 * version shown may not be what's on disk and forcing the write is the
+	 * user's way out.
+	 */
+	#save_base(options: DiskfileSaveOptions | undefined): string | null {
+		if (this.diskfile.deleted_on_disk) return null;
+		if (options?.overwrite && this.diskfile.content_error !== null) return null;
+		return this.last_seen_disk_hash;
 	}
 
 	/**
@@ -586,7 +695,8 @@ export class DiskfileEditorState {
 	 */
 	async #save_after_read(
 		pending_read: Promise<void> | null,
-		options: DiskfileSaveOptions | undefined
+		options: DiskfileSaveOptions | undefined,
+		overwrite_base: OverwriteBase | null
 	): Promise<boolean> {
 		this.#save_waits++;
 		try {
@@ -596,14 +706,24 @@ export class DiskfileEditorState {
 				await this.app.diskfiles.read_again(this.diskfile);
 				const error = this.diskfile.content_error;
 				if (error !== null) {
-					this.save_error = `not saved — couldn't check the file on disk: ${error}`;
+					this.save_error = this.#is_read_missing()
+						? SAVE_ERROR_DELETED_ON_DISK
+						: `not saved — couldn't check the file on disk: ${error}`;
 					return false;
 				}
 			}
 		} finally {
 			this.#save_waits--;
 		}
-		return this.save_changes(options);
+		return this.#save_changes(options, overwrite_base);
+	}
+
+	/**
+	 * Whether the file's last read failed because it's gone from disk — its
+	 * delete not reported yet. Read from the error's reason, not its message.
+	 */
+	#is_read_missing(): boolean {
+		return this.diskfile.content_error_reason === ERROR_PATH_NOT_FOUND;
 	}
 
 	/**
@@ -634,9 +754,21 @@ export class DiskfileEditorState {
 		// a thrown write (e.g. the transport failing) is a failed save like any
 		// other — reported through `save_error`, never a rejection
 		let error_message: string | null = null;
+		let disk_changed = false;
+		let written_hash: string | null = null;
 		try {
-			const result = await this.app.diskfiles.update(diskfile.path, content_to_save);
-			if (!result.ok) error_message = result.error.message;
+			const result = await this.app.diskfiles.update(
+				diskfile.path,
+				content_to_save,
+				in_flight_save.expected_hash
+			);
+			if (result.ok) {
+				written_hash = result.value.hash;
+			} else {
+				error_message = result.error.message;
+				const { reason } = (result.error.data ?? {}) as { reason?: unknown };
+				disk_changed = reason === ERROR_DISK_CHANGED;
+			}
 		} catch (error) {
 			console.error('[DiskfileEditorState] save threw:', error);
 			error_message = to_error_message(error, 'save failed');
@@ -645,6 +777,7 @@ export class DiskfileEditorState {
 			if (this.#in_flight_save === in_flight_save) this.#in_flight_save = null;
 		}
 
+		if (disk_changed) return this.#follow_refused_save(in_flight_save);
 		if (error_message !== null) {
 			this.save_error = error_message;
 			return false;
@@ -684,6 +817,7 @@ export class DiskfileEditorState {
 
 		if (!disk_moved_on) {
 			this.last_seen_disk_content = content_to_save;
+			this.last_seen_disk_hash = written_hash;
 			// the disk holds what was saved, so nothing edited predates it
 			this.disk_conflict = false;
 		}
@@ -694,6 +828,53 @@ export class DiskfileEditorState {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Follows a save the backend refused because the file no longer holds the
+	 * content the save was based on (`disk_changed`) — nothing was written,
+	 * and the edit is left as it is. Reads the file again
+	 * (`Diskfiles.read_again`, `save_pending` meanwhile), so the change lands
+	 * like any other: a conflict under the user's content, whose notice then
+	 * says why (no `save_error`), or the editor settling if the disk now holds
+	 * what was being saved.
+	 *
+	 * A refused `overwrite` sets `save_error` even then: the user asked to
+	 * write, and the conflict's notice alone would read as if nothing happened.
+	 *
+	 * @returns whether the disk now holds what the save would have written
+	 */
+	async #follow_refused_save(refused: InFlightSave): Promise<boolean> {
+		const { diskfile } = this;
+		const content_to_save = refused.content;
+		this.#save_waits++;
+		try {
+			await this.app.diskfiles.read_again(diskfile);
+		} finally {
+			this.#save_waits--;
+		}
+		if (diskfile.deleted_on_disk) {
+			this.save_error = 'not saved — the file was deleted on disk; saving again recreates it';
+			return false;
+		}
+		if (diskfile.content_error !== null) {
+			// gone, and its delete not reported yet — the read says so by reason
+			this.save_error = this.#is_read_missing()
+				? SAVE_ERROR_DELETED_ON_DISK
+				: `not saved — the file changed on disk, and reading it again failed: ${diskfile.content_error}`;
+			return false;
+		}
+		if (diskfile.content === null) {
+			this.save_error = `not saved — ${to_diskfile_unloaded_message(diskfile)}`;
+			return false;
+		}
+		if (diskfile.content === content_to_save) return true;
+		if (this.has_conflict) {
+			this.save_error = refused.overwrite ? SAVE_ERROR_CHANGED_AGAIN : null;
+		} else {
+			this.save_error = 'not saved — the file changed on disk while saving; save again';
+		}
+		return false;
 	}
 
 	/**

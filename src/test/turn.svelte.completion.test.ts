@@ -15,6 +15,7 @@ import { create_frontend_action_handlers } from '#lib/frontend_action_handlers.t
 import type { FrontendActionHandlers } from '#lib/frontend_action_types.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { update_ok } from './diskfile_test_helpers.ts';
 
 type CompletionCreateHandlers = NonNullable<FrontendActionHandlers['completion_create']>;
 type CompletionProgressHandlers = NonNullable<FrontendActionHandlers['completion_progress']>;
@@ -294,7 +295,7 @@ describe('completion output with file parts', () => {
 		update_calls = [];
 		app.diskfiles.update = (_path, content) => {
 			update_calls.push(content);
-			return Promise.resolve({ ok: true, value: null });
+			return Promise.resolve(update_ok(content));
 		};
 	});
 

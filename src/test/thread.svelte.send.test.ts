@@ -19,6 +19,7 @@ import {
 import { JSONRPC_ERROR_CODES, ThrownJsonrpcError } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { content_hash } from './diskfile_test_helpers.ts';
 
 /** A stubbed `completion_create` call, resolved manually by the test. */
 interface StubbedCall {
@@ -266,7 +267,14 @@ describe('a file part still loading when sent', () => {
 
 		read.resolve({
 			ok: true,
-			value: { contents: 'file text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+			value: {
+				contents: 'file text',
+				unloaded_reason: null,
+				hash: content_hash('file text'),
+				size: 9,
+				ctime: 1,
+				mtime: 1
+			}
 		});
 		await flush();
 		assert.strictEqual(calls.length, 1);
@@ -322,7 +330,14 @@ describe('a file part still loading when sent', () => {
 		const sent = thread.send_message('what does it say?');
 		read.resolve({
 			ok: true,
-			value: { contents: null, unloaded_reason: 'too_large', size: 9, ctime: 1, mtime: 1 }
+			value: {
+				contents: null,
+				unloaded_reason: 'too_large',
+				hash: null,
+				size: 9,
+				ctime: 1,
+				mtime: 1
+			}
 		});
 		await flush();
 		assert.strictEqual(calls.length, 1);
@@ -341,7 +356,14 @@ describe('a file part still loading when sent', () => {
 		thread.cancel_pending();
 		read.resolve({
 			ok: true,
-			value: { contents: 'file text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+			value: {
+				contents: 'file text',
+				unloaded_reason: null,
+				hash: content_hash('file text'),
+				size: 9,
+				ctime: 1,
+				mtime: 1
+			}
 		});
 		assert.strictEqual(await sent, assistant_turn);
 		assert.ok(assistant_turn.cancelled);
@@ -357,7 +379,14 @@ describe('a file part whose read failed when sent', () => {
 	});
 	const LOADED: ReadResult = {
 		ok: true,
-		value: { contents: 'file text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+		value: {
+			contents: 'file text',
+			unloaded_reason: null,
+			hash: content_hash('file text'),
+			size: 9,
+			ctime: 1,
+			mtime: 1
+		}
 	};
 	const OTHER_PATH = parse_or_throw(DiskfilePath, '/test/other.txt');
 

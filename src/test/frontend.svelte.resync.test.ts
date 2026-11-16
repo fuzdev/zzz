@@ -22,6 +22,7 @@ import {
 } from '#lib/terminal_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { content_hash } from './diskfile_test_helpers.ts';
 
 const ZZZ_DIR = parse_or_throw(DiskfileDirectoryPath, '/zzz/');
 const WS_DIR = parse_or_throw(DiskfileDirectoryPath, '/ws/');
@@ -101,7 +102,14 @@ beforeEach(() => {
 			const contents = disk.get(path) ?? 'contents';
 			return Promise.resolve({
 				ok: true,
-				value: { contents, unloaded_reason: null, size: contents.length, ctime: 1, mtime: 1 }
+				value: {
+					contents,
+					unloaded_reason: null,
+					hash: content_hash(contents),
+					size: contents.length,
+					ctime: 1,
+					mtime: 1
+				}
 			});
 		},
 		workspace_open: ({ path }: { path: string }) =>

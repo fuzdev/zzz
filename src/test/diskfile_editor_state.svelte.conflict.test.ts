@@ -10,7 +10,13 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	answer_update,
+	flush_reads,
+	install_fake_disk,
+	type FakeDisk,
+	type HeldUpdateResult
+} from './diskfile_test_helpers.ts';
 
 /**
  * A change on disk under the user's edit is kept apart from it: the edit
@@ -39,10 +45,10 @@ const broadcast = async (contents: string): Promise<void> => {
 /** Makes `app.diskfiles.update` wait for the returned deferred. */
 const defer_update = () => {
 	const writes: Array<string> = [];
-	const deferred = create_deferred<Awaited<ReturnType<Frontend['diskfiles']['update']>>>();
+	const deferred = create_deferred<HeldUpdateResult>();
 	app.diskfiles.update = (_path, content) => {
 		writes.push(content);
-		return deferred.promise;
+		return deferred.promise.then((result) => answer_update(content, result));
 	};
 	return { writes, deferred };
 };

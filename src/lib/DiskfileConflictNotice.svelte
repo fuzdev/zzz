@@ -46,7 +46,13 @@
 		attrs
 	}: {
 		editor_state: DiskfileEditorState;
-		/** Called after the user overwrites or keeps the disk version, e.g. to refocus the editor. */
+		/**
+		 * Called after the user overwrites or keeps the disk version, e.g. to
+		 * refocus the editor — not after an overwrite that leaves the conflict
+		 * standing (refused, or failed): the notice takes the focus back then
+		 * (its button, disabled while the save waited, lost it), unless the
+		 * user moved it elsewhere meanwhile.
+		 */
 		onresolve?: (() => void) | undefined;
 		attrs?: SvelteHTMLElements['div'] | undefined;
 	} = $props();
@@ -104,10 +110,20 @@ and both versions are in the history -->
 				title={editor_state.has_unsaved_edits
 					? 'show your draft and save it over the file on disk'
 					: `save ${editor_state.showing_disk ? 'your version' : 'the version shown'} over the file on disk`}
-				onclick={async () => {
+				onclick={async (event) => {
+					const button = event.currentTarget;
 					// the draft, even if the editor shows an older entry or the disk (it's shown first)
-					await editor_state.save_draft({ overwrite: true });
-					onresolve?.();
+					const saved = await editor_state.save_draft({ overwrite: true });
+					if (saved || !editor_state.has_conflict) {
+						onresolve?.();
+						return;
+					}
+					// refused — say a newer version landed — and the notice stays, with the
+					// choice still to make. The button was disabled while the save waited,
+					// which drops its focus to `<body>` in browsers: take it back to the
+					// notice, unless the user has moved on
+					const focused = document.activeElement;
+					if (focused === button || focused === document.body || focused === null) focus();
 				}}
 			>
 				{editor_state.has_unsaved_edits
