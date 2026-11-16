@@ -49,7 +49,7 @@
  *
  * **Startup-reset env gate** — `make_default_rust_backend_config` sets
  * `FUZ_TESTING_RESET_DB_ON_STARTUP=true` by default, which makes
- * `testing_zzz_server` wipe the auth-namespace schema (11 tables)
+ * `testing_zzz_server` wipe the auth-namespace schema
  * before migrations replay on every boot. No more manual `psql DROP
  * TABLE...` between vitest sessions — the binary self-cleans. The
  * `_testing_reset` RPC action (per-test reset) is orthogonal and stays

@@ -372,7 +372,7 @@ into zzz's cross-backend projects.
 crates/zzz_server/src/
 ├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle over `fuz_actions::server`: config (command line + env), the spine core (`create_app_backend`: keyring, READ COMMITTED guard, migrations, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry` compile, file watchers, route composition, `serve_until_shutdown` (the auth cleanup beside the server, the 1001 close of every live WebSocket and the end of every audit stream before the drain), then jobs and PTYs torn down
 ├── main.rs           # Thin production entry — parses the command line, constructs `Argon2idHasher`, calls `run_app`
-├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `project_open`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
+├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `project_open`, `repo_focus`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
 │   ├── mod.rs        # `App` long-lived state (projects, `project_lifecycle`, `trusted_owner`, `git`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_read (+ its bounded text read, `read_text_contents`, and the bytes' `hash`), diskfile_update (+ its `expected_hash` compare-and-swap), diskfile_create, diskfile_delete, directory_create
@@ -424,8 +424,8 @@ and `perform_action`), and DB pool / migrations all live in the spine crates
 revocation is the spine `RealtimeCloser` over the WS and SSE registries
 (../docs/backend.md § Auth, item 10).
 
-**Large responses**: `session_load` and `project_open` carry every
-indexed file's metadata (never its contents — those come by `diskfile_read`),
+**Large responses**: `session_load`, `project_open`, and `repo_focus` carry
+every indexed file's metadata (never its contents — those come by `diskfile_read`),
 so a large tree is a large response, and they skip the `serde_json::Value`
 round trip: a snapshot clones the index's nodes (metadata only — the index
 holds no file text), the handler returns its typed result as a
@@ -556,8 +556,8 @@ joined after the drain, before PTY teardown.
   rule, ../docs/backend.md § Known Issues → Filer watches), is a `change`, a
   `touch` included), ignored paths filtered before the bounded
   event channel with a coalesced root rescan on overflow, per-watcher ignore
-  config, in-memory file index returned (as metadata) by `session_load` and
-  `project_open`, symlinks skipped; ignores
+  config, in-memory file index returned (as metadata) by `session_load`,
+  `project_open`, and `repo_focus`, symlinks skipped; ignores
   `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` and the
   credential directories (`.ssh`/`.gnupg`/`.aws`/`.kube`/`.docker`/
   `.password-store`) by name globally (`.zzz` keeps the CLI daemon home's

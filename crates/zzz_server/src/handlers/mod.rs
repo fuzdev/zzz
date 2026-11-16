@@ -1,8 +1,8 @@
 //! Long-lived `App` server state, the per-domain RPC handlers, and the
 //! `App.broadcast` connection shim.
 //!
-//! The per-domain handler modules (`core`, `filesystem`, `provider`,
-//! `terminal`, `project`) hold the zzz-specific RPC handlers in the spine
+//! The per-domain handler modules (`core`, `filesystem`, `job`, `media`,
+//! `provider`, `terminal`, `project`) hold the zzz-specific RPC handlers in the spine
 //! signature `(params: Value, ctx: ActionContext<'_>, app: Arc<App>) ->
 //! Result<Value, JsonrpcError>`. They are registered into
 //! `App.action_registry` via `crate::zzz_action_specs::build_*_specs`, which
@@ -182,7 +182,7 @@ impl App {
     ///
     /// Shim over `App.realtime`. The spine WS handler registers
     /// connections in `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`);
-    /// call sites (`filer::broadcast_filer_change`, `project::project_*`)
+    /// call sites (`filer::app_broadcast`, `project::broadcast_project_changed`)
     /// broadcast through this shim. Terminal output and job state are
     /// per-account, so `pty_manager` and `job_manager` use
     /// `realtime.send_to_account` instead.

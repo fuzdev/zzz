@@ -5,7 +5,7 @@
 //! parent), the first rule that applies decides ([`resolve_project`]):
 //!
 //! 1. **A registry** — a `repos.toml` found walking up by `fuz_repos`'s
-//!    discovery ([`discover_registry`]), placed at the workspace root it
+//!    discovery ([`discover_registry`]), placed at the registry root it
 //!    belongs to (where a link above a checkout names it, else its own
 //!    directory). The walk is bounded: strictly below the home directory, or
 //!    within the allowlisted root ([`RootPolicy::outside_home`]) holding the
@@ -127,7 +127,7 @@ pub struct Project {
 /// Which rule rooted a [`Project`].
 #[derive(Debug)]
 pub enum ProjectKind {
-    /// A registry's workspace root.
+    /// A registry's root.
     Registry {
         /// The registry file as found at the root — possibly a symlink,
         /// whose target is inside the root.

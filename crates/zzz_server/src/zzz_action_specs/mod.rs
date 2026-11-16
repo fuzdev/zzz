@@ -49,14 +49,14 @@ pub fn build_zzz_owned_specs(
     specs
 }
 
-/// The permissive-credential census — zzz's half of the S1 `Any` surface,
-/// readable in one place (the counterpart of
+/// The permissive-credential census — zzz's half of the spine's
+/// `Any`-credential surface, readable in one place (the counterpart of
 /// `fuz_auth::action_auth::any_credential_surface`, the `fuz_cell_actions`
 /// census, and the other spine servers' censuses).
 ///
 /// The whole set is `CredentialGate::Any` today, deliberately. Many of these
 /// specs are machine-capability *mutations* — `diskfile_update`,
-/// `diskfile_create`, `diskfile_delete`, `directory_create`, the four
+/// `diskfile_create`, `diskfile_delete`, `directory_create`, the
 /// `terminal_*` verbs, `project_open` / `project_close`, `repo_focus` /
 /// `repo_unfocus`, and `completion_create` — and they
 /// are the largest permissive surface in the ecosystem. That is a recorded
