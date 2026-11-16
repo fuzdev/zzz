@@ -20,11 +20,13 @@
 //! `main.rs` to the command line, the swap points, and `run_app(...)`.
 
 pub mod file_bytes;
+pub mod file_trust;
 pub mod filer;
 pub mod handlers;
 pub mod job_manager;
 pub mod media;
 mod origin_allowlist;
+pub mod project;
 pub mod provider;
 pub mod pty_manager;
 pub mod root_policy;

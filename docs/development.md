@@ -5,8 +5,10 @@ Development workflow, extension points, and common patterns.
 ## Setup
 
 Requires Node (>=24.14), the Rust toolchain pinned in `rust-toolchain.toml`
-(rustup installs it automatically), PostgreSQL, and the sibling [fuz](https://github.com/fuzdev/fuz) Rust
-workspace checked out alongside this repo as `fuz/` (path deps — including `fuz_pty`).
+(rustup installs it automatically), PostgreSQL, and the sibling [fuz](https://github.com/fuzdev/fuz) and
+[fuz_repos](https://github.com/fuzdev/fuz_repos) Rust workspaces checked out
+alongside this repo as `fuz/` and `fuz_repos/` (path deps — including
+`fuz_pty`, and `fuz_repos` and `fuz_git` for repo registries).
 Terminals also need [Zig](https://ziglang.org/download/) 0.17, which builds
 the terminal emulator's module (see [Terminal emulator
 module](#terminal-emulator-module)); without it everything else runs.

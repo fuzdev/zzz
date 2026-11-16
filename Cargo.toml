@@ -19,6 +19,8 @@ fuz_realtime = { path = "../fuz/crates/fuz_realtime" }
 fuz_actions = { path = "../fuz/crates/fuz_actions" }
 fuz_testing = { path = "../fuz/crates/fuz_testing" }
 fuz_audit = { path = "../fuz/crates/fuz_audit" }
+fuz_repos = { path = "../fuz_repos/crates/fuz_repos" }
+fuz_git = { path = "../fuz_repos/crates/fuz_git" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs", "io-util", "process", "sync", "time"] }
 axum = { version = "0.8", features = ["ws"] }
 serde = { version = "1", features = ["derive"] }
@@ -35,6 +37,10 @@ blake3 = "1"
 uuid = { version = "1", features = ["v4"] }
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "stream", "json"] }
+libc = "0.2"
+# NSS user and group lookups (`getpwuid_r`, `getgrgid_r`) for the registry
+# trust rule.
+nix = { version = "0.31", default-features = false, features = ["user"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -69,11 +69,14 @@ SSE parsing for streaming completions.
 
 ## Prerequisites
 
-The sibling [fuz](https://github.com/fuzdev/fuz) workspace must be checked out alongside this repo:
+The sibling [fuz](https://github.com/fuzdev/fuz) and
+[fuz_repos](https://github.com/fuzdev/fuz_repos) workspaces must be checked
+out alongside this repo:
 
 ```
 ~/dev/zzz/                  (this repo)
 ~/dev/fuz/                  (path deps: fuz_sys, fuz_pty, the spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions — plus fuz_testing for the test binary and fuz_audit for xtask)
+~/dev/fuz_repos/            (path deps: fuz_repos for registry discovery and parsing, fuz_git, its git runner)
 ```
 
 If a path dep is missing, `cargo build` will fail with
@@ -396,7 +399,9 @@ crates/zzz_server/src/
 │   ├── openai.rs     # OpenAiProvider — Chat Completions API with SSE streaming
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
 ├── file_bytes.rs     # Byte routes for files (`/api/files/bytes`): ranged read with a response-header lockdown, exclusive create, offset-checked append — hand-written axum handlers with their own auth + scope gates
+├── file_trust.rs     # Whether discovered config is the daemon user's alone to write — Debian sshd's rule: owned by the user or root, never `o+w`, `g+w` only by the user's private group (`TrustedOwner`, NSS read once by `current`)
 ├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered, stat-only file index (events are hints, `lstat` decides; no file is read), change by `lstat` stamp with git's racily-clean rule, per-directory watches from the filer's own walk (degraded polling past the watch limit), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
+├── project.rs        # Resolving an opened path to its project: a registry (`repos.toml`, found by `fuz_repos`'s bounded discovery — strictly below `$HOME` or within an allowlisted root — each candidate trusted, confined, and outside protected directories, or the open is refused), else the nearest `.git`, else the directory; entries canonicalized and confined to the root, refused one by one (`resolve_project`, `ProjectError` / `EntryRefusal` reasons)
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── root_policy.rs    # Which directories can be roots: strictly inside `$HOME` or in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor, or under `/proc` / `/sys` / `/dev` (`RootPolicy`, held by `App` and the boot checks)
 ├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, protected directories (credential directories, `.zzz` directories other than the app dir) refused under every root (`protected_dir`), symlink rejection, atomic writes (temp file + fsync + rename) with an optional compare-and-swap on the file's BLAKE3 (`ExpectedContent`, `disk_changed`), exclusive create, offset-checked append, open-for-read

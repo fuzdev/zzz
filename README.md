@@ -31,10 +31,11 @@ the `zzz` CLI (see [docs/development.md](docs/development.md)) — is the suppor
 It also builds as a static site via SvelteKit's static adapter with diminished capabilities,
 and the full app is served by the Rust `zzz_server` backend.
 
-> The Rust backend depends on sibling crates from the fuz workspace via path
-> dependencies (including the native `fuz_pty` terminal crate). They must be
-> checked out alongside this repo for `cargo build` to succeed; until they're
-> published, building from a bare clone isn't yet reproducible.
+> The Rust backend depends on sibling crates from the fuz and fuz_repos
+> workspaces via path dependencies (including the native `fuz_pty` terminal
+> crate). They must be checked out alongside this repo for `cargo build` to
+> succeed; until they're published, building from a bare clone isn't yet
+> reproducible.
 
 > Developing on Windows
 > requires something like [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).

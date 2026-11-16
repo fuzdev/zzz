@@ -132,9 +132,10 @@ npm install
 cargo xtask dev            # the terminal module if needed, then zzzd + Vite — the user runs it
 ```
 
-The Rust crates need the sibling Rust workspace checked out alongside this
-repo (path deps); terminals need Zig 0.17 (without it the app runs and each
-terminal says the module is missing). Node deps via npm; there is no Deno.
+The Rust crates need the sibling Rust workspaces `fuz` and `fuz_repos`
+checked out alongside this repo (path deps); terminals need Zig 0.17
+(without it the app runs and each terminal says the module is missing).
+Node deps via npm; there is no Deno.
 
 - `gro check` — all checks (typecheck, test, gen, format, lint)
 - `gro typecheck`, `gro test`, `gro gen`, `gro format`, `gro build`

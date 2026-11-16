@@ -37,7 +37,10 @@ uuid.workspace = true
 notify.workspace = true
 fuz_pty.workspace = true
 reqwest.workspace = true
-libc = "0.2"
+fuz_repos.workspace = true
+fuz_git.workspace = true
+libc.workspace = true
+nix.workspace = true
 
 [dev-dependencies]
 # Re-declare fuz_http (already a normal dep) with the test-only

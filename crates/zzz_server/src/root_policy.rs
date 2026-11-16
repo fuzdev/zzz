@@ -125,6 +125,13 @@ impl RootPolicy {
         self.home.as_deref()
     }
 
+    /// The allowlisted directories outside the home directory
+    /// ([`ROOTS_OUTSIDE_HOME_VAR`]), canonical.
+    #[must_use]
+    pub fn outside_home(&self) -> &[PathBuf] {
+        &self.outside_home
+    }
+
     /// The directories that never hold a root, allowlisted or not: `/`, the
     /// home directory and its ancestors, and the pseudo-filesystems.
     ///
