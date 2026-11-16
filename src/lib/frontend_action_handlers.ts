@@ -256,10 +256,8 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
+	// `Frontend.close_project` applies the close at its rev
 	project_close: {
-		receive_response: ({ data: { input } }) => {
-			frontend.projects.remove_by_root(input.root);
-		},
 		receive_error: ({ data: { error } }) => {
 			console.error('[frontend_action_handlers] project_close failed:', error);
 		}
@@ -268,7 +266,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	project_list: {
 		receive_response: ({ data: { output } }) => {
 			for (const project_data of output.projects) {
-				frontend.projects.add(project_data);
+				frontend.projects.receive_remote_change(project_data);
 			}
 		},
 		receive_error: ({ data: { error } }) => {
@@ -304,7 +302,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	project_changed: {
 		receive: ({ data: { input } }) => {
 			if (input.type === 'close') {
-				frontend.receive_project_closed(input.project.root);
+				frontend.receive_project_closed(input.project.root, input.project.rev);
 			} else {
 				frontend.projects.receive_remote_change(input.project);
 			}

@@ -15,6 +15,7 @@ import type { SessionLoadData, ProjectOpenOutput } from '#lib/action_specs.ts';
 import type { ProjectInfoJson } from '#lib/project.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { content_hash } from './diskfile_test_helpers.ts';
 
 const WS_DIR = parse_or_throw(DiskfileDirectoryPath, '/ws/');
 const PATH_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
@@ -60,6 +61,7 @@ beforeEach(() => {
 		file_roots: [parse_or_throw(DiskfileDirectoryPath, '/zzz/')],
 		provider_status: [],
 		projects: [],
+		projects_rev: 1,
 		terminal_ids: [],
 		jobs: [],
 		server_instance_id: create_uuid()
@@ -75,7 +77,7 @@ beforeEach(() => {
 		},
 		repo_files: (input: { root: string; dir: string }) => {
 			repo_files_calls.push(input);
-			return Promise.resolve({ ok: true, value: { files: [], watch_status: 'full' } });
+			return Promise.resolve({ ok: true, value: { files: [], watch_status: 'full', rev: 0 } });
 		}
 	};
 });
@@ -91,11 +93,15 @@ const WS_INFO: ProjectInfoJson = {
 	kind: 'plain_dir',
 	registry_path: null,
 	entries: [],
-	focused: [WS_DIR]
+	focused: [WS_DIR],
+	rev: 1
 };
 
 /** Delivers a `project_changed` notification through the real handler. */
-const receive_change = (project: ProjectInfoJson, type: 'open' | 'update' = 'open'): void => {
+const receive_change = (
+	project: ProjectInfoJson,
+	type: 'open' | 'update' | 'close' = 'open'
+): void => {
 	(
 		app.action_handlers.project_changed as unknown as {
 			receive: (event: unknown) => void;
@@ -115,26 +121,39 @@ const filer_change = (type: DiskfileChangeType, path: DiskfilePath, mtime?: numb
 	});
 };
 
+/** An open's reply, as the daemon sends it — `opened` unless given. */
+const reply = (
+	project: ProjectInfoJson,
+	value: Partial<Omit<ProjectOpenOutput, 'project'>> = {}
+): ProjectOpenResult => ({
+	ok: true,
+	value: {
+		project,
+		focus: project.kind === 'registry' ? null : project.root,
+		files: [],
+		watch_status: 'full',
+		refused: [],
+		opened: true,
+		...value
+	}
+});
+
 describe('Projects.open', () => {
 	test('adds the project the daemon returns, with its focus, watch status, and files', async () => {
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/ws/./'));
 		assert.strictEqual(calls[0]!.path, '/ws/./');
-		calls[0]!.resolve({
-			ok: true,
-			value: {
-				project: WS_INFO,
-				focus: WS_DIR,
-				files: [create_disknode(PATH_A, 5)],
-				watch_status: 'degraded',
-				refused: []
-			}
-		});
+		calls[0]!.resolve(
+			reply(WS_INFO, { files: [create_disknode(PATH_A, 5)], watch_status: 'degraded' })
+		);
 
 		const result = await opened;
 		assert.ok(result.ok);
-		assert.strictEqual(result.value.project.root, WS_DIR);
+		assert.strictEqual(result.value.project?.root, WS_DIR);
 		assert.strictEqual(result.value.focus, WS_DIR);
-		assert.strictEqual(result.value.project.watch_status, 'degraded');
+		assert.isTrue(result.value.opened);
+		assert.strictEqual(result.value.rev, 1);
+		assert.strictEqual(result.value.project?.rev, 1);
+		assert.strictEqual(result.value.project?.watch_status, 'degraded');
 		assert.strictEqual(app.projects.get_by_root(WS_DIR), result.value.project);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.mtime, 5);
 	});
@@ -143,16 +162,11 @@ describe('Projects.open', () => {
 		const opened = app.projects.open(WS_DIR);
 		filer_change('delete', PATH_A);
 		filer_change('change', PATH_B, 3);
-		calls[0]!.resolve({
-			ok: true,
-			value: {
-				project: WS_INFO,
-				focus: WS_DIR,
-				files: [create_disknode(PATH_A, 2), create_disknode(PATH_B, 2), create_disknode(PATH_C, 2)],
-				watch_status: 'full',
-				refused: []
-			}
-		});
+		calls[0]!.resolve(
+			reply(WS_INFO, {
+				files: [create_disknode(PATH_A, 2), create_disknode(PATH_B, 2), create_disknode(PATH_C, 2)]
+			})
+		);
 		assert.ok((await opened).ok);
 
 		assert.ok(!app.diskfiles.get_by_path(PATH_A), 'a file deleted in flight stays deleted');
@@ -167,10 +181,9 @@ describe('Projects.open', () => {
 		const opened = app.projects.open(DEV, { focus: [APP, SITE] });
 		assert.deepEqual(calls[0]!.input, { path: DEV, focus: [APP, SITE] });
 		const refused = [{ dir: SITE, reason: 'repo_not_present' }];
-		calls[0]!.resolve({
-			ok: true,
-			value: {
-				project: {
+		calls[0]!.resolve(
+			reply(
+				{
 					...WS_INFO,
 					root: DEV,
 					kind: 'registry',
@@ -181,16 +194,13 @@ describe('Projects.open', () => {
 					],
 					focused: [APP]
 				},
-				focus: null,
-				files: [],
-				watch_status: 'full',
-				refused
-			}
-		});
+				{ refused }
+			)
+		);
 		const result = await opened;
 		assert.ok(result.ok);
 		assert.deepEqual(result.value.refused, refused);
-		assert.deepEqual(result.value.project.focused, [APP]);
+		assert.deepEqual(result.value.project?.focused, [APP]);
 
 		// an open asking for no focus sends none
 		void app.projects.open(WS_DIR, { focus: [] });
@@ -205,6 +215,96 @@ describe('Projects.open', () => {
 		assert.ok(!result.ok);
 		assert.strictEqual(result.error.message, 'not found');
 		assert.strictEqual(app.projects.items.size, 0);
+	});
+
+	// the race logged as "an open reply re-adding a project that was closed"
+	test('a reply older than a close applied here adds nothing back, nor its files', async () => {
+		const opened = app.projects.open(WS_DIR);
+		receive_change(WS_INFO); // its own, rev 1
+		assert.ok(app.projects.get_by_root(WS_DIR));
+		// another client closes it, the notification ahead of this open's reply
+		receive_change({ ...WS_INFO, rev: 2 }, 'close');
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+		calls[0]!.resolve(reply(WS_INFO, { files: [create_disknode(PATH_A)] }));
+		const result = await opened;
+		assert.ok(result.ok);
+		assert.isNull(result.value.project, 'closed here, so not held');
+		assert.ok(!app.projects.get_by_root(WS_DIR), 'the tombstone keeps it closed');
+		assert.ok(!app.diskfiles.get_by_path(PATH_A), "the dropped state's files aren't applied");
+		// nor does its own late notification
+		receive_change(WS_INFO);
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+		// a newer open does
+		receive_change({ ...WS_INFO, rev: 3 });
+		assert.ok(app.projects.get_by_root(WS_DIR));
+	});
+
+	test('an own close takes its rev from the reply, which keeps an older reply out', async () => {
+		(app.api as unknown as Record<string, unknown>).project_close = () =>
+			Promise.resolve({ ok: true, value: { rev: 2 } });
+		app.projects.add(WS_INFO);
+		const opened = app.projects.open(WS_DIR);
+		assert.ok((await app.close_project(WS_DIR)).ok);
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+		calls[0]!.resolve(reply(WS_INFO, { opened: false }));
+		assert.ok((await opened).ok);
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+	});
+
+	test('a close older than the state held changes nothing', () => {
+		app.projects.add({ ...WS_INFO, rev: 3 });
+		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+		receive_change({ ...WS_INFO, rev: 2 }, 'close');
+		assert.ok(app.projects.get_by_root(WS_DIR), 'opened again after that close');
+		assert.ok(app.diskfiles.get_by_path(PATH_A), 'its files stay');
+	});
+
+	test("a close releases the project's files, keeping a draft flagged deleted", async () => {
+		app.projects.add(WS_INFO);
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+		const b = app.diskfiles.get_by_path(PATH_B)!;
+		(app.api as unknown as Record<string, unknown>).diskfile_read = () =>
+			Promise.resolve({
+				ok: true,
+				value: {
+					contents: 'x',
+					unloaded_reason: null,
+					hash: content_hash('x'),
+					size: 1,
+					ctime: 1,
+					mtime: 1
+				}
+			});
+		await app.diskfiles.ensure_content(b);
+		app.diskfiles.select(b.id, true);
+		app.diskfiles.get_editor_state(b).current_content = 'edited';
+
+		receive_change({ ...WS_INFO, rev: 2 }, 'close');
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+		assert.ok(!app.diskfiles.get_by_path(PATH_A), 'nothing indexes it now');
+		assert.isTrue(app.diskfiles.get_by_path(PATH_B)?.deleted_on_disk, 'kept for its draft');
+	});
+
+	test('a close keeps the files another root covers', () => {
+		app.scoped_dirs = [WS_DIR];
+		app.projects.add(WS_INFO);
+		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+		receive_change({ ...WS_INFO, rev: 2 }, 'close');
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+		assert.ok(app.diskfiles.get_by_path(PATH_A), 'the scoped dir still indexes it');
+	});
+
+	test('a removal the daemon could not stamp leaves a tombstone at the rev held', () => {
+		app.projects.add({ ...WS_INFO, rev: 2 });
+		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+		app.projects.remove_by_root(WS_DIR);
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+		assert.ok(!app.diskfiles.get_by_path(PATH_A), 'its files released');
+		// a state at or below the rev held, landing late, adds nothing back
+		receive_change({ ...WS_INFO, rev: 2 });
+		assert.ok(!app.projects.get_by_root(WS_DIR), 'the tombstone keeps it out');
+		receive_change({ ...WS_INFO, rev: 3 });
+		assert.ok(app.projects.get_by_root(WS_DIR), 'a newer open adds it');
 	});
 });
 
@@ -226,7 +326,7 @@ describe('Projects.receive_remote_change', () => {
 		assert.isNull(app.projects.active_id);
 	});
 
-	test('a known project with no new focus is not resynced', () => {
+	test('a known project at the same rev changes and fetches nothing', () => {
 		app.projects.add(WS_INFO);
 		receive_change(WS_INFO);
 		assert.strictEqual(session_loads, 0);
@@ -237,20 +337,11 @@ describe('Projects.receive_remote_change', () => {
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/ws/./'));
 		receive_change(WS_INFO); // the broadcast lands first, under the canonical root
 		assert.strictEqual(session_loads, 0);
-		calls[0]!.resolve({
-			ok: true,
-			value: {
-				project: WS_INFO,
-				focus: WS_DIR,
-				files: [create_disknode(PATH_A, 5)],
-				watch_status: 'full',
-				refused: []
-			}
-		});
+		calls[0]!.resolve(reply(WS_INFO, { files: [create_disknode(PATH_A, 5)] }));
 		const result = await opened;
 		assert.ok(result.ok);
 		assert.strictEqual(result.value.project, app.projects.get_by_root(WS_DIR));
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.mtime, 5);
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.mtime, 5, 'the same rev: its files');
 		assert.strictEqual(session_loads, 0);
 	});
 
@@ -301,7 +392,7 @@ describe('a registry project', () => {
 	const DEV = parse_or_throw(DiskfileDirectoryPath, '/dev/');
 	const APP = parse_or_throw(DiskfileDirectoryPath, '/dev/app/');
 	const SITE = parse_or_throw(DiskfileDirectoryPath, '/dev/site/');
-	const registry_info = (focused: Array<DiskfileDirectoryPath>): ProjectInfoJson => ({
+	const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectInfoJson => ({
 		root: DEV,
 		name: 'dev',
 		opened_at: '2026-09-26T00:00:00.000Z',
@@ -311,7 +402,8 @@ describe('a registry project', () => {
 			{ key: 'app', kind: 'repo', dir: APP, state: 'present' },
 			{ key: 'site', kind: 'repo', dir: SITE, state: 'present' }
 		],
-		focused
+		focused,
+		rev
 	});
 	const node = (path: string, mtime = 1): SerializableDisknode => ({
 		id: parse_or_throw(DiskfilePath, path),
@@ -321,83 +413,59 @@ describe('a registry project', () => {
 		mtime
 	});
 
-	test('a remote update that drops a focus resyncs, pruning its files', async () => {
+	test('a remote update that drops a focus with its entry releases its files, no resync', async () => {
 		app.projects.add(registry_info([APP, SITE]));
 		app.diskfiles.add_initial([node('/dev/app/a.ts'), node('/dev/site/a.ts')]);
 		// `site`'s entry is gone, so the daemon dropped its focus and filer
 		const without_site = {
-			...registry_info([APP]),
+			...registry_info([APP], 2),
 			entries: registry_info([]).entries.slice(0, 1)
 		};
-		session.projects = [without_site];
-		session.file_roots = [...session.file_roots, DEV, APP];
-		session.files = [node('/dev/app/a.ts')];
 		receive_change(without_site, 'update');
-		assert.strictEqual(session_loads, 1);
 		await flush();
+		assert.strictEqual(session_loads, 0);
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP]);
 		assert.ok(app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/dev/app/a.ts')));
-		assert.ok(!app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/dev/site/a.ts')), 'pruned');
+		assert.ok(!app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/dev/site/a.ts')));
 	});
 
-	test("this client's open narrowing a plain root to a registry resyncs once it settles", async () => {
+	test("this client's open narrowing a plain root to a registry releases what it doesn't index", async () => {
 		// `/dev` was a plain directory, focused on its root, before its registry appeared
-		app.projects.add({
-			root: DEV,
-			kind: 'plain_dir',
-			focused: [DEV]
-		});
+		app.projects.add({ root: DEV, kind: 'plain_dir', focused: [DEV], rev: 1 });
 		app.diskfiles.add_initial([node('/dev/README.md'), node('/dev/scratch/x.txt')]);
-		session.projects = [registry_info([])];
-		session.file_roots = [...session.file_roots, DEV];
-		session.files = [node('/dev/README.md')];
 		const opened = app.projects.open(DEV);
-		calls[0]!.resolve({
-			ok: true,
-			value: {
-				project: registry_info([]),
-				focus: null,
-				files: [node('/dev/README.md')],
-				watch_status: 'full',
-				refused: []
-			}
-		});
+		calls[0]!.resolve(
+			reply(registry_info([], 2), { files: [node('/dev/README.md')], opened: false })
+		);
 		const result = await opened;
 		assert.ok(result.ok);
-		assert.deepEqual(result.value.project.focused, [], 'the root focus the registry dropped');
-		assert.strictEqual(session_loads, 1);
-		await flush();
+		assert.deepEqual(result.value.project?.focused, [], 'the root focus the registry dropped');
+		assert.strictEqual(session_loads, 0, 'no resync');
 		assert.ok(
 			!app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/dev/scratch/x.txt')),
-			'the unindexed file pruned'
+			'the unindexed file released'
 		);
 		assert.ok(app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/dev/README.md')));
 	});
 
-	test('a focus dropped while an own open is in flight resyncs once it settles', async () => {
-		(app.api as unknown as Record<string, unknown>).session_load = () => {
-			session_loads++;
-			return new Promise(() => {});
-		};
+	test('a focus dropped while an own open is in flight is released at once, no resync', async () => {
 		app.projects.add(registry_info([APP, SITE]));
+		app.diskfiles.add_initial([node('/dev/app/a.ts'), node('/dev/site/a.ts')]);
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/dev/app/'));
 		const without_site = {
-			...registry_info([APP]),
+			...registry_info([APP], 2),
 			entries: registry_info([]).entries.slice(0, 1)
 		};
 		receive_change(without_site, 'update');
-		assert.strictEqual(session_loads, 0, 'deferred');
-		calls[0]!.resolve({
-			ok: true,
-			value: { project: without_site, focus: APP, files: [], watch_status: 'full', refused: [] }
-		});
+		assert.ok(!app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/dev/site/a.ts')));
+		calls[0]!.resolve(reply(without_site, { focus: APP, opened: false }));
 		assert.ok((await opened).ok);
-		assert.strictEqual(session_loads, 1);
+		assert.strictEqual(session_loads, 0);
 	});
 
 	test('a remote update that adds a focus pulls that repo, not a resync', () => {
 		app.projects.add(registry_info([APP]));
-		receive_change(registry_info([APP, SITE]), 'update');
+		receive_change(registry_info([APP, SITE], 2), 'update');
 		assert.strictEqual(session_loads, 0);
 		assert.deepEqual(repo_files_calls, [{ root: DEV, dir: SITE }]);
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
@@ -407,20 +475,11 @@ describe('a registry project', () => {
 		app.projects.add(registry_info([APP]));
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/dev/app/'));
 		// another client focuses `site` while the open is in flight
-		receive_change(registry_info([APP, SITE]), 'update');
+		receive_change(registry_info([APP, SITE], 2), 'update');
 		assert.strictEqual(session_loads, 0);
 		assert.deepEqual(repo_files_calls, [], 'deferred while the open is in flight');
-		// the reply was built before that focus
-		calls[0]!.resolve({
-			ok: true,
-			value: {
-				project: registry_info([APP]),
-				focus: APP,
-				files: [],
-				watch_status: 'full',
-				refused: []
-			}
-		});
+		// the open changed nothing, so its reply is the state before that focus
+		calls[0]!.resolve(reply(registry_info([APP]), { focus: APP, opened: false }));
 		const result = await opened;
 		assert.ok(result.ok);
 		assert.deepEqual(
@@ -439,17 +498,8 @@ describe('a registry project', () => {
 	test('a remote focus a reply covers needs no fetch', async () => {
 		app.projects.add(registry_info([APP]));
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/dev/site/'));
-		receive_change(registry_info([APP, SITE]), 'update'); // this open's own notification
-		calls[0]!.resolve({
-			ok: true,
-			value: {
-				project: registry_info([APP, SITE]),
-				focus: SITE,
-				files: [],
-				watch_status: 'full',
-				refused: []
-			}
-		});
+		receive_change(registry_info([APP, SITE], 2), 'update'); // this open's own notification
+		calls[0]!.resolve(reply(registry_info([APP, SITE], 2), { focus: SITE, opened: false }));
 		assert.ok((await opened).ok);
 		assert.strictEqual(session_loads, 0);
 		assert.deepEqual(repo_files_calls, []);
@@ -464,16 +514,12 @@ describe('a registry project', () => {
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/dev/app/src/'), {
 			reconcile_files: true
 		});
-		calls[0]!.resolve({
-			ok: true,
-			value: {
-				project: registry_info([APP]),
+		calls[0]!.resolve(
+			reply(registry_info([APP]), {
 				focus: APP,
-				files: [node('/dev/README.md', 2), node('/dev/app/a.ts')],
-				watch_status: 'full',
-				refused: []
-			}
-		});
+				files: [node('/dev/README.md', 2), node('/dev/app/a.ts')]
+			})
+		);
 		const result = await opened;
 		assert.ok(result.ok);
 		assert.strictEqual(result.value.focus, APP);

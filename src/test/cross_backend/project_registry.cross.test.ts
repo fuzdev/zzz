@@ -11,8 +11,10 @@
  * adds to an open project (`project_changed` `update`), the focus an open
  * requests and what of it it refuses, what `repo_focus` and
  * `repo_unfocus` index and release and what they refuse, what `repo_files`
- * reads for a client pulling another's focus and what it refuses, the refusal of an
- * untrusted registry with its reason, and the scope a close releases.
+ * reads for a client pulling another's focus and what it refuses, the
+ * lifecycle rev each change stamps and every reply and notification carries,
+ * the refusal of an untrusted registry with its reason, and the scope a close
+ * releases.
  *
  * @module
  */
@@ -33,6 +35,7 @@ import {
 
 import {
 	ProjectChangedInput,
+	ProjectCloseOutput,
 	ProjectOpenOutput,
 	RepoFilesOutput,
 	RepoFocusOutput,
@@ -296,6 +299,107 @@ describe('project registry cross-backend', () => {
 			assert.include(ids, join(dev, 'README.md'));
 			assert.notInclude(ids, join(dev, 'app', 'a.ts'));
 			assert.notInclude(ids, join(dev, 'app', 'src', 'b.ts'));
+		} finally {
+			await ws.close();
+		}
+	});
+
+	test('each change stamps a newer rev, which its reply and notification carry', async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		const root = `${dev}/`;
+		const app_dir = `${dev}/app/`;
+		const ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: fixture.transport.cookies()
+		});
+		/**
+		 * The rev of the `project_changed` of `type` for this root reporting
+		 * `focused` — the client matches over every message it has received.
+		 */
+		const changed = (type: string, focused: Array<string>) =>
+			ws
+				.wait_for<Record<string, unknown>>(
+					is_notification_with<{
+						type: string;
+						project: { root: string; focused: Array<string> };
+					}>(
+						'project_changed',
+						(params) =>
+							params.type === type &&
+							params.project.root === root &&
+							JSON.stringify(params.project.focused) === JSON.stringify(focused)
+					),
+					5_000
+				)
+				.then((n) => {
+					const parsed = parse(ProjectChangedInput, n.params);
+					assert.ok(parsed.ok, JSON.stringify(parsed));
+					return parsed.value.project.rev;
+				});
+		let snapshots = 0;
+		const session_rev = async (): Promise<number> => {
+			// each request its own id: the client matches replies by id
+			const session = await ws.request<{ data: { projects_rev: number } }>(
+				`snapshot_${snapshots++}`,
+				'session_load',
+				undefined
+			);
+			return session.data.projects_rev;
+		};
+		try {
+			await ws.request('_warmup', 'ping', undefined);
+			const before = await session_rev();
+
+			const opened_notification = changed('open', []);
+			const opened = await open_project(fixture, dev);
+			assert.isTrue(opened.opened, 'this open created it');
+			assert.isAbove(opened.project.rev, before);
+			assert.strictEqual(await opened_notification, opened.project.rev);
+			assert.strictEqual(await session_rev(), opened.project.rev, 'nothing changed since');
+
+			// an open that changes nothing merges, at the same rev
+			const again = await open_project(fixture, dev);
+			assert.isFalse(again.opened, 'merged into the open project');
+			assert.strictEqual(again.project.rev, opened.project.rev);
+
+			const focused_notification = changed('update', [app_dir]);
+			const focus = await call(fixture, 'repo_focus', { root, dir: app_dir });
+			assert.ok(focus.ok, JSON.stringify(focus));
+			const focused = parse(RepoFocusOutput, focus.result);
+			assert.ok(focused.ok, JSON.stringify(focused));
+			assert.isAbove(focused.value.project.rev, opened.project.rev);
+			assert.strictEqual(await focused_notification, focused.value.project.rev);
+
+			const pulled = parse(
+				RepoFilesOutput,
+				await ws.request('pull', 'repo_files', { root, dir: app_dir })
+			);
+			assert.ok(pulled.ok, JSON.stringify(pulled));
+			assert.strictEqual(pulled.value.rev, focused.value.project.rev, 'read at the focus');
+
+			const unfocused_notification = changed('update', []);
+			const unfocus = await call(fixture, 'repo_unfocus', { root, dir: app_dir });
+			assert.ok(unfocus.ok, JSON.stringify(unfocus));
+			const unfocused = parse(RepoUnfocusOutput, unfocus.result);
+			assert.ok(unfocused.ok, JSON.stringify(unfocused));
+			assert.isAbove(unfocused.value.project.rev, focused.value.project.rev);
+			assert.strictEqual(await unfocused_notification, unfocused.value.project.rev);
+
+			const closed_notification = changed('close', []);
+			const close = await call(fixture, 'project_close', { root });
+			assert.ok(close.ok, JSON.stringify(close));
+			const closed = parse(ProjectCloseOutput, close.result);
+			assert.ok(closed.ok, JSON.stringify(closed));
+			assert.isAbove(closed.value.rev, unfocused.value.project.rev);
+			assert.strictEqual(await closed_notification, closed.value.rev);
+			assert.strictEqual(await session_rev(), closed.value.rev, 'the snapshot is at the close');
+
+			// opened again: a newer rev, created again
+			const reopened = await open_project(fixture, dev);
+			assert.isTrue(reopened.opened);
+			assert.isAbove(reopened.project.rev, closed.value.rev);
 		} finally {
 			await ws.close();
 		}

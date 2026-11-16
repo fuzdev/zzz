@@ -21,7 +21,8 @@ const plain_info = (root: string, name: string): ProjectInfoJson => ({
 	kind: 'plain_dir',
 	registry_path: null,
 	entries: [],
-	focused: [parse_or_throw(DiskfileDirectoryPath, root)]
+	focused: [parse_or_throw(DiskfileDirectoryPath, root)],
+	rev: 1
 });
 
 let app: Frontend;

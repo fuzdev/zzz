@@ -18,7 +18,6 @@
 //! its subdirectories are its repos, and an unfocused one isn't indexed at
 //! all.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -37,8 +36,8 @@ use crate::project::{
     EntryDir, Project, ProjectError, ProjectKind, ResolveOptions, resolve_project,
 };
 use crate::project_manager::{
-    EntryState, Filers, FocusRefused, FocusedFiles, LifecycleError, OpenEntry, OpenKind,
-    OpenProject, Opened, ProjectInfo,
+    EntryState, FocusRefused, FocusedFiles, LifecycleError, OpenEntry, OpenKind, OpenProject,
+    Opened, ProjectInfo,
 };
 
 /// `project_close` of a root that isn't an open project (`invalid_params`)
@@ -123,6 +122,15 @@ struct ProjectOpenResult {
     watch_status: WatchStatus,
     /// Each requested focus that didn't land, and why.
     refused: Vec<FocusRefusal>,
+    /// Whether this open created the project, rather than merging into one
+    /// already open ([`Opened::opened`]).
+    opened: bool,
+}
+
+#[derive(Serialize)]
+struct ProjectCloseResult {
+    /// The close's rev — the closed project's last ([`ProjectInfo::rev`]).
+    rev: u64,
 }
 
 /// A requested focus of a `project_open` that didn't land — twin of
@@ -149,6 +157,8 @@ struct RepoFilesResult {
     files: Vec<SerializableDisknode>,
     /// Over every indexed directory of the project, as `project_open`'s.
     watch_status: WatchStatus,
+    /// The project's rev when the index was read ([`FocusedFiles::rev`]).
+    rev: u64,
 }
 
 #[derive(Serialize)]
@@ -400,28 +410,8 @@ fn to_open_project(
         name,
         opened_at,
         kind,
+        rev: 0,
     })
-}
-
-/// The index of every filer in `filers`, deduplicated by path.
-async fn files_of(app: &App, filers: &Filers) -> Vec<SerializableDisknode> {
-    let mut files: BTreeMap<String, SerializableDisknode> = BTreeMap::new();
-    for dir in filers.keys() {
-        for file in app.filer_manager.files_for(dir).await {
-            files.entry(file.id.clone()).or_insert(file);
-        }
-    }
-    files.into_values().collect()
-}
-
-/// Whether every filer in `filers` has every directory watched.
-async fn watch_status_of(app: &App, filers: &Filers) -> WatchStatus {
-    for dir in filers.keys() {
-        if app.filer_manager.watch_status_for(dir).await == WatchStatus::Degraded {
-            return WatchStatus::Degraded;
-        }
-    }
-    WatchStatus::Full
 }
 
 // -- Handlers ----------------------------------------------------------------
@@ -480,10 +470,12 @@ pub async fn project_list(
 /// project that's no longer a registry is refused per directory rather than
 /// failing the open.
 ///
-/// Returns the project, the directory the opened path focused, the file
-/// index of every filer of the project — each requested focus that landed
-/// included — and the refused focuses; on the idempotent path too, so a
-/// client re-opening an open project can seed its tree the same way. A
+/// Returns the project (with the rev it last changed at), the directory the
+/// opened path focused, the file index of every filer of the project — each
+/// requested focus that landed included, read at the project's rev — the
+/// refused focuses, and whether this open created the project (`opened`)
+/// rather than merging into one already open; on the idempotent path too,
+/// so a client re-opening an open project can seed its tree the same way. A
 /// registry entry that's refused (escaping the root, protected,
 /// unresolvable, not a directory) is reported in the project's entries; the
 /// rest of the project still opens. The root or the opened path's focus
@@ -546,7 +538,11 @@ async fn open_project(
     focus: Option<String>,
     requested: Vec<String>,
 ) -> Result<ActionOutput, JsonrpcError> {
-    let Opened { landed, refused } = app
+    let Opened {
+        landed,
+        opened,
+        refused,
+    } = app
         .projects
         .open(&app, fresh, &requested)
         .await
@@ -565,9 +561,7 @@ async fn open_project(
             reason: focus_refusal_reason(error),
         })
         .collect::<Vec<_>>();
-    let files = files_of(&app, &landed.filers).await;
-    let watch_status = watch_status_of(&app, &landed.filers).await;
-    let size_hint = disknodes_json_size_hint(&files)
+    let size_hint = disknodes_json_size_hint(&landed.files)
         + PROJECT_OPEN_OVERHEAD
         + refused
             .iter()
@@ -576,9 +570,10 @@ async fn open_project(
     let result = ProjectOpenResult {
         project: landed.project.to_info(),
         focus,
-        files,
-        watch_status,
+        files: landed.files,
+        watch_status: landed.watch_status,
         refused,
+        opened,
     };
     Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
 }
@@ -599,7 +594,9 @@ const OPEN_PROJECT: &str = "open project";
 const FOCUS_REPO: &str = "focus repo";
 
 /// `project_close` — close an open project
-/// ([`crate::project_manager::ProjectManager::close`]).
+/// ([`crate::project_manager::ProjectManager::close`]), returning the
+/// close's rev, which a client keeps so no older reply or notification adds
+/// the project back.
 ///
 /// `root` is matched against the open projects as given (plus a trailing
 /// `/`), then canonicalized — so a non-canonical spelling of an open root
@@ -627,11 +624,12 @@ pub async fn project_close(
     // Run to completion in its own task: the spine cancels a socket's
     // in-flight handlers when it closes, and a close dropped partway would
     // leave the project's filers running with nothing to stop them.
-    tokio::spawn(async move { app.projects.close(&app, &root).await })
+    let closed = tokio::spawn(async move { app.projects.close(&app, &root).await })
         .await
         .map_err(|e| internal_error_with_source("failed to close project", &e))?
         .map_err(|e| lifecycle_error("close project", &e, None))?;
-    Ok(Value::Null)
+    serde_json::to_value(ProjectCloseResult { rev: closed.rev })
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// `repo_focus` — focus a registry entry of an open project
@@ -681,13 +679,11 @@ async fn focus_repo(
         .focus(&app, &root, &dir)
         .await
         .map_err(|e| lifecycle_error(FOCUS_REPO, &e, Some(&dir)))?;
-    let files = app.filer_manager.files_for(&dir).await;
-    let watch_status = watch_status_of(&app, &landed.filers).await;
-    let size_hint = disknodes_json_size_hint(&files) + PROJECT_OPEN_OVERHEAD;
+    let size_hint = disknodes_json_size_hint(&landed.files) + PROJECT_OPEN_OVERHEAD;
     let result = RepoFocusResult {
         project: landed.project.to_info(),
-        files,
-        watch_status,
+        files: landed.files,
+        watch_status: landed.watch_status,
     };
     Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
 }
@@ -703,7 +699,9 @@ async fn focus_repo(
 /// root. The check and the read happen under the projects' lock
 /// ([`crate::project_manager::ProjectManager::focused_files`]), so the reply
 /// is the index as one state holds it, never a filer a commit has stopped or
-/// narrowed but not yet published. A focus already dropped is refused rather
+/// narrowed but not yet published — and carries that state's rev, so a
+/// client holding a later focus of the repo can drop a read of an earlier
+/// one. A focus already dropped is refused rather
 /// than answered with no files, which an empty repo would read as; the
 /// `project_changed` that dropped it says what changed.
 ///
@@ -727,6 +725,7 @@ async fn read_repo_files(app: &App, root: &str, dir: &str) -> Result<ActionOutpu
     let FocusedFiles {
         files,
         watch_status,
+        rev,
     } = app
         .projects
         .focused_files(app, root, dir)
@@ -736,6 +735,7 @@ async fn read_repo_files(app: &App, root: &str, dir: &str) -> Result<ActionOutpu
     Ok(ActionOutput::serialize(RepoFilesResult {
         files,
         watch_status,
+        rev,
     })
     .with_size_hint(size_hint))
 }
@@ -918,6 +918,7 @@ purpose = "a reference"
                     },
                 ],
                 "focused": ["/w/app/"],
+                "rev": 0,
             })
         );
         assert_eq!(
@@ -1128,6 +1129,7 @@ purpose = "a reference"
                     .map(|key| tmp.key(&format!("w/{key}/")))
                     .collect(),
             },
+            rev: 0,
         }
     }
 
@@ -1258,7 +1260,12 @@ purpose = "a reference"
                 .is_ok()
         );
 
-        assert_eq!(project_close_all(&app).await.unwrap().len(), 1);
+        let before = app.projects.published().rev;
+        let closed = project_close_all(&app).await.unwrap();
+        assert_eq!(closed.len(), 1);
+        // each closed project carries the close's rev, as its broadcast does
+        assert!(closed[0].rev > before);
+        assert_eq!(closed[0].rev, app.projects.published().rev);
         assert!(app.filer_manager.files_for(&app_dir).await.is_empty());
         assert!(app.projects.published().projects.is_empty());
     }

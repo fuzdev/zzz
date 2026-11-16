@@ -48,7 +48,7 @@ let unfocus_calls: Array<{ input: unknown; resolve: (result: Reply<RepoUnfocusOu
 const cleanups: Array<() => void> = [];
 
 /** The registry at `/dev/`: `app` and `site` present, `gone` missing, `keys` refused. */
-const registry_info = (focused: Array<DiskfileDirectoryPath>): ProjectInfoJson => ({
+const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectInfoJson => ({
 	root: DEV,
 	name: 'dev',
 	opened_at: '2026-11-16T00:00:00.000Z',
@@ -71,7 +71,8 @@ const registry_info = (focused: Array<DiskfileDirectoryPath>): ProjectInfoJson =
 			reason: 'entry_not_confined'
 		}
 	],
-	focused
+	focused,
+	rev
 });
 
 beforeEach(() => {
@@ -119,7 +120,7 @@ const focus_site = async (): Promise<void> => {
 	focus_calls.at(-1)!.resolve({
 		ok: true,
 		value: {
-			project: registry_info([APP, SITE]),
+			project: registry_info([APP, SITE], 2),
 			files: [
 				{
 					id: parse_or_throw(DiskfilePath, '/dev/site/s.md'),
@@ -192,8 +193,8 @@ describe('focusing a lazy row', () => {
 		await focus_site();
 		assert.deepEqual(dev_outline().slice(2, 4), ['  - site', '    s.md']);
 
-		app.projects.add(registry_info([APP]));
-		app.diskfiles.release_unfocused(SITE);
+		// unfocused again, elsewhere
+		app.projects.receive_remote_change(registry_info([APP], 3));
 		click(find_row(target, 'site'));
 		assert.strictEqual(focus_calls.length, 2);
 	});
@@ -262,7 +263,7 @@ describe('the repo contextmenus', () => {
 			[{ root: DEV, dir: APP }]
 		);
 		assert.strictEqual(find_row(target, 'app unfocusing…').getAttribute('aria-busy'), 'true');
-		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([]) } });
+		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([], 3) } });
 		await tick();
 		assert.deepEqual(dev_outline(), ['- /dev/', '  ~ app', '  ~ site', '  README.md']);
 		assert.ok(!app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/dev/app/src/a.ts')));

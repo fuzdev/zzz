@@ -42,14 +42,16 @@ const create_disknode = (path: DiskfilePath, mtime = 1): SerializableDisknode =>
 	mtime
 });
 
-const create_project_info = (root: DiskfileDirectoryPath): ProjectInfoJson => ({
+/** A plain-directory project at `root`, as the daemon stamped it at `rev`. */
+const create_project_info = (root: DiskfileDirectoryPath, rev = 1): ProjectInfoJson => ({
 	root,
 	name: root,
 	opened_at: new Date(0).toISOString(),
 	kind: 'plain_dir',
 	registry_path: null,
 	entries: [],
-	focused: [root]
+	focused: [root],
+	rev
 });
 
 let server_instance_id: Uuid;
@@ -61,6 +63,7 @@ const create_session = (data: Partial<SessionLoadData> = {}): SessionLoadData =>
 	file_roots: [ZZZ_DIR],
 	provider_status: [],
 	projects: [],
+	projects_rev: 1,
 	terminal_ids: [],
 	jobs: [],
 	server_instance_id,
@@ -80,6 +83,7 @@ type ProjectOpenResult =
 				files: Array<SerializableDisknode>;
 				watch_status: 'full';
 				refused: Array<ProjectFocusRefusal>;
+				opened: boolean;
 			};
 	  }
 	| { ok: false; error: { code: number; message: string } };
@@ -129,7 +133,9 @@ beforeEach(() => {
 			new Promise<ProjectOpenResult>((resolve) =>
 				open_calls.push({ path, focus: focus ?? [], resolve })
 			),
-		repo_focus: () => new Promise((resolve) => focus_calls.push(resolve))
+		repo_focus: () => new Promise((resolve) => focus_calls.push(resolve)),
+		repo_files: () =>
+			Promise.resolve({ ok: true, value: { files: [], watch_status: 'full', rev: 0 } })
 	};
 });
 
@@ -175,6 +181,12 @@ const set_socket_connected = (connected: boolean): void => {
 
 const add_running_terminal = (): Terminal =>
 	app.terminals.add({ status: 'running', terminal_id: create_uuid() });
+
+/** Delivers a `project_changed` notification through the real handler. */
+const notify = (type: 'open' | 'update' | 'close', project: ProjectInfoJson): void =>
+	(app.action_handlers.project_changed as unknown as { receive: (event: unknown) => void }).receive(
+		{ data: { input: { type, project } } }
+	);
 
 /** A socket connect time after everything so far. */
 let clock = 0;
@@ -454,7 +466,7 @@ describe('project reconcile', () => {
 		assert.ok(app.diskfiles.get_by_path(WS_A));
 
 		// another tab closed it and opened another, while this one was disconnected
-		await load({ projects: [create_project_info(OTHER_DIR)] });
+		await load({ projects: [create_project_info(OTHER_DIR, 3)], projects_rev: 3 });
 		assert.ok(!app.projects.get_by_root(WS_DIR), 'closed on the backend');
 		assert.ok(app.projects.get_by_root(OTHER_DIR));
 		assert.strictEqual(app.projects.items.size, 1);
@@ -476,27 +488,122 @@ describe('project reconcile', () => {
 		assert.ok(!app.diskfiles.get_by_path(nested_b));
 	});
 
-	test('an open or close during the request wins over the snapshot', async () => {
+	test('a close or open applied during the request is newer than the snapshot, which loses', async () => {
 		await load({ projects: [create_project_info(WS_DIR)] });
 
 		const loaded = app.load_session();
-		// closed, and another opened with its files, while the request was in flight
-		app.projects.remove_by_root(WS_DIR);
-		app.projects.add(create_project_info(OTHER_DIR));
+		// closed, and another opened with its files, while the request was in
+		// flight — after the daemon read the snapshot (`projects_rev` 2)
+		app.receive_project_closed(WS_DIR, 3);
+		app.projects.receive_remote_change(create_project_info(OTHER_DIR, 4));
 		app.diskfiles.add_initial([create_disknode(OTHER_A)]);
 		await succeed(1, {
 			projects: [create_project_info(WS_DIR)],
+			projects_rev: 2,
 			file_roots: [ZZZ_DIR, WS_DIR, OTHER_DIR]
 		});
 		assert.ok(await loaded);
 
 		assert.ok(!app.projects.get_by_root(WS_DIR), 'the close stands');
 		assert.ok(app.projects.get_by_root(OTHER_DIR), 'the open stands');
-		assert.ok(app.diskfiles.get_by_path(OTHER_A), "the opened project's files stay");
+		assert.ok(app.diskfiles.get_by_path(OTHER_A), "the opened project's files aren't pruned");
 
-		// a later snapshot is authoritative again
-		await load({ projects: [] });
+		// the open is new here, so its files come by another snapshot, which is
+		// newer than both
+		assert.strictEqual(calls.length, 3);
+		await succeed(2, {
+			projects: [create_project_info(OTHER_DIR, 4)],
+			projects_rev: 4,
+			files: [create_disknode(OTHER_A)],
+			file_roots: [ZZZ_DIR, OTHER_DIR]
+		});
+		assert.ok(app.projects.get_by_root(OTHER_DIR));
+		assert.ok(app.diskfiles.get_by_path(OTHER_A));
+
+		// a later snapshot without it closes it
+		await load({ projects: [], projects_rev: 5 });
 		assert.strictEqual(app.projects.items.size, 0);
+	});
+
+	test('a held project newer than the snapshot is neither removed nor pruned', async () => {
+		await load({
+			projects: [create_project_info(WS_DIR)],
+			files: [create_disknode(WS_A)],
+			file_roots: [ZZZ_DIR, WS_DIR]
+		});
+		// a reopen applied after the daemon read the next snapshot, which saw it closed
+		const loaded = app.load_session();
+		app.projects.receive_remote_change(create_project_info(WS_DIR, 4));
+		await succeed(1, { projects: [], projects_rev: 3 });
+		assert.ok(await loaded);
+		assert.ok(app.projects.get_by_root(WS_DIR), 'held at a newer rev');
+		assert.ok(app.diskfiles.get_by_path(WS_A), 'its files left to the newer state');
+		// one no newer is removed
+		await load({ projects: [], projects_rev: 5 });
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+	});
+
+	test("a close releases the project's files, and no later snapshot brings them back", async () => {
+		await load({
+			projects: [create_project_info(WS_DIR, 1)],
+			files: [create_disknode(WS_A)],
+			file_roots: [ZZZ_DIR, WS_DIR]
+		});
+		assert.ok(app.diskfiles.get_by_path(WS_A));
+		notify('close', create_project_info(WS_DIR, 2));
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+		assert.ok(!app.diskfiles.get_by_path(WS_A), 'released with its project');
+		await load({ projects_rev: 2 });
+		assert.ok(!app.diskfiles.get_by_path(WS_A));
+	});
+
+	test('a snapshot listing a root closed here since it was read adds none of its files', async () => {
+		await load({ projects: [], file_roots: [ZZZ_DIR] });
+		const loaded = app.load_session();
+		const before = calls.length;
+		// opened at 2 and closed at 3, both landing before the snapshot read at 2
+		notify('open', create_project_info(WS_DIR, 2));
+		notify('close', create_project_info(WS_DIR, 3));
+		await succeed(before - 1, {
+			projects: [create_project_info(WS_DIR, 2)],
+			projects_rev: 2,
+			files: [create_disknode(WS_A), create_disknode(ZZZ_A)],
+			file_roots: [ZZZ_DIR, WS_DIR]
+		});
+		assert.ok(await loaded);
+		await flush();
+		assert.ok(!app.projects.get_by_root(WS_DIR), 'the close stands');
+		assert.ok(!app.diskfiles.get_by_path(WS_A), "the closed root's files aren't added");
+		assert.ok(app.diskfiles.get_by_path(ZZZ_A), 'the rest of the snapshot is');
+	});
+
+	test("a closed root's files another root covers are still added by the snapshot", async () => {
+		await load({ scoped_dirs: [WS_DIR], projects: [], file_roots: [ZZZ_DIR, WS_DIR] });
+		const loaded = app.load_session();
+		const before = calls.length;
+		notify('open', create_project_info(WS_DIR, 2));
+		notify('close', create_project_info(WS_DIR, 3));
+		await succeed(before - 1, {
+			scoped_dirs: [WS_DIR],
+			projects: [create_project_info(WS_DIR, 2)],
+			projects_rev: 2,
+			files: [create_disknode(WS_A)],
+			file_roots: [ZZZ_DIR, WS_DIR]
+		});
+		assert.ok(await loaded);
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+		assert.ok(app.diskfiles.get_by_path(WS_A), 'the scoped dir indexes it');
+	});
+
+	test('a root the snapshot saw closed stays closed to older state', async () => {
+		await load({ projects: [create_project_info(WS_DIR)] });
+		await load({ projects: [], projects_rev: 3 });
+		assert.ok(!app.projects.get_by_root(WS_DIR));
+		// a reply or notification read before the snapshot, landing after it
+		app.projects.receive_remote_change(create_project_info(WS_DIR, 2));
+		assert.ok(!app.projects.get_by_root(WS_DIR), 'at or below the floor');
+		app.projects.receive_remote_change(create_project_info(WS_DIR, 4));
+		assert.ok(app.projects.get_by_root(WS_DIR), 'opened again after the snapshot');
 	});
 });
 
@@ -539,11 +646,12 @@ describe('projects after a restart', () => {
 		open_calls[0]!.resolve({
 			ok: true,
 			value: {
-				project: create_project_info(WS_DIR),
+				project: create_project_info(WS_DIR, 2),
 				focus: WS_DIR,
 				files: [create_disknode(WS_A)],
 				watch_status: 'full',
-				refused: []
+				refused: [],
+				opened: true
 			}
 		});
 		await flush();
@@ -555,7 +663,8 @@ describe('projects after a restart', () => {
 
 		// a later snapshot listing it is plain replace again, with no more reopens
 		await load({
-			projects: [create_project_info(WS_DIR)],
+			projects: [create_project_info(WS_DIR, 2)],
+			projects_rev: 2,
 			files: [create_disknode(WS_A)],
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
@@ -607,7 +716,11 @@ describe('projects after a restart', () => {
 		const nested_a = parse_or_throw(DiskfilePath, '/ws/nested/a.txt');
 		await setup();
 		// the restarted daemon still watches a scoped dir inside the project
-		await load_restarted({ files: [create_disknode(nested_a)], file_roots: [ZZZ_DIR, nested_dir] });
+		await load_restarted({
+			scoped_dirs: [nested_dir],
+			files: [create_disknode(nested_a)],
+			file_roots: [ZZZ_DIR, nested_dir]
+		});
 		open_calls[0]!.resolve({
 			ok: false,
 			error: { code: JSONRPC_ERROR_CODES.forbidden, message: 'failed to open project' }
@@ -641,11 +754,12 @@ describe('projects after a restart', () => {
 	const REOPENED: ProjectOpenResult = {
 		ok: true,
 		value: {
-			project: create_project_info(WS_DIR),
+			project: create_project_info(WS_DIR, 2),
 			focus: WS_DIR,
 			files: [create_disknode(WS_A)],
 			watch_status: 'full',
-			refused: []
+			refused: [],
+			opened: true
 		}
 	};
 
@@ -693,7 +807,7 @@ describe('projects after a restart', () => {
 			[WS_DIR, WS_DIR],
 			'closed again'
 		);
-		close_calls[1]!.resolve({ ok: true, value: null });
+		close_calls[1]!.resolve({ ok: true, value: { rev: 3 } });
 		await flush();
 		assert.ok(!app.projects.get_by_root(WS_DIR), 'absent');
 	});
@@ -702,12 +816,17 @@ describe('projects after a restart', () => {
 		await setup();
 		await load_restarted();
 		const close_calls = stub_close();
+		// another client reopened it first
 		await load({
-			projects: [create_project_info(WS_DIR)],
+			projects: [create_project_info(WS_DIR, 2)],
+			projects_rev: 2,
 			files: [create_disknode(WS_A)],
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
-		open_calls[0]!.resolve(REOPENED);
+		open_calls[0]!.resolve({
+			...REOPENED,
+			value: { ...REOPENED.value, project: create_project_info(WS_DIR, 2), opened: false }
+		});
 		await flush();
 		assert.strictEqual(close_calls.length, 0);
 		assert.ok(app.projects.get_by_root(WS_DIR));
@@ -726,6 +845,48 @@ describe('projects after a restart', () => {
 		assert.ok(app.projects.get_by_root(WS_DIR));
 	});
 
+	test('a close older than the reopened state, landing mid-reopen, cancels nothing', async () => {
+		await setup();
+		await load_restarted();
+		const close_calls = stub_close();
+		// this reopen's own notification (rev 4), then a stale close (rev 3)
+		notify('open', create_project_info(WS_DIR, 4));
+		app.receive_project_closed(WS_DIR, 3);
+		assert.ok(app.projects.get_by_root(WS_DIR), 'the close is older than the state held');
+		open_calls[0]!.resolve({
+			...REOPENED,
+			value: { ...REOPENED.value, project: create_project_info(WS_DIR, 4) }
+		});
+		await flush();
+		assert.strictEqual(close_calls.length, 0, 'not closed again');
+		assert.ok(app.projects.get_by_root(WS_DIR));
+	});
+
+	test("another client's reopen, ahead of this one's older reply, still prunes what changed", async () => {
+		await setup();
+		await load_restarted();
+		const before = calls.length;
+		// another client reopened it and changed it (rev 3) — the state held
+		// was the lost instance's, so its files say nothing of the new one's
+		notify('open', create_project_info(WS_DIR, 3));
+		// this client's own open, older, lands after: its files are dropped
+		open_calls[0]!.resolve({
+			...REOPENED,
+			value: { ...REOPENED.value, project: create_project_info(WS_DIR, 2), files: [] }
+		});
+		await flush();
+		assert.strictEqual(calls.length, before + 1, 'resynced for the files');
+		// `WS_A` was deleted while zzzd was down
+		await succeed(before, {
+			projects: [create_project_info(WS_DIR, 3)],
+			projects_rev: 3,
+			files: [],
+			file_roots: [ZZZ_DIR, WS_DIR]
+		});
+		assert.ok(!app.diskfiles.get_by_path(WS_A), 'pruned');
+		assert.isTrue(app.diskfiles.get_by_path(WS_B)?.deleted_on_disk, 'the draft kept, flagged');
+	});
+
 	test('a snapshot during the reopen leaves the project alone', async () => {
 		await setup();
 		await load_restarted();
@@ -741,9 +902,10 @@ describe('a registry project after a restart', () => {
 	const APP = parse_or_throw(DiskfileDirectoryPath, '/dev/app/');
 	const SITE = parse_or_throw(DiskfileDirectoryPath, '/dev/site/');
 	const APP_A = parse_or_throw(DiskfilePath, '/dev/app/a.txt');
+	const APP_B = parse_or_throw(DiskfilePath, '/dev/app/b.txt');
 	const SITE_A = parse_or_throw(DiskfilePath, '/dev/site/a.txt');
-	const registry_info = (focused: Array<DiskfileDirectoryPath>): ProjectInfoJson => ({
-		...create_project_info(DEV),
+	const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectInfoJson => ({
+		...create_project_info(DEV, rev),
 		kind: 'registry',
 		registry_path: parse_or_throw(DiskfilePath, '/dev/repos.toml'),
 		entries: [
@@ -771,18 +933,23 @@ describe('a registry project after a restart', () => {
 	/** The `project_open` calls so far, each its path and requested focus. */
 	const opens = () => open_calls.map((c) => [c.path, c.focus]);
 
-	/** A reopen's reply: the project focusing `focused`, `refused` the rest. */
+	/**
+	 * A reopen's reply: the project focusing `focused`, `refused` the rest, at
+	 * `rev` — after the restart's snapshot (`projects_rev` 1) by default.
+	 */
 	const reply = (
 		focused: Array<DiskfileDirectoryPath>,
-		refused: Array<ProjectFocusRefusal> = []
+		refused: Array<ProjectFocusRefusal> = [],
+		rev = 2
 	): ProjectOpenResult => ({
 		ok: true,
 		value: {
-			project: registry_info(focused),
+			project: registry_info(focused, rev),
 			focus: null,
 			files: focused.includes(APP) ? [node(APP_A)] : [],
 			watch_status: 'full',
-			refused
+			refused,
+			opened: true
 		}
 	});
 	const transient = {
@@ -799,7 +966,11 @@ describe('a registry project after a restart', () => {
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
 		assert.ok(app.diskfiles.get_by_path(APP_A));
 		assert.ok(!app.diskfiles.get_by_path(SITE_A), 'gone from its reopened repo');
-		await load({ projects: [registry_info([APP, SITE])], file_roots: [ZZZ_DIR, DEV, APP, SITE] });
+		await load({
+			projects: [registry_info([APP, SITE], 2)],
+			projects_rev: 2,
+			file_roots: [ZZZ_DIR, DEV, APP, SITE]
+		});
 		assert.strictEqual(open_calls.length, 1, 'reopened, so no retry');
 	});
 
@@ -813,7 +984,7 @@ describe('a registry project after a restart', () => {
 		focus_calls[0]!({
 			ok: true,
 			value: {
-				project: registry_info([APP, SITE]),
+				project: registry_info([APP, SITE], 2),
 				files: [node(APP_A), node(SITE_A)],
 				watch_status: 'full'
 			}
@@ -834,7 +1005,11 @@ describe('a registry project after a restart', () => {
 		open_calls[0]!.resolve(reply([APP], [{ dir: SITE, reason: 'permission_denied' }]));
 		await flush();
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP]);
-		await load({ projects: [registry_info([APP])], file_roots: [ZZZ_DIR, DEV, APP] });
+		await load({
+			projects: [registry_info([APP], 2)],
+			projects_rev: 2,
+			file_roots: [ZZZ_DIR, DEV, APP]
+		});
 		assert.strictEqual(open_calls.length, 1, 'nothing left to retry');
 	});
 
@@ -842,17 +1017,25 @@ describe('a registry project after a restart', () => {
 		await setup_restarted();
 		open_calls[0]!.resolve(reply([APP], [{ dir: SITE, reason: ERROR_REPO_INDEX_FAILED }]));
 		await flush();
-		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE], 'kept while retried');
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP], "the daemon's focus");
 
 		// listed, with `app` reopened and `site` not: `site` is retried
-		await load({ projects: [registry_info([APP])], file_roots: [ZZZ_DIR, DEV, APP] });
+		await load({
+			projects: [registry_info([APP], 2)],
+			projects_rev: 2,
+			file_roots: [ZZZ_DIR, DEV, APP]
+		});
 		assert.deepEqual(opens(), [
 			[DEV, [APP, SITE]],
 			[DEV, [SITE]]
 		]);
-		open_calls[1]!.resolve(reply([APP, SITE]));
+		open_calls[1]!.resolve(reply([APP, SITE], [], 3));
 		await flush();
-		await load({ projects: [registry_info([APP, SITE])], file_roots: [ZZZ_DIR, DEV, APP, SITE] });
+		await load({
+			projects: [registry_info([APP, SITE], 3)],
+			projects_rev: 3,
+			file_roots: [ZZZ_DIR, DEV, APP, SITE]
+		});
 		assert.strictEqual(open_calls.length, 2, 'reopened, so no more retries');
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
 	});
@@ -881,7 +1064,10 @@ describe('a registry project after a restart', () => {
 		await flush();
 		// zzzd restarts again, and another client reopens the project on `other` alone
 		server_instance_id = create_uuid();
-		await load({ projects: [registry_info([OTHER])], file_roots: [ZZZ_DIR, DEV, OTHER] });
+		await load({
+			projects: [{ ...registry_info([OTHER]), entries: [...registry_info([]).entries] }],
+			file_roots: [ZZZ_DIR, DEV, OTHER]
+		});
 		assert.deepEqual(
 			opens(),
 			[
@@ -910,18 +1096,164 @@ describe('a registry project after a restart', () => {
 		]);
 	});
 
-	test('an update while a snapshot is in flight asks for another', async () => {
+	test('an update applied while a snapshot is in flight is newer, and the snapshot leaves it', async () => {
 		await load({ projects: [registry_info([APP])], file_roots: [ZZZ_DIR, DEV, APP] });
 		const loaded = app.load_session();
-		// an update that adds nothing and drops nothing, for a root the snapshot
-		// will skip as changed in flight
 		(
 			app.action_handlers.project_changed as unknown as { receive: (event: unknown) => void }
-		).receive({ data: { input: { type: 'update', project: registry_info([APP]) } } });
+		).receive({ data: { input: { type: 'update', project: registry_info([APP, SITE], 3) } } });
 		const before = calls.length;
-		await succeed(before - 1, { projects: [registry_info([APP])] });
+		// read before the update
+		await succeed(before - 1, { projects: [registry_info([APP])], projects_rev: 2 });
+		assert.ok(await loaded);
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
+		assert.strictEqual(calls.length, before, 'no other snapshot needed');
+	});
+
+	test("a restart's snapshot is followed by another when state was applied while it was in flight", async () => {
+		await load({ projects: [registry_info([APP])], file_roots: [ZZZ_DIR, DEV, APP] });
+		server_instance_id = create_uuid();
+		const loaded = app.load_session();
+		// the new instance's notification, ahead of a snapshot read before it —
+		// which the reset lets win, so another is loaded
+		(
+			app.action_handlers.project_changed as unknown as { receive: (event: unknown) => void }
+		).receive({ data: { input: { type: 'open', project: registry_info([APP, SITE], 9) } } });
+		const before = calls.length;
+		await succeed(before - 1, { projects: [registry_info([APP], 8)], projects_rev: 8 });
 		assert.ok(await loaded);
 		assert.strictEqual(calls.length, before + 1, 'another snapshot follows');
+		await succeed(before, {
+			projects: [registry_info([APP, SITE], 9)],
+			projects_rev: 9,
+			file_roots: [ZZZ_DIR, DEV, APP, SITE]
+		});
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
+		assert.strictEqual(open_calls.length, 0, 'listed, so nothing to reopen');
+	});
+
+	test('a restart whose clock stepped back loads another snapshot for state it dropped', async () => {
+		await load({
+			projects: [create_project_info(WS_DIR, 50)],
+			projects_rev: 50,
+			file_roots: [ZZZ_DIR, WS_DIR]
+		});
+		server_instance_id = create_uuid();
+		const loaded = app.load_session();
+		const before = calls.length;
+		// the new instance (lower revs) opens `other` after reading the
+		// snapshot; its notification, below the old instance's revs, is dropped
+		notify('open', create_project_info(OTHER_DIR, 6));
+		await succeed(before - 1, {
+			projects: [create_project_info(WS_DIR, 5)],
+			projects_rev: 5,
+			file_roots: [ZZZ_DIR, WS_DIR]
+		});
+		assert.ok(await loaded);
+		assert.strictEqual(calls.length, before + 1, 'another snapshot follows');
+		await succeed(before, {
+			projects: [create_project_info(WS_DIR, 5), create_project_info(OTHER_DIR, 6)],
+			projects_rev: 6,
+			file_roots: [ZZZ_DIR, WS_DIR, OTHER_DIR]
+		});
+		assert.ok(app.projects.get_by_root(OTHER_DIR));
+		assert.strictEqual(calls.length, before + 1, 'the follow-up loads no other');
+	});
+
+	test("a snapshot older than a narrower state held adds none of the dropped repo's files", async () => {
+		await load({
+			projects: [registry_info([APP, SITE])],
+			files: [node(APP_A), node(SITE_A)],
+			file_roots: [ZZZ_DIR, DEV, APP, SITE]
+		});
+		const loaded = app.load_session();
+		const before = calls.length;
+		// the snapshot is read at 2, with both focused; another client then
+		// unfocuses `site` (3), which releases its files here
+		notify('update', registry_info([APP], 3));
+		assert.ok(!app.diskfiles.get_by_path(SITE_A));
+		await succeed(before - 1, {
+			projects: [registry_info([APP, SITE], 2)],
+			projects_rev: 2,
+			// `b.txt` is new here — the snapshot is first to carry it
+			files: [node(APP_A), node(APP_B), node(SITE_A)],
+			file_roots: [ZZZ_DIR, DEV, APP, SITE]
+		});
+		assert.ok(await loaded);
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP], 'the newer state stands');
+		assert.ok(app.diskfiles.get_by_path(APP_B), 'what it indexes is added');
+		assert.ok(!app.diskfiles.get_by_path(SITE_A), 'the unfocused repo stays released');
+	});
+
+	test("a restart's snapshot is followed by another for a close the old revs dropped", async () => {
+		await load({
+			projects: [create_project_info(WS_DIR, 50)],
+			projects_rev: 50,
+			file_roots: [ZZZ_DIR, WS_DIR]
+		});
+		server_instance_id = create_uuid();
+		const loaded = app.load_session();
+		const before = calls.length;
+		// the new instance (lower revs) has `ws` open, read into the snapshot,
+		// then closes it — below the old instance's revs, the close is dropped
+		notify('close', create_project_info(WS_DIR, 6));
+		assert.ok(app.projects.get_by_root(WS_DIR), 'dropped by the old rev');
+		await succeed(before - 1, {
+			projects: [create_project_info(WS_DIR, 5)],
+			projects_rev: 5,
+			file_roots: [ZZZ_DIR, WS_DIR]
+		});
+		assert.ok(await loaded);
+		assert.strictEqual(calls.length, before + 1, 'another snapshot follows');
+		await succeed(before, { projects: [], projects_rev: 6 });
+		assert.ok(!app.projects.get_by_root(WS_DIR), 'closed');
+		assert.strictEqual(calls.length, before + 1, 'the follow-up loads no other');
+	});
+
+	test("a restart's snapshot is followed by another for a close received while it was in flight", async () => {
+		await load({ projects: [], file_roots: [ZZZ_DIR] });
+		server_instance_id = create_uuid();
+		const loaded = app.load_session();
+		const before = calls.length;
+		// `other`, opened on the new instance before this socket connected and
+		// read into the snapshot, is then closed — its close lands ahead of it
+		notify('close', create_project_info(OTHER_DIR, 7));
+		await succeed(before - 1, {
+			projects: [create_project_info(OTHER_DIR, 6)],
+			projects_rev: 6,
+			file_roots: [ZZZ_DIR, OTHER_DIR]
+		});
+		assert.ok(await loaded);
+		assert.strictEqual(calls.length, before + 1, 'another snapshot follows');
+		await succeed(before, { projects: [], projects_rev: 7 });
+		assert.ok(!app.projects.get_by_root(OTHER_DIR), 'closed');
+		assert.strictEqual(calls.length, before + 1, 'the follow-up loads no other');
+	});
+
+	test('a reopen landing on an instance gone since keeps no rev of it', async () => {
+		await setup_restarted();
+		// zzzd restarts again while the project is reopening
+		server_instance_id = create_uuid();
+		await load();
+		// it lands — on the instance that's gone, whose clock ran ahead
+		open_calls[0]!.resolve(reply([APP, SITE], [], 100));
+		await flush();
+		assert.strictEqual(app.projects.get_by_root(DEV)?.rev, -1);
+		// so the new instance's state applies
+		notify('update', registry_info([APP], 5));
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP]);
+	});
+
+	test('a restart resets every rev held, so a lower-seeded instance still applies', async () => {
+		await load({ projects: [registry_info([APP], 50)], projects_rev: 50 });
+		// the clock stepped back: the new instance stamps lower revs
+		server_instance_id = create_uuid();
+		await load({ projects: [registry_info([APP, SITE], 5)], projects_rev: 5 });
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
+		assert.strictEqual(app.projects.get_by_root(DEV)?.rev, 5);
+		// and a close at the new instance's rev applies
+		app.receive_project_closed(DEV, 6);
+		assert.ok(!app.projects.get_by_root(DEV));
 	});
 
 	test('another restart before a retry reopens the whole focus, not just the retry', async () => {
@@ -963,33 +1295,78 @@ describe('a registry project after a restart', () => {
 			[DEV, DEV],
 			'the open that landed anyway is closed again'
 		);
-		close_calls[1]!.resolve({ ok: true, value: null });
+		close_calls[1]!.resolve({ ok: true, value: { rev: 3 } });
 		await flush();
 		assert.ok(!app.projects.get_by_root(DEV));
 	});
 
-	test("another client's close during a reopen stops it", async () => {
+	test("another client's close during a reopen closes it again when this open created it after", async () => {
 		await setup_restarted();
 		const close_calls: Array<{ root: string; resolve: (result: unknown) => void }> = [];
 		(app.api as unknown as Record<string, unknown>).project_close = ({ root }: { root: string }) =>
 			new Promise((resolve) => close_calls.push({ root, resolve }));
-		// the other client's close lands while the project is reopening
+		// the other client's close of the instance's earlier open (rev 2) lands
+		// while the project is reopening
 		(
 			app.action_handlers.project_changed as unknown as { receive: (event: unknown) => void }
-		).receive({ data: { input: { type: 'close', project: registry_info([]) } } });
+		).receive({ data: { input: { type: 'close', project: registry_info([], 2) } } });
 		assert.ok(!app.projects.get_by_root(DEV), 'removed here');
-		open_calls[0]!.resolve(reply([APP, SITE]));
+		open_calls[0]!.resolve(reply([APP, SITE], [], 3));
 		await flush();
 		assert.deepEqual(
 			close_calls.map((c) => c.root),
 			[DEV],
 			'the open that landed anyway is closed again'
 		);
-		close_calls[0]!.resolve({ ok: true, value: null });
+		close_calls[0]!.resolve({ ok: true, value: { rev: 4 } });
 		await flush();
 		assert.ok(!app.projects.get_by_root(DEV));
-		await load();
+		await load({ projects_rev: 4 });
 		assert.strictEqual(open_calls.length, 1, 'no retry');
+	});
+
+	// the race logged as "a remote close re-closing a fresh open"
+	test('a reopen that merged into a fresh open after a close leaves that open alone', async () => {
+		await setup_restarted();
+		const close_calls: Array<{ root: string; resolve: (result: unknown) => void }> = [];
+		(app.api as unknown as Record<string, unknown>).project_close = ({ root }: { root: string }) =>
+			new Promise((resolve) => close_calls.push({ root, resolve }));
+		const receive = (type: 'open' | 'close', project: ProjectInfoJson): void =>
+			(
+				app.action_handlers.project_changed as unknown as { receive: (event: unknown) => void }
+			).receive({ data: { input: { type, project } } });
+		// another client closes it, then a third opens it fresh, while this
+		// client's reopen is in flight
+		receive('close', registry_info([], 2));
+		receive('open', registry_info([SITE], 3));
+		assert.ok(app.projects.get_by_root(DEV), 'the fresh open is newer than the close');
+		// this reopen merged into that open
+		const merged = reply([APP, SITE], [], 4);
+		assert.ok(merged.ok);
+		open_calls[0]!.resolve({ ok: true, value: { ...merged.value, opened: false } });
+		await flush();
+		assert.deepEqual(close_calls, [], 'not closed again');
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
+	});
+
+	test('a reopen that created the project, changed by someone since, is left open', async () => {
+		await setup_restarted();
+		const close_calls: Array<{ root: string; resolve: (result: unknown) => void }> = [];
+		(app.api as unknown as Record<string, unknown>).project_close = ({ root }: { root: string }) =>
+			new Promise((resolve) => close_calls.push({ root, resolve }));
+		const receive = (type: 'open' | 'update' | 'close', project: ProjectInfoJson): void =>
+			(
+				app.action_handlers.project_changed as unknown as { receive: (event: unknown) => void }
+			).receive({ data: { input: { type, project } } });
+		receive('close', registry_info([], 2));
+		// this reopen created it after the close (rev 3), and another client has
+		// opened a path in it since (rev 4), which this client saw first
+		receive('open', registry_info([APP, SITE], 3));
+		receive('update', registry_info([APP, SITE], 4));
+		open_calls[0]!.resolve(reply([APP, SITE], [], 3));
+		await flush();
+		assert.deepEqual(close_calls, [], 'someone acted on it after the close');
+		assert.ok(app.projects.get_by_root(DEV));
 	});
 
 	test('a root that is no longer a registry reopens as what it is, its focus refused', async () => {
@@ -999,14 +1376,15 @@ describe('a registry project after a restart', () => {
 		open_calls[0]!.resolve({
 			ok: true,
 			value: {
-				project: create_project_info(DEV),
+				project: create_project_info(DEV, 2),
 				focus: DEV,
 				files: [node(APP_A), node(SITE_A)],
 				watch_status: 'full',
 				refused: [
 					{ dir: APP, reason: 'project_not_registry' },
 					{ dir: SITE, reason: 'project_not_registry' }
-				]
+				],
+				opened: true
 			}
 		});
 		await flush();
@@ -1014,9 +1392,13 @@ describe('a registry project after a restart', () => {
 		assert.ok(project);
 		assert.strictEqual(project.kind, 'plain_dir');
 		assert.deepEqual(project.focused, [DEV]);
-		// the kind change resyncs, as any narrowing reply does
-		assert.strictEqual(calls.length, loads + 1);
-		await succeed(loads, { projects: [create_project_info(DEV)], file_roots: [ZZZ_DIR, DEV] });
+		assert.ok(app.diskfiles.get_by_path(APP_A), 'its root, a tree now, covers the repos');
+		assert.strictEqual(calls.length, loads, 'a narrowing state settles here, no resync');
+		await load({
+			projects: [create_project_info(DEV, 2)],
+			projects_rev: 2,
+			file_roots: [ZZZ_DIR, DEV]
+		});
 		assert.strictEqual(open_calls.length, 1, 'nothing left to retry');
 	});
 
@@ -1026,12 +1408,13 @@ describe('a registry project after a restart', () => {
 		open_calls[0]!.resolve({
 			ok: true,
 			value: {
-				project: { ...create_project_info(UPPER), kind: 'git_repo' },
+				project: { ...create_project_info(UPPER, 2), kind: 'git_repo' },
 				focus: UPPER,
 				files: [node(APP_A)],
 				watch_status: 'full',
 				// another project's refusals say nothing of this one's focus
-				refused: [{ dir: SITE, reason: ERROR_REPO_INDEX_FAILED }]
+				refused: [{ dir: SITE, reason: ERROR_REPO_INDEX_FAILED }],
+				opened: true
 			}
 		});
 		await flush();

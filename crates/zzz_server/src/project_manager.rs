@@ -11,6 +11,17 @@
 //! state, so those stay in step and notifications for one root go out in the
 //! order its changes took effect.
 //!
+//! Every commit that changes the state bumps the manager's **rev** and
+//! stamps it on what changed ([`OpenProject::rev`]), so every reply and
+//! `project_changed` carries the rev its state was committed at, and the
+//! published snapshot the rev it was taken at ([`PublishedProjects::rev`]).
+//! A client applies a project's state only when its rev is newer than the
+//! one it holds, so the order replies and notifications reach it in — over
+//! one socket, two, or HTTP — doesn't matter. A reply's files are read
+//! under the lock its change committed under, so they're the index of
+//! exactly the state its rev names. The counter starts at the clock
+//! ([`rev_seed`]), so revs keep increasing across restarts.
+//!
 //! What a project keeps indexed is [`filers_of`]: a registry's root at its
 //! top level, and each focused directory whole. Two projects can keep one
 //! directory (a registry's entry that's also open as its own project), so
@@ -27,6 +38,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use fuz_realtime::notify_to_string;
 use fuz_repos::registry::EntryKind;
@@ -39,7 +52,11 @@ use crate::handlers::App;
 
 /// An open project as the manager holds it. [`ProjectInfo`] is its wire
 /// projection ([`Self::to_info`]).
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Equality is the project's state and leaves out [`Self::rev`], which says
+/// when the state last changed: comparing a project with its next state
+/// tells whether anything changed, and so whether a commit stamps a new rev.
+#[derive(Debug, Clone)]
 pub struct OpenProject {
     /// The root, canonical, with a trailing `/` — the project's identity.
     pub root: String,
@@ -48,7 +65,31 @@ pub struct OpenProject {
     /// When it was first opened (RFC 3339).
     pub opened_at: String,
     pub kind: OpenKind,
+    /// The manager's rev at the commit that last changed this project
+    /// ([`ProjectManager::commit`]); 0 for a project as resolved, not yet
+    /// committed.
+    pub rev: u64,
 }
+
+impl PartialEq for OpenProject {
+    fn eq(&self, other: &Self) -> bool {
+        // `rev` left out on purpose — see the type's docs; destructured, so
+        // a field added to the type can't be left out of equality unnoticed
+        let Self {
+            root,
+            name,
+            opened_at,
+            kind,
+            rev: _,
+        } = self;
+        *root == other.root
+            && *name == other.name
+            && *opened_at == other.opened_at
+            && *kind == other.kind
+    }
+}
+
+impl Eq for OpenProject {}
 
 /// Which rule rooted an open project ([`crate::project::ProjectKind`]).
 ///
@@ -127,6 +168,7 @@ impl OpenProject {
             registry_path,
             entries,
             focused: self.focused().into_iter().map(str::to_owned).collect(),
+            rev: self.rev,
         }
     }
 }
@@ -169,6 +211,10 @@ pub struct ProjectInfo {
     pub entries: Vec<ProjectEntryInfo>,
     /// The focused directories (trailing `/`), sorted ([`OpenProject::focused`]).
     pub focused: Vec<String>,
+    /// The rev at which this project last changed ([`OpenProject::rev`]) —
+    /// on a close, the close's own. A client applies a project's state only
+    /// when its rev is newer than the one it holds.
+    pub rev: u64,
 }
 
 /// Which rule rooted a project ([`OpenKind`]).
@@ -245,6 +291,9 @@ pub struct PublishedProjects {
     /// filer running on any other directory belongs to no open project — a
     /// permanent one, or one an open or focus in flight started.
     pub filers: BTreeSet<String>,
+    /// The manager's rev when these were published: every change to
+    /// `projects` up to it is in them, and none after.
+    pub rev: u64,
 }
 
 /// Why an open, close, focus, or unfocus didn't take effect, or a read of a
@@ -290,19 +339,33 @@ pub enum LifecycleError {
     Notify(#[source] serde_json::Error),
 }
 
-/// An open or focus as it landed: the project, and the directories it keeps
-/// indexed — whose files the reply carries.
+/// An open or focus as it landed: the project, and the files its reply
+/// carries.
+///
+/// The files are read under the lock the change committed under, so they're
+/// the index of exactly the state `project.rev` names (see
+/// [`ProjectManager::open`]).
 #[derive(Debug)]
 pub struct Landed {
     pub project: OpenProject,
-    pub filers: Filers,
+    /// An open's: every directory the project keeps indexed. A focus's: the
+    /// focused repo's alone.
+    pub files: Vec<SerializableDisknode>,
+    /// Over every directory the project keeps indexed.
+    pub watch_status: WatchStatus,
 }
 
 /// An open as it landed ([`ProjectManager::open`]): the project and its
-/// filers, and each requested focus that didn't land.
+/// files, whether the open created it, and each requested focus that didn't
+/// land.
 #[derive(Debug)]
 pub struct Opened {
     pub landed: Landed,
+    /// Whether this open created the project, rather than merging into one
+    /// already open. A client that closed the project while its open was in
+    /// flight closes it again only when its own open created it — merged,
+    /// someone else opened it since the close.
+    pub opened: bool,
     /// Those refused before the lock — by the fresh resolve, then by a
     /// listing that failed — then those whose filer was stopped by the time
     /// the lock was taken, each group in the order requested. A focus
@@ -331,6 +394,10 @@ pub struct FocusedFiles {
     pub files: Vec<SerializableDisknode>,
     /// Over every directory the project keeps indexed, as an open's.
     pub watch_status: WatchStatus,
+    /// The project's rev when they were read ([`OpenProject::rev`]): at or
+    /// after the commit that focused the directory, so a client holding a
+    /// later focus of it can tell a read of an earlier one.
+    pub rev: u64,
 }
 
 // -- Derivations ----------------------------------------------------------------
@@ -380,6 +447,8 @@ fn deepen(filers: &mut Filers, more: &Filers) {
 pub(crate) fn merge_project(existing: &OpenProject, fresh: &OpenProject) -> OpenProject {
     let mut merged = OpenProject {
         opened_at: existing.opened_at.clone(),
+        // the rev it last changed at, until a commit stamps a change
+        rev: existing.rev,
         ..fresh.clone()
     };
     // a checkout's or plain directory's one focus is its root, as fresh
@@ -485,6 +554,27 @@ fn with_trailing_slash(mut key: String) -> String {
 
 // -- Filers ---------------------------------------------------------------------
 
+/// The index of every filer in `filers`, deduplicated by path.
+async fn files_of(app: &App, filers: &Filers) -> Vec<SerializableDisknode> {
+    let mut files: BTreeMap<String, SerializableDisknode> = BTreeMap::new();
+    for dir in filers.keys() {
+        for file in app.filer_manager.files_for(dir).await {
+            files.entry(file.id.clone()).or_insert(file);
+        }
+    }
+    files.into_values().collect()
+}
+
+/// Whether every filer in `filers` has every directory watched.
+async fn watch_status_of(app: &App, filers: &Filers) -> WatchStatus {
+    for dir in filers.keys() {
+        if app.filer_manager.watch_status_for(dir).await == WatchStatus::Degraded {
+            return WatchStatus::Degraded;
+        }
+    }
+    WatchStatus::Full
+}
+
 /// Start every filer in `filers`, or find the ones already running —
 /// failing at the first that can't start.
 async fn ensure_filers(app: &Arc<App>, filers: &Filers) -> Result<(), LifecycleError> {
@@ -545,7 +635,7 @@ async fn release(app: &Arc<App>, was: &Filers, now: &Filers) {
 /// dropped partway leaves the state, the filers, and the snapshot out of
 /// step. The spine cancels a socket's in-flight handlers when it closes, so
 /// a caller runs each in its own task.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ProjectManager {
     /// The open projects. Holding this guard is the only way to change
     /// them, to stop or narrow a filer, and to set the `ScopedFs` roots and
@@ -556,11 +646,55 @@ pub struct ProjectManager {
     /// The state as the last commit left it, for readers that don't wait on
     /// the lock.
     published: parking_lot::RwLock<Arc<PublishedProjects>>,
+    /// The lifecycle rev: bumped by every commit that changes the state, and
+    /// stamped on what it changed ([`OpenProject::rev`]), so a client can
+    /// tell newer project state from older whatever order replies and
+    /// notifications reach it in. Written only under `projects`' lock — the
+    /// atomic is for the type system, the lock orders it; read outside the
+    /// lock only through [`Self::published`].
+    rev: AtomicU64,
+}
+
+/// The rev a manager starts at: microseconds since the Unix epoch at boot,
+/// so revs keep increasing across a daemon restart — each commit bumps by
+/// one, and no daemon commits a million times a second — and a client
+/// holding revs from the last boot takes the new daemon's state as newer. A
+/// clock that stepped back breaks that; a client resets what it holds on a
+/// new `server_instance_id` anyway, so it costs a resync, not wrong state.
+///
+/// Microseconds since the epoch stay under 2^53 until the year 2255, so a
+/// rev is exact as a JSON number (an IEEE double) on every client. A clock
+/// before the epoch seeds 0.
+fn rev_seed(now: SystemTime) -> u64 {
+    now.duration_since(UNIX_EPOCH).map_or(0, |since| {
+        u64::try_from(since.as_micros()).unwrap_or(u64::MAX)
+    })
+}
+
+impl Default for ProjectManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ProjectManager {
+    /// A manager with no project open, its rev seeded from the clock
+    /// ([`rev_seed`]).
     pub fn new() -> Self {
-        Self::default()
+        Self::with_rev_seed(rev_seed(SystemTime::now()))
+    }
+
+    /// A manager whose rev starts at `seed` — [`Self::new`]'s clock reading,
+    /// or a test's.
+    pub(crate) fn with_rev_seed(seed: u64) -> Self {
+        Self {
+            projects: tokio::sync::Mutex::default(),
+            published: parking_lot::RwLock::new(Arc::new(PublishedProjects {
+                rev: seed,
+                ..PublishedProjects::default()
+            })),
+            rev: AtomicU64::new(seed),
+        }
     }
 
     /// The open projects and the directories they keep indexed, as the last
@@ -612,17 +746,13 @@ impl ProjectManager {
             });
         }
         let files = app.filer_manager.files_for(dir).await;
-        let mut watch_status = WatchStatus::Full;
-        for kept in filers_of(project).keys() {
-            if app.filer_manager.watch_status_for(kept).await == WatchStatus::Degraded {
-                watch_status = WatchStatus::Degraded;
-                break;
-            }
-        }
+        let watch_status = watch_status_of(app, &filers_of(project)).await;
+        let rev = project.rev;
         drop(projects);
         Ok(FocusedFiles {
             files,
             watch_status,
+            rev,
         })
     }
 
@@ -642,7 +772,10 @@ impl ProjectManager {
     /// on a required one, as before.
     ///
     /// Broadcasts `project_changed` — `open` for a new project, `update` for
-    /// an open one this changed, nothing for one it didn't.
+    /// an open one this changed, nothing for one it didn't — stamped with the
+    /// commit's rev; one it didn't change keeps the rev it last changed at.
+    /// The files of every directory the project keeps are read before the
+    /// lock drops, so they're the index at the returned project's rev.
     ///
     /// # Errors
     ///
@@ -701,6 +834,7 @@ impl ProjectManager {
         // a racing `repo_focus`, or an open — landed after all
         let landed = project.focused();
         refused.retain(|refusal| !landed.contains(&refusal.dir.as_str()));
+        let opened = previous.is_none();
         let change = match previous {
             None => Some(ProjectChange::Open),
             Some(previous) if *previous != project => Some(ProjectChange::Update),
@@ -709,13 +843,28 @@ impl ProjectManager {
         let mut next = projects.clone();
         next.insert(project.root.clone(), project.clone());
         let changes = change.map(|change| (change, project.clone()));
-        self.commit(app, &mut projects, next, &started, changes)
-            .await?;
+        if let Some(rev) = self
+            .commit(app, &mut projects, next, &started, changes)
+            .await?
+        {
+            project.rev = rev;
+        }
+        // read before the lock drops: a commit after it could stop or narrow
+        // a filer this reads, and the reply would carry files no state at
+        // `project.rev` held — which a client applying the reply's state by
+        // its rev would take as the truth about those directories
+        let filers = filers_of(&project);
+        let files = files_of(app, &filers).await;
+        let watch_status = watch_status_of(app, &filers).await;
         drop(projects);
 
-        let filers = filers_of(&project);
         Ok(Opened {
-            landed: Landed { project, filers },
+            landed: Landed {
+                project,
+                files,
+                watch_status,
+            },
+            opened,
             refused,
         })
     }
@@ -726,7 +875,8 @@ impl ProjectManager {
     /// was deleted can still be closed by its stored root.
     ///
     /// Its filers stop unless another open project keeps them, its root
-    /// leaves scope, and `project_changed` `close` is broadcast. Permanent
+    /// leaves scope, and `project_changed` `close` is broadcast. Returns the
+    /// closed project stamped with the close's rev. Permanent
     /// filers and roots (the app dir, the scoped dirs) stay, so closing a
     /// project that overlaps one never revokes the access it grants.
     ///
@@ -754,29 +904,40 @@ impl ProjectManager {
                 root: root.to_owned(),
             });
         };
+        let mut project = project;
         let changes = [(ProjectChange::Close, project.clone())];
-        self.commit(app, &mut projects, next, &Filers::new(), changes)
-            .await?;
+        if let Some(rev) = self
+            .commit(app, &mut projects, next, &Filers::new(), changes)
+            .await?
+        {
+            project.rev = rev;
+        }
         Ok(project)
     }
 
     /// Close every open project, as [`Self::close`] does each. Every project
     /// is released before any `close` is broadcast.
     ///
-    /// Returns the closed projects.
+    /// Returns the closed projects, each stamped with the close's rev.
     ///
     /// # Errors
     ///
     /// [`LifecycleError::Notify`] — every project is closed regardless.
     pub async fn close_all(&self, app: &Arc<App>) -> Result<Vec<OpenProject>, LifecycleError> {
         let mut projects = self.projects.lock().await;
-        let closed: Vec<OpenProject> = projects.values().cloned().collect();
+        let mut closed: Vec<OpenProject> = projects.values().cloned().collect();
         let changes: Vec<(ProjectChange, OpenProject)> = closed
             .iter()
             .map(|project| (ProjectChange::Close, project.clone()))
             .collect();
-        self.commit(app, &mut projects, Projects::new(), &Filers::new(), changes)
-            .await?;
+        if let Some(rev) = self
+            .commit(app, &mut projects, Projects::new(), &Filers::new(), changes)
+            .await?
+        {
+            for project in &mut closed {
+                project.rev = rev;
+            }
+        }
         Ok(closed)
     }
 
@@ -786,7 +947,8 @@ impl ProjectManager {
     /// again.
     ///
     /// Broadcasts `project_changed` `update`; focusing a focused entry
-    /// changes and broadcasts nothing.
+    /// changes and broadcasts nothing. The repo's files are read before the
+    /// lock drops, as an open's are.
     ///
     /// # Errors
     ///
@@ -849,7 +1011,7 @@ impl ProjectManager {
                 focused_mut(&mut project)?.insert(dir.to_owned());
                 Ok((previous.clone(), project))
             });
-        let (previous, project) = match checked {
+        let (previous, mut project) = match checked {
             Ok(checked) => checked,
             Err(error) => {
                 release(app, started, &desired_filers(projects.values())).await;
@@ -859,12 +1021,22 @@ impl ProjectManager {
         let mut next = projects.clone();
         next.insert(project.root.clone(), project.clone());
         let changes = (previous != project).then(|| (ProjectChange::Update, project.clone()));
-        self.commit(app, &mut projects, next, started, changes)
-            .await?;
+        if let Some(rev) = self
+            .commit(app, &mut projects, next, started, changes)
+            .await?
+        {
+            project.rev = rev;
+        }
+        // read before the lock drops, as an open's reply is
+        let files = app.filer_manager.files_for(dir).await;
+        let watch_status = watch_status_of(app, &filers_of(&project)).await;
         drop(projects);
 
-        let filers = filers_of(&project);
-        Ok(Landed { project, filers })
+        Ok(Landed {
+            project,
+            files,
+            watch_status,
+        })
     }
 
     /// Drop the registry entry at `dir` from the focus of the open project at
@@ -900,34 +1072,45 @@ impl ProjectManager {
         let mut next = projects.clone();
         next.insert(project.root.clone(), project.clone());
         let changes = [(ProjectChange::Update, project.clone())];
-        self.commit(app, &mut projects, next, &Filers::new(), changes)
-            .await?;
+        if let Some(rev) = self
+            .commit(app, &mut projects, next, &Filers::new(), changes)
+            .await?
+        {
+            project.rev = rev;
+        }
         Ok(project)
     }
 
     /// Make `next` the open projects. `started` is what the caller's scans
-    /// started before taking the lock; `changes` is what to broadcast once
-    /// `next` is in effect.
+    /// started before taking the lock; `changes` is what changed, to
+    /// broadcast once `next` is in effect — empty for a commit that changes
+    /// no project's state (a no-op open still commits, releasing what its
+    /// scans started).
     ///
     /// In order: every filer `next` needs is ensured — a failure there
     /// releases what the operation started and leaves everything as it was;
-    /// then `next` replaces the state, the filers it no longer needs are
-    /// stopped or narrowed, the roots it drops leave `ScopedFs` and the ones
-    /// it adds enter, the snapshot is published, and `changes` go out.
+    /// then, when anything changed, the rev is bumped and stamped on each
+    /// changed project, in `next` and in its notification (a close's on the
+    /// closed project alone); then `next` replaces the state, the filers it
+    /// no longer needs are stopped or narrowed, the roots it drops leave
+    /// `ScopedFs` and the ones it adds enter, the snapshot is published with
+    /// the rev, and `changes` go out.
+    ///
+    /// Returns the rev stamped on the changes, `None` when there were none.
     ///
     /// # Errors
     ///
-    /// [`LifecycleError::Filer`], with nothing changed;
+    /// [`LifecycleError::Filer`], with nothing changed (the rev included);
     /// [`LifecycleError::Notify`] for the first notification that can't be
     /// built, with `next` in effect and every other one sent.
     async fn commit(
         &self,
         app: &Arc<App>,
         projects: &mut tokio::sync::MutexGuard<'_, Projects>,
-        next: Projects,
+        mut next: Projects,
         started: &Filers,
         changes: impl IntoIterator<Item = (ProjectChange, OpenProject)>,
-    ) -> Result<(), LifecycleError> {
+    ) -> Result<Option<u64>, LifecycleError> {
         let before = desired_filers(projects.values());
         let after = desired_filers(next.values());
 
@@ -939,6 +1122,20 @@ impl ProjectManager {
             release(app, &attempted, &before).await;
             return Err(error);
         }
+
+        let mut changes: Vec<(ProjectChange, OpenProject)> = changes.into_iter().collect();
+        let stamped = (!changes.is_empty()).then(|| {
+            // under the lock, so no two commits share a rev
+            let rev = self.rev.load(Ordering::Relaxed) + 1;
+            self.rev.store(rev, Ordering::Relaxed);
+            for (_, project) in &mut changes {
+                project.rev = rev;
+                if let Some(kept) = next.get_mut(&project.root) {
+                    kept.rev = rev;
+                }
+            }
+            rev
+        });
 
         let closed: Vec<String> = projects
             .keys()
@@ -964,15 +1161,18 @@ impl ProjectManager {
         *self.published.write() = Arc::new(PublishedProjects {
             projects: projects.values().cloned().collect(),
             filers: after.keys().cloned().collect(),
+            rev: self.rev.load(Ordering::Relaxed),
         });
         #[cfg(debug_assertions)]
         check_invariants(app, projects, &after).await;
 
-        let mut result = Ok(());
+        let mut result = Ok(stamped);
         for (change, project) in changes {
             let sent = broadcast_project_changed(app, change, &project);
-            if result.is_ok() {
-                result = sent;
+            if result.is_ok()
+                && let Err(error) = sent
+            {
+                result = Err(error);
             }
         }
         result
@@ -1045,12 +1245,16 @@ mod tests {
 
     /// [`inert_app`] broadcasting over `realtime`.
     fn app_over(realtime: Arc<fuz_realtime::ConnectionRegistry>) -> Arc<App> {
+        Arc::new(app_value(realtime))
+    }
+
+    fn app_value(realtime: Arc<fuz_realtime::ConnectionRegistry>) -> App {
         let pool = fuz_db::create_pool(
             "postgres://localhost:1/project_manager_test_unused",
             &fuz_db::PoolOptions::default(),
         )
         .expect("a lazy pool builds without connecting");
-        Arc::new(App::new(
+        App::new(
             pool.clone(),
             crate::scoped_fs::ScopedFs::without_roots(),
             "/nowhere/".to_owned(),
@@ -1059,7 +1263,16 @@ mod tests {
             false,
             realtime,
             Arc::new(fuz_auth::AuditEmitter::new(pool)),
-        ))
+        )
+    }
+
+    /// [`inert_app`] with its manager's rev seeded at `seed` — a daemon
+    /// booted when the clock read that.
+    fn app_seeded(seed: u64) -> Arc<App> {
+        Arc::new(App {
+            projects: ProjectManager::with_rev_seed(seed),
+            ..app_value(Arc::new(fuz_realtime::ConnectionRegistry::new()))
+        })
     }
 
     /// [`inert_app`] with one socket, whose frames the receiver takes.
@@ -1141,6 +1354,7 @@ mod tests {
                 entries: keys.iter().map(entry).collect(),
                 focused: focus.iter().map(|key| format!("{root}{key}/")).collect(),
             },
+            rev: 0,
         }
     }
 
@@ -1151,6 +1365,7 @@ mod tests {
             name: "plain".to_owned(),
             opened_at: "t".to_owned(),
             kind: OpenKind::PlainDir,
+            rev: 0,
         }
     }
 
@@ -1169,6 +1384,12 @@ mod tests {
         assert_eq!(
             published.filers,
             desired.keys().cloned().collect::<BTreeSet<_>>()
+        );
+        // published at the manager's rev, every project no newer than it
+        assert_eq!(published.rev, app.projects.rev.load(Ordering::Relaxed));
+        assert!(
+            published.projects.iter().all(|p| p.rev <= published.rev),
+            "a project stamped after its snapshot's rev"
         );
         let mut roots = app.scoped_fs.runtime_roots();
         roots.sort();
@@ -1316,6 +1537,67 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_open_and_a_focus_read_their_reply_files_under_the_lock() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/app/sub/c.txt"] {
+            tmp.write(rel);
+        }
+        let app = inert_app();
+        let (root, app_dir) = (tmp.key("w/"), tmp.key("w/app/"));
+        app.projects
+            .open(&app, registry_at(&root, &["app"], &["app"]), &[])
+            .await
+            .unwrap();
+
+        // each parks on the focused repo's index, past its commit — an open
+        // that changes nothing, then a focus of the focused repo
+        for focusing in [false, true] {
+            let held = app.filer_manager.hold_index(&app_dir).await;
+            let reply = tokio::spawn({
+                let (app, root, app_dir) = (Arc::clone(&app), root.clone(), app_dir.clone());
+                async move {
+                    if focusing {
+                        app.projects
+                            .focus(&app, &root, &app_dir)
+                            .await
+                            .unwrap()
+                            .files
+                    } else {
+                        app.projects
+                            .open(&app, registry_at(&root, &["app"], &["app"]), &[])
+                            .await
+                            .unwrap()
+                            .landed
+                            .files
+                    }
+                }
+            });
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                while app.projects.projects.try_lock().is_ok() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("the change takes the lock");
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            assert!(!reply.is_finished(), "the reply's read waits on the index");
+            assert!(
+                app.projects.projects.try_lock().is_err(),
+                "the reply's files are read under the lock its commit held"
+            );
+            drop(held);
+            let files = reply.await.unwrap();
+            assert!(
+                files
+                    .iter()
+                    .any(|file| file.id == tmp.key("w/app/sub/c.txt")),
+                "{files:?}"
+            );
+        }
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_focused_files_read_waits_out_a_commit_partway() {
         let tmp = TempDir::new();
         for rel in ["w/README.md", "w/app/a.txt", "w/app/sub/c.txt"] {
@@ -1412,6 +1694,158 @@ mod tests {
             ]
         );
         assert_settled(&app).await;
+    }
+
+    /// The `project_changed` notifications queued on `rx`, each its type and
+    /// the rev it carries.
+    fn change_revs(rx: &mut fuz_realtime::ConnectionReceiver) -> Vec<(String, u64)> {
+        let mut changes = Vec::new();
+        while let Ok(frame) = rx.try_recv() {
+            let message: Value = serde_json::from_str(frame.as_str()).unwrap();
+            if message["method"] == "project_changed" {
+                let params = &message["params"];
+                changes.push((
+                    params["type"].as_str().unwrap().to_owned(),
+                    params["project"]["rev"].as_u64().unwrap(),
+                ));
+            }
+        }
+        changes
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn every_changing_commit_bumps_the_rev_and_stamps_it_and_a_no_op_never() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/site/b.txt"] {
+            tmp.write(rel);
+        }
+        let (app, _connection, mut rx) = app_with_socket();
+        let (root, app_dir, site_dir) = (tmp.key("w/"), tmp.key("w/app/"), tmp.key("w/site/"));
+        let manager = &app.projects;
+        let seed = manager.published().rev;
+        let revs = |project: &OpenProject| (project.rev, manager.published().rev);
+
+        let opened = manager
+            .open(&app, registry_at(&root, &["app", "site"], &["app"]), &[])
+            .await
+            .unwrap();
+        assert!(opened.opened, "this open created the project");
+        assert_eq!(revs(&opened.landed.project), (seed + 1, seed + 1));
+        // an open that changes nothing merges, and stamps nothing
+        let again = manager
+            .open(&app, registry_at(&root, &["app", "site"], &["app"]), &[])
+            .await
+            .unwrap();
+        assert!(!again.opened, "merged into the open project");
+        assert_eq!(revs(&again.landed.project), (seed + 1, seed + 1));
+
+        let focused = manager.focus(&app, &root, &site_dir).await.unwrap();
+        assert_eq!(revs(&focused.project), (seed + 2, seed + 2));
+        let read = manager.focused_files(&app, &root, &site_dir).await.unwrap();
+        assert_eq!(read.rev, seed + 2, "a read carries the project's rev");
+        let focused = manager.focus(&app, &root, &site_dir).await.unwrap();
+        assert_eq!(revs(&focused.project), (seed + 2, seed + 2));
+        let unfocused = manager.unfocus(&app, &root, &app_dir).await.unwrap();
+        assert_eq!(revs(&unfocused), (seed + 3, seed + 3));
+        let unfocused = manager.unfocus(&app, &root, &app_dir).await.unwrap();
+        assert_eq!(revs(&unfocused), (seed + 3, seed + 3));
+        // the published snapshot holds the projects at the rev it was taken at
+        let published = manager.published();
+        assert_eq!(published.projects[0].rev, seed + 3);
+
+        let closed = manager.close(&app, &root).await.unwrap();
+        assert_eq!(
+            revs(&closed),
+            (seed + 4, seed + 4),
+            "a close returns its rev"
+        );
+        assert!(manager.published().projects.is_empty());
+
+        assert_eq!(
+            change_revs(&mut rx),
+            [
+                ("open".to_owned(), seed + 1),
+                ("update".to_owned(), seed + 2),
+                ("update".to_owned(), seed + 3),
+                ("close".to_owned(), seed + 4),
+            ],
+            "each notification carries the rev its commit stamped"
+        );
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_commit_that_fails_bumps_no_rev() {
+        let tmp = TempDir::new();
+        tmp.write("w/README.md");
+        let app = inert_app();
+        let seed = app.projects.published().rev;
+        // the root can't be listed, so the open fails before anything commits
+        let missing = tmp.key("gone/");
+        assert!(matches!(
+            app.projects.open(&app, plain_at(&missing), &[]).await,
+            Err(LifecycleError::Filer { .. })
+        ));
+        assert_eq!(app.projects.published().rev, seed);
+        let opened = app
+            .projects
+            .open(&app, plain_at(&tmp.key("w/")), &[])
+            .await
+            .unwrap();
+        assert_eq!(
+            opened.landed.project.rev,
+            seed + 1,
+            "the next change takes the next rev"
+        );
+    }
+
+    #[test]
+    fn the_rev_seed_is_the_clock_in_microseconds_and_exact_as_a_json_number() {
+        let at = |micros: u64| UNIX_EPOCH + std::time::Duration::from_micros(micros);
+        assert_eq!(rev_seed(at(1_763_251_200_000_000)), 1_763_251_200_000_000);
+        assert_eq!(rev_seed(UNIX_EPOCH - std::time::Duration::from_secs(1)), 0);
+        // a JSON number is a double: exact up to 2^53, which a seed from the
+        // clock stays under for centuries
+        assert!(rev_seed(SystemTime::now()) < 1 << 53);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_later_boot_starts_above_every_rev_an_earlier_boot_stamped() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/site/b.txt"] {
+            tmp.write(rel);
+        }
+        let (root, site_dir) = (tmp.key("w/"), tmp.key("w/site/"));
+        let booted = SystemTime::now();
+
+        // a first boot that changes its projects a few times
+        let first = app_seeded(rev_seed(booted));
+        first
+            .projects
+            .open(&first, registry_at(&root, &["app", "site"], &["app"]), &[])
+            .await
+            .unwrap();
+        first
+            .projects
+            .focus(&first, &root, &site_dir)
+            .await
+            .unwrap();
+        let last = first.projects.close(&first, &root).await.unwrap().rev;
+        assert_settled(&first).await;
+
+        // a restart a millisecond later — a thousand revs of headroom
+        let second = app_seeded(rev_seed(booted + std::time::Duration::from_millis(1)));
+        assert!(second.projects.published().rev > last);
+        let reopened = second
+            .projects
+            .open(&second, registry_at(&root, &["app", "site"], &["app"]), &[])
+            .await
+            .unwrap();
+        assert!(
+            reopened.landed.project.rev > last,
+            "a client holding the first boot's revs takes the second's as newer"
+        );
+        assert_settled(&second).await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1527,9 +1961,16 @@ mod tests {
             .unwrap();
         assert!(opened.refused.is_empty(), "{:?}", opened.refused);
         assert_eq!(opened.landed.project.focused(), [&app_dir, &site_dir]);
+        let mut ids: Vec<String> = opened.landed.files.iter().map(|f| f.id.clone()).collect();
+        ids.sort();
         assert_eq!(
-            opened.landed.filers.keys().collect::<Vec<_>>(),
-            [&root, &app_dir, &site_dir]
+            ids,
+            [
+                tmp.key("w/README.md"),
+                tmp.key("w/app/a.txt"),
+                tmp.key("w/site/b.txt")
+            ],
+            "the reply carries the root's and both focuses' files"
         );
         let focus = serde_json::json!([app_dir, site_dir]);
         assert_eq!(

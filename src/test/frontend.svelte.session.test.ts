@@ -41,6 +41,7 @@ const create_session = (files: Array<SerializableDisknode> = []): SessionLoadDat
 	file_roots: [ZZZ_DIR],
 	provider_status: [],
 	projects: [],
+	projects_rev: 1,
 	terminal_ids: [],
 	jobs: [],
 	server_instance_id: SERVER_INSTANCE_ID

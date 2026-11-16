@@ -24,7 +24,7 @@ const DEV = parse_or_throw(DiskfileDirectoryPath, '/dev/');
 const APP = parse_or_throw(DiskfileDirectoryPath, '/dev/app/');
 const SITE = parse_or_throw(DiskfileDirectoryPath, '/dev/site/');
 
-const registry_info = (focused: Array<DiskfileDirectoryPath>): ProjectInfoJson => ({
+const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectInfoJson => ({
 	root: DEV,
 	name: 'dev',
 	opened_at: '2026-11-16T00:00:00.000Z',
@@ -47,7 +47,8 @@ const registry_info = (focused: Array<DiskfileDirectoryPath>): ProjectInfoJson =
 			reason: 'entry_not_confined'
 		}
 	],
-	focused
+	focused,
+	rev
 });
 
 type Reply = { ok: true; value: unknown } | { ok: false; error: { code: number; message: string } };
@@ -121,7 +122,7 @@ describe('a registry project on the projects page', () => {
 		assert.strictEqual(to_visible_text(entry_button('site/')), 'focusing…');
 		calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([APP, SITE]), files: [], watch_status: 'full' }
+			value: { project: registry_info([APP, SITE], 2), files: [], watch_status: 'full' }
 		});
 		await tick();
 		assert.deepEqual(entry_texts().slice(0, 2), ['app/ unfocus', 'site/ unfocus']);
@@ -130,7 +131,7 @@ describe('a registry project on the projects page', () => {
 		flushSync();
 		assert.deepEqual(calls[1]!.method, 'repo_unfocus');
 		assert.strictEqual(to_visible_text(entry_button('app/')), 'unfocusing…');
-		calls[1]!.resolve({ ok: true, value: { project: registry_info([SITE]) } });
+		calls[1]!.resolve({ ok: true, value: { project: registry_info([SITE], 3) } });
 		await tick();
 		assert.deepEqual(entry_texts().slice(0, 2), ['app/ focus', 'site/ unfocus']);
 	});

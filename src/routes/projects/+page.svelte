@@ -32,7 +32,8 @@
 	const open_and_activate = async (path: DiskfilePath): Promise<string | null> => {
 		const result = await app.projects.open(path);
 		if (!result.ok) return result.error.message;
-		app.projects.activate(result.value.project.id);
+		// `null` when it's closed already — a close this client applied after the open landed
+		if (result.value.project) app.projects.activate(result.value.project.id);
 		return null;
 	};
 

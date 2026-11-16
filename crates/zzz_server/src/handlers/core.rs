@@ -51,6 +51,13 @@ struct SessionLoadData {
     scoped_dirs: Vec<String>,
     provider_status: Vec<Value>,
     projects: Vec<ProjectInfo>,
+    /// The project manager's rev when `projects` was read: every project
+    /// change up to it is in them, and none after — so a client can drop a
+    /// project the snapshot doesn't list only when what it holds of it is no
+    /// newer. `files` are read after it, outside the lock: a change committed
+    /// between can show in them, and on a socket its `project_changed`
+    /// arrives before this reply.
+    projects_rev: u64,
     /// The caller's live terminals.
     terminal_ids: Vec<String>,
     /// The caller's jobs, oldest first.
@@ -156,6 +163,7 @@ pub async fn session_load(
             scoped_dirs: app.scoped_dirs.clone(),
             provider_status,
             projects,
+            projects_rev: published.rev,
             terminal_ids,
             jobs,
             server_instance_id: app.instance_id.to_string(),
@@ -223,9 +231,11 @@ mod tests {
                         name: "w".to_owned(),
                         opened_at: "2026-01-01T00:00:00Z".to_owned(),
                         kind: crate::project_manager::OpenKind::PlainDir,
+                        rev: 7,
                     }
                     .to_info(),
                 ],
+                projects_rev: 9,
                 terminal_ids: vec!["t1".to_owned()],
                 jobs: vec![],
                 server_instance_id: "00000000-0000-4000-8000-000000000000".to_owned(),
@@ -253,7 +263,9 @@ mod tests {
                     "registry_path": null,
                     "entries": [],
                     "focused": ["/w/"],
+                    "rev": 7,
                 }],
+                "projects_rev": 9,
                 "terminal_ids": ["t1"],
                 "jobs": [],
                 "server_instance_id": "00000000-0000-4000-8000-000000000000",

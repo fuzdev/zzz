@@ -53,8 +53,11 @@ const node = (path: DiskfilePath): SerializableDisknode => ({
 	mtime: 1
 });
 
-/** The registry project at `/dev/` with `app` and `site` present, focusing `focused`. */
-const registry_info = (focused: Array<DiskfileDirectoryPath>): ProjectInfoJson => ({
+/**
+ * The registry project at `/dev/` with `app` and `site` present, focusing
+ * `focused`, as the daemon stamped it at `rev`.
+ */
+const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectInfoJson => ({
 	root: DEV,
 	name: 'dev',
 	opened_at: '2026-11-16T00:00:00.000Z',
@@ -64,7 +67,8 @@ const registry_info = (focused: Array<DiskfileDirectoryPath>): ProjectInfoJson =
 		{ key: 'app', kind: 'repo', dir: APP, state: 'present' },
 		{ key: 'site', kind: 'repo', dir: SITE, state: 'present' }
 	],
-	focused
+	focused,
+	rev
 });
 
 const pending =
@@ -88,6 +92,7 @@ beforeEach(() => {
 		projects: [],
 		terminal_ids: [],
 		jobs: [],
+		projects_rev: 1,
 		server_instance_id: create_uuid()
 	};
 	(app as unknown as { api: unknown }).api = {
@@ -129,7 +134,7 @@ const receive_update = (project: ProjectInfoJson): void => {
 	);
 };
 
-/** The registry open with `focused`, its files known here. */
+/** The registry open with `focused` at rev 1, its files known here. */
 const setup = (focused: Array<DiskfileDirectoryPath>, files: Array<DiskfilePath>): void => {
 	app.projects.add(registry_info(focused));
 	app.diskfiles.add_initial(files.map(node));
@@ -153,38 +158,65 @@ describe('Projects.focus_repo', () => {
 		focus_calls[0]!.resolve({
 			ok: true,
 			value: {
-				project: registry_info([SITE]),
+				project: registry_info([SITE], 2),
 				files: [node(README), node(SITE_A)],
 				watch_status: 'degraded'
 			}
 		});
 		const result = await focused;
 		assert.ok(result.ok);
-		assert.deepEqual(result.value.focused, [SITE]);
-		assert.strictEqual(result.value.watch_status, 'degraded');
+		assert.deepEqual(result.value?.focused, [SITE]);
+		assert.strictEqual(result.value?.rev, 2);
+		assert.strictEqual(result.value?.watch_status, 'degraded');
 		assert.ok(app.diskfiles.get_by_path(SITE_A));
 		assert.isFalse(app.projects.pending_repos.has(SITE));
 		assert.strictEqual(session_loads, 0, 'the reply carries the files');
 	});
 
-	test('its own notification before the reply needs no resync', async () => {
+	test('its own notification before the reply needs no fetch', async () => {
 		setup([], [README]);
 		const focused = app.projects.focus_repo(DEV, SITE);
-		receive_update(registry_info([SITE]));
+		receive_update(registry_info([SITE], 2));
+		assert.strictEqual(files_calls.length, 0, 'deferred while the focus is in flight');
 		focus_calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([SITE]), files: [node(SITE_A)], watch_status: 'full' }
+			value: { project: registry_info([SITE], 2), files: [node(SITE_A)], watch_status: 'full' }
 		});
 		assert.ok((await focused).ok);
 		await flush();
+		assert.ok(app.diskfiles.get_by_path(SITE_A), 'the reply at the same rev carries the files');
+		assert.strictEqual(files_calls.length, 0);
+		assert.strictEqual(session_loads, 0);
+	});
+
+	test('a reply older than the state held applies neither, and what it would carry is pulled', async () => {
+		setup([], [README]);
+		const focused = app.projects.focus_repo(DEV, SITE);
+		receive_update(registry_info([SITE], 2)); // its own
+		receive_update(registry_info([APP, SITE], 3)); // another client's, after it
+		focus_calls[0]!.resolve({
+			ok: true,
+			value: { project: registry_info([SITE], 2), files: [node(SITE_A)], watch_status: 'full' }
+		});
+		const result = await focused;
+		assert.ok(result.ok);
+		assert.deepEqual(result.value?.focused, [APP, SITE], 'the newer state stands');
+		assert.ok(!app.diskfiles.get_by_path(SITE_A), "the older reply's files aren't applied");
+		assert.deepEqual(
+			files_calls.map((c) => c.input).sort((a, b) => a.dir!.localeCompare(b.dir!)),
+			[
+				{ root: DEV, dir: APP },
+				{ root: DEV, dir: SITE }
+			],
+			'what no applied reply carried is pulled once the focus settles'
+		);
 		assert.strictEqual(session_loads, 0);
 	});
 
 	test('a file kept for its draft while unfocused that the reply lacks is flagged deleted', async () => {
 		setup([SITE], [SITE_A, SITE_B]);
 		await edit(SITE_B);
-		app.projects.add(registry_info([]));
-		app.diskfiles.release_unfocused(SITE);
+		receive_update(registry_info([], 2));
 		const b = app.diskfiles.get_by_path(SITE_B);
 		assert.ok(b);
 		assert.isFalse(b.deleted_on_disk);
@@ -192,7 +224,7 @@ describe('Projects.focus_repo', () => {
 		const focused = app.projects.focus_repo(DEV, SITE);
 		focus_calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([SITE]), files: [node(SITE_A)], watch_status: 'full' }
+			value: { project: registry_info([SITE], 3), files: [node(SITE_A)], watch_status: 'full' }
 		});
 		assert.ok((await focused).ok);
 		assert.strictEqual(app.diskfiles.get_by_path(SITE_B), b);
@@ -226,10 +258,10 @@ describe('Projects.unfocus_repo', () => {
 		const unfocused = app.projects.unfocus_repo(DEV, SITE);
 		assert.deepEqual(unfocus_calls[0]!.input, { root: DEV, dir: SITE });
 		assert.isTrue(app.projects.pending_repos.has(SITE));
-		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([APP]) } });
+		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([APP], 2) } });
 		const result = await unfocused;
 		assert.ok(result.ok);
-		assert.deepEqual(result.value.focused, [APP]);
+		assert.deepEqual(result.value?.focused, [APP]);
 		assert.ok(!app.diskfiles.get_by_path(SITE_C), 'nothing holds it, so forgotten');
 		assert.strictEqual(app.diskfiles.get_by_path(SITE_A), a, 'kept for its tab');
 		assert.isFalse(a.deleted_on_disk);
@@ -261,7 +293,7 @@ describe('Projects.unfocus_repo', () => {
 		});
 		setup([SITE], [SITE_A, parse_or_throw(DiskfilePath, '/dev/site/sub/x.txt')]);
 		const unfocused = app.projects.unfocus_repo(DEV, SITE);
-		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([]) } });
+		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([], 2) } });
 		assert.ok((await unfocused).ok);
 		assert.ok(app.diskfiles.get_by_path(SITE_A), 'a loose file of the nested registry');
 		assert.ok(
@@ -270,16 +302,41 @@ describe('Projects.unfocus_repo', () => {
 		);
 	});
 
-	test("a reply that predates another client's focus keeps it", async () => {
-		setup([APP], []);
-		session.projects = [registry_info([SITE])]; // the daemon's state after both
-		const unfocused = app.projects.unfocus_repo(DEV, APP);
-		// another client focuses `site` after the unfocus, its notification first here
-		receive_update(registry_info([APP, SITE]));
-		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([]) } });
+	// the race logged as "an own unfocus reply dropping a remote focus"
+	test("a reply older than another client's focus since leaves that focus and its files", async () => {
+		setup([APP, SITE], [APP_A, SITE_A]);
+		const unfocused = app.projects.unfocus_repo(DEV, SITE);
+		// another client focuses `site` again after the unfocus (rev 2); its
+		// notification lands first here, the unfocus's own late
+		receive_update(registry_info([APP, SITE], 3));
+		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([APP], 2) } });
 		const result = await unfocused;
 		assert.ok(result.ok);
-		assert.deepEqual(result.value.focused, [SITE]);
+		assert.deepEqual(result.value?.focused, [APP, SITE]);
+		receive_update(registry_info([APP], 2));
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
+		assert.ok(app.diskfiles.get_by_path(SITE_A), 'not released by the older state');
+		assert.strictEqual(session_loads, 0);
+	});
+
+	test('a reply listing a focus this client had not heard of pulls it', async () => {
+		setup([SITE], [README, SITE_A]);
+		const unfocused = app.projects.unfocus_repo(DEV, SITE);
+		// another client focused `app` (rev 2), its notification never reached here
+		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([APP], 3) } });
+		assert.ok((await unfocused).ok);
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: DEV, dir: APP }]
+		);
+		files_calls[0]!.resolve({
+			ok: true,
+			value: { files: [node(APP_A)], watch_status: 'full', rev: 3 }
+		});
+		await flush();
+		assert.ok(app.diskfiles.get_by_path(APP_A));
+		assert.ok(!app.diskfiles.get_by_path(SITE_A), 'the unfocused repo released');
+		assert.strictEqual(session_loads, 0);
 	});
 
 	test('a file another root still covers stays', async () => {
@@ -287,7 +344,7 @@ describe('Projects.unfocus_repo', () => {
 		app.scoped_dirs = [SITE];
 		setup([SITE], [SITE_A]);
 		const unfocused = app.projects.unfocus_repo(DEV, SITE);
-		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([]) } });
+		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([], 2) } });
 		assert.ok((await unfocused).ok);
 		assert.ok(app.diskfiles.get_by_path(SITE_A));
 	});
@@ -297,7 +354,7 @@ describe('a remote unfocus', () => {
 	test("releases the repo's files here without a resync, keeping drafts unflagged", async () => {
 		setup([APP, SITE], [APP_A, SITE_A, SITE_B]);
 		await edit(SITE_B);
-		receive_update(registry_info([APP]));
+		receive_update(registry_info([APP], 2));
 		await flush();
 		assert.strictEqual(session_loads, 0);
 		assert.ok(!app.diskfiles.get_by_path(SITE_A));
@@ -305,54 +362,53 @@ describe('a remote unfocus', () => {
 		assert.ok(app.diskfiles.get_by_path(APP_A));
 	});
 
-	test('during an own open, resyncs once it settles — the snapshot keeps drafts and tabs unflagged', async () => {
+	test("during an own open, releases at once, and the open's older reply brings nothing back", async () => {
 		setup([APP, SITE], [APP_A, SITE_A, SITE_B, SITE_C]);
 		const c = app.diskfiles.get_by_path(SITE_C)!;
 		app.diskfiles.select(c.id, true);
 		await edit(SITE_B);
 		const opened = app.projects.open(APP);
-		receive_update(registry_info([APP]));
-		assert.ok(app.diskfiles.get_by_path(SITE_A), 'not yet');
-		session.projects = [registry_info([APP])];
-		session.files = [node(APP_A)];
+		receive_update(registry_info([APP], 2));
+		assert.ok(!app.diskfiles.get_by_path(SITE_A), 'released by the newer state');
+		// the open changed nothing, so its reply is the state before the unfocus
 		open_calls[0]!.resolve({
 			ok: true,
 			value: {
-				project: registry_info([APP, SITE]),
+				project: registry_info([APP, SITE], 1),
 				focus: APP,
 				files: [node(APP_A), node(SITE_A)],
 				watch_status: 'full',
-				refused: []
+				refused: [],
+				opened: false
 			}
 		});
 		assert.ok((await opened).ok);
 		await flush();
-		assert.strictEqual(session_loads, 1);
-		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP], 'the snapshot wins');
-		assert.ok(!app.diskfiles.get_by_path(SITE_A));
+		assert.strictEqual(session_loads, 0, 'no resync');
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP]);
+		assert.ok(!app.diskfiles.get_by_path(SITE_A), "the older reply's files aren't applied");
 		assert.isFalse(app.diskfiles.get_by_path(SITE_B)?.deleted_on_disk);
 		assert.isFalse(app.diskfiles.get_by_path(SITE_C)?.deleted_on_disk, 'kept for its tab');
 	});
 
-	test('a focus dropped because its entry went missing resyncs, flagging drafts deleted', async () => {
+	test('a focus dropped because its entry went missing is released, flagging drafts deleted', async () => {
 		setup([APP, SITE], [APP_A, SITE_A, SITE_B]);
 		await edit(SITE_B);
-		const missing = registry_info([APP]);
+		const missing = registry_info([APP], 2);
 		missing.entries[1] = { ...missing.entries[1]!, state: 'missing' };
-		session.projects = [missing];
-		session.files = [node(APP_A)];
 		receive_update(missing);
 		await flush();
-		assert.strictEqual(session_loads, 1);
+		assert.strictEqual(session_loads, 0);
 		assert.ok(!app.diskfiles.get_by_path(SITE_A));
-		assert.isTrue(app.diskfiles.get_by_path(SITE_B)?.deleted_on_disk);
+		assert.isTrue(app.diskfiles.get_by_path(SITE_B)?.deleted_on_disk, 'gone with its dir');
+		assert.ok(app.diskfiles.get_by_path(APP_A));
 	});
 });
 
 describe('a remote focus', () => {
 	test("pulls the repo's files alone, reconciled around filer changes, without a resync", async () => {
 		setup([], [README, SITE_C]);
-		receive_update(registry_info([SITE]));
+		receive_update(registry_info([SITE], 2));
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [SITE]);
 		assert.deepEqual(
 			files_calls.map((c) => c.input),
@@ -365,7 +421,7 @@ describe('a remote focus', () => {
 		});
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A), node(SITE_B)], watch_status: 'degraded' }
+			value: { files: [node(SITE_A), node(SITE_B)], watch_status: 'degraded', rev: 2 }
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(SITE_A));
@@ -376,9 +432,16 @@ describe('a remote focus', () => {
 		assert.strictEqual(session_loads, 0);
 	});
 
+	test('an older notification changes nothing and fetches nothing', () => {
+		setup([SITE], [README]);
+		receive_update(registry_info([APP, SITE], 1));
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [SITE]);
+		assert.strictEqual(files_calls.length, 0);
+	});
+
 	test('a pull answered `repo_not_focused` is left to the change that dropped it', async () => {
 		setup([], [README]);
-		receive_update(registry_info([SITE]));
+		receive_update(registry_info([SITE], 2));
 		files_calls[0]!.resolve({
 			ok: false,
 			error: {
@@ -394,17 +457,62 @@ describe('a remote focus', () => {
 
 	test('a pull whose focus dropped here meanwhile applies nothing', async () => {
 		setup([], [README]);
-		receive_update(registry_info([SITE]));
-		receive_update(registry_info([]));
-		files_calls[0]!.resolve({ ok: true, value: { files: [node(SITE_A)], watch_status: 'full' } });
+		receive_update(registry_info([SITE], 2));
+		receive_update(registry_info([], 3));
+		files_calls[0]!.resolve({
+			ok: true,
+			value: { files: [node(SITE_A)], watch_status: 'full', rev: 2 }
+		});
 		await flush();
 		assert.ok(!app.diskfiles.get_by_path(SITE_A));
 		assert.strictEqual(session_loads, 0);
 	});
 
+	test('a pull of an earlier focus of the repo, landing after a later one, is dropped', async () => {
+		setup([], [README]);
+		receive_update(registry_info([SITE], 2));
+		receive_update(registry_info([], 3));
+		receive_update(registry_info([SITE], 4));
+		assert.strictEqual(files_calls.length, 2);
+		// a file created while the repo was unfocused, which the later pull has
+		const created = parse_or_throw(DiskfilePath, '/dev/site/new.txt');
+		files_calls[1]!.resolve({
+			ok: true,
+			value: { files: [node(SITE_A), node(created)], watch_status: 'full', rev: 4 }
+		});
+		await flush();
+		assert.ok(app.diskfiles.get_by_path(created));
+		files_calls[0]!.resolve({
+			ok: true,
+			value: { files: [node(SITE_A)], watch_status: 'full', rev: 2 }
+		});
+		await flush();
+		assert.ok(app.diskfiles.get_by_path(created), 'not pruned by the read of the earlier focus');
+	});
+
+	test("a later focus of another repo leaves an earlier one's pull in flight to apply", async () => {
+		setup([], [README]);
+		receive_update(registry_info([SITE], 2));
+		receive_update(registry_info([APP, SITE], 3));
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[
+				{ root: DEV, dir: SITE },
+				{ root: DEV, dir: APP }
+			]
+		);
+		// `site`'s pull read the index at its own focus, before `app`'s
+		files_calls[0]!.resolve({
+			ok: true,
+			value: { files: [node(SITE_A)], watch_status: 'full', rev: 2 }
+		});
+		await flush();
+		assert.ok(app.diskfiles.get_by_path(SITE_A), 'the focus it read is the one held');
+	});
+
 	test('a pull that fails otherwise resyncs', async () => {
 		setup([], [README]);
-		receive_update(registry_info([SITE]));
+		receive_update(registry_info([SITE], 2));
 		files_calls[0]!.resolve({
 			ok: false,
 			error: { code: JSONRPC_ERROR_CODES.internal_error, message: 'boom' }
@@ -416,10 +524,14 @@ describe('a remote focus', () => {
 	test("an own focus's reply listing a focus not heard of pulls that repo after", async () => {
 		setup([], [README]);
 		const focused = app.projects.focus_repo(DEV, APP);
-		// `site`'s notification never reached this client
+		// `site`'s notification (rev 2) never reached this client
 		focus_calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([APP, SITE]), files: [node(APP_A)], watch_status: 'full' }
+			value: {
+				project: registry_info([APP, SITE], 3),
+				files: [node(APP_A)],
+				watch_status: 'full'
+			}
 		});
 		assert.ok((await focused).ok);
 		assert.deepEqual(
@@ -427,12 +539,17 @@ describe('a remote focus', () => {
 			[{ root: DEV, dir: SITE }],
 			"the reply carries `app`'s files alone"
 		);
-		files_calls[0]!.resolve({ ok: true, value: { files: [node(SITE_A)], watch_status: 'full' } });
+		files_calls[0]!.resolve({
+			ok: true,
+			value: { files: [node(SITE_A)], watch_status: 'full', rev: 3 }
+		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(SITE_A));
-		// its notification landing late fetches nothing more
-		receive_update(registry_info([APP, SITE]));
+		// the notifications landing late fetch nothing more
+		receive_update(registry_info([SITE], 2));
+		receive_update(registry_info([APP, SITE], 3));
 		assert.strictEqual(files_calls.length, 1);
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
 		assert.strictEqual(session_loads, 0);
 	});
 
@@ -440,19 +557,26 @@ describe('a remote focus', () => {
 		setup([], [README]);
 		const focused = app.projects.focus_repo(DEV, APP);
 		// another client focuses `site`, then this focus's own notification lands
-		receive_update(registry_info([SITE]));
-		receive_update(registry_info([APP, SITE]));
+		receive_update(registry_info([SITE], 2));
+		receive_update(registry_info([APP, SITE], 3));
 		assert.strictEqual(files_calls.length, 0, 'deferred while the focus is in flight');
 		focus_calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([APP, SITE]), files: [node(APP_A)], watch_status: 'full' }
+			value: {
+				project: registry_info([APP, SITE], 3),
+				files: [node(APP_A)],
+				watch_status: 'full'
+			}
 		});
 		assert.ok((await focused).ok);
 		assert.deepEqual(
 			files_calls.map((c) => c.input),
 			[{ root: DEV, dir: SITE }]
 		);
-		files_calls[0]!.resolve({ ok: true, value: { files: [node(SITE_A)], watch_status: 'full' } });
+		files_calls[0]!.resolve({
+			ok: true,
+			value: { files: [node(SITE_A)], watch_status: 'full', rev: 3 }
+		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(APP_A));
 		assert.ok(app.diskfiles.get_by_path(SITE_A));

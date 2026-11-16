@@ -1,9 +1,13 @@
 import {
 	array,
+	min_value,
 	nullable,
+	number,
 	object,
 	one_of,
 	optional,
+	pipe,
+	safe_integer,
 	string,
 	with_default,
 	with_default_fn,
@@ -50,6 +54,17 @@ export const ProjectEntryJson = object({
 export type ProjectEntryJson = Infer<typeof ProjectEntryJson>;
 
 /**
+ * A lifecycle rev: the daemon bumps it on every change to its open projects
+ * and stamps it on what changed, so a client applies a project's state only
+ * when it's newer than the state it holds, whatever order replies and
+ * notifications arrive in. Seeded from the clock (microseconds since the
+ * epoch) at boot, so revs keep increasing across restarts; below 2^53, so
+ * exact as a JSON number.
+ */
+export const ProjectRev = pipe(number, safe_integer, min_value(0));
+export type ProjectRev = Infer<typeof ProjectRev>;
+
+/**
  * The wire format of an open project, shared between frontend and backend —
  * in action spec inputs and outputs, and the `Project` cell's JSON.
  */
@@ -72,7 +87,9 @@ export const ProjectInfoJson = object({
 	 * its one. A registry's root is indexed at its top level alone, so an
 	 * unfocused entry has no files.
 	 */
-	focused: array(DiskfileDirectoryPath)
+	focused: array(DiskfileDirectoryPath),
+	/** The rev at which this project last changed — on a close, the close's own. */
+	rev: ProjectRev
 });
 export type ProjectInfoJson = Infer<typeof ProjectInfoJson>;
 
@@ -94,7 +111,13 @@ export const ProjectJson = cell_json_schema(
 		kind: with_default(ProjectKind, 'plain_dir'),
 		registry_path: with_default(nullable(DiskfilePath), null),
 		entries: with_default_fn(array(ProjectEntryJson), () => []),
-		focused: with_default_fn(array(DiskfileDirectoryPath), () => [])
+		focused: with_default_fn(array(DiskfileDirectoryPath), () => []),
+		/**
+		 * The rev of the state held (`ProjectRev`), `-1` when unknown — a
+		 * project not from the daemon, or one held across a restart, which any
+		 * state from the daemon replaces.
+		 */
+		rev: with_default(number, -1)
 	},
 	'Project'
 );
@@ -118,6 +141,7 @@ export class Project extends Cell<typeof ProjectJson> {
 	registry_path: DiskfilePath | null = $state.raw()!;
 	entries: Array<ProjectEntryJson> = $state.raw()!;
 	focused: Array<DiskfileDirectoryPath> = $state.raw()!;
+	rev: number = $state.raw()!;
 
 	/**
 	 * Whether the daemon watches every indexed directory of this project, as
@@ -158,14 +182,14 @@ export class Project extends Cell<typeof ProjectJson> {
 	/** Focuses `dir`, one of this registry's present entries — see `Projects.focus_repo`. */
 	focus_repo(
 		dir: DiskfileDirectoryPath
-	): Promise<Result<{ value: Project }, { error: JsonrpcErrorObject }>> {
+	): Promise<Result<{ value: Project | null }, { error: JsonrpcErrorObject }>> {
 		return this.app.projects.focus_repo(this.root, dir);
 	}
 
 	/** Unfocuses `dir`, one of this registry's entries — see `Projects.unfocus_repo`. */
 	unfocus_repo(
 		dir: DiskfileDirectoryPath
-	): Promise<Result<{ value: Project }, { error: JsonrpcErrorObject }>> {
+	): Promise<Result<{ value: Project | null }, { error: JsonrpcErrorObject }>> {
 		return this.app.projects.unfocus_repo(this.root, dir);
 	}
 }

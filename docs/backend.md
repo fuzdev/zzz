@@ -435,7 +435,11 @@ commands):
   a refused one, `project_not_registry` for a plain directory), and
   `repo_files` what the project doesn't focus — an unfocused entry, the
   root, an unregistered directory (`repo_not_focused`); the whole
-  root is in scope while open and out of it once closed; a registry its
+  root is in scope while open and out of it once closed; each change —
+  open, focus, unfocus, close — stamps a newer rev, which its reply, its
+  `project_changed`, a `repo_files` read at it, and `session_load`'s
+  `projects_rev` carry, an open that changes nothing keeping the rev
+  (`opened` false), and `project_close` answers `{rev}`; a registry its
   other users can write refuses the open (`registry_untrusted`).
 - **`filesystem.cross.test.ts`** — `diskfile_read` (a text file whole with
   its size and `mtime`, read through to the disk — a same-length rewrite read
@@ -1090,6 +1094,27 @@ commands):
   its opens, focuses, and closes took effect. Debug builds check after each
   commit that every kept directory has a filer deep enough and that the
   runtime `ScopedFs` roots are the open projects' roots.
+- **The lifecycle rev**: a commit that changes the state bumps the
+  `ProjectManager`'s rev, under the lock, and stamps it on each project it
+  changed (`OpenProject::rev`, kept out of the state's equality, so a
+  commit that changes nothing stamps nothing) and on the closed project of
+  a close; the published snapshot carries the rev it was taken at
+  (`PublishedProjects::rev`, `session_load`'s `projects_rev`). So every
+  reply and notification says which state it is, and clients apply only
+  newer state (./architecture.md § Projects → The lifecycle rev) instead of
+  depending on the order frames arrive in, which a socket's order fixes
+  but HTTP doesn't. The counter is seeded at boot from the clock in
+  microseconds since the epoch (`rev_seed`), so revs keep increasing across
+  a restart (a client still resets what it holds on a new
+  `server_instance_id`, so a clock that stepped back costs a resync, not
+  wrong state); that stays below 2^53, exact as a JSON number. An open's
+  and a focus's reply read their files under the lock their commit held,
+  not after it: a commit after the lock dropped could stop or narrow a
+  filer the reply reads, and the reply would carry files no state at its
+  rev held — which a client applying the reply's state by its rev, since
+  no newer state has reached it, would take as the truth (an empty listing
+  pruning a repo's files). Reading under the lock costs a clone of the
+  reply's indexes while other changes wait, as `repo_files` already does.
 - **`parking_lot::RwLock`** for short synchronous sections (the published
   projects snapshot, `ScopedFs` roots); no poisoning. The async managers (filer index,
   PTY terminals, providers) use `tokio::sync::RwLock` — scope sync guards

@@ -1518,18 +1518,33 @@ opened within 2s it loads over HTTP, and the first connect then resyncs —
 as it does after a failed first load, instead of waiting out the retry
 backoff. `receive_session` reconciles rather than adds:
 
-- **Projects** are replaced (`Projects.reconcile`): listed ones added or
-  updated, the rest removed — another client closed them. After a zzzd
-  restart (a new `server_instance_id`), the projects it lost are reopened
-  instead, each by one `Projects.open` of its root requesting every
-  directory it had focused (`Project.reopen_paths`) as the open's `focus`
+- **Projects** are reconciled by their rev (`Projects.reconcile`, see
+  **The lifecycle rev** under Projects): each listed one applies when it's newer
+  than the state held, and a held one the snapshot doesn't list is removed
+  — another client closed it — only when what's held of it is no newer
+  than the snapshot's `projects_rev`; a held project newer than the
+  snapshot keeps its state, and its files aren't pruned, nor the
+  snapshot's added where that state doesn't index them (a focus it
+  dropped); a listed one closed here since the snapshot was read stays
+  closed, and the snapshot's files under it aren't added. After a zzzd
+  restart (a new `server_instance_id`), every rev held is forgotten first
+  (`Projects.reset_revs`): the new instance's snapshot is the truth,
+  whatever revs the old one stamped (if any project state or close
+  arrived while the snapshot was in flight — applied, or dropped by the
+  old instance's revs — another snapshot follows, since the reset let
+  this one win over it). The projects it lost are
+  reopened instead of removed, each by one `Projects.open` of its root
+  requesting every directory it had focused before the snapshot applied
+  (`Project.reopen_paths`) as the open's `focus`
   — reconciling only the focused directories' files, the complete trees
   so far — so their files, tabs, and unsaved edits stay. The project is
-  reopened once the open lands on its root. A requested focus the daemon
-  refuses (`refused`: no longer a present entry, unlistable, or the root
-  no longer a registry) is dropped, except one that couldn't be indexed
-  for a passing cause (`repo_index_failed`), kept for the next snapshot to
-  retry (a snapshot listing the project without it retries it too). When
+  reopened once the open lands on its root. The reply's focus is the
+  daemon's, applied by its rev, so a requested focus it refuses
+  (`refused`: no longer a present entry, unlistable, or the root no longer
+  a registry) is dropped and its files released, except that one that
+  couldn't be indexed for a passing cause (`repo_index_failed`) is kept
+  for the next snapshot to retry (a snapshot listing the project without
+  it retries it too). When
   the open is refused (the root gone or forbidden, the registry unusable)
   or lands on another root, the project and the files only it covered are
   dropped (logged) — files another open root covers stay; when it fails
@@ -1542,10 +1557,15 @@ backoff. `receive_session` reconciles rather than adds:
   closed. A close while
   a reopen is in flight sticks: the backend's open scans before
   registering, so the close finds nothing open and the open lands anyway —
-  the reopen then closes it again. Another restart while a reopen is in
+  the reopen then closes it again, but only when its own open created the
+  project (`opened`) and nothing changed it since. One that merged into a
+  project open already, or that a later change reached first, was acted
+  on by someone after the close, which stands. Another restart while a reopen is in
   flight queues the project's whole focus again once that reopen settles
-  (what it opened was on the instance that's gone), and after a restart a
-  project another client already reopened gets the rest of its focus.
+  (what it opened was on the instance that's gone, so the rev its reply
+  stamped is forgotten too), and after a restart a
+  project another client already reopened gets the rest of its focus when
+  a retry of it was pending; otherwise the snapshot's focus stands.
 - **Files** under a snapshot root, or under a project the reconcile just
   removed, that the snapshot lacks are removed through the same path as a
   `delete` (`Diskfiles.reconcile`), so a file open with unsaved edits stays,
@@ -1562,9 +1582,9 @@ backoff. `receive_session` reconciles rather than adds:
   a reload shows the job without them until more arrive.
 
 Changes made while the request is in flight win: paths a `filer_change`
-added, changed, or deleted are skipped as above, projects opened or closed
-meanwhile (`Projects.track_changes`) keep their state and their files
-aren't pruned, and terminals started meanwhile aren't judged. A completion
+added, changed, or deleted are skipped as above, project state is ordered
+by its rev (a project opened, changed, or closed after the snapshot was
+read is newer than it), and terminals started meanwhile aren't judged. A completion
 whose `completion_create` was in flight when the socket closed is rejected
 by the WebSocket client (`service_unavailable` — it can't be correlated
 after the reconnect), which settles its turn as errored; the chunks it had
@@ -1788,42 +1808,67 @@ focus or unfocus it, a missing or refused one with why. Both
 paths require an absolute path (a leading `~` isn't expanded) and activate
 the project `project_open` returns, and the query param is handled once and
 then stripped from the URL, so a reload doesn't reopen a project the user
-has since closed. `project_changed` broadcasts keep every connected client's
-`Projects` collection in sync. A project opened elsewhere, or one an open
-or focus elsewhere gave a new focus, arrives without its files (a filer's
-initial scan broadcasts nothing), so the client adds or updates it —
-without activating it — and fetches them (`Projects.receive_remote_change`):
-a project new here by resyncing the session, a new focus on a known one by
-pulling that repo alone (`repo_files`, reconciled under the repo as a
-focus's reply is). A pull the daemon refuses as `repo_not_focused`, or
-whose focus this client has dropped by the time it lands, applies nothing:
-the `project_changed` that dropped the focus settles it. While this
-client's own opens are in flight the fetch waits for them, and is skipped
-for what their replies carried: a reply built before another client's
-focus doesn't carry it. A reply never shrinks the
-focus this client already has that its resolve still supports (a reply
-may predate another client's focus); a notification or a snapshot is the
-daemon's word on it. Stopping a filer deletes nothing on clients, so a
-change that drops a focus needs its files released here. An unfocus — a
-notification dropping only focuses on entries still present, the kind
-unchanged, with no open or focus of this client in flight, or this
-client's own `repo_unfocus` reply — releases them at once
-(`Diskfiles.release_unfocused`): each file the index no longer covers is
-forgotten, except one held by a draft or a tab, kept as it is — not
-flagged deleted, since it's still on disk — until the repo is focused
-again or nothing holds it. Such a file isn't watched meanwhile, so a change
-on disk shows only once the repo is focused again, or as a conflict when
-it's saved (the save checks the disk version it was based on). Any other
-drop (a kind change, an entry gone), or one while an open or focus is in
-flight, whose reply may bring the files back, resyncs once none is, and
-the snapshot prunes them, keeping a file with a draft or a tab in an
-unfocused repo the same way. A change that lands while a
-snapshot is in flight asks for another after it, since that snapshot
-leaves the changed project's files alone. `Projects.focus_repo` applies
-its reply like an open's, reconciling the repo's files (a draft kept
-while it was unfocused whose file is gone is flagged deleted then);
-`Projects.unfocus_repo`'s reply keeps the focus this client has besides
-the repo, since it may predate another client's.
+has since closed.
+
+**The lifecycle rev.** Every change to the open projects — an open that
+changed something, a focus, an unfocus, a close — bumps the daemon's
+project rev and stamps it on the project it changed (`ProjectInfoJson.rev`;
+a close's on the closed project), so every reply and every
+`project_changed` carries the rev its state was committed at:
+`project_open` and `repo_focus` and `repo_unfocus` with the project,
+`project_close` as `{rev}`, `repo_files` as the project's rev when it read
+the index, and `session_load` as `projects_rev`, the rev its projects were
+read at. The counter starts at the clock (microseconds since the epoch),
+so revs keep increasing across a restart; they stay under 2^53, exact as
+JSON numbers. A reply's files are read under the lock its change committed
+under, so they're the index of exactly the state its rev names.
+
+`Projects` applies project state from the daemon by one rule, whatever
+order replies and notifications arrive in — this client's own
+`project_changed` reaches it before its own reply, an HTTP reply can trail
+a notification, and two clients' changes interleave:
+
+- A held project takes a state only when its rev is newer than the one
+  held; an older state is dropped whole, its reply's files with it (a
+  reply's files are applied only when its state is the one held).
+- A close older than the state held — the project opened again since —
+  changes nothing. Any other leaves a tombstone, `(root, rev)`, and
+  removes the project if held, releasing its files the index no longer
+  covers as a narrowed state does (below): a root not held is added only
+  by a state newer than its tombstone and than the last snapshot's
+  `projects_rev` (state at or below it is one the snapshot saw). A
+  snapshot that lists a root closed here after it was read leaves it
+  closed and doesn't add its files.
+- A newer state that narrows — drops a focus, a kind change included,
+  since a checkout's or plain directory's one focus is its root — releases
+  the dropped directories' files here (`Diskfiles.release_uncovered`),
+  since stopping a filer deletes nothing on clients: a file still indexed
+  (another focus, another root, a registry root's loose files) stays; one
+  in a present but unfocused repo is forgotten unless a draft or a tab
+  holds it, kept as it is — not flagged deleted, since it's still on disk —
+  until the repo is focused again or nothing holds it; any other (its
+  entry gone missing or out of the registry, or under a root become a
+  registry's) goes as a snapshot that no longer lists it would remove it.
+  A kept file isn't watched meanwhile, so a change on disk shows only once
+  the repo is focused again, or as a conflict when it's saved (the save
+  checks the disk version it was based on).
+- A newer state that widens — a project new here, opened elsewhere
+  (another tab, `zzz <path>`), or a focus added elsewhere — arrives
+  without its files (a filer's initial scan broadcasts nothing). What it
+  needs is held pending, each directory with the state's rev, until no
+  open or focus of this client's is in flight; an applied reply at or
+  after that rev that carries the directory settles it. Then each repo
+  still focused is pulled alone (`repo_files`, reconciled under the repo as
+  a focus's reply is), and a project new here resyncs the session. A pull
+  of an earlier focus than the one held — across an unfocus and a focus
+  again — is dropped, as is one the daemon refuses as `repo_not_focused`
+  or whose focus is gone here: the change that dropped it settles it.
+
+`Projects.focus_repo` applies its reply like an open's, reconciling the
+repo's files (a draft kept while it was unfocused whose file is gone is
+flagged deleted then); `Projects.unfocus_repo` applies its reply by the
+same rule, so a reply older than another client's later focus of the repo
+neither drops that focus nor releases its files.
 
 The file tree shows one root row per open project's root, and under a
 registry's root its present entries from the project (`Projects.repos`),

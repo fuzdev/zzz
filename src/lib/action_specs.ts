@@ -57,7 +57,7 @@ import { ProviderStatus, ProviderName } from './provider_types.ts';
 import { JobSnapshot } from './job_types.ts';
 import { TranscriptSegment } from './transcript_types.ts';
 import { CompletionMessage, CompletionRequest, CompletionResponse } from './completion_types.ts';
-import { ProjectInfoJson, ProjectWatchStatus } from './project.svelte.ts';
+import { ProjectInfoJson, ProjectRev, ProjectWatchStatus } from './project.svelte.ts';
 
 // -- Shared sub-schemas -----------------------------------------------------
 
@@ -107,6 +107,15 @@ export const SessionLoadData = object({
 	file_roots: array(DiskfileDirectoryPath),
 	provider_status: array(ProviderStatus),
 	projects: array(ProjectInfoJson),
+	/**
+	 * The daemon's project rev when `projects` was read: every project change
+	 * up to it is in them, and none after. A held project the snapshot
+	 * doesn't list is closed only when the rev held of it is no newer.
+	 * `files` are read after it, outside the lock: a change committed between
+	 * can show in them, and on a socket its `project_changed` arrives before
+	 * this reply.
+	 */
+	projects_rev: ProjectRev,
 	/** Backend ids of the caller's live terminals. */
 	terminal_ids: array(Uuid),
 	/** The caller's jobs, oldest first — running, queued, and recent finished ones. */
@@ -437,7 +446,13 @@ export const ProjectOpenOutput = object({
 	files: array(SerializableDisknode),
 	watch_status: ProjectWatchStatus,
 	/** Each requested `focus` that didn't land. */
-	refused: array(ProjectFocusRefusal)
+	refused: array(ProjectFocusRefusal),
+	/**
+	 * Whether this open created the project, rather than merging into one
+	 * already open — a client that closed the project while its open was in
+	 * flight closes it again only when its own open created it.
+	 */
+	opened: boolean
 });
 export type ProjectOpenOutput = Infer<typeof ProjectOpenOutput>;
 
@@ -446,6 +461,12 @@ export const ProjectCloseInput = object({
 	root: DiskfileDirectoryPath
 });
 export type ProjectCloseInput = Infer<typeof ProjectCloseInput>;
+
+/** Output for `project_close`: the close's rev, the closed project's last. */
+export const ProjectCloseOutput = object({
+	rev: ProjectRev
+});
+export type ProjectCloseOutput = Infer<typeof ProjectCloseOutput>;
 
 /**
  * Input for `repo_focus`: a registry entry of an open project, by the
@@ -495,7 +516,13 @@ export const RepoFilesOutput = object({
 	/** The focused repo's index. */
 	files: array(SerializableDisknode),
 	/** Over every indexed directory of the project, as `project_open`'s. */
-	watch_status: ProjectWatchStatus
+	watch_status: ProjectWatchStatus,
+	/**
+	 * The project's rev when the index was read — at or after the focus it
+	 * read, so a client holding a later focus of the repo drops a read of an
+	 * earlier one.
+	 */
+	rev: ProjectRev
 });
 export type RepoFilesOutput = Infer<typeof RepoFilesOutput>;
 
@@ -845,7 +872,7 @@ export const project_close_action_spec = {
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
 	input: ProjectCloseInput,
-	output: literal(null),
+	output: ProjectCloseOutput,
 	async: true,
 	description:
 		'Close a project — stops the file watching no other open project keeps and removes its root from ScopedFs.'

@@ -95,8 +95,12 @@ const PROJECT_REOPEN_REFUSAL_CODES: ReadonlySet<number> = new Set([
 export interface SessionSnapshotChanges {
 	/** What `filer_change` reported (`Diskfiles.track_changes`). */
 	file_changes: DiskfileSnapshotChanges;
-	/** Project roots opened or closed (`Projects.track_changes`). */
-	project_roots: ReadonlySet<string>;
+	/**
+	 * `Projects.received` when the snapshot was requested — a restart's
+	 * snapshot can't be ordered against state received while it was in
+	 * flight, applied or not.
+	 */
+	projects_received: number;
 	/** Backend ids of the terminals running when the snapshot was requested. */
 	running_terminal_ids: ReadonlySet<Uuid>;
 }
@@ -430,9 +434,9 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 * after every reconnect (see `handle_socket_connect`).
 	 *
 	 * Changes that arrive while the request is in flight win over the snapshot:
-	 * files a `filer_change` reported (see `Diskfiles.track_changes`) and
-	 * projects opened or closed are left as they are, and only terminals
-	 * running when the request was sent can be found lost. The snapshot
+	 * files a `filer_change` reported (see `Diskfiles.track_changes`) are left
+	 * as they are, project state is ordered by its rev (`Projects.reconcile`),
+	 * and only terminals running when the request was sent can be found lost. The snapshot
 	 * carries no contents: every file held eagerly is read again (the shown
 	 * ones first), and any other loaded file drops its content
 	 * (`Diskfiles.upsert`).
@@ -451,11 +455,10 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		let error_message: string;
 		const file_changes = this.diskfiles.track_changes();
-		const project_changes = this.projects.track_changes();
+		const projects_received = this.projects.received;
 		const running_terminal_ids = this.terminals.running_terminal_ids();
 		const stop_tracking = (): void => {
 			file_changes.stop();
-			project_changes.stop();
 		};
 		try {
 			const result = await this.api.session_load();
@@ -464,7 +467,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 			if (result.ok) {
 				this.receive_session(result.value.data, {
 					file_changes,
-					project_roots: project_changes.roots,
+					projects_received,
 					running_terminal_ids
 				});
 				this.session_status = 'success';
@@ -609,9 +612,12 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	/**
 	 * Reconciles the app with a session snapshot — replacing, not just adding:
 	 *
-	 * - projects: adds or updates the listed ones and removes the rest
+	 * - projects: applies the listed ones by their rev, and removes the held
+	 *   ones it doesn't list that are no newer than its `projects_rev`
 	 *   (`Projects.reconcile`) — except after a zzzd restart (a new
-	 *   `server_instance_id`), when the ones it lost are reopened instead
+	 *   `server_instance_id`), which first forgets every rev held
+	 *   (`Projects.reset_revs`: the new instance's snapshot is the truth),
+	 *   and when the ones it lost are reopened instead
 	 *   (one `Projects.open` of each root, requesting the directories it had
 	 *   focused), keeping their files and tabs; a reopen refused because the
 	 *   root is gone or forbidden, or that resolves to another project, drops
@@ -619,7 +625,11 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 *   next snapshot to retry
 	 * - files: upserts the snapshot's, and removes known files it lacks under
 	 *   `file_roots` or a removed project, keeping ones with unsaved edits
-	 *   (`Diskfiles.reconcile`) — files elsewhere are left alone
+	 *   (`Diskfiles.reconcile`) — files elsewhere, and under a project whose
+	 *   state held is newer than the snapshot or that's being reopened, are
+	 *   left alone; the snapshot's files under a root closed here since it
+	 *   was read, or under a newer state held, are added only where the
+	 *   index held covers them (`Diskfiles.is_indexed`)
 	 * - terminals: running ones the backend no longer has become `lost`
 	 *   (`Terminals.reconcile`)
 	 *
@@ -639,12 +649,30 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.scoped_dirs = data.scoped_dirs;
 		this.provider_status = data.provider_status;
 
-		// projects changed in flight or being reopened are left as they are — a
-		// reopen this restart overtook queues its whole focus once it settles
-		const skip_projects: Set<string> = new Set(changes?.project_roots);
-		for (const root of this.#projects_reopening) {
-			skip_projects.add(root);
-			if (restarted) this.#projects_restarted_while_reopening.add(root);
+		// what a restart's reopen restores is the focus held before the snapshot
+		// applies — a project another client reopened first is listed with only
+		// what it restored
+		const lost_focus: Map<DiskfileDirectoryPath, ReadonlyArray<DiskfileDirectoryPath>> = new Map(
+			restarted ? this.projects.items.values.map((p) => [p.root, p.reopen_paths]) : []
+		);
+		if (restarted) {
+			// revs from the instance that's gone say nothing about the new one's
+			// (a clock that stepped back seeds it lower), so the snapshot is the
+			// truth — but state the new instance sent while it was in flight may
+			// be newer than it, applied or dropped by the old revs, so load
+			// another, which orders after both (and has the same instance id, so
+			// it doesn't come back here)
+			this.projects.reset_revs();
+			if (changes && changes.projects_received !== this.projects.received) {
+				this.resync_session();
+			}
+		}
+
+		// projects being reopened are kept — a reopen this restart overtook
+		// queues its whole focus once it settles
+		const reopening: Set<DiskfileDirectoryPath> = new Set(this.#projects_reopening);
+		if (restarted) {
+			for (const root of reopening) this.#projects_restarted_while_reopening.add(root);
 		}
 		// lost to an earlier restart, some of their reopen failed without a
 		// refusal — retry what the snapshot doesn't show reopened
@@ -660,20 +688,30 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 				continue;
 			}
 			this.#projects_to_reopen.set(root, pending);
-			if (!skip_projects.has(root)) retry.push(root);
+			if (!reopening.has(root)) retry.push(root);
 		}
-		const unlisted = this.projects.reconcile(data.projects, {
-			skip_roots: new Set([...skip_projects, ...retry]),
+		const { unlisted, newer, refused } = this.projects.reconcile(data.projects, data.projects_rev, {
+			keep_roots: new Set([...reopening, ...retry]),
 			keep_unlisted: restarted
 		});
 		const reopen = restarted ? [...unlisted, ...retry] : retry;
 		const removed = restarted ? [] : unlisted;
 
+		// a listed root closed here since the snapshot was read, or held at a
+		// newer state that may index less (an unfocus applied meanwhile): its
+		// files the index no longer covers aren't added back
+		const stale = [...refused, ...newer];
+		const files = stale.length
+			? data.files.filter(
+					(file) =>
+						!stale.some((root) => file.id.startsWith(root)) || this.diskfiles.is_indexed(file.id)
+				)
+			: data.files;
 		// a removed project's files are gone from the backend's view unless
 		// another root covers them — then they're in the snapshot or pruned there
-		this.diskfiles.reconcile(data.files, [...data.file_roots, ...removed], {
+		this.diskfiles.reconcile(files, [...data.file_roots, ...removed], {
 			changes: changes?.file_changes,
-			skip_dirs: [...skip_projects, ...reopen]
+			skip_dirs: [...newer, ...reopening, ...reopen]
 		});
 
 		this.terminals.reconcile(
@@ -693,25 +731,27 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 			// backend has focused already, when another client reopened it first;
 			// otherwise only what's pending
 			const info = listed.get(root);
+			const held = lost_focus.get(root) ?? project.reopen_paths;
 			const paths = (
-				restarted
-					? Array.from(new Set([...project.reopen_paths, ...(pending ?? [])]))
-					: (pending ?? project.reopen_paths)
+				restarted ? Array.from(new Set([...held, ...(pending ?? [])])) : (pending ?? held)
 			).filter((path) => !info || (path !== root && !info.focused.includes(path)));
 			if (!paths.length) {
 				this.#projects_to_reopen.delete(root);
 				continue;
 			}
-			void this.#reopen_project(root, paths, data.file_roots);
+			void this.#reopen_project(root, paths);
 		}
 	}
 
 	/**
-	 * Closes the project at `root` (`project_close`) and removes it here. A
-	 * reply that it isn't open (`ERROR_PROJECT_NOT_OPEN` — e.g. a restart
-	 * forgot it and its reopen hasn't succeeded) removes it here too, and the
-	 * close always cancels a pending reopen — one in flight closes the project
-	 * again once it lands — so a closed project stays closed.
+	 * Closes the project at `root` (`project_close`) and applies the close at
+	 * its rev (`Projects.receive_closed`), which leaves a tombstone unless the
+	 * state held is newer, and releases the project's files. A reply
+	 * that it isn't open (`ERROR_PROJECT_NOT_OPEN` — e.g. a restart forgot it
+	 * and its reopen hasn't succeeded) removes it here too, and the close
+	 * always cancels a pending reopen — one in flight closes the project
+	 * again once it lands, if its open created it — so a closed project
+	 * stays closed.
 	 *
 	 * @returns the RPC result — any failure but "not open" is for the caller to surface
 	 */
@@ -721,23 +761,27 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.#projects_to_reopen.delete(root);
 		if (this.#projects_reopening.has(root)) this.#projects_reopen_cancelled.add(root);
 		const result = await this.api.project_close({ root });
-		if (!result.ok) {
-			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
-			if (reason !== ERROR_PROJECT_NOT_OPEN) return result;
+		if (result.ok) {
+			this.projects.receive_closed(root, result.value.rev);
+			return { ok: true, value: null };
 		}
+		const { reason } = (result.error.data ?? {}) as { reason?: unknown };
+		if (reason !== ERROR_PROJECT_NOT_OPEN) return result;
 		this.projects.remove_by_root(root);
 		return { ok: true, value: null };
 	}
 
 	/**
-	 * Handles a `project_changed` close — another client's or this one's:
-	 * removes the project here and cancels a reopen of it, pending or in
-	 * flight (one that lands anyway is closed again, see `#reopen_project`).
+	 * Handles a `project_changed` close at `rev` — another client's or this
+	 * one's: applies it (`Projects.receive_closed`) and, unless the project
+	 * held was opened again after it, cancels a reopen of it, pending or in
+	 * flight (one that lands anyway is closed again if its open created it,
+	 * see `#reopen_project`).
 	 */
-	receive_project_closed(root: DiskfileDirectoryPath): void {
+	receive_project_closed(root: DiskfileDirectoryPath, rev: number): void {
+		if (!this.projects.receive_closed(root, rev)) return;
 		this.#projects_to_reopen.delete(root);
 		if (this.#projects_reopening.has(root)) this.#projects_reopen_cancelled.add(root);
-		this.projects.remove_by_root(root);
 	}
 
 	/**
@@ -753,18 +797,19 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 * dropped; when it fails otherwise, it's kept for the next snapshot to
 	 * retry, so nothing loops. A close while it's in flight wins — this
 	 * client's `close_project`, or another's, which removes the project here:
-	 * a reopen that lands anyway is closed again.
+	 * a reopen that lands anyway is closed again when its own open created
+	 * the project (`ProjectOpened.opened`). One that merged into a project
+	 * open already was opened by someone else after the close, which stands.
 	 */
 	async #reopen_project(
 		root: DiskfileDirectoryPath,
-		paths: ReadonlyArray<DiskfileDirectoryPath>,
-		file_roots: ReadonlyArray<string>
+		paths: ReadonlyArray<DiskfileDirectoryPath>
 	): Promise<void> {
 		this.#projects_to_reopen.set(root, [...paths]);
 		this.#projects_reopening.add(root);
 		let reopened = false;
+		let opened = false;
 		let failed: Array<DiskfileDirectoryPath> = [];
-		const refused: Array<DiskfileDirectoryPath> = [];
 		let cancelled = false;
 		try {
 			let error: JsonrpcErrorObject | null = null;
@@ -775,10 +820,13 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 				});
 				if (!result.ok) {
 					error = result.error;
-				} else if (result.value.project.root === root) {
+				} else if (result.value.project?.root === root) {
 					reopened = true;
+					// created by this open, and nothing changed it since — a newer state
+					// held means someone acted on it after the close, which stands
+					opened = result.value.opened && result.value.project.rev === result.value.rev;
 					for (const { dir, reason } of result.value.refused) {
-						(reason === ERROR_REPO_INDEX_FAILED ? failed : refused).push(dir);
+						if (reason === ERROR_REPO_INDEX_FAILED) failed.push(dir);
 					}
 				}
 			} catch (thrown) {
@@ -796,8 +844,9 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		if (cancelled || this.#disposed) {
 			this.#projects_to_reopen.delete(root);
 			this.#projects_restarted_while_reopening.delete(root);
-			if (reopened && cancelled && !this.#disposed) {
-				// closed while in flight, and the backend opened it anyway — close it again
+			if (reopened && opened && cancelled && !this.#disposed) {
+				// closed while in flight, and this open created it after the close
+				// — close it again
 				const closed = await this.close_project(root);
 				if (!closed.ok) {
 					console.error(`[frontend] failed to close reopened project ${root}:`, closed.error);
@@ -810,26 +859,24 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		} else {
 			this.#projects_to_reopen.delete(root);
 		}
-		// a refused focus won't come back, whether or not the rest landed — kept,
-		// it would be requested again on every retry and restart
+		// a refused focus won't come back: the reply's focus, applied by its rev,
+		// lacks it, and its files were released (`Projects`) — only the failed
+		// ones are kept to retry
 		const project = this.projects.get_by_root(root);
-		if (project && refused.length) {
-			project.focused = project.focused.filter((dir) => !refused.includes(dir));
-		}
 		if (this.#projects_restarted_while_reopening.delete(root) && project) {
-			// the open landed on the instance that restarted since — queue the
-			// whole focus again, and ask for the snapshot that retries it
+			// the open landed on the instance that restarted since — its rev says
+			// nothing of the new one's, so forget it; queue the whole focus
+			// again, and ask for the snapshot that retries it
+			project.rev = -1;
 			const again = Array.from(new Set([...project.reopen_paths, ...failed]));
 			this.#projects_to_reopen.set(root, again);
 			this.resync_session();
 			return;
 		}
 		if (reopened || failed.length) return;
+		// its files go but what another root covers — a project the reopen
+		// resolved to instead, say
 		this.projects.remove_by_root(root);
-		// what another root covers — a project the reopen resolved to instead,
-		// say — stays
-		const covered = [...file_roots, ...this.projects.items.values.map((p) => p.root)];
-		this.diskfiles.reconcile([], [root], { skip_dirs: covered });
 	}
 
 	add_providers(providers_json: Array<ProviderJsonInput>): void {

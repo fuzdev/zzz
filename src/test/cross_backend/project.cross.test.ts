@@ -463,7 +463,9 @@ describe('project cross-backend', () => {
 		const root = await open_project(fixture, tmp_dir);
 
 		const close = await call(fixture, 'project_close', { root });
-		assert.equal(result_of(close, 'close'), null, 'close result is null');
+		const closed = result_of(close, 'close') as { rev: number };
+		assert.deepEqual(Object.keys(closed), ['rev'], 'the close answers its rev alone');
+		assert.ok(Number.isSafeInteger(closed.rev) && closed.rev > 0, `rev: ${closed.rev}`);
 		assert.notInclude(await list_roots(fixture), root, 'project gone');
 
 		const error = error_of(await call(fixture, 'project_close', { root }), 'a double close');

@@ -6,6 +6,7 @@ import { flushSync } from 'svelte';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
+	DiskfileDirectoryPath,
 	DiskfilePath,
 	SerializableDisknode,
 	type DiskfileChangeType
@@ -733,6 +734,63 @@ describe('delete with unsaved edits keeps the tab', () => {
 	});
 });
 
+describe('release_uncovered', () => {
+	const DEV = parse_or_throw(DiskfileDirectoryPath, '/dev/');
+	const at = (path: string): DiskfilePath => parse_or_throw(DiskfilePath, path);
+	const dir = (path: string): DiskfileDirectoryPath => parse_or_throw(DiskfileDirectoryPath, path);
+
+	/** Seeds the files at `paths` and gives `held` a tab with a draft. */
+	const seed = async (paths: Array<DiskfilePath>, held: Array<DiskfilePath>): Promise<void> => {
+		for (const path of paths) await disk.load(path, path);
+		for (const path of held) {
+			const diskfile = app.diskfiles.get_by_path(path)!;
+			app.diskfiles.select(diskfile.id, true);
+			app.diskfiles.get_editor_state(diskfile).current_content = 'edited';
+		}
+	};
+
+	test('releases what a narrower state no longer indexes, by why it went', async () => {
+		// a registry at `/dev/` that dropped its focus of `app` (present, so
+		// unfocused) and of `gone` (missing now)
+		app.projects.add({
+			root: DEV,
+			kind: 'registry',
+			entries: [
+				{ key: 'app', kind: 'repo', dir: dir('/dev/app/'), state: 'present' },
+				{ key: 'gone', kind: 'repo', dir: dir('/dev/gone/'), state: 'missing' }
+			],
+			focused: []
+		});
+		const paths = ['/dev/README.md', '/dev/app/a.ts', '/dev/app/b.ts', '/dev/gone/x.ts'].map(at);
+		await seed(paths, [at('/dev/app/b.ts'), at('/dev/gone/x.ts')]);
+
+		app.diskfiles.release_uncovered([dir('/dev/app/'), dir('/dev/gone/')]);
+
+		assert.ok(app.diskfiles.get_by_path(at('/dev/README.md')), 'outside the dropped dirs');
+		assert.ok(!app.diskfiles.get_by_path(at('/dev/app/a.ts')), 'unfocused, nothing holds it');
+		const b = app.diskfiles.get_by_path(at('/dev/app/b.ts'));
+		assert.ok(b, 'unfocused, held by its draft');
+		assert.isFalse(b.deleted_on_disk, 'still on disk');
+		const x = app.diskfiles.get_by_path(at('/dev/gone/x.ts'));
+		assert.ok(x, 'its draft keeps it');
+		assert.isTrue(x.deleted_on_disk, 'its repo gone, as a snapshot would remove it');
+	});
+
+	test('a root turned registry keeps its loose files and what another root covers', async () => {
+		app.scoped_dirs = [dir('/dev/shared/')];
+		app.projects.add({ root: DEV, kind: 'registry', entries: [], focused: [] });
+		const paths = ['/dev/README.md', '/dev/scratch/y.ts', '/dev/shared/z.ts'].map(at);
+		await seed(paths, []);
+
+		// it was a plain directory, focused on its root
+		app.diskfiles.release_uncovered([DEV]);
+
+		assert.ok(app.diskfiles.get_by_path(at('/dev/README.md')), 'a loose file of its top level');
+		assert.ok(!app.diskfiles.get_by_path(at('/dev/scratch/y.ts')), 'below it, unindexed');
+		assert.ok(app.diskfiles.get_by_path(at('/dev/shared/z.ts')), 'a scoped dir covers it');
+	});
+});
+
 describe('path_relative', () => {
 	const ZZZ_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/zzz/');
 
@@ -1210,9 +1268,12 @@ describe('create_file selects the new file', () => {
 		await app.diskfiles.create_file('b.txt');
 
 		app.projects.remove_by_root(SOURCE_DIR);
+		assert.ok(!app.diskfiles.get_by_path(a.path), "the closed project's file is released");
 		filer_change('add', PATH_B);
 
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(b);
+		assert.notStrictEqual(app.diskfiles.selected_file_id, b.id);
 	});
 
 	test('the next create replaces the pending selection', async () => {

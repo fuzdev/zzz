@@ -674,20 +674,34 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Releases the files known under `dir`, a repo just unfocused, that the
-	 * index no longer covers (`is_in_unfocused_repo`): each is forgotten with
-	 * its editing state, except one held — with a draft or a tab — which is
-	 * kept as it is, not flagged `deleted_on_disk` since it's still on disk,
-	 * until the repo is focused again (the focus's files then settle it) or
-	 * nothing holds it (`release_if_unneeded`). A kept file isn't watched
-	 * meanwhile; a save still checks the disk version it was based on.
+	 * Releases the files known under `dirs` that the index no longer covers —
+	 * the focuses a newer project state dropped (`Projects`), a kind change
+	 * included, since a checkout's or plain directory's one focus is its
+	 * root, and a closed project's root — since stopping a filer deletes
+	 * nothing here. A file still
+	 * indexed (another focus, another root, a registry root's loose files)
+	 * stays. One in a repo that's present but unfocused
+	 * (`is_in_unfocused_repo`) is still on disk: forgotten with its editing
+	 * state, unless held — with a draft or a tab — and then kept as it is,
+	 * not flagged `deleted_on_disk`, until the repo is focused again (the
+	 * focus's files then settle it) or nothing holds it
+	 * (`release_if_unneeded`); a kept file isn't watched meanwhile, and a
+	 * save still checks the disk version it was based on. Any other — its
+	 * entry gone missing or out of the registry, under a root that's become
+	 * a registry's, or under a closed project's root — goes as a snapshot
+	 * that no longer lists it would remove it (`remove_by_path`: kept,
+	 * flagged deleted, only for a draft).
 	 */
-	release_unfocused(dir: string): void {
+	release_uncovered(dirs: ReadonlyArray<string>): void {
+		if (!dirs.length) return;
 		for (const diskfile of this.items.values) {
 			const { path } = diskfile;
-			if (!path.startsWith(dir) || !this.is_in_unfocused_repo(path)) continue;
-			if (this.#is_held(diskfile)) continue;
-			this.#forget(diskfile);
+			if (!is_under_any(path, dirs) || this.is_indexed(path)) continue;
+			if (this.is_in_unfocused_repo(path)) {
+				if (!this.#is_held(diskfile)) this.#forget(diskfile);
+			} else {
+				this.remove_by_path(path);
+			}
 		}
 	}
 
@@ -702,7 +716,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Forgets diskfile `id` if it's outside what the index covers — deleted on
 	 * disk, or kept from an unfocused repo for its draft or tab
-	 * (`release_unfocused`) — and nothing holds it anymore: no draft and no tab. Called when its
+	 * (`release_uncovered`) — and nothing holds it anymore: no draft and no tab. Called when its
 	 * draft is discarded and when its last tab closes.
 	 */
 	release_if_unneeded(id: Uuid): void {
@@ -834,6 +848,19 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	});
 
 	/**
+	 * Whether the index covers `path`, by what's held here: under a root it
+	 * indexes whole — the app dir, a scoped dir, a project's focus — or a
+	 * registry root's loose file, which its top-level filer indexes.
+	 */
+	is_indexed(path: string): boolean {
+		const { trees, top_levels } = this.index_coverage;
+		return (
+			is_under_any(path, trees) ||
+			top_levels.some((root) => path.startsWith(root) && !path.slice(root.length).includes('/'))
+		);
+	}
+
+	/**
 	 * Whether `path` is under a registry project's root where the index doesn't
 	 * look — below its top level and in no focused repo — so a file there
 	 * never arrives.
@@ -852,14 +879,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * watched.
 	 */
 	is_in_unfocused_repo(path: string): boolean {
-		const { trees, top_levels } = this.index_coverage;
-		if (is_under_any(path, trees)) return false;
-		// a nested registry's loose files, which its root's top-level filer indexes
-		if (
-			top_levels.some((root) => path.startsWith(root) && !path.slice(root.length).includes('/'))
-		) {
-			return false;
-		}
+		// a nested registry's loose files included, which its root's top-level filer indexes
+		if (this.is_indexed(path)) return false;
 		for (const [dir, project] of this.app.projects.repos) {
 			if (path.startsWith(dir) && !project.focused.includes(dir as DiskfileDirectoryPath))
 				return true;
