@@ -9,7 +9,8 @@
  * state), what it indexes (the root's loose files and the focused repo —
  * never an unfocused repo or an unregistered directory), the focus an open
  * adds to an open project (`project_changed` `update`), what `repo_focus` and
- * `repo_unfocus` index and release and what they refuse, the refusal of an
+ * `repo_unfocus` index and release and what they refuse, what `repo_files`
+ * reads for a client pulling another's focus and what it refuses, the refusal of an
  * untrusted registry with its reason, and the scope a close releases.
  *
  * @module
@@ -32,6 +33,7 @@ import {
 import {
 	ProjectChangedInput,
 	ProjectOpenOutput,
+	RepoFilesOutput,
 	RepoFocusOutput,
 	RepoUnfocusOutput
 } from '#lib/action_specs.ts';
@@ -216,14 +218,24 @@ describe('project registry cross-backend', () => {
 			const focused = parse(RepoFocusOutput, res.result);
 			assert.ok(focused.ok, JSON.stringify(focused));
 			assert.deepEqual(focused.value.project.focused, [app_dir]);
-			assert.deepEqual(focused.value.files.map((f) => f.id as string).sort(), [
-				join(dev, 'README.md'),
-				join(dev, 'app', 'a.ts'),
-				join(dev, 'app', 'src', 'b.ts'),
-				join(dev, 'repos.toml')
-			]);
+			assert.deepEqual(
+				focused.value.files.map((f) => f.id as string).sort(),
+				[join(dev, 'app', 'a.ts'), join(dev, 'app', 'src', 'b.ts')],
+				"the focused repo alone — the root's loose files are the client's already"
+			);
 			const notification = parse(ProjectChangedInput, (await focused_update).params);
 			assert.ok(notification.ok, JSON.stringify(notification));
+
+			// another client, told of the focus, pulls the repo over its socket
+			const pulled = parse(
+				RepoFilesOutput,
+				await ws.request('pull', 'repo_files', { root, dir: app_dir })
+			);
+			assert.ok(pulled.ok, JSON.stringify(pulled));
+			assert.deepEqual(pulled.value.files.map((f) => f.id as string).sort(), [
+				join(dev, 'app', 'a.ts'),
+				join(dev, 'app', 'src', 'b.ts')
+			]);
 
 			// again: the same focus, a trailing slash optional
 			const again = await call(fixture, 'repo_focus', { root: dev, dir: join(dev, 'app') });
@@ -237,6 +249,10 @@ describe('project registry cross-backend', () => {
 			assert.ok(unfocused.ok, JSON.stringify(unfocused));
 			assert.deepEqual(unfocused.value.project.focused, []);
 			await unfocused_update;
+			// a pull after the unfocus is refused, not answered empty
+			const late = await call(fixture, 'repo_files', { root, dir: app_dir });
+			assert.ok(!late.ok);
+			assert.deepEqual(late.error.data, { reason: 'repo_not_focused' });
 
 			// another client's snapshot no longer has the repo's files
 			const session = await ws.request<{ data: { files: Array<{ id: string }> } }>(
@@ -287,6 +303,16 @@ describe('project registry cross-backend', () => {
 			'project_not_registry'
 		);
 		await refused('repo_unfocus', { root, dir: `${dev}/scratch/` }, -32602, 'repo_not_in_project');
+		await refused(
+			'repo_files',
+			{ root: `${dev}_none/`, dir: `${dev}/app/` },
+			-32602,
+			'project_not_open'
+		);
+		// a present entry not focused, the root itself, and what's no entry
+		for (const dir of [`${dev}/app/`, root, `${dev}/scratch/`]) {
+			await refused('repo_files', { root, dir }, -32602, 'repo_not_focused');
+		}
 
 		const list = await call(fixture, 'project_list');
 		assert.ok(list.ok);

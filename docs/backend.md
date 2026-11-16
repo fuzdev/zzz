@@ -422,11 +422,15 @@ commands):
   root's loose files and the focused repo alone (not an unregistered
   directory); the root alone focuses nothing, and a later open of a repo
   adds its focus with a `project_changed` `update`; `repo_focus` of an
-  entry indexes it and notifies another socket, again changes nothing, and
-  `repo_unfocus` drops it from that socket's next snapshot; both refuse
+  entry indexes it, replies with that repo's files alone, and notifies
+  another socket, which pulls the repo with `repo_files`, again changes
+  nothing, and `repo_unfocus` drops it from that socket's next snapshot,
+  a later `repo_files` refusing it (`repo_not_focused`); both refuse
   what isn't a present entry (`project_not_open`, `repo_not_in_project`,
   `repo_not_present` as `not_found` for one not cloned and `forbidden` for
-  a refused one, `project_not_registry` for a plain directory); the whole
+  a refused one, `project_not_registry` for a plain directory), and
+  `repo_files` what the project doesn't focus — an unfocused entry, the
+  root, an unregistered directory (`repo_not_focused`); the whole
   root is in scope while open and out of it once closed; a registry its
   other users can write refuses the open (`registry_untrusted`).
 - **`filesystem.cross.test.ts`** — `diskfile_read` (a text file whole with
@@ -757,7 +761,15 @@ commands):
   entry not cloned, or gone since the registry was resolved → `not_found`,
   or refused → `forbidden`, all `repo_not_present`; a repo whose listing
   fails otherwise → as for `project_open`'s focused directory, the message
-  `failed to focus repo: …`.
+  `failed to focus repo: …`. `repo_files` of a root that isn't open →
+  `invalid_params` / `project_not_open`, of a directory the project doesn't
+  focus → `invalid_params` / `repo_not_focused`
+  (`handlers::project::ERROR_REPO_NOT_FOCUSED`) — never an empty answer,
+  which an empty repo would read as. The check and the read happen under
+  the projects' lock (`ProjectManager::focused_files`): a commit stops or
+  narrows filers before it publishes, so a read checked against the
+  published snapshot could find a filer already stopped (no files) or
+  narrowed (a nested registry's top level alone).
 - **Atomic writes**: `ScopedFs::write_file` stages content in a hidden
   `.zzz-tmp-<uuid>` file beside the target (`O_EXCL | O_NOFOLLOW`), gives it
   the replaced file's mode minus setuid/setgid (zzz always drops them — the

@@ -46,6 +46,7 @@ export const ActionSpecs: ActionSpecs = {
 	project_list: specs.project_list_action_spec,
 	repo_focus: specs.repo_focus_action_spec,
 	repo_unfocus: specs.repo_unfocus_action_spec,
+	repo_files: specs.repo_files_action_spec,
 	project_changed: specs.project_changed_action_spec
 };
 export type ActionSpecs = {
@@ -81,6 +82,7 @@ export type ActionSpecs = {
 	readonly project_list: typeof specs.project_list_action_spec;
 	readonly repo_focus: typeof specs.repo_focus_action_spec;
 	readonly repo_unfocus: typeof specs.repo_unfocus_action_spec;
+	readonly repo_files: typeof specs.repo_files_action_spec;
 	readonly project_changed: typeof specs.project_changed_action_spec;
 };
 
@@ -123,6 +125,7 @@ export interface ActionInputs {
 	project_list: Infer<typeof specs.project_list_action_spec.input>;
 	repo_focus: Infer<typeof specs.repo_focus_action_spec.input>;
 	repo_unfocus: Infer<typeof specs.repo_unfocus_action_spec.input>;
+	repo_files: Infer<typeof specs.repo_files_action_spec.input>;
 	project_changed: Infer<typeof specs.project_changed_action_spec.input>;
 }
 
@@ -163,6 +166,7 @@ export interface ActionCallInputs {
 	project_list: InferInput<typeof specs.project_list_action_spec.input>;
 	repo_focus: InferInput<typeof specs.repo_focus_action_spec.input>;
 	repo_unfocus: InferInput<typeof specs.repo_unfocus_action_spec.input>;
+	repo_files: InferInput<typeof specs.repo_files_action_spec.input>;
 	project_changed: InferInput<typeof specs.project_changed_action_spec.input>;
 }
 
@@ -203,6 +207,7 @@ export interface ActionOutputs {
 	project_list: Infer<typeof specs.project_list_action_spec.output>;
 	repo_focus: Infer<typeof specs.repo_focus_action_spec.output>;
 	repo_unfocus: Infer<typeof specs.repo_unfocus_action_spec.output>;
+	repo_files: Infer<typeof specs.repo_files_action_spec.output>;
 	project_changed: Infer<typeof specs.project_changed_action_spec.output>;
 }
 
@@ -348,6 +353,11 @@ export interface ActionEventDatas {
 		'repo_unfocus',
 		ActionInputs['repo_unfocus'],
 		ActionOutputs['repo_unfocus']
+	>;
+	repo_files: ActionEventRequestResponseData<
+		'repo_files',
+		ActionInputs['repo_files'],
+		ActionOutputs['repo_files']
 	>;
 	project_changed: ActionEventRemoteNotificationData<
 		'project_changed',

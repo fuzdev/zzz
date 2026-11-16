@@ -43,11 +43,14 @@ let calls: Array<{
 /** The session snapshot `session_load` returns — the daemon's view after the remote open. */
 let session: SessionLoadData;
 let session_loads: number;
+/** The `repo_files` pulls, each its input, answered with no files. */
+let repo_files_calls: Array<{ root: string; dir: string }>;
 
 beforeEach(() => {
 	app = monkeypatch_zzz_for_tests(new Frontend());
 	calls = [];
 	session_loads = 0;
+	repo_files_calls = [];
 	session = {
 		zzz_dir: parse_or_throw(DiskfileDirectoryPath, '/zzz/'),
 		scoped_dirs: [],
@@ -65,6 +68,10 @@ beforeEach(() => {
 		session_load: () => {
 			session_loads++;
 			return Promise.resolve({ ok: true, value: { data: session } });
+		},
+		repo_files: (input: { root: string; dir: string }) => {
+			repo_files_calls.push(input);
+			return Promise.resolve({ ok: true, value: { files: [], watch_status: 'full' } });
 		}
 	};
 });
@@ -343,24 +350,21 @@ describe('a registry project', () => {
 		assert.strictEqual(session_loads, 1);
 	});
 
-	test('a remote update that adds a focus resyncs for its files', () => {
+	test('a remote update that adds a focus pulls that repo, not a resync', () => {
 		app.projects.add(registry_info([APP]));
 		receive_change(registry_info([APP, SITE]), 'update');
-		assert.strictEqual(session_loads, 1);
+		assert.strictEqual(session_loads, 0);
+		assert.deepEqual(repo_files_calls, [{ root: DEV, dir: SITE }]);
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
 	});
 
-	test("a remote focus during this client's own open of the root still resyncs", async () => {
-		// the resync stays in flight, so what's checked is the reply's doing
-		(app.api as unknown as Record<string, unknown>).session_load = () => {
-			session_loads++;
-			return new Promise(() => {});
-		};
+	test("a remote focus during this client's own open of the root pulls it once the open settles", async () => {
 		app.projects.add(registry_info([APP]));
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/dev/app/'));
 		// another client focuses `site` while the open is in flight
 		receive_change(registry_info([APP, SITE]), 'update');
-		assert.strictEqual(session_loads, 0, 'deferred while the open is in flight');
+		assert.strictEqual(session_loads, 0);
+		assert.deepEqual(repo_files_calls, [], 'deferred while the open is in flight');
 		// the reply was built before that focus
 		calls[0]!.resolve({
 			ok: true,
@@ -373,10 +377,15 @@ describe('a registry project', () => {
 			[APP, SITE],
 			'an older reply never shrinks the focus'
 		);
-		assert.strictEqual(session_loads, 1, "resynced for the focus the reply didn't carry");
+		assert.deepEqual(
+			repo_files_calls,
+			[{ root: DEV, dir: SITE }],
+			"pulled the focus the reply didn't carry"
+		);
+		assert.strictEqual(session_loads, 0);
 	});
 
-	test('a remote focus a reply covers needs no resync', async () => {
+	test('a remote focus a reply covers needs no fetch', async () => {
 		app.projects.add(registry_info([APP]));
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/dev/site/'));
 		receive_change(registry_info([APP, SITE]), 'update'); // this open's own notification
@@ -386,6 +395,7 @@ describe('a registry project', () => {
 		});
 		assert.ok((await opened).ok);
 		assert.strictEqual(session_loads, 0);
+		assert.deepEqual(repo_files_calls, []);
 		assert.strictEqual(app.projects.get_by_root(DEV)?.last_focus, SITE, 'new files go there');
 		assert.strictEqual(app.diskfiles.new_files_dir, SITE);
 	});

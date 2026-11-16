@@ -580,9 +580,9 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	/**
 	 * Reloads the session snapshot to reconcile state no notification
-	 * carries — after a reconnect, or a project opened or focused elsewhere
-	 * (see `Projects.receive_remote_change`). With a load in flight, which may
-	 * predate the change, another follows it.
+	 * carries — after a reconnect, a project opened elsewhere, or a remote
+	 * change a pull can't settle (see `Projects.receive_remote_change`). With a
+	 * load in flight, which may predate the change, another follows it.
 	 */
 	resync_session(): void {
 		if (this.#disposed) return;

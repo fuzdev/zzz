@@ -32,7 +32,7 @@ use fuz_realtime::notify_to_string;
 use fuz_repos::registry::EntryKind;
 use serde::Serialize;
 
-use crate::filer::{FilerConfig, FilerDepth, FilerLifetime};
+use crate::filer::{FilerConfig, FilerDepth, FilerLifetime, SerializableDisknode, WatchStatus};
 use crate::handlers::App;
 
 // -- State ----------------------------------------------------------------------
@@ -247,12 +247,17 @@ pub struct PublishedProjects {
     pub filers: BTreeSet<String>,
 }
 
-/// Why an open, close, focus, or unfocus didn't take effect.
+/// Why an open, close, focus, or unfocus didn't take effect, or a read of a
+/// focus ([`ProjectManager::focused_files`]) was refused.
 #[derive(Debug, thiserror::Error)]
 pub enum LifecycleError {
     /// The root names no open project.
     #[error("project not open: {root}")]
     NotOpen { root: String },
+    /// A read of a directory that's none of the open project's focused
+    /// directories.
+    #[error("{dir} isn't a focused repo of {root}")]
+    NotFocused { root: String, dir: String },
     /// A focus or unfocus on a checkout or plain directory, whose one focus
     /// is its root, kept while it's open.
     #[error("{root} isn't a registry project — its root is its one focus")]
@@ -291,6 +296,16 @@ pub enum LifecycleError {
 pub struct Landed {
     pub project: OpenProject,
     pub filers: Filers,
+}
+
+/// A focused directory's index as one commit left it
+/// ([`ProjectManager::focused_files`]).
+#[derive(Debug)]
+pub struct FocusedFiles {
+    /// The files of the directory's filer.
+    pub files: Vec<SerializableDisknode>,
+    /// Over every directory the project keeps indexed, as an open's.
+    pub watch_status: WatchStatus,
 }
 
 // -- Derivations ----------------------------------------------------------------
@@ -484,7 +499,8 @@ pub struct ProjectManager {
     /// The open projects. Holding this guard is the only way to change
     /// them, to stop or narrow a filer, and to set the `ScopedFs` roots and
     /// [`Self::published`]. A scan before the lock starts or widens filers;
-    /// nothing else does without it.
+    /// nothing else does without it. A read that must see filers and state
+    /// agree takes it too ([`Self::focused_files`]).
     projects: tokio::sync::Mutex<Projects>,
     /// The state as the last commit left it, for readers that don't wait on
     /// the lock.
@@ -501,6 +517,62 @@ impl ProjectManager {
     /// only once its filers run and its root is in scope.
     pub fn published(&self) -> Arc<PublishedProjects> {
         Arc::clone(&self.published.read())
+    }
+
+    /// The index of `dir`, a focused directory of the open project at
+    /// `root` — a registry's focused entry, or a checkout's or plain
+    /// directory's root — read under the lock every commit holds.
+    ///
+    /// A commit stops or narrows filers ([`release`]) before it publishes,
+    /// so a check against [`Self::published`] and a read of the filer
+    /// outside the lock could pass the check and read a filer already
+    /// stopped (no files) or narrowed (a nested registry's top level) — an
+    /// answer no state ever held. Under the lock, the check and the read see
+    /// one state: no commit is partway, and every filer the state keeps runs
+    /// at least as deep as it keeps it.
+    ///
+    /// Lock order: this mutex, then `FilerManager`'s filer map (read, let go
+    /// before the next), then one filer's index (read) — the order a commit
+    /// takes them in, through `ensure_filers`, `release`, and
+    /// `check_invariants`. Nothing that holds the filer map or an index
+    /// takes this mutex (the filers never touch the projects), so the read
+    /// can't deadlock against a commit; it waits for one, and a commit waits
+    /// for it to clone the index.
+    ///
+    /// # Errors
+    ///
+    /// [`LifecycleError::NotOpen`]; [`LifecycleError::NotFocused`] for a
+    /// directory the project doesn't focus — refused rather than answered
+    /// with no files, which an empty repo would read as.
+    pub async fn focused_files(
+        &self,
+        app: &App,
+        root: &str,
+        dir: &str,
+    ) -> Result<FocusedFiles, LifecycleError> {
+        let projects = self.projects.lock().await;
+        let project = projects.get(root).ok_or_else(|| LifecycleError::NotOpen {
+            root: root.to_owned(),
+        })?;
+        if !project.focused().contains(&dir) {
+            return Err(LifecycleError::NotFocused {
+                root: root.to_owned(),
+                dir: dir.to_owned(),
+            });
+        }
+        let files = app.filer_manager.files_for(dir).await;
+        let mut watch_status = WatchStatus::Full;
+        for kept in filers_of(project).keys() {
+            if app.filer_manager.watch_status_for(kept).await == WatchStatus::Degraded {
+                watch_status = WatchStatus::Degraded;
+                break;
+            }
+        }
+        drop(projects);
+        Ok(FocusedFiles {
+            files,
+            watch_status,
+        })
     }
 
     /// Open `fresh` — a project as just resolved, focusing what the open
@@ -1099,6 +1171,97 @@ mod tests {
             Err(LifecycleError::NotOpen { .. })
         ));
         assert_eq!(app.filer_manager.files_for(&app_dir).await.len(), 1);
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_focused_files_read_holds_the_lock_while_it_reads() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/app/sub/c.txt"] {
+            tmp.write(rel);
+        }
+        let app = inert_app();
+        let (root, app_dir) = (tmp.key("w/"), tmp.key("w/app/"));
+        app.projects
+            .open(&app, registry_at(&root, &["app"], &["app"]))
+            .await
+            .unwrap();
+
+        // the read parks on the index, past its check
+        let held = app.filer_manager.hold_index(&app_dir).await;
+        let reader = tokio::spawn({
+            let (app, root, app_dir) = (Arc::clone(&app), root.clone(), app_dir.clone());
+            async move { app.projects.focused_files(&app, &root, &app_dir).await }
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while app.projects.projects.try_lock().is_ok() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the read takes the lock");
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        assert!(!reader.is_finished(), "the read waits on the index");
+        assert!(
+            app.projects.projects.try_lock().is_err(),
+            "the read holds the lock across its read, so no commit stops the filer between"
+        );
+        drop(held);
+        assert_eq!(reader.await.unwrap().unwrap().files.len(), 2);
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_focused_files_read_waits_out_a_commit_partway() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/app/sub/c.txt"] {
+            tmp.write(rel);
+        }
+        let app = inert_app();
+        let (root, app_dir) = (tmp.key("w/"), tmp.key("w/app/"));
+        app.projects
+            .open(&app, registry_at(&root, &["app"], &["app"]))
+            .await
+            .unwrap();
+        let read = app
+            .projects
+            .focused_files(&app, &root, &app_dir)
+            .await
+            .unwrap();
+        assert_eq!(read.files.len(), 2);
+
+        // an unfocus partway through its commit: under the lock, its filer
+        // stopped (`release`), the snapshot not yet published
+        let mut projects = app.projects.projects.lock().await;
+        let mut next = projects.clone();
+        focused_mut(next.get_mut(&root).unwrap())
+            .unwrap()
+            .remove(&app_dir);
+        app.filer_manager.stop_filer(&app_dir).await;
+        assert!(
+            app.projects.published().projects[0]
+                .focused()
+                .contains(&app_dir.as_str()),
+            "a check against the snapshot would pass here and read no files"
+        );
+        let reader = tokio::spawn({
+            let (app, root, app_dir) = (Arc::clone(&app), root.clone(), app_dir.clone());
+            async move { app.projects.focused_files(&app, &root, &app_dir).await }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        assert!(!reader.is_finished(), "the read waits on the lock");
+
+        // the commit finishes, and the read sees the state it left
+        let update = (ProjectChange::Update, next[&root].clone());
+        app.projects
+            .commit(&app, &mut projects, next, &Filers::new(), [update])
+            .await
+            .unwrap();
+        drop(projects);
+        assert!(matches!(
+            reader.await.unwrap(),
+            Err(LifecycleError::NotFocused { .. })
+        ));
         assert_settled(&app).await;
     }
 

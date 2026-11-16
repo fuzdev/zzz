@@ -2209,6 +2209,14 @@ impl FilerManager {
         }
     }
 
+    /// Test seam: hold the index of the filer on `path` for writing, so a
+    /// read of it waits.
+    #[cfg(test)]
+    pub(crate) async fn hold_index(&self, path: &str) -> impl Drop + use<> {
+        let files = Arc::clone(&self.filers.read().await[path].filer.files);
+        files.write_owned().await
+    }
+
     /// The watch status of the filer watching exactly `path` (trailing
     /// slash); `Full` if no filer watches it.
     pub async fn watch_status_for(&self, path: &str) -> WatchStatus {

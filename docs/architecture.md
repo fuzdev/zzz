@@ -1493,7 +1493,8 @@ The initial file listing comes from `session_load` (the backend rescans and
 flattens the index of every permanent filer and every filer the open
 projects keep, and lists their roots as `file_roots` — a filer an open or
 focus still in flight started isn't listed before its project's change is), and `project_open` returns the index of every filer of the
-opened project so the new tree appears immediately. `Frontend.load_session` runs `session_load`
+opened project so the new tree appears immediately (`repo_focus` and
+`repo_files` a focused repo's alone). `Frontend.load_session` runs `session_load`
 and retries a failure with backoff (1s doubling to 30s) until it succeeds,
 tracking progress in `session_status` / `session_error`; `Projects.open`
 does the same snapshot handling for `project_open`. Both record what
@@ -1739,9 +1740,14 @@ concerns":
   project's last resolve left it (`repo_not_in_project`, or
   `repo_not_present` for one not cloned or refused), starts its filer
   before the lock, then under it records the focus, re-ensures the filers,
-  and broadcasts `update`, replying with the project, every filer's files,
-  and the `watch_status`; focusing a focused repo changes and broadcasts
-  nothing. `repo_unfocus` drops the focus under the lock and releases its
+  and broadcasts `update`, replying with the project, the focused repo's
+  files alone (the rest of the project is the client's already), and the
+  project's `watch_status`; focusing a focused repo changes and broadcasts
+  nothing. `repo_files` reads a focused directory's files under the
+  lock, so it never sees a filer a commit has stopped or narrowed but not
+  yet published, refusing a root that isn't open (`project_not_open`)
+  and a directory the project doesn't focus (`repo_not_focused`) rather
+  than answering with no files, as an empty repo would. `repo_unfocus` drops the focus under the lock and releases its
   filer as an open's narrowing does — stopped unless another open project
   keeps it, narrowed to a top-level one if that's all one keeps (a nested
   registry's root) — then broadcasts `update`. `project_close` reverses
@@ -1770,13 +1776,17 @@ the project `project_open` returns, and the query param is handled once and
 then stripped from the URL, so a reload doesn't reopen a project the user
 has since closed. `project_changed` broadcasts keep every connected client's
 `Projects` collection in sync. A project opened elsewhere, or one an open
-elsewhere gave a new focus, arrives without its files (a filer's initial
-scan broadcasts nothing), so the client adds or updates it — without
-activating it — and resyncs the session to fetch them
-(`Projects.receive_remote_change`). While this client's own opens are in
-flight the resync waits for them, and is skipped only when their replies
-carried every directory the notification brought in: a reply built
-before another client's focus doesn't carry it. A reply never shrinks the
+or focus elsewhere gave a new focus, arrives without its files (a filer's
+initial scan broadcasts nothing), so the client adds or updates it —
+without activating it — and fetches them (`Projects.receive_remote_change`):
+a project new here by resyncing the session, a new focus on a known one by
+pulling that repo alone (`repo_files`, reconciled under the repo as a
+focus's reply is). A pull the daemon refuses as `repo_not_focused`, or
+whose focus this client has dropped by the time it lands, applies nothing:
+the `project_changed` that dropped the focus settles it. While this
+client's own opens are in flight the fetch waits for them, and is skipped
+for what their replies carried: a reply built before another client's
+focus doesn't carry it. A reply never shrinks the
 focus this client already has that its resolve still supports (a reply
 may predate another client's focus); a notification or a snapshot is the
 daemon's word on it. Stopping a filer deletes nothing on clients, so a

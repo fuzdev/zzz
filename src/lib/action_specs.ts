@@ -437,8 +437,9 @@ export type RepoFocusInput = Infer<typeof RepoFocusInput>;
 /** Output for `repo_focus`. */
 export const RepoFocusOutput = object({
 	project: ProjectInfoJson,
-	/** The index of every filer of the project, the newly focused repo's included. */
+	/** The focused repo's index alone — the rest of the project is the client's already. */
 	files: array(SerializableDisknode),
+	/** Over every indexed directory of the project, as `project_open`'s. */
 	watch_status: ProjectWatchStatus
 });
 export type RepoFocusOutput = Infer<typeof RepoFocusOutput>;
@@ -455,6 +456,25 @@ export const RepoUnfocusOutput = object({
 	project: ProjectInfoJson
 });
 export type RepoUnfocusOutput = Infer<typeof RepoUnfocusOutput>;
+
+/**
+ * Input for `repo_files`: a focused directory of an open project — a
+ * registry's focused entry, or a checkout's or plain directory's root.
+ */
+export const RepoFilesInput = object({
+	root: DiskfileDirectoryPath,
+	dir: DiskfileDirectoryPath
+});
+export type RepoFilesInput = Infer<typeof RepoFilesInput>;
+
+/** Output for `repo_files`. */
+export const RepoFilesOutput = object({
+	/** The focused repo's index. */
+	files: array(SerializableDisknode),
+	/** Over every indexed directory of the project, as `project_open`'s. */
+	watch_status: ProjectWatchStatus
+});
+export type RepoFilesOutput = Infer<typeof RepoFilesOutput>;
 
 /** Output for `project_list`. */
 export const ProjectListOutput = object({
@@ -830,7 +850,7 @@ export const repo_focus_action_spec = {
 	output: RepoFocusOutput,
 	async: true,
 	description:
-		"Focus a registry entry of an open project — its files are then indexed and watched, as opening a path in it would, without resolving the registry again — and notify `project_changed` `update`; idempotent. Refuses a root that isn't open (`invalid_params` / `project_not_open`), a project that isn't a registry (`project_not_registry`), a directory that's none of its entries (`repo_not_in_project`), and an entry not yet cloned or gone since (`not_found`), or refused (`forbidden`), as last resolved (`repo_not_present` — opening the project again resolves it); a repo that can't be listed otherwise fails as `project_open`'s focused directory does (`forbidden` / `permission_denied`), leaving the project as it was."
+		"Focus a registry entry of an open project — its files are then indexed and watched, as opening a path in it would, without resolving the registry again — and notify `project_changed` `update`, returning that repo's files alone; idempotent. Refuses a root that isn't open (`invalid_params` / `project_not_open`), a project that isn't a registry (`project_not_registry`), a directory that's none of its entries (`repo_not_in_project`), and an entry not yet cloned or gone since (`not_found`), or refused (`forbidden`), as last resolved (`repo_not_present` — opening the project again resolves it); a repo that can't be listed otherwise fails as `project_open`'s focused directory does (`forbidden` / `permission_denied`), leaving the project as it was."
 } satisfies RequestResponseActionSpec;
 
 export const repo_unfocus_action_spec = {
@@ -844,6 +864,19 @@ export const repo_unfocus_action_spec = {
 	async: true,
 	description:
 		"Drop a registry entry from an open project's focus — its file watching stops unless another open project keeps it, and its files leave the index — and notify `project_changed` `update`; idempotent, and a registry may keep no focus. Refuses a root that isn't open (`invalid_params` / `project_not_open`), a project that isn't a registry, whose root stays focused while it's open (`project_not_registry`), and a directory that's none of its entries (`repo_not_in_project`)."
+} satisfies RequestResponseActionSpec;
+
+export const repo_files_action_spec = {
+	method: 'repo_files',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: false,
+	input: RepoFilesInput,
+	output: RepoFilesOutput,
+	async: true,
+	description:
+		"The index of a focused repo of an open project — what a client pulls for a focus another client made, which `project_changed` reports without its files. Refuses a root that isn't open (`invalid_params` / `project_not_open`) and a directory the project doesn't focus (`repo_not_focused`), rather than answering with no files, as an empty repo would. The check and the read see one state: a concurrent focus change lands wholly before or after."
 } satisfies RequestResponseActionSpec;
 
 export const project_changed_action_spec = {
@@ -903,5 +936,6 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	project_list_action_spec,
 	repo_focus_action_spec,
 	repo_unfocus_action_spec,
+	repo_files_action_spec,
 	project_changed_action_spec
 ];

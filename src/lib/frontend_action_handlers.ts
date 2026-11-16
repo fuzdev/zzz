@@ -5,6 +5,7 @@ import type { FrontendActionHandlers } from './frontend_action_types.ts';
 import { Turn } from './turn.svelte.ts';
 import { to_completion_response_text } from './response_helpers.ts';
 import { ERROR_DISK_CHANGED } from './diskfile_helpers.ts';
+import { ERROR_PROJECT_NOT_OPEN, ERROR_REPO_NOT_FOCUSED } from './project_helpers.ts';
 
 // TODO stubbing out a lot of these
 
@@ -279,6 +280,17 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	repo_focus: {
 		receive_error: ({ data: { error } }) => {
 			console.error('[frontend_action_handlers] repo_focus failed:', error);
+		}
+	},
+
+	// `Projects` pulls a repo another client focused and reconciles its files
+	repo_files: {
+		receive_error: ({ data: { error } }) => {
+			// the focus or the project went meanwhile, which its own
+			// `project_changed` settles
+			const { reason } = (error.data ?? {}) as { reason?: unknown };
+			if (reason === ERROR_REPO_NOT_FOCUSED || reason === ERROR_PROJECT_NOT_OPEN) return;
+			console.error('[frontend_action_handlers] repo_files failed:', error);
 		}
 	},
 

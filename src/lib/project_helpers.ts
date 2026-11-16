@@ -10,6 +10,13 @@ import { DiskfilePath } from './diskfile_types.ts';
 export const ERROR_PROJECT_NOT_OPEN = 'project_not_open';
 
 /**
+ * `data.reason` of the `invalid_params` error `repo_files` returns for a
+ * directory the project doesn't focus — one unfocused since a client learned
+ * of its focus, as distinct from an empty repo.
+ */
+export const ERROR_REPO_NOT_FOCUSED = 'repo_not_focused';
+
+/**
  * What to tell the user about a project whose `watch_status` is
  * `degraded`: some of its directories have no file watch, so the daemon
  * rescans them every few seconds instead.

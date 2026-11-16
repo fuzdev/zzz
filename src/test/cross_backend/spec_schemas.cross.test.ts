@@ -52,6 +52,7 @@ import {
 	project_list_action_spec,
 	project_open_action_spec,
 	provider_load_status_action_spec,
+	repo_files_action_spec,
 	session_load_action_spec,
 	terminal_ack_action_spec,
 	terminal_close_action_spec,
@@ -210,9 +211,14 @@ describe('zzz spec schemas cross-backend', () => {
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
-			await call_and_check(fixture, project_open_action_spec, { path: dir });
+			const opened = (await call_and_check(fixture, project_open_action_spec, {
+				path: dir
+			})) as { project: { root: string } };
 			await wait_for_checked_notification(ws, project_changed_action_spec);
 			await call_and_check(fixture, project_list_action_spec);
+			// a plain directory's one focus is its root
+			const { root } = opened.project;
+			await call_and_check(fixture, repo_files_action_spec, { root, dir: root });
 			await call_and_check(fixture, session_load_action_spec);
 
 			const file_path = join(dir, 'written.txt');

@@ -42,6 +42,7 @@ export const ActionMethod = one_of([
 	'project_list',
 	'repo_focus',
 	'repo_unfocus',
+	'repo_files',
 	'project_changed'
 ]);
 export type ActionMethod = Infer<typeof ActionMethod>;
@@ -73,7 +74,8 @@ export const RequestResponseActionMethod = one_of([
 	'project_close',
 	'project_list',
 	'repo_focus',
-	'repo_unfocus'
+	'repo_unfocus',
+	'repo_files'
 ]);
 export type RequestResponseActionMethod = Infer<typeof RequestResponseActionMethod>;
 
@@ -134,6 +136,7 @@ export const FrontendActionMethod = one_of([
 	'project_list',
 	'repo_focus',
 	'repo_unfocus',
+	'repo_files',
 	'project_changed'
 ]);
 export type FrontendActionMethod = Infer<typeof FrontendActionMethod>;
@@ -173,6 +176,7 @@ export const BackendActionMethod = one_of([
 	'project_list',
 	'repo_focus',
 	'repo_unfocus',
+	'repo_files',
 	'project_changed'
 ]);
 export type BackendActionMethod = Infer<typeof BackendActionMethod>;
@@ -208,7 +212,8 @@ export const BackendRequestResponseMethod = one_of([
 	'project_close',
 	'project_list',
 	'repo_focus',
-	'repo_unfocus'
+	'repo_unfocus',
+	'repo_files'
 ]);
 export type BackendRequestResponseMethod = Infer<typeof BackendRequestResponseMethod>;
 
@@ -373,6 +378,10 @@ export interface FrontendActionsApi {
 		input: ActionCallInputs['repo_unfocus'],
 		options?: RpcClientCallOptions
 	) => Promise<Result<{ value: ActionOutputs['repo_unfocus'] }, { error: JsonrpcErrorObject }>>;
+	repo_files: (
+		input: ActionCallInputs['repo_files'],
+		options?: RpcClientCallOptions
+	) => Promise<Result<{ value: ActionOutputs['repo_files'] }, { error: JsonrpcErrorObject }>>;
 	project_changed: (
 		input: ActionCallInputs['project_changed'],
 		options?: RpcClientCallOptions

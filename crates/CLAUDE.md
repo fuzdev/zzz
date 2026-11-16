@@ -35,7 +35,7 @@ hand-written file byte routes (`file_bytes.rs`, outside the registry). Besides t
 `handlers/` holds `App` state and a `broadcast` shim over `App.realtime` (connection revocation
 lives on the spine's `ConnectionRegistry` — see Auth below). RPC methods:
 `ping`, `session_load`, `project_*`, `repo_focus`, `repo_unfocus`,
-`diskfile_*`, `directory_create`, `media_finalize`, `transcription_create`, `job_cancel`, `terminal_*`,
+`repo_files`, `diskfile_*`, `directory_create`, `media_finalize`, `transcription_create`, `job_cancel`, `terminal_*`,
 `provider_load_status`, `completion_create`,
 `account_verify`, `account_session_list`,
 `account_session_revoke`, `account_session_revoke_all`,
@@ -372,13 +372,13 @@ into zzz's cross-backend projects.
 crates/zzz_server/src/
 ├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle over `fuz_actions::server`: config (command line + env), the spine core (`create_app_backend`: keyring, READ COMMITTED guard, migrations, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry` compile, file watchers, route composition, `serve_until_shutdown` (the auth cleanup beside the server, the 1001 close of every live WebSocket and the end of every audit stream before the drain), then jobs and PTYs torn down
 ├── main.rs           # Thin production entry — parses the command line, constructs `Argon2idHasher`, calls `run_app`
-├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `project_open`, `repo_focus`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
+├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `project_open`, `repo_focus`, `repo_files`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
 │   ├── mod.rs        # `App` long-lived state (`ProjectManager`, `trusted_owner`, `git`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_read (+ its bounded text read, `read_text_contents`, and the bytes' `hash`), diskfile_update (+ its `expected_hash` compare-and-swap), diskfile_create, diskfile_delete, directory_create
 │   ├── job.rs        # job_cancel
 │   ├── media.rs      # media_finalize, transcription_create (+ `tool_error`, the `ToolError` → JSON-RPC mapping)
-│   ├── project.rs    # project_list, project_open, project_close, repo_focus, repo_unfocus: the resolve and what an open focuses, each change handed to `ProjectManager`, its refusals mapped to the wire (`lifecycle_error`)
+│   ├── project.rs    # project_list, project_open, project_close, repo_focus, repo_unfocus, repo_files: the resolve and what an open focuses, each change handed to `ProjectManager`, its refusals mapped to the wire (`lifecycle_error`)
 │   ├── provider.rs   # provider_load_status, completion_create
 │   └── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_ack, terminal_close
 ├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by `run_app`'s `ActionRegistry::compile`; each captures `Arc<App>` and calls the matching `handlers::*` fn
@@ -425,9 +425,10 @@ and `perform_action`), and DB pool / migrations all live in the spine crates
 revocation is the spine `RealtimeCloser` over the WS and SSE registries
 (../docs/backend.md § Auth, item 10).
 
-**Large responses**: `session_load`, `project_open`, and `repo_focus` carry
-every indexed file's metadata (never its contents — those come by `diskfile_read`),
-so a large tree is a large response, and they skip the `serde_json::Value`
+**Large responses**: `session_load`, `project_open`, `repo_focus`, and
+`repo_files` carry indexed files' metadata — every indexed file's, or a
+focused repo's for the last two — never their contents (those come by
+`diskfile_read`), so a large tree is a large response, and they skip the `serde_json::Value`
 round trip: a snapshot clones the index's nodes (metadata only — the index
 holds no file text), the handler returns its typed result as a
 `fuz_actions::ActionOutput` (registered with `ActionSpec::new_output`, sized
@@ -529,7 +530,7 @@ joined after the drain, before PTY teardown.
 ## Known Limitations
 
 - RPC methods: `ping`, `session_load`, `project_*`, `repo_focus`,
-  `repo_unfocus`, `diskfile_read`,
+  `repo_unfocus`, `repo_files`, `diskfile_read`,
   `diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`,
   `media_finalize`,
   `transcription_create`, `job_cancel`, `terminal_*`, `provider_load_status`,
@@ -558,7 +559,7 @@ joined after the drain, before PTY teardown.
   `touch` included), ignored paths filtered before the bounded
   event channel with a coalesced root rescan on overflow, per-watcher ignore
   config, in-memory file index returned (as metadata) by `session_load`,
-  `project_open`, and `repo_focus`, symlinks skipped; ignores
+  `project_open`, `repo_focus`, and `repo_files`, symlinks skipped; ignores
   `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` and the
   credential directories (`.ssh`/`.gnupg`/`.aws`/`.kube`/`.docker`/
   `.password-store`) by name globally (`.zzz` keeps the CLI daemon home's
