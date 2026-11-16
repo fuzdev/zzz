@@ -15,14 +15,13 @@ import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import { jsonrpc_error_messages } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import { get_datetime_now } from './datetime.ts';
+import { Datetime } from './datetime.ts';
 import { Diskfile } from './diskfile.svelte.ts';
 import {
 	DiskfileJson,
 	DiskfilePath,
 	type DiskfileDirectoryPath,
 	type DiskfileJsonInput,
-	type DisknodeMetadata,
 	type SerializableDisknode
 } from './diskfile_types.ts';
 import {
@@ -63,11 +62,6 @@ interface ContentLoad {
 	promise: Promise<void>;
 	/** The file changed on disk while the read was in flight, so it reads again. */
 	stale: boolean;
-	/**
-	 * Contents arrived on the wire while the read was in flight — maybe newer
-	 * than what it returns, so its result isn't applied over them.
-	 */
-	superseded: boolean;
 }
 
 /** What `Diskfiles` takes from a `diskfile_read`: its output, or why it failed. */
@@ -91,16 +85,8 @@ export interface DiskfilesOptions extends CellOptions<typeof DiskfilesJson> {}
  * see `Diskfiles.track_changes` for how a snapshot is applied around it.
  */
 export interface DiskfileSnapshotChanges {
-	/**
-	 * Paths an `add`, `change`, or `delete` reported. The snapshot's entries
-	 * for them are skipped.
-	 */
+	/** Paths a `filer_change` reported. The snapshot's entries for them are skipped. */
 	readonly paths: ReadonlySet<string>;
-	/**
-	 * The latest `touch` reported per path. A touch never makes the snapshot
-	 * yield; its metadata is applied again after the snapshot.
-	 */
-	readonly touches: ReadonlyMap<string, DisknodeMetadata>;
 }
 
 /** Records what `filer_change` reports while a file-tree snapshot is in flight. */
@@ -187,44 +173,30 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	// not reactive — bookkeeping for snapshot requests in flight
-	readonly #change_trackers: Set<{
-		paths: Set<string>;
-		touches: Map<string, DisknodeMetadata>;
-	}> = new Set();
+	readonly #change_trackers: Set<{ paths: Set<string> }> = new Set();
 
 	/**
-	 * Starts recording what `handle_change` is given. Start it before
+	 * Starts recording the paths `handle_change` is given. Start it before
 	 * requesting a file-tree snapshot and pass it to `add_initial` or
 	 * `reconcile` with the snapshot, which is then applied around what
-	 * `filer_change` reported while the request was in flight:
+	 * `filer_change` reported while the request was in flight: a reported
+	 * path keeps what the notification left — the snapshot's entry for it is
+	 * skipped, and it isn't pruned — so a file deleted meanwhile isn't
+	 * resurrected and newer metadata isn't reverted.
 	 *
-	 * - A path an `add`, `change`, or `delete` reported keeps what the
-	 *   notification left: the snapshot's entry for it is skipped, and it isn't
-	 *   pruned. So a file deleted meanwhile isn't resurrected and newer content
-	 *   isn't reverted.
-	 * - A `touch` never makes the snapshot yield, because it carries no
-	 *   contents: a client that missed a `change` while disconnected holds old
-	 *   text, and only the snapshot can replace it. The snapshot's entry is
-	 *   applied (or the file pruned, if the snapshot lacks it), and then the
-	 *   path's latest touch is applied again — unless an `add`, `change`, or
-	 *   `delete` was also reported for the path, whose result already stands.
-	 *
-	 * The touch's metadata wins over the snapshot's whichever `mtime` is
-	 * higher. The two can't be ordered from here — a notification that arrives
-	 * during the request may have been sent before or after the backend read
-	 * its index for the snapshot, and a file's `mtime` can move backwards — but
-	 * the backend queues a notification for every change to its index, so its
-	 * notifications converge on the index: if the snapshot was the newer of the
-	 * two, whatever moved the file past the touch has its own notification
-	 * still to come, and that one settles it. Preferring the snapshot would
-	 * have no such correction when the touch was the newer.
+	 * The two can't be ordered from here — a notification that arrives during
+	 * the request may have been sent before or after the backend read its
+	 * index for the snapshot — but the backend queues a notification for every
+	 * change to its index, so its notifications converge on the index: if the
+	 * snapshot was the newer of the two, whatever moved the file past the
+	 * notification has its own notification still to come, and that one
+	 * settles it.
 	 */
 	track_changes(): DiskfileChangeTracker {
-		const tracker = { paths: new Set<string>(), touches: new Map<string, DisknodeMetadata>() };
+		const tracker = { paths: new Set<string>() };
 		this.#change_trackers.add(tracker);
 		return {
 			paths: tracker.paths,
-			touches: tracker.touches,
 			stop: () => this.#change_trackers.delete(tracker)
 		};
 	}
@@ -232,58 +204,16 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Applies a `filer_change` notification. `add` and `change` both upsert by
 	 * path — the backend's add/change split is advisory, and a re-seed or a
-	 * missed delete must never leave two diskfiles for one path. A `touch`
-	 * carries no contents (see `touch`).
+	 * missed delete must never leave two diskfiles for one path.
 	 */
 	handle_change(params: ActionInputs['filer_change']): void {
 		const { disknode } = params;
-		if (params.change.type === 'touch') {
-			// recorded apart from the changes a snapshot in flight yields to
-			// (see `track_changes`), whether or not there's a diskfile to update
-			for (const tracker of this.#change_trackers) tracker.touches.set(disknode.id, disknode);
-			this.touch(disknode);
-			return;
-		}
 		for (const tracker of this.#change_trackers) tracker.paths.add(disknode.id);
 		if (params.change.type === 'delete') {
 			this.remove_by_path(disknode.id);
 		} else {
 			this.upsert(disknode);
 		}
-	}
-
-	/**
-	 * Applies a `touch`: the file's metadata changed on disk. It takes the new
-	 * `size` and `mtime`, and since a notification without contents can't say
-	 * whether the bytes moved, its content is treated as a change on disk
-	 * would be (see `upsert`): read again if the file is held eagerly, else
-	 * dropped until it's next needed. A read that lands on the same text
-	 * changes nothing (`DiskfileEditorState.check_disk_changes`).
-	 *
-	 * A path this client doesn't hold is left alone (the next snapshot brings
-	 * it), as is a diskfile kept after its file was deleted, whose content is
-	 * no longer the file's.
-	 *
-	 * @returns whether a diskfile was updated
-	 */
-	touch(metadata: DisknodeMetadata): boolean {
-		const existing = this.#apply_metadata(metadata);
-		if (!existing) return false;
-		this.#follow_disk_change(existing);
-		return true;
-	}
-
-	/**
-	 * Takes a touch's `size` and `mtime` — nothing else.
-	 *
-	 * @returns the diskfile updated, `undefined` for a path not held or a file deleted on disk
-	 */
-	#apply_metadata(metadata: DisknodeMetadata): Diskfile | undefined {
-		const existing = this.items.by_optional('by_path', metadata.id);
-		if (!existing || existing.deleted_on_disk) return undefined;
-		if (existing.size !== metadata.size) existing.size = metadata.size;
-		if (existing.mtime !== metadata.mtime) existing.mtime = metadata.mtime;
-		return existing;
 	}
 
 	/**
@@ -356,88 +286,43 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * A diskfile kept after a delete (see `remove_by_path`) is reattached this
 	 * way when its path reappears on disk.
 	 *
-	 * A disknode with `contents` is a read: the diskfile takes them as loaded
-	 * (`null` makes it `unloadable`). An existing diskfile whose content and
-	 * dependency data already match is left untouched but for its `size` and
-	 * `mtime`, so a resync that re-sends every file doesn't churn the unchanged
-	 * ones. A content change is recorded in the file's editing state, if it has
-	 * one (`DiskfileEditorState.check_disk_changes`).
-	 *
-	 * A disknode without `contents` carries metadata only, so for a diskfile
-	 * already held its content may be out of date: a file held eagerly — with
-	 * an editing state, or referenced by a `DiskfilePart` — is read again,
-	 * keeping its content until the new one lands, and any other drops its
-	 * content to `unrequested`, to be read when next needed
-	 * (`ensure_content`). A read in flight reads again instead. A new file
-	 * starts `unrequested`, and is read right away if a part references it.
+	 * A disknode carries metadata only — contents come from `diskfile_read`
+	 * alone — so for a diskfile already held its content may be out of date:
+	 * a file held eagerly — with an editing state, or referenced by a
+	 * `DiskfilePart` — is read again, keeping its content until the new one
+	 * lands, and any other drops its content to `unrequested`, to be read when
+	 * next needed (`ensure_content`). A read in flight reads again instead. A
+	 * read that lands on the same text changes nothing
+	 * (`DiskfileEditorState.check_disk_changes`), so a resync that re-sends
+	 * every file, or a `touch`, raises no conflict. A new file starts
+	 * `unrequested`, and is read right away if a part references it.
 	 */
 	upsert(disknode: SerializableDisknode): Diskfile {
 		const existing = this.items.by_optional('by_path', disknode.id);
-		const { contents } = disknode;
 		if (!existing) {
 			const diskfile = this.add(disknode_to_diskfile_json(disknode));
-			if (contents === null) {
-				diskfile.unloaded_status = 'unloadable';
-			} else if (contents === undefined && this.#is_held_eagerly(diskfile)) {
-				void this.#start_load(diskfile);
-			}
+			if (this.#is_held_eagerly(diskfile)) void this.#start_load(diskfile);
 			return diskfile;
 		}
-		if (contents === undefined) {
-			existing.deleted_on_disk = false;
-			if (existing.source_dir !== disknode.source_dir) existing.source_dir = disknode.source_dir;
-			if (existing.size !== disknode.size) existing.size = disknode.size;
-			if (existing.mtime !== disknode.mtime) existing.mtime = disknode.mtime;
-			// back on disk, and its root may have changed with a snapshot from another filer
-			this.#sync_directories(existing);
-			this.#follow_disk_change(existing);
-			return existing;
-		}
-		// a read in flight may have been served before this — it reads again,
-		// and its result isn't applied over these contents
-		const load = this.#loads.get(existing.id);
-		if (load) {
-			load.stale = true;
-			load.superseded = true;
-		}
-		if (!existing.deleted_on_disk && diskfile_matches(existing, disknode)) {
-			// the metadata a rewrite to the same content changes — and the only
-			// sign of a change to a file whose content isn't loaded
-			if (existing.size !== disknode.size) existing.size = disknode.size;
-			if (existing.mtime !== disknode.mtime) existing.mtime = disknode.mtime;
-			this.#settle_contents(existing, contents);
-			return existing;
-		}
 		existing.deleted_on_disk = false;
-		existing.set_json({
-			...disknode_to_diskfile_json(disknode, existing.id),
-			// TODO hacky, should be handled more cleanly elsewhere
-			created: existing.created, // Preserve original creation date
-			updated: get_datetime_now() // TODO @many probably rely on the db to bump `updated`
-		});
-		this.#settle_contents(existing, contents);
+		if (existing.source_dir !== disknode.source_dir) existing.source_dir = disknode.source_dir;
+		if (existing.size !== disknode.size) existing.size = disknode.size;
+		if (existing.mtime !== disknode.mtime) {
+			existing.mtime = disknode.mtime;
+			// as a new file's is (`disknode_to_diskfile_json`)
+			if (disknode.mtime !== null) {
+				existing.updated = parse_or_throw(Datetime, new Date(disknode.mtime).toISOString());
+			}
+		}
 		// back on disk, and its root may have changed with a snapshot from another filer
 		this.#sync_directories(existing);
-		untrack(() => this.#editor_states.get(existing.id))?.check_disk_changes();
+		this.#follow_disk_change(existing);
 		return existing;
 	}
 
 	/**
-	 * Settles the content status of a diskfile that took `contents` from a
-	 * disknode: a string is loaded, `null` unloadable for a reason not given.
-	 */
-	#settle_contents(diskfile: Diskfile, contents: string | null): void {
-		if (contents === null && diskfile.unloaded_status !== 'unloadable') {
-			diskfile.unloaded_status = 'unloadable';
-		}
-		if (diskfile.unloaded_reason !== null) diskfile.unloaded_reason = null;
-		if (diskfile.content_error !== null) diskfile.content_error = null;
-	}
-
-	/**
-	 * Follows a change on disk that came without contents (see `upsert`): a
-	 * read in flight reads again, a file held eagerly is read, and any other
-	 * held content is dropped.
+	 * Follows a change on disk (see `upsert`): a read in flight reads again, a
+	 * file held eagerly is read, and any other held content is dropped.
 	 */
 	#follow_disk_change(diskfile: Diskfile): void {
 		const load = this.#loads.get(diskfile.id);
@@ -505,6 +390,34 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
+	 * The read of `diskfile`'s content in flight or queued, `null` when there's
+	 * none. It resolves once the reading stops: a read landed with no change on
+	 * disk reported meanwhile, the last read failed (`content_error`), or the
+	 * file went away — it never rejects (see `ensure_content`). Starts nothing:
+	 * a save waits on it so it never writes before a change it was told of is
+	 * checked (`DiskfileEditorState.save_changes`).
+	 */
+	pending_read(diskfile: Diskfile): Promise<void> | null {
+		return this.#loads.get(diskfile.id)?.promise ?? null;
+	}
+
+	/**
+	 * Reads `diskfile`'s content again even when it counts as settled
+	 * (`loaded`, or `unloadable` after a failed read), joining a read in
+	 * flight — for an explicit ask that can't trust what's held, such as a save
+	 * after a re-read failed (`content_error` with the old content kept). The
+	 * status doesn't change while it reads: only an `unrequested` file shows
+	 * `loading`. A file deleted on disk or gone from the collection isn't
+	 * read. Never rejects: a failed read sets `content_error` again.
+	 */
+	read_again(diskfile: Diskfile): Promise<void> {
+		const load = this.#loads.get(diskfile.id);
+		if (load) return load.promise;
+		if (!this.#is_live(diskfile)) return Promise.resolve();
+		return this.#start_load(diskfile);
+	}
+
+	/**
 	 * Loads `diskfile`'s content (`ensure_content`) and returns it — for what
 	 * copies it, which shows why when it can't. Unlike `ensure_content`, it
 	 * rejects rather than leave the caller to read the status, and it retries
@@ -539,7 +452,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 	#start_load(diskfile: Diskfile): Promise<void> {
 		if (diskfile.content_status === 'unrequested') diskfile.unloaded_status = 'loading';
-		const load: ContentLoad = { promise: Promise.resolve(), stale: false, superseded: false };
+		const load: ContentLoad = { promise: Promise.resolve(), stale: false };
 		this.#loads.set(diskfile.id, load);
 		load.promise = this.#run_load(diskfile, load);
 		return load.promise;
@@ -548,9 +461,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Reads until a read lands with no change on disk reported meanwhile.
 	 * Each result is applied as it lands — so a file written more often than
-	 * a read takes still shows its content — unless contents arrived on the
-	 * wire meanwhile, which may be newer; a failure is applied only when it's
-	 * the last read.
+	 * a read takes still shows its content; a failure is applied only when
+	 * it's the last read.
 	 */
 	async #run_load(diskfile: Diskfile, load: ContentLoad): Promise<void> {
 		try {
@@ -560,12 +472,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 						// reset as the read starts, not while it waits for a slot — a change
 						// reported while it waits is one this read already sees
 						load.stale = false;
-						load.superseded = false;
 						return this.#read(diskfile.path);
 					},
 					() => this.#read_priority(diskfile)
 				);
-				if (!load.superseded && (result.ok || !load.stale)) this.#apply_read(diskfile, result);
+				if (result.ok || !load.stale) this.#apply_read(diskfile, result);
 			} while (load.stale && this.#is_live(diskfile));
 		} finally {
 			if (this.#loads.get(diskfile.id) === load) this.#loads.delete(diskfile.id);
@@ -664,26 +575,12 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	add_initial(files: Array<SerializableDisknode>, changes?: DiskfileSnapshotChanges): void {
 		this.#upsert_snapshot(files, changes?.paths);
-		this.#apply_touches(changes);
 	}
 
 	#upsert_snapshot(files: Array<SerializableDisknode>, skip_paths?: ReadonlySet<string>): void {
 		for (const disknode of files) {
 			if (skip_paths?.has(disknode.id)) continue;
 			this.upsert(disknode);
-		}
-	}
-
-	/**
-	 * Applies the touches reported while a snapshot was in flight again, now
-	 * that the snapshot is in — except for a path a full change was reported
-	 * for (see `track_changes`).
-	 */
-	#apply_touches(changes: DiskfileSnapshotChanges | undefined): void {
-		if (!changes) return;
-		// metadata only — each touch already re-read or dropped its file's content when it arrived
-		for (const [path, metadata] of changes.touches) {
-			if (!changes.paths.has(path)) this.#apply_metadata(metadata);
 		}
 	}
 
@@ -697,8 +594,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * @param files - the snapshot's file tree
 	 * @param roots - the directories (trailing `/`) whose complete trees `files` holds
 	 * @param options.changes - what `filer_change` reported while the snapshot
-	 *   was in flight (see `track_changes`): a path with a full change is
-	 *   neither upserted nor removed
+	 *   was in flight (see `track_changes`): a reported path is neither
+	 *   upserted nor removed
 	 * @param options.skip_dirs - directories (trailing `/`) whose files aren't
 	 *   removed, e.g. workspaces opened while the snapshot was in flight
 	 */
@@ -707,12 +604,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		roots: ReadonlyArray<string>,
 		options?: { changes?: DiskfileSnapshotChanges; skip_dirs?: ReadonlyArray<string> }
 	): void {
-		const changes = options?.changes;
-		const skip_paths = changes?.paths;
+		const skip_paths = options?.changes?.paths;
 		const skip_dirs = options?.skip_dirs ?? [];
 		this.#upsert_snapshot(files, skip_paths);
 		this.#prune_unlisted(files, roots, skip_paths, skip_dirs);
-		this.#apply_touches(changes);
 	}
 
 	#prune_unlisted(
@@ -1161,7 +1056,3 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 /** Whether `path` is inside one of `dirs` (each with a trailing `/`). */
 const is_under_any = (path: string, dirs: ReadonlyArray<string>): boolean =>
 	dirs.some((dir) => path.startsWith(dir));
-
-/** Whether `diskfile` already holds everything `upsert` would take from `disknode`. */
-const diskfile_matches = (diskfile: Diskfile, disknode: SerializableDisknode): boolean =>
-	diskfile.content === disknode.contents && diskfile.source_dir === disknode.source_dir;

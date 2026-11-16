@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
+import { parse, parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, afterEach, describe, assert, vi } from 'vitest';
 import { create_deferred, type Deferred } from '@fuzdev/fuz_util/async.ts';
 import { assert_rejects } from '@fuzdev/fuz_util/testing.ts';
@@ -8,7 +8,6 @@ import { assert_rejects } from '@fuzdev/fuz_util/testing.ts';
 import {
 	DiskfilePath,
 	SerializableDisknode,
-	type DisknodeMetadata,
 	type DiskfileUnloadedReason
 } from '#lib/diskfile_types.ts';
 import { DISKFILE_READ_CONCURRENCY } from '#lib/diskfiles.svelte.ts';
@@ -24,10 +23,10 @@ import { HISTORY_LABEL_DISK_CHANGE } from '#lib/diskfile_editor_state.svelte.ts'
 import { run_in_effect } from './reactive_test_helpers.svelte.ts';
 
 /**
- * Contents on demand: a diskfile seeded from metadata alone is `unrequested`
- * and loads through `diskfile_read` when something needs it
- * (`Diskfiles.ensure_content`); a change on disk without contents re-reads
- * the files held eagerly and drops the rest.
+ * Contents on demand: a diskfile seeded from a disknode (metadata only) is
+ * `unrequested` and loads through `diskfile_read` when something needs it
+ * (`Diskfiles.ensure_content`); a change on disk re-reads the files held
+ * eagerly and drops the rest.
  */
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/ws/');
@@ -36,19 +35,13 @@ const PATH_A = to_path('a.txt');
 const PATH_B = to_path('b.txt');
 const PATH_C = to_path('c.txt');
 
-/** A disknode without contents — what the index sends once it's metadata-only. */
-const metadata = (path: DiskfilePath, mtime = 1): DisknodeMetadata => ({
+/** A disknode as the index sends it — metadata only. */
+const metadata = (path: DiskfilePath, mtime = 1): SerializableDisknode => ({
 	id: path,
 	source_dir: SOURCE_DIR,
 	size: 1,
 	ctime: 1,
 	mtime
-});
-
-/** A disknode carrying contents, as today's index sends them. */
-const with_contents = (path: DiskfilePath, contents: string | null): SerializableDisknode => ({
-	...metadata(path),
-	contents
 });
 
 type ReadResult =
@@ -115,7 +108,7 @@ const get = (path: DiskfilePath): Diskfile => {
 	return diskfile;
 };
 
-/** A `filer_change` without contents — every one, once the index is metadata-only. */
+/** A `filer_change` — metadata only, as every one is. */
 const change_on_disk = (path: DiskfilePath, mtime = 2): void => {
 	app.diskfiles.handle_change({
 		change: { type: 'change', path },
@@ -177,11 +170,11 @@ describe('metadata-only seeds', () => {
 		assert.strictEqual(diskfile.mtime, 5);
 	});
 
-	test('contents on a disknode are a read: the file is loaded, or unloadable for null', () => {
-		app.diskfiles.add_initial([with_contents(PATH_A, 'text'), with_contents(PATH_B, null)]);
-		assert.strictEqual(get(PATH_A).content_status, 'loaded');
-		assert.strictEqual(get(PATH_B).content_status, 'unloadable');
-		assert.isNull(get(PATH_B).unloaded_reason, 'the wire gave no reason');
+	test('a disknode carries no contents: the schema refuses the key', () => {
+		assert.ok(parse(SerializableDisknode, metadata(PATH_A)).ok);
+		for (const contents of ['text', null]) {
+			assert.isFalse(parse(SerializableDisknode, { ...metadata(PATH_A), contents }).ok);
+		}
 	});
 });
 
@@ -201,7 +194,12 @@ describe('single-flight', () => {
 
 	test('a loaded or unloadable file is not read again', async () => {
 		const diskfile = await load(PATH_A, 'text');
-		app.diskfiles.add_initial([with_contents(PATH_B, null)]);
+		app.diskfiles.add_initial([metadata(PATH_B)]);
+		const loading = app.diskfiles.ensure_content(get(PATH_B));
+		await flush();
+		await answer(PATH_B, read_ok(null, 'not_utf8'));
+		await loading;
+		assert.strictEqual(get(PATH_B).content_status, 'unloadable');
 		await app.diskfiles.ensure_content(diskfile);
 		await app.diskfiles.ensure_content(get(PATH_B));
 		await flush();
@@ -275,23 +273,6 @@ describe('stale while in flight', () => {
 		assert.strictEqual(diskfile.content, 'v2');
 	});
 
-	test('contents arriving on the wire during a read make it read again', async () => {
-		app.diskfiles.add_initial([metadata(PATH_A)]);
-		const diskfile = get(PATH_A);
-		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
-		app.diskfiles.handle_change({
-			change: { type: 'change', path: PATH_A },
-			disknode: with_contents(PATH_A, 'wire')
-		});
-		assert.strictEqual(diskfile.content, 'wire');
-		await answer(PATH_A, read_ok('older'));
-		assert.strictEqual(diskfile.content, 'wire', 'a read possibly served before it is dropped');
-		await answer(PATH_A, read_ok('wire'));
-		await loading;
-		assert.strictEqual(diskfile.content, 'wire');
-	});
-
 	test('a read stopped by a delete leaves the file unrequested, not loading', async () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const diskfile = get(PATH_A);
@@ -327,33 +308,6 @@ describe('stale while in flight', () => {
 		);
 		await loading;
 		assert.strictEqual(diskfile.content, 'text');
-	});
-
-	test('contents arriving on the wire while a read waits for a slot are read over, once', async () => {
-		const paths = Array.from({ length: DISKFILE_READ_CONCURRENCY }, (_, i) =>
-			to_path(`busy${i}.txt`)
-		);
-		app.diskfiles.add_initial(paths.map((path) => metadata(path)));
-		for (const path of paths) void app.diskfiles.ensure_content(get(path));
-		app.diskfiles.add_initial([metadata(PATH_A)]);
-		const diskfile = get(PATH_A);
-		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
-		assert.strictEqual(reads.length, DISKFILE_READ_CONCURRENCY, 'the read of a.txt is queued');
-
-		app.diskfiles.handle_change({
-			change: { type: 'change', path: PATH_A },
-			disknode: with_contents(PATH_A, 'wire')
-		});
-		assert.strictEqual(diskfile.content, 'wire');
-		await answer(paths[0]!, read_ok('busy'));
-		await answer(PATH_A, read_ok('newer'));
-		await loading;
-		assert.isFalse(
-			reads.some((read) => read.path === PATH_A),
-			'one read of a.txt — it started after the contents'
-		);
-		assert.strictEqual(diskfile.content, 'newer', 'so its result is applied');
 	});
 
 	test('load_content rejects for a file gone while it read', async () => {
@@ -499,7 +453,7 @@ describe('unloadable', () => {
 	});
 });
 
-describe('a change on disk without contents', () => {
+describe('a change on disk', () => {
 	test('re-reads a file with an editing state, keeping its content until the new lands', async () => {
 		const diskfile = await load(PATH_A, 'v1');
 		const editor_state = app.diskfiles.get_editor_state(diskfile);
@@ -560,7 +514,12 @@ describe('a change on disk without contents', () => {
 	});
 
 	test('drops an unloadable file nothing holds too — it may load now', async () => {
-		app.diskfiles.add_initial([with_contents(PATH_A, null)]);
+		app.diskfiles.add_initial([metadata(PATH_A)]);
+		const loading = app.diskfiles.ensure_content(get(PATH_A));
+		await flush();
+		await answer(PATH_A, read_ok(null, 'too_large'));
+		await loading;
+		assert.strictEqual(get(PATH_A).content_status, 'unloadable');
 		change_on_disk(PATH_A);
 		assert.strictEqual(get(PATH_A).content_status, 'unrequested');
 	});
@@ -573,13 +532,12 @@ describe('a change on disk without contents', () => {
 		assert.strictEqual(get(PATH_A).content_status, 'unrequested');
 	});
 
-	test('a touch follows the same policy', async () => {
+	test('a change of the timestamps alone follows the same policy', async () => {
 		const held = await load(PATH_A, 'a');
 		app.diskfiles.get_editor_state(held);
 		const loose = await load(PATH_B, 'b');
-		for (const path of [PATH_A, PATH_B]) {
-			app.diskfiles.handle_change({ change: { type: 'touch', path }, disknode: metadata(path, 3) });
-		}
+		// a `touch` arrives as a `change`, metadata only like every one
+		for (const path of [PATH_A, PATH_B]) change_on_disk(path, 3);
 		await flush();
 		assert.deepEqual(
 			reads.map((r) => r.path),

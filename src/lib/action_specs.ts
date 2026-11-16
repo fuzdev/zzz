@@ -16,7 +16,6 @@ import {
 	pipe,
 	safe_integer,
 	string,
-	union,
 	void as fuz_void,
 	with_default,
 	with_default_fn,
@@ -50,7 +49,6 @@ import {
 	DiskfileDirectoryPath,
 	DiskfilePath,
 	DiskfileUnloadedReason,
-	DisknodeMetadata,
 	SerializableDisknode
 } from './diskfile_types.ts';
 import { ERROR_INVALID_PATH, is_path_absolute } from './diskfile_helpers.ts';
@@ -131,19 +129,13 @@ export const SessionLoadOutput = object({
 export type SessionLoadOutput = Infer<typeof SessionLoadOutput>;
 
 /**
- * Input for `filer_change`: the file's whole disknode — or, for a `touch`,
- * its metadata without the contents (`DisknodeMetadata`).
+ * Input for `filer_change`: the change, and the file's disknode — its
+ * metadata, without its contents.
  */
-export const FilerChangeInput = union([
-	object({
-		change: object({ ...DiskfileChange.def, type: one_of(['add', 'change', 'delete']) }),
-		disknode: SerializableDisknode
-	}),
-	object({
-		change: object({ ...DiskfileChange.def, type: literal('touch') }),
-		disknode: DisknodeMetadata
-	})
-]);
+export const FilerChangeInput = object({
+	change: DiskfileChange,
+	disknode: SerializableDisknode
+});
 export type FilerChangeInput = Infer<typeof FilerChangeInput>;
 
 /** Input for `diskfile_read`. */
@@ -457,7 +449,7 @@ export const filer_change_action_spec = {
 	output: fuz_void,
 	async: true,
 	description:
-		"Notifies the frontend of a file system change detected by the watcher. Carries the file's contents unless the ones the backend holds for it are unchanged (a `touch`)."
+		"Notifies the frontend of a file system change detected by the watcher. Carries the file's metadata, not its contents — a client holding them reads them again (`diskfile_read`)."
 } satisfies RemoteNotificationActionSpec;
 
 export const diskfile_read_action_spec = {

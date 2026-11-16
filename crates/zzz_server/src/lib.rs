@@ -107,16 +107,14 @@ pub const RPC_MESSAGE_MAX_BYTES: usize = 16 * 1024 * 1024;
 /// (`fuz_realtime::connection_channel`).
 ///
 /// 32 MiB, above the spine's 4 MiB default
-/// (`fuz_actions::DEFAULT_WS_OUTBOUND_QUEUE_BYTES`), sized by the largest
-/// frame zzz pushes: a `filer_change` carries a file's whole text, up to
-/// `filer::MAX_INDEXED_FILE_SIZE` (4 MiB), and JSON escapes a control
-/// character to 6 bytes, so one frame can reach 24 MiB. The budget holds
-/// that frame behind others still waiting — under the default any file near
-/// the cap is delivered only into an empty queue, so two of them in a row,
-/// or one behind a line of terminal output, would close the socket. Every
-/// other notification is
-/// small next to it (`terminal_data` is at most one 8 KiB read, escaped), and
-/// responses are written by the connection's own loop, not queued.
+/// (`fuz_actions::DEFAULT_WS_OUTBOUND_QUEUE_BYTES`), and its own number, not
+/// tied to the message cap. Every frame zzz pushes is small: a
+/// `filer_change` carries a file's metadata, not its text (a client reads
+/// that with `diskfile_read`, a response), and `terminal_data` is at most
+/// one 8 KiB read, escaped. So the budget is how far a burst of frames can
+/// get ahead of a client — a change across a tree (a `git checkout`) queues
+/// one `filer_change` per file. Responses are written by the connection's
+/// own loop, not queued.
 ///
 /// It bounds a burst, it does not absorb one of any size: a batch of changes
 /// larger than this still closes a socket whose client takes nothing while
@@ -126,17 +124,11 @@ pub const RPC_MESSAGE_MAX_BYTES: usize = 16 * 1024 * 1024;
 ///
 /// **Memory.** This is what a client that stops reading can make zzzd hold
 /// for its socket: up to 32 MiB waiting, plus the one frame its writer has
-/// taken (at most 24 MiB), until the write stalls out
-/// (`fuz_realtime::WS_WRITE_STALL_TIMEOUT`) or the next frame overflows the
-/// queue. A broadcast's text is one buffer shared by every recipient, so
-/// sockets holding the same `filer_change` frames hold them once.
-pub const WS_OUTBOUND_QUEUE_BYTES: usize = 2 * RPC_MESSAGE_MAX_BYTES;
-
-// The budget holds the largest `filer_change` frame — every byte of a file
-// at the cap escaped to 6 — with 1 MiB to spare for its envelope and for the
-// frames it queues behind.
-const _: () =
-    assert!(WS_OUTBOUND_QUEUE_BYTES as u64 >= 6 * filer::MAX_INDEXED_FILE_SIZE + 1024 * 1024);
+/// taken, until the write stalls out (`fuz_realtime::WS_WRITE_STALL_TIMEOUT`)
+/// or the next frame overflows the queue. A broadcast's text is one buffer
+/// shared by every recipient, so sockets holding the same `filer_change`
+/// frames hold them once.
+pub const WS_OUTBOUND_QUEUE_BYTES: usize = 32 * 1024 * 1024;
 
 /// Receive silence past which `/api/ws` closes a socket (4003, "server
 /// heartbeat timeout") — 1200 s, twice the longest heartbeat interval zzz's
@@ -146,25 +138,22 @@ const _: () =
 /// a client idle for one interval and slow on the next stays inside it.
 const WS_RECEIVE_TIMEOUT: std::time::Duration = std::time::Duration::from_mins(20);
 
-/// The limits `/api/ws` is mounted with: the inbound message cap shared
-/// with the `/api/rpc` body ([`RPC_MESSAGE_MAX_BYTES`] — an oversized
-/// message closes the socket), the outbound queue budget
-/// ([`WS_OUTBOUND_QUEUE_BYTES`]), and the receive timeout
-/// ([`WS_RECEIVE_TIMEOUT`]).
+/// The limits `/api/ws` is mounted with: the inbound message cap shared with
+/// the `/api/rpc` body ([`RPC_MESSAGE_MAX_BYTES`] — an oversized message closes
+/// the socket), the outbound queue budget ([`WS_OUTBOUND_QUEUE_BYTES`]), and
+/// the receive timeout ([`WS_RECEIVE_TIMEOUT`]).
 ///
 /// Private, and read by exactly one non-test site — the
-/// `register_action_ws_with_options` call in `run_app` — so that mounting
-/// the socket without it (the spine's `register_action_ws`, or its
-/// message-limit helper, either of which leaves the outbound budget at the
-/// spine's 4 MiB default) leaves this unused and fails the `dead_code` lint
-/// under `-D warnings`. The assertion above names `WS_OUTBOUND_QUEUE_BYTES`
-/// rather than this for the same reason: a use inside a `const _` would keep
-/// it alive. `filer`'s budget test reads it too, which doesn't count in the
-/// library target. The tripwire only sees the const going unread: a call
+/// `register_action_ws_with_options` call in `run_app` — so that mounting the
+/// socket without it (the spine's `register_action_ws`, or its message-limit
+/// helper, either of which leaves the outbound budget at the spine's 4 MiB
+/// default) leaves this unused and fails the `dead_code` lint under
+/// `-D warnings`. `filer`'s frame-size test reads it too, which doesn't count
+/// in the library target. The tripwire only sees the const going unread: a call
 /// site that reads one field and drops the other (say `max_message_bytes`
 /// alone, through the message-limit helper) still compiles clean — and so does
-/// one that drops `receive_timeout` for the spine default, which the
-/// `ws_receive_timeout_covers_the_longest_client_interval` test pins.
+/// one that drops `receive_timeout` for the spine default, which a test pins
+/// (`ws_receive_timeout_covers_the_longest_client_interval`).
 const WS_OPTIONS: fuz_actions::ActionWsOptions = fuz_actions::ActionWsOptions {
     max_message_bytes: RPC_MESSAGE_MAX_BYTES,
     outbound_queue_bytes: WS_OUTBOUND_QUEUE_BYTES,
@@ -452,7 +441,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     let surfaces = router::SurfaceRouters {
         rpc: fuz_actions::create_rpc_router(dispatch.clone()),
         // `WS_OPTIONS`: the `/api/rpc` body's inbound cap, and an outbound
-        // queue budget sized for `filer_change` frames.
+        // queue budget sized for bursts of `filer_change` frames.
         ws: fuz_actions::register_action_ws_with_options(
             backend.ws_route_state(
                 dispatch,

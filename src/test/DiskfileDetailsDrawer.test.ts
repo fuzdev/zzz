@@ -11,10 +11,11 @@ import DiskfileMarkdownView from '#lib/DiskfileMarkdownView.svelte';
 import DiskfileTranscriptView from '#lib/DiskfileTranscriptView.svelte';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
 
 /**
  * Every file view's details sit in one drawer, which follows the app-wide
@@ -24,16 +25,8 @@ import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
-const create_disknode = (path: DiskfilePath, contents: string | null): SerializableDisknode => ({
-	id: path,
-	source_dir: SOURCE_DIR,
-	contents,
-	size: 1,
-	ctime: 1,
-	mtime: 1
-});
-
 let app: Frontend;
+let disk: FakeDisk;
 const cleanups: Array<() => void> = [];
 
 // jsdom has no Web Animations, which Svelte transitions use
@@ -52,6 +45,7 @@ beforeEach(() => {
 	Element.prototype.animate = animate_stub;
 	vi.spyOn(console, 'log').mockImplementation(() => undefined);
 	app = monkeypatch_zzz_for_tests(new Frontend());
+	disk = install_fake_disk(app, SOURCE_DIR);
 });
 afterEach(() => {
 	for (const cleanup of cleanups.splice(0)) cleanup();
@@ -63,8 +57,8 @@ afterEach(() => {
 	}
 });
 
-const write_file = (path: string, contents: string | null): Diskfile =>
-	app.diskfiles.upsert(create_disknode(parse_or_throw(DiskfilePath, path), contents));
+const write_file = (path: string, contents: string | null): Promise<Diskfile> =>
+	disk.load(path, contents);
 
 const render = (component: Component<any>, props: Record<string, unknown>) => {
 	const target = document.createElement('div');
@@ -348,8 +342,8 @@ describe('every file view keeps its details in the drawer', () => {
 	];
 
 	for (const { name, component, path, contents, details } of cases) {
-		test(`${name} renders its details inside the drawer, and closed, not at all`, () => {
-			const diskfile = write_file(path, contents);
+		test(`${name} renders its details inside the drawer, and closed, not at all`, async () => {
+			const diskfile = await write_file(path, contents);
 			const view = render(component, { diskfile });
 			const shown = content(view.target);
 			assert.ok(shown, 'open by default');
@@ -370,8 +364,8 @@ describe('every file view keeps its details in the drawer', () => {
 		// panel - `right` would push it past the panel's edge on a full row (the transcript's, with
 		// "open audio")
 		const opens_right = name === 'DiskfileEditorView' || name === 'DiskfileMarkdownView';
-		test(`${name}'s delete confirmation opens inside the drawer, ${opens_right ? 'right' : 'left'}`, () => {
-			const diskfile = write_file(path, contents);
+		test(`${name}'s delete confirmation opens inside the drawer, ${opens_right ? 'right' : 'left'}`, async () => {
+			const diskfile = await write_file(path, contents);
 			const view = render(component, { diskfile });
 			const drawer_content = content(view.target);
 			assert.ok(drawer_content);
@@ -420,7 +414,7 @@ describe('a file view shows what its drawer would, with the drawer closed', () =
 
 	for (const { name, component, path, contents } of editor_cases) {
 		test(`${name} shows a save error once, with the drawer open or closed`, async () => {
-			const diskfile = write_file(path, contents);
+			const diskfile = await write_file(path, contents);
 			const view = render(component, { diskfile });
 			app.diskfiles.get_editor_state(diskfile).save_error = 'disk full';
 			flushSync();
@@ -440,7 +434,7 @@ describe('a file view shows what its drawer would, with the drawer closed', () =
 	}
 
 	test('DiskfileTranscriptView shows a failed copy once, with the drawer open or closed', async () => {
-		const diskfile = write_file('/w/a.webm.transcript.json', TRANSCRIPT);
+		const diskfile = await write_file('/w/a.webm.transcript.json', TRANSCRIPT);
 		vi.spyOn(app.diskfiles, 'create_file_at').mockRejectedValue(new Error('disk full'));
 		const view = render(DiskfileTranscriptView, { diskfile });
 		const button = Array.from(view.target.querySelectorAll('button')).find(

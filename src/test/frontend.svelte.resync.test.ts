@@ -32,13 +32,13 @@ const ZZZ_B = parse_or_throw(DiskfilePath, '/zzz/b.txt');
 const WS_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
 const OTHER_A = parse_or_throw(DiskfilePath, '/other/a.txt');
 
-const create_disknode = (path: DiskfilePath, contents = 'contents'): SerializableDisknode => ({
+/** A disknode as the backend sends it — metadata only, `mtime` telling versions apart. */
+const create_disknode = (path: DiskfilePath, mtime = 1): SerializableDisknode => ({
 	id: path,
 	source_dir: path.startsWith(WS_DIR) ? WS_DIR : ZZZ_DIR,
-	contents,
 	size: 1,
 	ctime: 1,
-	mtime: 1
+	mtime
 });
 
 const create_workspace_info = (path: DiskfileDirectoryPath): WorkspaceInfoJson => ({
@@ -78,6 +78,10 @@ type WorkspaceOpenResult =
 	| { ok: false; error: { code: number; message: string } };
 
 let app: Frontend;
+/** What each path reads as (`diskfile_read`) — `contents` when not set. */
+let disk: Map<string, string>;
+/** Every path read, in order. */
+let reads: Array<string>;
 /** Pending `session_load` calls, resolved by the test. */
 let calls: Array<(result: SessionLoadResult) => void>;
 /** Pending `workspace_open` calls, resolved by the test. */
@@ -88,8 +92,18 @@ beforeEach(() => {
 	app = monkeypatch_zzz_for_tests(new Frontend());
 	calls = [];
 	open_calls = [];
+	disk = new Map();
+	reads = [];
 	(app as unknown as { api: unknown }).api = {
 		session_load: () => new Promise<SessionLoadResult>((resolve) => calls.push(resolve)),
+		diskfile_read: ({ path }: { path: string }) => {
+			reads.push(path);
+			const contents = disk.get(path) ?? 'contents';
+			return Promise.resolve({
+				ok: true,
+				value: { contents, unloaded_reason: null, size: contents.length, ctime: 1, mtime: 1 }
+			});
+		},
 		workspace_open: ({ path }: { path: string }) =>
 			new Promise<WorkspaceOpenResult>((resolve) => open_calls.push({ path, resolve }))
 	};
@@ -116,15 +130,18 @@ const load = async (data: Partial<SessionLoadData> = {}): Promise<void> => {
 	assert.ok(await loaded);
 };
 
-const filer_change = (
-	type: Exclude<DiskfileChangeType, 'touch'>,
-	path: DiskfilePath,
-	contents?: string
-): void => {
+const filer_change = (type: DiskfileChangeType, path: DiskfilePath, mtime?: number): void => {
 	app.diskfiles.handle_change({
 		change: { type, path },
-		disknode: create_disknode(path, contents)
+		disknode: create_disknode(path, mtime)
 	});
+};
+
+/** Loads the content of the file at `path` (`diskfile_read`), as a view would. */
+const load_content = async (path: DiskfilePath): Promise<void> => {
+	const diskfile = app.diskfiles.get_by_path(path);
+	assert.ok(diskfile);
+	await app.diskfiles.ensure_content(diskfile);
 };
 
 /** Overrides the socket's reactive `connected` for the test. */
@@ -324,8 +341,8 @@ describe('file reconcile', () => {
 		await load({ files: [create_disknode(ZZZ_A), create_disknode(ZZZ_B)] });
 		assert.ok(app.diskfiles.get_by_path(ZZZ_B));
 
-		await load({ files: [create_disknode(ZZZ_A, 'a new')] });
-		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_A)?.content, 'a new');
+		await load({ files: [create_disknode(ZZZ_A, 2)] });
+		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_A)?.mtime, 2);
 		assert.ok(!app.diskfiles.get_by_path(ZZZ_B), 'deleted while disconnected');
 	});
 
@@ -340,7 +357,8 @@ describe('file reconcile', () => {
 	});
 
 	test('keeps a pruned file open with unsaved edits, flagged deleted on disk', async () => {
-		await load({ files: [create_disknode(ZZZ_A, 'a')] });
+		await load({ files: [create_disknode(ZZZ_A)] });
+		await load_content(ZZZ_A);
 		const a = app.diskfiles.get_by_path(ZZZ_A);
 		assert.ok(a);
 		app.diskfiles.select(a.id, true);
@@ -353,70 +371,51 @@ describe('file reconcile', () => {
 		assert.ok(app.diskfiles.editor.tabs.by_diskfile_id.get(a.id));
 
 		// and reattaches it when a later snapshot has the file again
-		await load({ files: [create_disknode(ZZZ_A, 'a')] });
+		await load({ files: [create_disknode(ZZZ_A)] });
 		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_A), a);
 		assert.isFalse(a.deleted_on_disk);
 	});
 
-	test('a `touch` during the request keeps its mtime, and one for an unknown file leaves the snapshot to bring it', async () => {
-		await load({ files: [create_disknode(ZZZ_A, 'a')] });
+	test('a `filer_change` during the request is neither pruned nor reverted', async () => {
+		await load({ files: [create_disknode(ZZZ_A)] });
 
 		const loaded = app.load_session();
-		const touch = (path: DiskfilePath): void => {
-			const { contents: _, ...metadata } = create_disknode(path, '');
-			app.diskfiles.handle_change({
-				change: { type: 'touch', path },
-				disknode: { ...metadata, mtime: 99 }
-			});
-		};
-		touch(ZZZ_A);
-		// not held here, so the touch had nothing to update
-		touch(ZZZ_B);
-		await succeed(1, { files: [create_disknode(ZZZ_A, 'a'), create_disknode(ZZZ_B, 'b')] });
+		filer_change('add', ZZZ_B, 3);
+		filer_change('change', ZZZ_A, 3);
+		await succeed(1, { files: [create_disknode(ZZZ_A, 2)] });
 		assert.ok(await loaded);
 
-		const a = app.diskfiles.get_by_path(ZZZ_A);
-		assert.strictEqual(a?.content, 'a');
-		assert.strictEqual(a?.mtime, 99, 'the snapshot did not take the mtime back');
-		const b = app.diskfiles.get_by_path(ZZZ_B);
-		assert.strictEqual(b?.content, 'b', 'the snapshot brought the file the touch could not add');
-		assert.strictEqual(b?.mtime, 99);
+		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_B)?.mtime, 3, 'created after the snapshot');
+		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_A)?.mtime, 3);
 	});
 
-	test('a `touch` during the request does not keep contents the snapshot replaces', async () => {
-		// held from before a connection gap, during which the file changed on disk
-		await load({ files: [create_disknode(ZZZ_A, 'old')] });
+	test('a reconnect reads the files held eagerly again, the shown first, and drops the rest', async () => {
+		const ZZZ_C = parse_or_throw(DiskfilePath, '/zzz/c.txt');
+		const files = [create_disknode(ZZZ_A), create_disknode(ZZZ_B), create_disknode(ZZZ_C)];
+		await load({ files });
+		for (const path of [ZZZ_A, ZZZ_B, ZZZ_C]) await load_content(path);
+		const a = app.diskfiles.get_by_path(ZZZ_A)!;
+		const b = app.diskfiles.get_by_path(ZZZ_B)!;
+		const c = app.diskfiles.get_by_path(ZZZ_C)!;
+		// a has an editing state, b is shown in the selected tab, c is held by nothing
+		const a_state = app.diskfiles.get_editor_state(a);
+		app.diskfiles.select(b.id, true);
+		app.diskfiles.get_editor_state(b);
+		reads.length = 0;
+		// missed while disconnected: b changed on disk, and a was rewritten with the same text
+		disk.set(ZZZ_B, 'b changed');
 
-		const loaded = app.load_session();
-		const { contents: _, ...metadata } = create_disknode(ZZZ_A, '');
-		app.diskfiles.handle_change({
-			change: { type: 'touch', path: ZZZ_A },
-			disknode: { ...metadata, mtime: 99 }
-		});
-		// the snapshot was read before the touch: newer contents, older mtime
-		await succeed(1, { files: [create_disknode(ZZZ_A, 'new')] });
-		assert.ok(await loaded);
+		await load({ files });
+		assert.strictEqual(c.content_status, 'unrequested', 'dropped, to be read when next needed');
+		assert.strictEqual(a.content, 'contents', 'kept while it reads again');
+		await new Promise((resolve) => setTimeout(resolve, 0));
 
-		const a = app.diskfiles.get_by_path(ZZZ_A);
-		assert.strictEqual(a?.content, 'new', 'the touch said nothing about the contents');
-		assert.strictEqual(a?.mtime, 99, 'the snapshot did not take the mtime back');
-	});
-
-	test('a file `filer_change` touched during the request is neither pruned nor reverted', async () => {
-		await load({ files: [create_disknode(ZZZ_A, 'a')] });
-
-		const loaded = app.load_session();
-		filer_change('add', ZZZ_B, 'b');
-		filer_change('change', ZZZ_A, 'a newer');
-		await succeed(1, { files: [create_disknode(ZZZ_A, 'a older')] });
-		assert.ok(await loaded);
-
-		assert.strictEqual(
-			app.diskfiles.get_by_path(ZZZ_B)?.content,
-			'b',
-			'created after the snapshot'
-		);
-		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_A)?.content, 'a newer');
+		assert.deepEqual(reads, [ZZZ_B, ZZZ_A], 'the shown file first, and only the files held');
+		assert.strictEqual(b.content, 'b changed');
+		assert.strictEqual(app.diskfiles.get_editor_state(b).current_content, 'b changed');
+		assert.strictEqual(a.content, 'contents');
+		assert.isFalse(a_state.disk_conflict, 'the same text is no change');
+		assert.strictEqual(a_state.history.entries.length, 1, 'nothing recorded for it');
 	});
 });
 
@@ -484,9 +483,10 @@ describe('workspaces after a restart', () => {
 	const setup = async (): Promise<void> => {
 		await load({
 			workspaces: [create_workspace_info(WS_DIR)],
-			files: [create_disknode(WS_A), create_disknode(WS_B, 'b')],
+			files: [create_disknode(WS_A), create_disknode(WS_B)],
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
+		await load_content(WS_B);
 		const b = app.diskfiles.get_by_path(WS_B)!;
 		app.diskfiles.select(b.id, true);
 		app.diskfiles.get_editor_state(b).current_content = 'b edited';

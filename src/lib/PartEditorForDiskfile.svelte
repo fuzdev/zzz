@@ -7,7 +7,7 @@
 	import DiskfileActions from './DiskfileActions.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import DiskfileMetrics from './DiskfileMetrics.svelte';
-	import DiskfileConflictNotice from './DiskfileConflictNotice.svelte';
+	import DiskfileConflictNotice, { save_from_view } from './DiskfileConflictNotice.svelte';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
@@ -46,8 +46,7 @@
 	const save = async (): Promise<void> => {
 		if (!editor_state) return;
 		// a blocked save points at the conflict notice rather than doing nothing silently
-		if (editor_state.has_conflict && conflict_notice?.focus()) return;
-		await editor_state.save_changes();
+		await save_from_view(editor_state, () => conflict_notice);
 	};
 
 	let show_file_picker = $state.raw(false);

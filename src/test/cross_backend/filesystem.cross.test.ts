@@ -880,7 +880,9 @@ describe('filesystem cross-backend', () => {
 					string,
 					unknown
 				>;
-				assert.equal(disknode.contents, 'renamed');
+				assert.notProperty(disknode, 'contents');
+				const read = await ws.request('read_renamed', 'diskfile_read', { path: new_path });
+				assert.equal((read as Record<string, unknown>).contents, 'renamed');
 			} finally {
 				await ws.close();
 			}
@@ -896,7 +898,7 @@ describe('filesystem cross-backend', () => {
 			await rm(tmp_dir, { recursive: true, force: true });
 		}
 	});
-	test('filer_change_sends_contents_only_when_they_changed', async () => {
+	test('filer_change_sends_metadata_only', async () => {
 		const CHANGED = 'chängéd';
 		const fixture = await setup_test();
 		const tmp_dir = join(tmpdir(), `zzz_cross_filer_${randomUUID()}`);
@@ -912,6 +914,14 @@ describe('filesystem cross-backend', () => {
 				headers: fixture.create_session_headers()
 			});
 			assert.ok(open.ok);
+			// the workspace's files: metadata, and no contents key
+			const opened_files = (open.result as Record<string, unknown>).files as Array<
+				Record<string, unknown>
+			>;
+			const opened_file = opened_files.find((f) => f.id === path);
+			assert.ok(opened_file);
+			assert.notProperty(opened_file, 'contents');
+			assert.equal(opened_file.size, 'unchanged'.length);
 
 			const ws = await create_ws_transport({
 				base_url: handle.config.base_url,
@@ -921,24 +931,31 @@ describe('filesystem cross-backend', () => {
 			try {
 				await ws.request('_warmup', 'ping', undefined);
 
-				/** The next `filer_change` for `path` after message `from`, parsed against the spec. */
-				const next_change = async (from: number): Promise<FilerChangeInput> => {
+				/**
+				 * The next `filer_change` for `path` after message `from`, parsed
+				 * against the spec — the next one whose disknode carries `mtime`,
+				 * when given, since a write and a later `utimes` can land in one
+				 * debounce window or in two.
+				 */
+				const next_change = async (from: number, mtime?: number): Promise<FilerChangeInput> => {
 					const msg = await ws.wait_for<Record<string, unknown>>((m) => {
 						if (ws.messages.indexOf(m) < from) return false;
 						const rec = m as Record<string, unknown> | null;
 						if (rec?.method !== 'filer_change') return false;
-						const change = (rec.params as Record<string, unknown> | undefined)?.change as
-							Record<string, unknown> | undefined;
-						return change?.path === path;
+						const params = rec.params as Record<string, unknown> | undefined;
+						const change = params?.change as Record<string, unknown> | undefined;
+						if (change?.path !== path) return false;
+						if (mtime === undefined) return true;
+						return (params?.disknode as Record<string, unknown> | undefined)?.mtime === mtime;
 					}, 10_000);
 					return parse_or_throw(FilerChangeInput, msg.params);
 				};
 
-				// an mtime-only change: the metadata, and no contents key at all
+				// an mtime-only change: a `change` with the new metadata, no contents key
 				let from = ws.messages.length;
 				await utimes(path, new Date(1_000_000), new Date(1_000_000));
-				const touched = await next_change(from);
-				assert.equal(touched.change.type, 'touch');
+				const touched = await next_change(from, 1_000_000);
+				assert.equal(touched.change.type, 'change');
 				assert.notProperty(touched.disknode, 'contents');
 				assert.equal(touched.disknode.mtime, 1_000_000);
 				assert.equal(touched.disknode.size, 'unchanged'.length);
@@ -947,19 +964,23 @@ describe('filesystem cross-backend', () => {
 				from = ws.messages.length;
 				await writeFile(path, 'unchanged', 'utf-8');
 				await utimes(path, new Date(2_000_000), new Date(2_000_000));
-				const rewritten = await next_change(from);
-				assert.equal(rewritten.change.type, 'touch');
+				// the frame carrying the `utimes` — the write's own may come first
+				const rewritten = await next_change(from, 2_000_000);
+				assert.equal(rewritten.change.type, 'change');
 				assert.notProperty(rewritten.disknode, 'contents');
 
-				// new contents are sent, with the size in bytes, not characters
+				// new contents too: the size in bytes, not characters, and the
+				// contents only by a read
 				from = ws.messages.length;
 				await writeFile(path, CHANGED, 'utf-8');
 				const changed = await next_change(from);
 				assert.equal(changed.change.type, 'change');
-				assert.propertyVal(changed.disknode, 'contents', CHANGED);
+				assert.notProperty(changed.disknode, 'contents');
 				assert.equal(changed.disknode.size, Buffer.byteLength(CHANGED));
+				const read = await ws.request('read_changed', 'diskfile_read', { path });
+				assert.equal((read as Record<string, unknown>).contents, CHANGED);
 
-				// a snapshot still has the file whole, with the latest timestamps
+				// a snapshot has the file's latest metadata, and no contents key
 				const session = await rpc_call({
 					app: fixture.transport,
 					path: handle.config.rpc_path,
@@ -970,8 +991,10 @@ describe('filesystem cross-backend', () => {
 				const files = ((session.result as Record<string, unknown>).data as Record<string, unknown>)
 					.files as Array<Record<string, unknown>>;
 				const snapshot_file = files.find((f) => f.id === path);
-				assert.equal(snapshot_file?.contents, CHANGED);
-				assert.equal(snapshot_file?.size, Buffer.byteLength(CHANGED));
+				assert.ok(snapshot_file);
+				assert.notProperty(snapshot_file, 'contents');
+				assert.equal(snapshot_file.size, Buffer.byteLength(CHANGED));
+				for (const file of files) assert.notProperty(file, 'contents', String(file.id));
 			} finally {
 				await ws.close();
 			}

@@ -24,7 +24,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	session_load: {
 		// `Frontend.load_session` applies the snapshot and retries failures
 		receive_response: ({ data: { output } }) => {
-			// counts only — the full snapshot (every file's contents) would be
+			// counts only — the full snapshot (every indexed file) would be
 			// retained by devtools on every load
 			const { files, workspaces, terminal_ids } = output.data;
 			console.log('[frontend_action_handlers] session loaded:', {

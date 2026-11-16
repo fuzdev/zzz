@@ -36,16 +36,25 @@ export const outline = (rows: ReadonlyArray<DiskfileTreeRow>): Array<string> =>
 		return `${indent}${row.kind === 'file' ? '' : row.expanded ? '- ' : '+ '}${row.label}`;
 	});
 
-/** Adds the file at `path` to `app` as its root's filer reports it, contents `x`. */
-export const write_diskfile = (app: Frontend, path: string, source_dir: string = '/w/'): Diskfile =>
-	app.diskfiles.upsert({
+/**
+ * Adds the file at `path` to `app` as its root's filer reports it (metadata
+ * only), loaded with contents `x` as a read would leave it.
+ */
+export const write_diskfile = (
+	app: Frontend,
+	path: string,
+	source_dir: string = '/w/'
+): Diskfile => {
+	const diskfile = app.diskfiles.upsert({
 		id: parse_or_throw(DiskfilePath, path),
 		source_dir: parse_or_throw(SerializableDisknode.def.source_dir, source_dir),
-		contents: 'x',
 		size: 1,
 		ctime: 1,
 		mtime: 1
 	});
+	if (diskfile.content_status === 'unrequested') diskfile.content = 'x';
+	return diskfile;
+};
 
 export interface MountedExplorer {
 	target: HTMLElement;

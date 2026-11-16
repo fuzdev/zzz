@@ -42,7 +42,7 @@
 	import DiskfilePartView from './DiskfilePartView.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';
-	import DiskfileConflictNotice from './DiskfileConflictNotice.svelte';
+	import DiskfileConflictNotice, { save_from_view } from './DiskfileConflictNotice.svelte';
 	import DiskfileSaveErrorNotice from './DiskfileSaveErrorNotice.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
 	import Icon from './Icon.svelte';
@@ -208,11 +208,8 @@
 		return false;
 	};
 
-	const save = async (): Promise<void> => {
-		// a blocked save points at the conflict notice rather than doing nothing silently
-		if (editor_state.has_conflict && conflict_notice?.focus()) return;
-		await editor_state.save_changes();
-	};
+	// a blocked save points at the conflict notice rather than doing nothing silently
+	const save = (): Promise<void> => save_from_view(editor_state, () => conflict_notice);
 
 	// where the editor's caret is, for the preview's mark and the outline
 	let caret_offset: number | null = $state.raw(null);

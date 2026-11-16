@@ -210,8 +210,8 @@ pub async fn workspace_list(
 /// the idempotent path too, so a client re-opening an already-open workspace
 /// can seed its tree the same way. A directory whose listing is refused
 /// fails with `forbidden` (`permission_denied`), leaving nothing open. The
-/// file index — contents included — is handed to the transport to serialize
-/// once, sharing the index's contents.
+/// file index — every file's metadata, no contents — is handed to the
+/// transport to serialize once.
 ///
 /// # Errors
 ///
@@ -506,7 +506,10 @@ mod tests {
                     name: "w".to_owned(),
                     opened_at: "2026-01-01T00:00:00Z".to_owned(),
                 },
-                files: vec![SerializableDisknode::for_test("/w/b.bin", None, None)],
+                files: vec![
+                    SerializableDisknode::for_test("/w/a.txt", Some("a"), Some(1.5)),
+                    SerializableDisknode::for_test("/w/b.bin", None, None),
+                ],
                 watch_status,
             };
             assert_eq!(
@@ -518,9 +521,14 @@ mod tests {
                         "opened_at": "2026-01-01T00:00:00Z",
                     },
                     "files": [{
+                        "id": "/w/a.txt",
+                        "source_dir": "/w/",
+                        "size": 1,
+                        "ctime": 1.5,
+                        "mtime": 1.5,
+                    }, {
                         "id": "/w/b.bin",
                         "source_dir": "/w/",
-                        "contents": null,
                         "size": null,
                         "ctime": null,
                         "mtime": null,

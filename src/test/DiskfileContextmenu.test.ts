@@ -11,10 +11,12 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import DiskfileContextmenuHarness from './DiskfileContextmenuHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
 let app: Frontend;
+let disk: FakeDisk;
 const cleanups: Array<() => void> = [];
 
 // jsdom has no `ResizeObserver`, which the menu's size bindings use
@@ -28,6 +30,7 @@ beforeEach(() => {
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 	vi.spyOn(console, 'log').mockImplementation(() => undefined);
 	app = monkeypatch_zzz_for_tests(new Frontend());
+	disk = install_fake_disk(app, SOURCE_DIR);
 });
 afterEach(() => {
 	for (const cleanup of cleanups.splice(0)) cleanup();
@@ -35,15 +38,8 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-const add_diskfile = (path: string, contents: string | null): Diskfile =>
-	app.diskfiles.upsert({
-		id: parse_or_throw(DiskfilePath, path),
-		source_dir: SOURCE_DIR,
-		contents,
-		size: 1,
-		ctime: 1,
-		mtime: 1
-	});
+const add_diskfile = (path: string, contents: string | null): Promise<Diskfile> =>
+	disk.load(path, contents);
 
 const render = (diskfile: Diskfile): HTMLElement => {
 	const target = document.createElement('div');
@@ -86,7 +82,7 @@ const open_submenu = async (target: HTMLElement, text: string): Promise<void> =>
 
 describe('DiskfileContextmenu view submenu', () => {
 	test('opening the menu creates no editing state, and choosing a mode sets it', async () => {
-		const a = add_diskfile('/w/a.md', '# a');
+		const a = await add_diskfile('/w/a.md', '# a');
 		const target = render(a);
 		open_menu(target);
 		await open_submenu(target, 'view');
@@ -100,8 +96,8 @@ describe('DiskfileContextmenu view submenu', () => {
 		assert.strictEqual(app.diskfiles.find_editor_state(a.id)?.markdown_view_mode_choice, 'preview');
 	});
 
-	test('only markdown files get the view submenu', () => {
-		const a = add_diskfile('/w/a.txt', 'a');
+	test('only markdown files get the view submenu', async () => {
+		const a = await add_diskfile('/w/a.txt', 'a');
 		const target = render(a);
 		open_menu(target);
 		assert.ok(find_menuitem(target, 'file'));
@@ -156,7 +152,7 @@ describe('DiskfileContextmenu copy file content', () => {
 			value: { writeText: write_text },
 			configurable: true
 		});
-		const a = add_diskfile('/w/a.txt', 'loaded text');
+		const a = await add_diskfile('/w/a.txt', 'loaded text');
 		const target = render(a);
 		open_menu(target);
 		await open_submenu(target, 'file');
@@ -277,7 +273,7 @@ describe('DiskfileContextmenu copy file content', () => {
 	});
 
 	test('is not offered for a file that can not load', async () => {
-		const a = add_diskfile('/w/big.bin', null);
+		const a = await add_diskfile('/w/big.bin', null);
 		const target = render(a);
 		open_menu(target);
 		await open_submenu(target, 'file');

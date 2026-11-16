@@ -12,6 +12,7 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
+import { install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
 
 /**
  * The files page's header: the tabs, then the details toggle for the file
@@ -21,6 +22,7 @@ import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
 let app: Frontend;
+let disk: FakeDisk;
 const cleanups: Array<() => void> = [];
 
 // jsdom has no Web Animations, which Svelte transitions use
@@ -47,6 +49,7 @@ beforeEach(() => {
 	Element.prototype.animate = animate_stub;
 	vi.spyOn(console, 'log').mockImplementation(() => undefined);
 	app = monkeypatch_zzz_for_tests(new Frontend());
+	disk = install_fake_disk(app, SOURCE_DIR);
 	// a backend with a filesystem, so the page shows its files
 	app.capabilities.backend = {
 		name: 'backend',
@@ -69,15 +72,7 @@ afterEach(() => {
 	}
 });
 
-const write_file = (path: string, contents: string): Diskfile =>
-	app.diskfiles.upsert({
-		id: parse_or_throw(DiskfilePath, path),
-		source_dir: SOURCE_DIR,
-		contents,
-		size: 1,
-		ctime: 1,
-		mtime: 1
-	});
+const write_file = (path: string, contents: string): Promise<Diskfile> => disk.load(path, contents);
 
 const render = () => {
 	const target = document.createElement('div');
@@ -103,8 +98,8 @@ const desk_placeholder = (target: HTMLElement): HTMLButtonElement | null =>
 	target.querySelector<HTMLButtonElement>('button.visibility\\:hidden');
 
 describe('DashboardDiskfiles header', () => {
-	test('the details toggle shows only with a file view', () => {
-		write_file('/w/a.txt', 'hello');
+	test('the details toggle shows only with a file view', async () => {
+		await write_file('/w/a.txt', 'hello');
 		const target = render();
 		assert.isNull(details_button(target), 'no tab, no toggle');
 
@@ -115,8 +110,8 @@ describe('DashboardDiskfiles header', () => {
 		assert.ok(details_button(target));
 	});
 
-	test('it is an icon, named by its label and stating whether the drawer is open', () => {
-		const a = write_file('/w/a.txt', 'hello');
+	test('it is an icon, named by its label and stating whether the drawer is open', async () => {
+		const a = await write_file('/w/a.txt', 'hello');
 		app.diskfiles.select(a.id, true);
 		const target = render();
 		const button = details_button(target);
@@ -129,8 +124,8 @@ describe('DashboardDiskfiles header', () => {
 		assert.ok(document.getElementById(DISKFILE_DETAILS_DRAWER_ID), 'it controls the drawer');
 	});
 
-	test('a click toggles the setting, and the file view follows', () => {
-		const a = write_file('/w/a.txt', 'hello');
+	test('a click toggles the setting, and the file view follows', async () => {
+		const a = await write_file('/w/a.txt', 'hello');
 		app.diskfiles.select(a.id, true);
 		const target = render();
 		const button = details_button(target);
@@ -150,8 +145,8 @@ describe('DashboardDiskfiles header', () => {
 		assert.ok(target.querySelector('.details-drawer-content'));
 	});
 
-	test('the desk menu button keeps its room in the header only while it shows', () => {
-		const a = write_file('/w/a.txt', 'hello');
+	test('the desk menu button keeps its room in the header only while it shows', async () => {
+		const a = await write_file('/w/a.txt', 'hello');
 		app.diskfiles.select(a.id, true);
 		const target = render();
 		const placeholder = desk_placeholder(target);
@@ -174,8 +169,8 @@ describe('DashboardDiskfiles header', () => {
 		assert.ok(desk_placeholder(target));
 	});
 
-	test('with tabs but no file view, the desk menu button keeps its room, and no toggle shows', () => {
-		const a = write_file('/w/a.txt', 'hello');
+	test('with tabs but no file view, the desk menu button keeps its room, and no toggle shows', async () => {
+		const a = await write_file('/w/a.txt', 'hello');
 		app.diskfiles.select(a.id, true);
 		const target = render();
 		assert.ok(details_button(target));
@@ -196,8 +191,8 @@ describe('DashboardDiskfiles header', () => {
 		assert.ok(desk_placeholder(target));
 	});
 
-	test('the toggle and the placeholder sit at the top, not stretched to the tabs', () => {
-		const a = write_file('/w/a.txt', 'hello');
+	test('the toggle and the placeholder sit at the top, not stretched to the tabs', async () => {
+		const a = await write_file('/w/a.txt', 'hello');
 		app.diskfiles.select(a.id, true);
 		const target = render();
 		assert.isTrue(details_button(target)?.classList.contains('align-self:flex-start'));

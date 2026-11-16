@@ -424,10 +424,12 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 * after every reconnect (see `handle_socket_connect`).
 	 *
 	 * Changes that arrive while the request is in flight win over the snapshot:
-	 * files a `filer_change` added, changed, or deleted (a `touch` only keeps
-	 * its metadata — see `Diskfiles.track_changes`) and workspaces opened or
-	 * closed are left as they are, and only terminals running when the request
-	 * was sent can be found lost.
+	 * files a `filer_change` reported (see `Diskfiles.track_changes`) and
+	 * workspaces opened or closed are left as they are, and only terminals
+	 * running when the request was sent can be found lost. The snapshot
+	 * carries no contents: every file held eagerly is read again (the shown
+	 * ones first), and any other loaded file drops its content
+	 * (`Diskfiles.upsert`).
 	 *
 	 * A success also re-pings a backend whose last ping failed (see
 	 * `Capabilities.check_backend`).

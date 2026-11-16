@@ -6,7 +6,6 @@ import {
 	number,
 	object,
 	one_of,
-	optional,
 	pipe,
 	string,
 	with_default,
@@ -22,18 +21,16 @@ import { PathWithTrailingSlash } from './path_schemas.ts';
  * What happened to a file the backend indexes:
  *
  * - `add` — it's newly indexed
- * - `change` — its contents differ
- * - `touch` — its metadata changed and the contents the backend holds for
- *   it didn't (a `touch`, a rewrite of the same bytes), so they aren't sent
- *   again. The backend holds no contents for a file it didn't load
- *   (`contents: null`), so every change to such a file is a `touch`
+ * - `change` — its contents, size, or timestamps moved — a `touch` or a
+ *   rewrite of the same bytes included
  * - `delete` — it's gone
  *
- * The frontend treats a notification without contents — every `touch` —
- * as a sign the file may have changed: a file it holds eagerly is read
- * again, any other loses its loaded content (see `Diskfiles.upsert`).
+ * A notification carries the file's metadata, never its contents, so the
+ * frontend takes an `add` or `change` as a sign the file may have changed:
+ * a file it holds eagerly is read again, any other loses its loaded content
+ * (see `Diskfiles.upsert`).
  */
-export const DiskfileChangeType = one_of(['add', 'change', 'touch', 'delete']);
+export const DiskfileChangeType = one_of(['add', 'change', 'delete']);
 export type DiskfileChangeType = Infer<typeof DiskfileChangeType>;
 
 /** An absolute Unix-style file path. */
@@ -72,35 +69,20 @@ export type DiskfileUnloadedReason = Infer<typeof DiskfileUnloadedReason>;
 
 // TODO hacky, uses the serializable form of the Gro `Disknode` (which uses maps)
 /**
- * A file the backend indexes. `size` is the file's size in bytes, known
- * whether or not its contents are loaded — `null` when the backend can't
- * say (a deleted file's node). `ctime` / `mtime` are milliseconds since the
- * epoch, `null` when the backend can't say.
- *
- * `contents` is optional: a node without it carries metadata only, and the
- * frontend reads the contents when it needs them (`diskfile_read`). Present,
- * it's a read the frontend takes as loaded — a string, or `null` for a file
- * whose contents can't be loaded as text (over 4 MiB, not UTF-8, or
- * unreadable).
+ * A file the backend indexes — its metadata, never its contents, which the
+ * frontend reads when it needs them (`diskfile_read`). `size` is the file's
+ * size in bytes — `null` when the backend can't say (a deleted file's node).
+ * `ctime` / `mtime` are milliseconds since the epoch, `null` when the
+ * backend can't say.
  */
 export const SerializableDisknode = object({
 	id: DiskfilePath,
 	source_dir: DiskfileDirectoryPath,
-	contents: optional(nullable(string)),
 	size: nullable(number),
 	ctime: nullable(number),
 	mtime: nullable(number)
 });
 export type SerializableDisknode = Infer<typeof SerializableDisknode>;
-
-/**
- * A disknode without its contents — what a `touch` change carries. It has no
- * `contents` key, which is not `contents: null`: `null` says the file's
- * contents can't be loaded, and this says nothing about them.
- */
-const { contents: _contents, ...disknode_metadata_entries } = SerializableDisknode.def;
-export const DisknodeMetadata = object(disknode_metadata_entries);
-export type DisknodeMetadata = Infer<typeof DisknodeMetadata>;
 
 /**
  * Where a diskfile's content stands — see `Diskfile.content_status`:

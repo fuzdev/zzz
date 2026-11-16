@@ -380,7 +380,8 @@ commands):
   non-canonical spelling, or nested in a scoped dir keeps write access; closing
   a plain workspace revokes it), `_testing_reset` closing every workspace and
   restoring the boot-time scope,
-  `workspace_open` returning the workspace's files and `watch_status` (first
+  `workspace_open` returning the workspace's files (metadata, no contents)
+  and `watch_status` (first
   and idempotent open; symlinks and link loops skipped; an unreadable
   subdirectory skipped while its siblings are indexed; an unreadable root
   refused with `forbidden` and nothing registered),
@@ -416,10 +417,11 @@ commands):
   `RPC_MESSAGE_MAX_BYTES`: under it is written, over it is a 413 on HTTP and
   closes the socket on WS), and `filer_change`
   broadcasts in an open workspace (file create; rename → `delete` of the old
-  path + `add` of the new; an mtime-only change or a rewrite of the same
-  bytes → a `touch` with no `contents` key, new contents → a `change` with
-  them, each parsed against the TS spec, and each disknode's `size` the
-  file's bytes).
+  path + `add` of the new; an mtime-only change, a rewrite of the same
+  bytes, and new contents each → a `change` with the new metadata, each
+  parsed against the TS spec, no disknode — broadcast, `workspace_open`, or
+  `session_load` — carrying a `contents` key, each disknode's `size` the
+  file's bytes, and the contents read back with `diskfile_read`).
 - **`file_bytes.cross.test.ts`** — the byte routes (`/api/files/bytes`),
   which sit outside the action system, so this suite is what pins their
   posture: reads (whole, `Range` → 206 / 416, HEAD), the response-header
@@ -499,7 +501,8 @@ commands):
   and other accounts' not), and a self-deleted account's terminal processes
   being reaped.
 - **`provider.cross.test.ts`** — `provider_load_status` (no-key status) plus `session_load`
-  (zzz_dir file listing with contents and size + recursive subdirectory walk; `file_roots`
+  (zzz_dir file listing with size and no contents, the contents read with
+  `diskfile_read` + recursive subdirectory walk; `file_roots`
   covering `zzz_dir`, the scoped dirs, and every file; a stable
   `server_instance_id`).
 - **`completion.cross.test.ts`** — `completion_create` on a provider with no
@@ -547,11 +550,11 @@ commands):
   the file tree.
 - **filer file-size cap** — `filer::MAX_INDEXED_FILE_SIZE`
   (4 MiB, in `crates/zzz_server/src/filer.rs`) caps the in-memory index: files
-  over 4 MiB carry their metadata but store `contents: None`. This bounds
-  memory under workspaces containing large lockfiles or build outputs.
-  The cross-backend integration tests don't exercise files >4 MiB. The
-  frontend treats such a file (and any other `contents: None` — non-UTF-8 or
-  unreadable) as `unloadable`: read-only, never saved over (see
+  over 4 MiB are indexed by their metadata and their contents aren't read.
+  This bounds memory under workspaces containing large lockfiles or build
+  outputs. The index never sends contents; `diskfile_read` applies the same
+  cap. The frontend treats a file whose read finds no text (over the cap,
+  not UTF-8) or fails as `unloadable`: read-only, never saved over (see
   ./architecture.md § Known Limitations). A loaded file's save fits the 16 MiB RPC
   message cap except in the worst case (JSON escapes each control character
   to 6 bytes), where the client guard refuses it cleanly.
@@ -919,8 +922,8 @@ commands):
     `blake3`, `size`, `duration_ms`), `tool` (`backend`, `version`,
     `model`, `model_blake3`, `params`), `language`, and `segments`
     (`start_ms`, `end_ms`, `text`, `words`). The model's hash is cached per
-    file version, since a model is gigabytes. Being a text file under the
-    index's limit, it reaches clients through the filer like any other.
+    file version, since a model is gigabytes. It's a text file like any
+    other: the filer lists it, and clients read it with `diskfile_read`.
   - **Nothing runs automatically**: no probe, decode, or transcription
     happens because a file appeared. Each is a caller's explicit action.
 - **Dispatch is async**: filesystem handlers (`diskfile_update`, etc.) use

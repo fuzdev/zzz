@@ -198,12 +198,14 @@ describe('workspace cross-backend', () => {
 				const files = (open.result as Record<string, unknown>).files as Array<
 					Record<string, unknown>
 				>;
-				return new Map(files.map((f) => [f.id as string, f.contents]));
+				for (const file of files) assert.notProperty(file, 'contents', String(file.id));
+				return new Map(files.map((f) => [f.id as string, f.size]));
 			};
 
+			// metadata only: each file's size, no contents
 			const expected = new Map([
-				[join(tmp_dir, 'a.txt'), 'alpha'],
-				[join(tmp_dir, 'sub', 'b.txt'), 'beta']
+				[join(tmp_dir, 'a.txt'), 'alpha'.length],
+				[join(tmp_dir, 'sub', 'b.txt'), 'beta'.length]
 			]);
 			const open = await call(fixture, 'workspace_open', { path: tmp_dir });
 			assert.ok(open.ok, `workspace_open failed: ${JSON.stringify(open)}`);
@@ -242,10 +244,10 @@ describe('workspace cross-backend', () => {
 			const result = open.result as Record<string, unknown>;
 			const files = result.files as Array<Record<string, unknown>>;
 			assert.deepEqual(
-				new Map(files.map((f) => [f.id as string, f.contents])),
+				new Map(files.map((f) => [f.id as string, f.size])),
 				new Map([
-					[join(tmp_dir, 'a.txt'), 'alpha'],
-					[join(tmp_dir, 'open', 'b.txt'), 'beta']
+					[join(tmp_dir, 'a.txt'), 'alpha'.length],
+					[join(tmp_dir, 'open', 'b.txt'), 'beta'.length]
 				])
 			);
 			assert.equal(result.watch_status, 'full');

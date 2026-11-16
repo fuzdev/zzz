@@ -29,9 +29,8 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	unloaded_status: DiskfileUnloadedStatus = $state.raw('unrequested');
 
 	/**
-	 * Why a read found no text to load (over 4 MiB, not UTF-8), when it said.
-	 * `null` otherwise, including for a file the backend sent as unloadable
-	 * without a reason.
+	 * Why a read found no text to load (over 4 MiB, not UTF-8). `null`
+	 * otherwise, including for a read that failed (`content_error`).
 	 */
 	unloaded_reason: DiskfileUnloadedReason | null = $state.raw(null);
 

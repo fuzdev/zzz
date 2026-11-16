@@ -12,6 +12,7 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
+import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
 
 /**
  * The markdown view is the editor view's twin over the same app-level state
@@ -22,16 +23,8 @@ import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 const PATH_A = parse_or_throw(DiskfilePath, '/w/a.md');
 
-const create_disknode = (path: DiskfilePath, contents: string | null): SerializableDisknode => ({
-	id: path,
-	source_dir: SOURCE_DIR,
-	contents,
-	size: 1,
-	ctime: 1,
-	mtime: 1
-});
-
 let app: Frontend;
+let disk: FakeDisk;
 const cleanups: Array<() => void> = [];
 
 // jsdom has no Web Animations, which Svelte transitions use
@@ -50,6 +43,7 @@ beforeEach(() => {
 	Element.prototype.animate = animate_stub;
 	vi.spyOn(console, 'log').mockImplementation(() => undefined);
 	app = monkeypatch_zzz_for_tests(new Frontend());
+	disk = install_fake_disk(app, SOURCE_DIR);
 });
 afterEach(() => {
 	for (const cleanup of cleanups.splice(0)) cleanup();
@@ -61,15 +55,23 @@ afterEach(() => {
 	}
 });
 
-/** An external write, as the filer broadcasts it. */
-const write_externally = (path: DiskfilePath, contents: string | null): Diskfile =>
-	app.diskfiles.upsert(create_disknode(path, contents));
+/**
+ * An external write, as the filer broadcasts it (metadata only), with the
+ * read of the new content it sets off for a file held eagerly landed.
+ */
+const write_externally = async (path: DiskfilePath, contents: string | null): Promise<Diskfile> => {
+	const diskfile = await disk.load(path, contents);
+	await flush_reads();
+	flushSync();
+	return diskfile;
+};
 
 /** An external delete, as the filer broadcasts it. */
 const delete_externally = (path: DiskfilePath): void => {
+	disk.files.delete(path);
 	app.diskfiles.handle_change({
 		change: { type: 'delete', path },
-		disknode: create_disknode(path, null)
+		disknode: { id: path, source_dir: SOURCE_DIR, size: null, ctime: null, mtime: null }
 	});
 	flushSync();
 };
@@ -136,15 +138,15 @@ const press_save = (target: EventTarget): void => {
 };
 
 describe('DiskfileMarkdownView', () => {
-	test('DiskfileView routes a markdown file to it', () => {
-		const a = write_externally(PATH_A, '# title');
+	test('DiskfileView routes a markdown file to it', async () => {
+		const a = await disk.load(PATH_A, '# title');
 		const view = render(DiskfileView, { diskfile: a });
 		assert.strictEqual(view.heading(), 'title');
 		assert.strictEqual(view.textarea()?.value, '# title');
 	});
 
-	test('splits source and preview by default, and the preview follows typing', () => {
-		const a = write_externally(PATH_A, '# one');
+	test('splits source and preview by default, and the preview follows typing', async () => {
+		const a = await disk.load(PATH_A, '# one');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		assert.strictEqual(view.heading(), 'one');
 		const textarea = view.textarea();
@@ -154,8 +156,8 @@ describe('DiskfileMarkdownView', () => {
 		assert.isTrue(app.diskfiles.get_editor_state(a).has_unsaved_edits);
 	});
 
-	test('the chosen mode is remembered per file across remounts', () => {
-		const a = write_externally(PATH_A, '# one');
+	test('the chosen mode is remembered per file across remounts', async () => {
+		const a = await disk.load(PATH_A, '# one');
 		const first = render(DiskfileMarkdownView, { diskfile: a });
 		click_button(first.target, 'preview');
 		assert.isNull(first.textarea());
@@ -171,8 +173,8 @@ describe('DiskfileMarkdownView', () => {
 		assert.isNull(second.heading());
 	});
 
-	test('a draft survives switching modes', () => {
-		const a = write_externally(PATH_A, 'v1');
+	test('a draft survives switching modes', async () => {
+		const a = await disk.load(PATH_A, 'v1');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		type_into(view.textarea()!, '# draft');
 		click_button(view.target, 'preview');
@@ -180,8 +182,8 @@ describe('DiskfileMarkdownView', () => {
 		assert.strictEqual(view.textarea()?.value, '# draft');
 	});
 
-	test('an unloaded file opens read-only in preview', () => {
-		const a = write_externally(PATH_A, null);
+	test('an unloaded file opens read-only in preview', async () => {
+		const a = await disk.load(PATH_A, null);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		assert.isNull(view.textarea());
 		assert.include(view.target.textContent, "read-only, it can't be edited or saved");
@@ -190,7 +192,7 @@ describe('DiskfileMarkdownView', () => {
 	});
 
 	test('Ctrl+S saves in preview mode, with no editor mounted', async () => {
-		const a = write_externally(PATH_A, 'v1');
+		const a = await disk.load(PATH_A, 'v1');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		type_into(view.textarea()!, 'v2');
 		click_button(view.target, 'preview');
@@ -199,11 +201,11 @@ describe('DiskfileMarkdownView', () => {
 		assert.strictEqual(a.content, 'v2');
 	});
 
-	test('Ctrl+S while conflicted focuses the notice, and resolving refocuses the editor', () => {
-		const a = write_externally(PATH_A, 'v1');
+	test('Ctrl+S while conflicted focuses the notice, and resolving refocuses the editor', async () => {
+		const a = await disk.load(PATH_A, 'v1');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		type_into(view.textarea()!, 'mine');
-		write_externally(PATH_A, 'theirs');
+		await write_externally(PATH_A, 'theirs');
 		flushSync();
 		const alert = view.alert();
 		assert.ok(alert);
@@ -217,7 +219,7 @@ describe('DiskfileMarkdownView', () => {
 	});
 
 	test('the details drawer is open until closed, and the preview shows a picked history entry', async () => {
-		const a = write_externally(PATH_A, 'v1');
+		const a = await disk.load(PATH_A, 'v1');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const editor_state = app.diskfiles.get_editor_state(a);
 		const older = editor_state.history.add_entry('# older', { created: 1 });
@@ -235,8 +237,8 @@ describe('DiskfileMarkdownView', () => {
 		assert.strictEqual(view.heading(), 'older');
 	});
 
-	test('in preview mode, a pending focus key is taken by the preview', () => {
-		const a = write_externally(PATH_A, '# a');
+	test('in preview mode, a pending focus key is taken by the preview', async () => {
+		const a = await disk.load(PATH_A, '# a');
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		app.ui.pending_element_to_focus_key = a.id;
 		const view = render(DiskfileMarkdownView, { diskfile: a });
@@ -247,7 +249,7 @@ describe('DiskfileMarkdownView', () => {
 	});
 
 	test('Ctrl+S in preview mode on an unloaded file writes nothing', async () => {
-		const a = write_externally(PATH_A, null);
+		const a = await disk.load(PATH_A, null);
 		const update = vi.spyOn(app.diskfiles, 'update');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'preview');
@@ -257,8 +259,8 @@ describe('DiskfileMarkdownView', () => {
 		assert.strictEqual(update.mock.calls.length, 0);
 	});
 
-	test('deleted on disk with unsaved edits offers to discard them, then says the tab holds it', () => {
-		const a = write_externally(PATH_A, 'v1');
+	test('deleted on disk with unsaved edits offers to discard them, then says the tab holds it', async () => {
+		const a = await disk.load(PATH_A, 'v1');
 		app.diskfiles.select(a.id, true);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		type_into(view.textarea()!, 'mine');
@@ -275,8 +277,8 @@ describe('DiskfileMarkdownView', () => {
 		);
 	});
 
-	test('the mode buttons show their shortcuts', () => {
-		const a = write_externally(PATH_A, '# a');
+	test('the mode buttons show their shortcuts', async () => {
+		const a = await disk.load(PATH_A, '# a');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const titles = Array.from(view.target.querySelectorAll('button[aria-pressed]')).map((b) =>
 			b.getAttribute('title')
@@ -309,8 +311,8 @@ const press_mode = (
 };
 
 describe('DiskfileMarkdownView mode shortcuts', () => {
-	test('Ctrl+Shift+1/2/3 switch modes from the editor, and the focus follows', () => {
-		const a = write_externally(PATH_A, '# a');
+	test('Ctrl+Shift+1/2/3 switch modes from the editor, and the focus follows', async () => {
+		const a = await disk.load(PATH_A, '# a');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const textarea = view.textarea()!;
 		textarea.focus();
@@ -332,8 +334,8 @@ describe('DiskfileMarkdownView mode shortcuts', () => {
 		assert.ok(view.heading());
 	});
 
-	test('work from the page, but leave an input elsewhere its keys', () => {
-		const a = write_externally(PATH_A, '# a');
+	test('work from the page, but leave an input elsewhere its keys', async () => {
+		const a = await disk.load(PATH_A, '# a');
 		render(DiskfileMarkdownView, { diskfile: a });
 		press_mode(document.body, 3);
 		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'source');
@@ -355,16 +357,16 @@ describe('DiskfileMarkdownView mode shortcut guards', () => {
 		return el;
 	};
 
-	test('a held key repeating switches nothing, though its repeats stay swallowed', () => {
-		const a = write_externally(PATH_A, '# a');
+	test('a held key repeating switches nothing, though its repeats stay swallowed', async () => {
+		const a = await disk.load(PATH_A, '# a');
 		render(DiskfileMarkdownView, { diskfile: a });
 		const event = press_mode(document.body, 3, { repeat: true });
 		assert.isTrue(event.defaultPrevented);
 		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'split');
 	});
 
-	test('focus on a non-editable element outside the view stays put, and the mode switches', () => {
-		const a = write_externally(PATH_A, '# a');
+	test('focus on a non-editable element outside the view stays put, and the mode switches', async () => {
+		const a = await disk.load(PATH_A, '# a');
 		render(DiskfileMarkdownView, { diskfile: a });
 		const button = add_outside(document.createElement('button'));
 		button.focus();
@@ -374,8 +376,8 @@ describe('DiskfileMarkdownView mode shortcut guards', () => {
 		assert.strictEqual(document.activeElement, button);
 	});
 
-	test('a focused element inside a contenteditable elsewhere keeps its keys', () => {
-		const a = write_externally(PATH_A, '# a');
+	test('a focused element inside a contenteditable elsewhere keeps its keys', async () => {
+		const a = await disk.load(PATH_A, '# a');
 		render(DiskfileMarkdownView, { diskfile: a });
 		const editable = add_outside(document.createElement('div'));
 		editable.setAttribute('contenteditable', 'true');
@@ -388,8 +390,8 @@ describe('DiskfileMarkdownView mode shortcut guards', () => {
 		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'split');
 	});
 
-	test('a modal dialog open over the page keeps the view as it is', () => {
-		const a = write_externally(PATH_A, '# a');
+	test('a modal dialog open over the page keeps the view as it is', async () => {
+		const a = await disk.load(PATH_A, '# a');
 		render(DiskfileMarkdownView, { diskfile: a });
 		// jsdom has no `showModal`, so the dialog claims `:modal` itself
 		const dialog = add_outside(document.createElement('dialog'));
@@ -417,8 +419,8 @@ describe('DiskfileMarkdownView outline and links', () => {
 
 	const DOC = '# Top\n\nintro [gone](./gone.md) and [ok](./a.md)\n\n## Part Two\n\nmore\n';
 
-	test('the drawer outlines the headings; a click puts the caret there and scrolls the preview', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('the drawer outlines the headings; a click puts the caret there and scrolls the preview', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const h2 = view.target.querySelector('h2');
 		assert.ok(h2);
@@ -433,8 +435,8 @@ describe('DiskfileMarkdownView outline and links', () => {
 		assert.strictEqual(textarea.selectionEnd, DOC.indexOf('## Part Two'));
 	});
 
-	test('in source mode the outline only moves the caret; in preview only scrolls', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('in source mode the outline only moves the caret; in preview only scrolls', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		click_button(view.target, 'source');
 		click_button(view.target, 'Top');
@@ -449,8 +451,8 @@ describe('DiskfileMarkdownView outline and links', () => {
 		assert.strictEqual(scroll.mock.calls.length, 1);
 	});
 
-	test('the drawer lists broken links; a click reveals the link', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('the drawer lists broken links; a click reveals the link', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const section = Array.from(view.target.querySelectorAll('section')).find((el) =>
@@ -475,20 +477,20 @@ describe('DiskfileMarkdownView outline and links', () => {
 		assert.strictEqual(document.activeElement, anchor, 'alone, the preview gives the link focus');
 	});
 
-	test('the list updates as the source changes', () => {
-		const a = write_externally(PATH_A, '# a');
+	test('the list updates as the source changes', async () => {
+		const a = await disk.load(PATH_A, '# a');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		assert.notInclude(view.target.textContent, 'broken links', 'no section without any');
 		type_into(view.textarea()!, '[x](./x.md)');
 		assert.include(view.target.textContent, 'broken links');
-		write_externally(parse_or_throw(DiskfilePath, '/w/x.md'), '');
+		await write_externally(parse_or_throw(DiskfilePath, '/w/x.md'), '');
 		flushSync();
 		assert.notInclude(view.target.textContent, 'broken links');
 	});
 
-	test('a link from another file reveals its heading once this file shows', () => {
-		const a = write_externally(PATH_A, DOC);
-		const b = write_externally(parse_or_throw(DiskfilePath, '/w/b.md'), '[to a](./a.md#part-two)');
+	test('a link from another file reveals its heading once this file shows', async () => {
+		const a = await disk.load(PATH_A, DOC);
+		const b = await disk.load(parse_or_throw(DiskfilePath, '/w/b.md'), '[to a](./a.md#part-two)');
 		app.diskfiles.get_editor_state(b).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileView, {
 			get diskfile() {
@@ -545,8 +547,8 @@ describe('DiskfileMarkdownView source sync', () => {
 		return el;
 	};
 
-	test('the preview marks the block holding the caret, following it and typing', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('the preview marks the block holding the caret, following it and typing', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const textarea = view.textarea()!;
 		assert.isNull(marked(view.target), 'no mark before the caret moves');
@@ -566,8 +568,8 @@ describe('DiskfileMarkdownView source sync', () => {
 		assert.strictEqual(view.target.querySelectorAll('.markdown-caret-block').length, 1);
 	});
 
-	test('clicking a preview block puts the caret at its source', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('clicking a preview block puts the caret at its source', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const textarea = view.textarea()!;
 
@@ -586,8 +588,8 @@ describe('DiskfileMarkdownView source sync', () => {
 		assert.strictEqual(textarea.selectionStart, DOC.indexOf('**bold**'));
 	});
 
-	test('in preview mode a click is only a click, and nothing is marked', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('in preview mode a click is only a click, and nothing is marked', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const h2 = find_by_text(view.target, 'h2', 'Part Two');
@@ -597,8 +599,8 @@ describe('DiskfileMarkdownView source sync', () => {
 		assert.isNull(marked(view.target));
 	});
 
-	test('the mark goes when the editor does', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('the mark goes when the editor does', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		move_caret(view.textarea()!, DOC.indexOf('intro'));
 		assert.strictEqual(marked(view.target), 'intro ok');
@@ -608,8 +610,8 @@ describe('DiskfileMarkdownView source sync', () => {
 		assert.isNull(marked(view.target), 'no stale caret from before');
 	});
 
-	test('a CRLF file: the caret, the clicks, and the outline agree with the textarea', () => {
-		const a = write_externally(PATH_A, CRLF_DOC);
+	test('a CRLF file: the caret, the clicks, and the outline agree with the textarea', async () => {
+		const a = await disk.load(PATH_A, CRLF_DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const textarea = view.textarea()!;
 		assert.strictEqual(textarea.value, DOC, 'the textarea reads LF');
@@ -637,7 +639,7 @@ describe('DiskfileMarkdownView source sync', () => {
 
 		// a disk change shows in the editor, LF, and leaves it clean
 		const CHANGED = CRLF_DOC.replace('one', 'uno');
-		write_externally(PATH_A, CHANGED);
+		await write_externally(PATH_A, CHANGED);
 		flushSync();
 		assert.strictEqual(view.textarea()!.value, DOC.replace('one', 'uno'));
 		assert.strictEqual(editor_state.current_content, CHANGED);
@@ -654,11 +656,11 @@ describe('DiskfileMarkdownView showing the disk version', () => {
 		target.querySelector('.markdown-caret-block')?.textContent.trim() ?? null;
 
 	/** A split view of a draft `DRAFT` under a disk change to `DISK`, showing the disk. */
-	const setup = () => {
-		const a = write_externally(PATH_A, '# v1');
+	const setup = async () => {
+		const a = await disk.load(PATH_A, '# v1');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		type_into(view.textarea()!, DRAFT);
-		write_externally(PATH_A, DISK);
+		await write_externally(PATH_A, DISK);
 		flushSync();
 		const editor_state = app.diskfiles.get_editor_state(a);
 		assert.isTrue(editor_state.has_conflict);
@@ -666,8 +668,8 @@ describe('DiskfileMarkdownView showing the disk version', () => {
 		return { a, view, editor_state };
 	};
 
-	test('the editor and the preview show the disk version, read-only, then the draft again', () => {
-		const { view, editor_state } = setup();
+	test('the editor and the preview show the disk version, read-only, then the draft again', async () => {
+		const { view, editor_state } = await setup();
 
 		assert.strictEqual(view.textarea()!.value, DISK);
 		assert.isTrue(view.textarea()!.readOnly);
@@ -682,15 +684,15 @@ describe('DiskfileMarkdownView showing the disk version', () => {
 		assert.strictEqual(view.heading(), 'Mine');
 	});
 
-	test('preview mode shows the disk version too', () => {
-		const { view } = setup();
+	test('preview mode shows the disk version too', async () => {
+		const { view } = await setup();
 		click_button(view.target, 'preview');
 		assert.isNull(view.textarea());
 		assert.strictEqual(view.heading(), 'Theirs');
 	});
 
-	test('a click on the preview only moves the caret in the read-only editor', () => {
-		const { view, editor_state } = setup();
+	test('a click on the preview only moves the caret in the read-only editor', async () => {
+		const { view, editor_state } = await setup();
 		const h2 = Array.from(view.target.querySelectorAll('h2')).find(
 			(el) => el.textContent.trim() === 'Disk Part'
 		);
@@ -712,7 +714,7 @@ describe('DiskfileMarkdownView showing the disk version', () => {
 	});
 
 	test('Ctrl+S while showing it stays blocked, and focuses the notice', async () => {
-		const { a, view } = setup();
+		const { a, view } = await setup();
 
 		press_save(view.textarea()!);
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -722,8 +724,8 @@ describe('DiskfileMarkdownView showing the disk version', () => {
 		assert.strictEqual(a.content, DISK);
 	});
 
-	test('keeping the disk version ends it, editable', () => {
-		const { view, editor_state } = setup();
+	test('keeping the disk version ends it, editable', async () => {
+		const { view, editor_state } = await setup();
 
 		click_button(view.target, 'keep the disk version');
 
@@ -824,8 +826,8 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		flushSync();
 	};
 
-	test('in the preview alone, sections on screen are lit, and the topmost heading in view is current', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('in the preview alone, sections on screen are lit, and the topmost heading in view is current', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
@@ -842,8 +844,8 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		);
 	});
 
-	test('a re-render re-reads the preview on the next frame', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('a re-render re-reads the preview on the next frame', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
@@ -851,14 +853,14 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
 
 		// the content shifts down under a still scroll, so the view now shows A's intro
-		write_externally(PATH_A, '# A\n\nmore intro\n\nintro\n\n## B\n\nbee\n\n# C\n\nsee\n');
+		await write_externally(PATH_A, '# A\n\nmore intro\n\nintro\n\n## B\n\nbee\n\n# C\n\nsee\n');
 		flushSync();
 		run_frames();
 		assert.deepEqual(lit(view.target), ['A*!', 'B', 'C']);
 	});
 
-	test("beside the editor, the caret's innermost section is current, wherever the preview is", () => {
-		const a = write_externally(PATH_A, DOC);
+	test("beside the editor, the caret's innermost section is current, wherever the preview is", async () => {
+		const a = await disk.load(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
@@ -873,8 +875,8 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A*!', 'B*', 'C']);
 	});
 
-	test('a caret ends the followed heading, so the preview alone follows afresh', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('a caret ends the followed heading, so the preview alone follows afresh', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(0);
@@ -890,8 +892,8 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C'], 'the innermost showing, not A held');
 	});
 
-	test('a caret placed with no frame since still ends the followed heading', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('a caret placed with no frame since still ends the followed heading', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(0);
@@ -924,8 +926,8 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		});
 	};
 
-	test('a mode switch re-reads the pane now being read on the next frame, with no scroll', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('a mode switch re-reads the pane now being read on the next frame, with no scroll', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
@@ -944,8 +946,8 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A*!', 'B', 'C'], 'the caret gone, A followed at once');
 	});
 
-	test('in the source alone the caret says too', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('in the source alone the caret says too', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'source';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		move_caret(view.textarea()!, DOC.indexOf('see'));
@@ -953,8 +955,8 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A', 'B', 'C!'], 'jsdom lays out no lines, so none lit');
 	});
 
-	test('with the drawer closed, a scroll measures nothing', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('with the drawer closed, a scroll measures nothing', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		toggle_details();
@@ -968,9 +970,9 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
 	});
 
-	test('a closing drawer measures nothing as its content slides out', () => {
+	test('a closing drawer measures nothing as its content slides out', async () => {
 		allow_motion();
-		const a = write_externally(PATH_A, DOC);
+		const a = await disk.load(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		toggle_details();
@@ -981,8 +983,8 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A', 'B', 'C']);
 	});
 
-	test('closing the drawer clears its lights, so it reopens with none stale', () => {
-		const a = write_externally(PATH_A, DOC);
+	test('closing the drawer clears its lights, so it reopens with none stale', async () => {
+		const a = await disk.load(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
@@ -1008,9 +1010,9 @@ describe('DiskfileMarkdownView outline highlight', () => {
 			}
 		});
 
-	test("a file switch starts the outline afresh: the caret's current section stays with its file", () => {
-		const a = write_externally(PATH_A, DOC);
-		const b = write_externally(PATH_B, DOC_B);
+	test("a file switch starts the outline afresh: the caret's current section stays with its file", async () => {
+		const a = await disk.load(PATH_A, DOC);
+		const b = await disk.load(PATH_B, DOC_B);
 		app.diskfiles.select(a.id, true);
 		const view = render_switching(a);
 		move_caret(view.textarea()!, DOC.indexOf('see'));
@@ -1021,9 +1023,9 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['P', 'Q', 'R'], "none of a's");
 	});
 
-	test('a file switch starts the outline afresh: the followed heading and lit sections too', () => {
-		const a = write_externally(PATH_A, DOC);
-		const b = write_externally(PATH_B, DOC_B);
+	test('a file switch starts the outline afresh: the followed heading and lit sections too', async () => {
+		const a = await disk.load(PATH_A, DOC);
+		const b = await disk.load(PATH_B, DOC_B);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		app.diskfiles.get_editor_state(b).markdown_view_mode_choice = 'preview';
 		app.diskfiles.select(a.id, true);

@@ -1,7 +1,43 @@
+<script module lang="ts">
+	import { tick } from 'svelte';
+
+	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
+
+	/**
+	 * Saves from a view (Ctrl+S, a save button), pointing at the conflict
+	 * notice when the save is blocked — up front, or once the save's wait for
+	 * the file's read (`DiskfileEditorState.save_changes`) uncovers a change on
+	 * disk. A conflict found after the wait takes the focus only while the user
+	 * hasn't moved on: focus where it was when the save started (or on
+	 * `<body>`), and nothing typed since — so a keystroke made while the read
+	 * waits is never taken away from the editor.
+	 *
+	 * @param editor_state - the file's editing state, which saves
+	 * @param get_conflict_notice - the view's conflict notice, read when needed —
+	 * after the wait, the one the view shows then
+	 */
+	export const save_from_view = async (
+		editor_state: DiskfileEditorState,
+		get_conflict_notice: () => { focus: () => boolean } | undefined
+	): Promise<void> => {
+		if (editor_state.has_conflict && get_conflict_notice()?.focus()) return;
+		const focused_at_start = document.activeElement;
+		const content_at_start = editor_state.current_content;
+		const saved = await editor_state.save_changes();
+		if (saved || !editor_state.has_conflict) return;
+		const focused = document.activeElement;
+		if (focused !== focused_at_start && focused !== document.body) return;
+		if (editor_state.current_content !== content_at_start) return;
+		// defensive: the notice has rendered by now in practice (Svelte flushes
+		// in a microtask), but a tick costs nothing and covers a slower render
+		await tick();
+		get_conflict_notice()?.focus();
+	};
+</script>
+
 <script lang="ts">
 	import type { SvelteHTMLElements } from 'svelte/elements';
 
-	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 	import ToggleButton from './ToggleButton.svelte';
 
 	const {
@@ -55,7 +91,7 @@ and both versions are in the history -->
 					inactive_content="show disk version"
 					active_content="show {yours}"
 					class="sized_sm"
-					disabled={editor_state.saving}
+					disabled={editor_state.saving || editor_state.save_pending}
 					title={editor_state.showing_disk
 						? `show ${yours} again, editable`
 						: `show the file on disk, read-only — ${yours} stays as it is`}
@@ -64,7 +100,7 @@ and both versions are in the history -->
 			<button
 				type="button"
 				class="sized_sm"
-				disabled={editor_state.saving}
+				disabled={editor_state.saving || editor_state.save_pending}
 				title={editor_state.has_unsaved_edits
 					? 'show your draft and save it over the file on disk'
 					: `save ${editor_state.showing_disk ? 'your version' : 'the version shown'} over the file on disk`}

@@ -75,7 +75,10 @@
 
 	// the question lapsed (its draft went away elsewhere) with the tab still
 	// open and shown — focus its editor rather than leaving focus on `<body>`;
-	// an unshown tab's editor isn't mounted, so a pending key would steal focus later
+	// an unshown tab's editor isn't mounted, so a pending key would steal focus later.
+	// The teardown reads state, not a derived: in a teardown Svelte returns the
+	// pre-flush value of a signal written in the same flush, and a derived with
+	// no reactions its cached value, which can be stale
 	$effect(() => {
 		const asked = tab;
 		if (!asked) return;
@@ -83,10 +86,7 @@
 		return () => {
 			if (handled) return;
 			untrack(() => {
-				if (
-					editor.tabs.items.by_id.has(asked.id) &&
-					editor.tabs.selected_diskfile_id === asked.diskfile_id
-				) {
+				if (editor.tabs.items.by_id.has(asked.id) && editor.tabs.selected_tab_id === asked.id) {
 					app.ui.pending_element_to_focus_key = asked.diskfile_id;
 				}
 			});
@@ -113,7 +113,7 @@
 				<button
 					type="button"
 					class="palette_f"
-					disabled={editor_state.saving}
+					disabled={editor_state.saving || editor_state.save_pending}
 					onclick={() => void save()}
 				>
 					save

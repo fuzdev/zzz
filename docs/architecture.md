@@ -178,11 +178,11 @@ request `params`, response `result`, notification `params`, or error `data`
 whose JSON is over `ACTION_PAYLOAD_BUDGET` (8192 characters) is replaced by a
 `{zzz_payload_omitted: '…'}` marker, and a longer error `message` is truncated
 and flagged with `zzz_message_truncated_from` (`bound_action_event_data` in
-`action_helpers.ts`). So a `session_load` snapshot or a file save doesn't keep
-every file's contents per call, and `completion_create` requests, each carrying
-the chat history so far, don't add up quadratically. An `Action` stops observing
-its `ActionEvent` and drops it once the call completes, so the event's full
-payloads can be collected.
+`action_helpers.ts`). So a `session_load` snapshot, a file read, or a save
+doesn't keep a whole file tree or file per call, and `completion_create`
+requests, each carrying the chat history so far, don't add up quadratically.
+An `Action` stops observing its `ActionEvent` and drops it once the call
+completes, so the event's full payloads can be collected.
 
 ## Cell System
 
@@ -1091,7 +1091,7 @@ These routes are outside the action system — they don't appear in the actions 
 
 ### Filer
 
-`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, contents, size, ctime, mtime}`: `id` is its path, `contents` its text or `null` when not loaded, and `size` its bytes from the `lstat` the filer read it after — known whether or not the contents are loaded, `null` only on a `delete`'s node. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. A change that moved an indexed file's metadata (its size or timestamps) and left the contents the index holds for it as they were (a `touch`, a rewrite of the same bytes) is a `touch`: its `disknode` is the file's metadata with no `contents` key (`DisknodeMetadata`), so the contents aren't sent again — a client holding the file reads it again if it holds it eagerly and otherwise drops its content to load on next access (`Diskfiles.touch`, see [File Editing](#file-editing)), and one that doesn't ignores it. The index holds no contents for a file it didn't load, so every change to such a file is a `touch`, and what shows it changed is its `size` and `mtime`. Every other change carries the whole disknode, where `contents: null` keeps its one meaning: not loadable as text. The frontend takes a disknode's `contents` as a read of the file, and a disknode without them as metadata (`SerializableDisknode.contents` is optional). A touch folded into an unbroadcast `add` or `change` is sent as that change, contents included. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
+`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, size, ctime, mtime}` — metadata only: `id` is its path and `size` its bytes from the `lstat` the filer read it after, `null` only on a `delete`'s node. No disknode carries contents; a client reads them with `diskfile_read` (see [File Editing](#file-editing)). Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. The index still reads and holds each indexed file's text (UTF-8, at most 4 MiB), so a rescan can tell an unchanged file from a changed one; any move of what it holds for a file — the text, the `size`, or the timestamps (a `touch`, a rewrite of the same bytes) — is a `change` carrying the new metadata. A client holding the file's content reads it again if it holds it eagerly and otherwise drops it, to load on next access (`Diskfiles.upsert`), and a re-read of the same text changes nothing. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
 
 Watches are per directory: the filer's own walk (on a blocking thread) adds one non-recursive watch to each directory it indexes — never inside ignored, symlinked, or non-UTF-8 directories — watching each before listing it, so nothing created in between is missed. A directory that appears gets watches for its subtree when it's synced; one that's removed or renamed away has them dropped (two paths sharing one inode, like a renamed directory's old and new path or a bind mount, share one kernel watch, removed only with its last path). An unreadable subdirectory is skipped and logged once, and picked up once it's readable again; one made unreadable later drops out of the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's indexed under it and retries. Rescans (`session_load`, overflow recovery) re-read only files whose `lstat` identity or change stamps moved, and trust a stamp only once the file has been still for two seconds (git's "racily clean" rule), since same-size writes within one timestamp tick look identical.
 
@@ -1295,9 +1295,8 @@ markdown view included when its preview is shown alone and no editor is
 mounted.
 
 **Contents on demand.** A diskfile's content loads when something needs
-it, over `diskfile_read`. The backend's disknodes still carry contents,
-and the frontend takes a disknode's `contents` as a read; a disknode
-without them carries metadata only. `Diskfile.content_status` says where
+it, over `diskfile_read` — the only way content arrives: the backend's
+disknodes carry metadata alone. `Diskfile.content_status` says where
 the content stands: `unrequested`, `loading`, `loaded`, or `unloadable` — a
 read found no text (`unloaded_reason`: over 4 MiB, or not UTF-8) or failed
 (`content_error`). `Diskfiles.ensure_content` is single-flight per file:
@@ -1332,9 +1331,9 @@ the selected tab's file first, then the other tabs'. A read never touches
   the entry stays open saying "loaded — copy again".
 
 A file is held eagerly while it has an editing state or a `DiskfilePart`
-references it. A change on disk that comes without contents — every
-`touch`, and any metadata-only disknode, a reconnect's snapshot entries
-included — re-reads an eagerly held file, keeping its content until the new
+references it. Every disknode that arrives for a file already held — an
+`add` or `change`, a `workspace_open` tree, a reconnect's snapshot entries
+— re-reads an eagerly held file, keeping its content until the new
 one lands so its editor never turns read-only meanwhile, and drops any
 other file's content back to `unrequested`, to load again on next access. A
 re-read of unchanged text changes nothing (`check_disk_changes` compares
@@ -1412,10 +1411,20 @@ buffer on an external change too, but only reports the conflict when saving
 ("the content of the file is newer", with Compare / Overwrite); zzz shows it
 as soon as it lands, since agents and tools write files while you edit, and
 keeps both versions in its history instead of opening a diff view (zzz has
-none yet). The check is frontend-only: an external write that lands after
-the backend received our save, but before our broadcast arrives, is
-overwritten without a conflict — closing that window needs the backend to
-compare against the version the save was based on.
+none yet). A change on disk arrives as metadata and its content by a read,
+so a save first waits for any read of the file in flight or queued
+(`Diskfiles.pending_read`) — the re-read a `filer_change` or a reconnect's
+snapshot starts — then decides on the content it brought; the save buttons
+are busy meanwhile (`save_pending`), and a conflict the wait uncovers takes
+the focus (unless the user moved on meanwhile). If the file's last read
+failed, the save reads it once more, and refuses ("couldn't check the file
+on disk") if that fails too — so short of an explicit overwrite, a change
+the frontend was told of is never written over unchecked. The check is
+still frontend-only: an external write the frontend hasn't heard of yet —
+one landing after that read, or after the backend received our save but
+before our broadcast arrives — is overwritten without a conflict. Closing
+that window needs the save to carry what it was based on (a hash of the
+content it edited) for the backend to compare.
 
 **Cells outlive components.** Svelte owns a `$derived` by the effect running
 when it was created and can stop recomputing it once that effect is
@@ -1437,10 +1446,8 @@ does the same snapshot handling for `workspace_open`. Both record what
 (`Diskfiles.track_changes`) and apply the snapshot around it: a path with an
 `add`, `change`, or `delete` keeps what the notification left — its snapshot
 entry is skipped, so a file deleted mid-request isn't resurrected and newer
-content isn't reverted. A `touch` carries no contents, so it never makes the
-snapshot yield: the snapshot's entry is applied (or the file pruned), and
-the touch's metadata is then applied again, unless a full change was also
-reported for the path.
+metadata isn't reverted; the change itself re-read or dropped the file's
+content.
 
 **Reconnect resync.** Notifications sent while the socket is down —
 `filer_change`, `workspace_changed`, `terminal_data`, `terminal_exited`,
@@ -1473,7 +1480,10 @@ backoff. `receive_session` reconciles rather than adds:
   removed, that the snapshot lacks are removed through the same path as a
   `delete` (`Diskfiles.reconcile`), so a file open with unsaved edits stays,
   flagged `deleted_on_disk`. Files outside those directories are left
-  alone — the snapshot says nothing about them.
+  alone — the snapshot says nothing about them. The snapshot is metadata,
+  so every file held eagerly is read again (the shown ones first) and any
+  other loaded file drops its content; one that changed while disconnected
+  shows the change, or a conflict under a draft.
 - **Terminals** running when the request went out that the snapshot's
   `terminal_ids` lacks become `lost` (`Terminals.reconcile`).
 - **Jobs** are replaced with the snapshot's `jobs` (`Jobs.reconcile`): they
@@ -1482,23 +1492,21 @@ backoff. `receive_session` reconciles rather than adds:
   a reload shows the job without them until more arrive.
 
 Changes made while the request is in flight win: paths a `filer_change`
-added, changed, or deleted are skipped as above (a `touch` keeps only its
-metadata, so a client that missed a `change` while disconnected still gets
-the snapshot's contents), workspaces opened or closed meanwhile
-(`Workspaces.track_changes`) keep their state and their files aren't
-pruned, and terminals started meanwhile aren't judged. A completion whose
-`completion_create` was in flight when the socket closed is rejected by the
-WebSocket client (`service_unavailable` — it can't be correlated after the
-reconnect), which settles its turn as errored; the chunks it had streamed
-stay. `Diskfiles` upserts by
-path — for seeds and for both `add` and `change` — so a path never has two
-`Diskfile`s. A `delete` closes the file's tabs, moves selection, and drops its
-editing state and history — unless the file has a draft (edited in a tab, a
-file part, anywhere): then the `Diskfile` is kept, flagged `deleted_on_disk`
-(marked in its tab, the explorer, and the editors), so saving writes the path
-back (always allowed while flagged; a successful save clears the flag right
-away) and the `add` broadcast reattaches it (same id). It's forgotten once nothing holds it — no draft
-(discarded from the editor's notice or a "don't save") and no tab
+added, changed, or deleted are skipped as above, workspaces opened or closed
+meanwhile (`Workspaces.track_changes`) keep their state and their files
+aren't pruned, and terminals started meanwhile aren't judged. A completion
+whose `completion_create` was in flight when the socket closed is rejected
+by the WebSocket client (`service_unavailable` — it can't be correlated
+after the reconnect), which settles its turn as errored; the chunks it had
+streamed stay. `Diskfiles` upserts by path — for seeds and for both `add`
+and `change` — so a path never has two `Diskfile`s. A `delete` closes the
+file's tabs, moves selection, and drops its editing state and history —
+unless the file has a draft (edited in a tab, a file part, anywhere): then
+the `Diskfile` is kept, flagged `deleted_on_disk` (marked in its tab, the
+explorer, and the editors), so saving writes the path back (always allowed
+while flagged; a successful save clears the flag right away) and the `add`
+broadcast reattaches it (same id). It's forgotten once nothing holds it — no
+draft (discarded from the editor's notice or a "don't save") and no tab
 (`Diskfiles.release_if_unneeded`). The explorer lists it for its draft
 (`Diskfiles.listed`); pickers don't (`on_disk`); a `DiskfilePart` shows and
 sends the draft, marked deleted. Tabs, history, and editor state are
@@ -1835,14 +1843,13 @@ Population, per capability:
   WebSocket and not yet written is bounded at 32 MiB
   (`WS_OUTBOUND_QUEUE_BYTES`); past it the server closes the socket (code
   4005) instead of holding more, and the frontend reconnects and resyncs like
-  after any drop. Sized so the largest `filer_change` (a 4 MiB file, up to 24
-  MiB once JSON-escaped) still fits behind other frames. A batch of file
-  changes is sent with a yield after each, so each socket's writer can take a
-  frame before the next is queued — a client that keeps up gets the batch
-  frame by frame, and one that falls more than the budget behind is closed
-  like any other. A change that only moved a file's metadata (a `touch`, a
-  rewrite of the same bytes) is sent without the contents, so it never weighs
-  on the budget; a large batch of files whose contents did change still does.
+  after any drop. Every frame is small — a `filer_change` carries a file's
+  metadata, not its text — so the budget is how far a burst can get ahead: a
+  change across a tree (a `git checkout`) queues one frame per file. A batch
+  of file changes is sent with a yield after each, so each socket's writer
+  can take a frame before the next is queued — a client that keeps up gets
+  the batch frame by frame, and one that falls more than the budget behind
+  is closed like any other.
   Terminal output is paced instead (see Terminal output pacing below), so a
   terminal that prints faster than the browser takes it slows down rather than
   closing the socket; a client that doesn't ack output (not zzz's UI) isn't

@@ -17,6 +17,22 @@ const setup_test = default_cross_process_setup(handle);
 
 const zzz_dir = handle.config.env.PUBLIC_ZZZ_DIR!;
 
+/** The contents `diskfile_read` returns for `path`. */
+const read_contents = async (
+	fixture: Awaited<ReturnType<typeof setup_test>>,
+	path: string
+): Promise<unknown> => {
+	const read = await rpc_call({
+		app: fixture.transport,
+		path: handle.config.rpc_path,
+		method: 'diskfile_read',
+		params: { path },
+		headers: fixture.create_session_headers()
+	});
+	assert.ok(read.ok, `diskfile_read failed: ${JSON.stringify(read)}`);
+	return (read.result as Record<string, unknown>).contents;
+};
+
 describe('provider + session cross-backend', () => {
 	test('provider_load_status_empty', async () => {
 		const fixture = await setup_test();
@@ -102,12 +118,11 @@ describe('provider + session cross-backend', () => {
 		try {
 			await writeFile(file_path, content, 'utf-8');
 
-			// Read-after-write race: the Filer indexes a newly-detected file
-			// before its content load completes, so an immediate `session_load`
-			// can snapshot the entry with `contents: null`. Poll until the
-			// watcher has loaded the contents (or time out). The exact timing
-			// is nondeterministic (async watcher + content load), so a fixed
-			// single call is flaky; the poll makes it deterministic.
+			// Read-after-write race: the Filer can index a newly-detected file
+			// mid-write, so an immediate `session_load` can snapshot the entry
+			// at an earlier size. Poll until it carries the written size (or
+			// time out). The exact timing is nondeterministic (async watcher),
+			// so a fixed single call is flaky; the poll makes it deterministic.
 			// (Cross-process analog of `wait_for_audit_row`; mirrors
 			// `session_load_returns_nested_files` below.)
 			let test_file: Record<string, unknown> | undefined;
@@ -123,7 +138,7 @@ describe('provider + session cross-backend', () => {
 				const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
 				const files = data.files as Array<Record<string, unknown>>;
 				test_file = files.find((f) => (f.id as string).endsWith(`/${file_name}`));
-				if (test_file?.contents === content) break;
+				if (test_file?.size === Buffer.byteLength(content)) break;
 				if (Date.now() > deadline) {
 					if (!test_file) {
 						const ids = files.map((f) => f.id);
@@ -133,7 +148,10 @@ describe('provider + session cross-backend', () => {
 				}
 				await new Promise((resolve) => setTimeout(resolve, 50));
 			}
-			assert.equal(test_file.contents, content);
+			assert.equal(test_file.size, Buffer.byteLength(content), 'size in bytes');
+			// metadata only — the contents come by a read
+			assert.notProperty(test_file, 'contents');
+			assert.equal(await read_contents(fixture, test_file.id as string), content);
 			assert.ok((test_file.source_dir as string).startsWith('/'), 'source_dir absolute');
 			assert.ok((test_file.source_dir as string).endsWith('/'), 'source_dir trailing slash');
 			assert.ok((test_file.id as string).startsWith('/'), 'file id absolute');
@@ -141,7 +159,6 @@ describe('provider + session cross-backend', () => {
 			assert.notProperty(test_file, 'dependents');
 			assert.notProperty(test_file, 'dependencies');
 			assert.equal(typeof test_file.mtime, 'number');
-			assert.equal(test_file.size, Buffer.byteLength(content), 'size in bytes');
 		} finally {
 			await rm(file_path, { force: true });
 		}
@@ -155,13 +172,12 @@ describe('provider + session cross-backend', () => {
 		try {
 			await writeFile(file_path, 'nested content', 'utf-8');
 
-			// Read-after-write race: the Filer indexes a newly-detected nested
-			// file before its content load completes, so an immediate
-			// `session_load` can snapshot the entry with `contents: null`.
-			// Poll until the watcher has loaded the contents (or time out).
-			// The exact timing is nondeterministic (async watcher + content
-			// load), so a fixed single call is flaky; the poll makes it
-			// deterministic. (Cross-process analog of `wait_for_audit_row`.)
+			// Read-after-write race: the Filer can index a newly-detected
+			// nested file mid-write, so an immediate `session_load` can
+			// snapshot the entry at an earlier size. Poll until it carries the
+			// written size (or time out). The exact timing is nondeterministic
+			// (async watcher), so a fixed single call is flaky; the poll makes
+			// it deterministic. (Cross-process analog of `wait_for_audit_row`.)
 			let nested: Record<string, unknown> | undefined;
 			const deadline = Date.now() + 5_000;
 			for (;;) {
@@ -175,7 +191,7 @@ describe('provider + session cross-backend', () => {
 				const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
 				const files = data.files as Array<Record<string, unknown>>;
 				nested = files.find((f) => (f.id as string).endsWith('/deep.txt'));
-				if (nested?.contents === 'nested content') break;
+				if (nested?.size === 'nested content'.length) break;
 				if (Date.now() > deadline) {
 					if (!nested) {
 						const ids = files.map((f) => f.id);
@@ -185,7 +201,9 @@ describe('provider + session cross-backend', () => {
 				}
 				await new Promise((resolve) => setTimeout(resolve, 50));
 			}
-			assert.equal(nested.contents, 'nested content');
+			assert.equal(nested.size, 'nested content'.length);
+			assert.notProperty(nested, 'contents');
+			assert.equal(await read_contents(fixture, nested.id as string), 'nested content');
 		} finally {
 			await rm(sub_dir, { recursive: true, force: true });
 		}

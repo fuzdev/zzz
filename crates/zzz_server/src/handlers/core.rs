@@ -99,9 +99,10 @@ pub async fn ping(
 /// consistency) with its roots, `scoped_dirs`, provider status, the caller's
 /// live terminal ids, and `App::instance_id`.
 ///
-/// The response carries every indexed file's contents, so it's handed to the
-/// transport to serialize once: the snapshot shares the index's contents, and
-/// no intermediate `Value` copy is made.
+/// The response carries every indexed file's metadata — not its contents,
+/// which a client reads with `diskfile_read` — and a large tree makes it
+/// large, so it's handed to the transport to serialize once, with no
+/// intermediate `Value` copy.
 ///
 /// # Errors
 ///
@@ -195,7 +196,8 @@ mod tests {
     use super::*;
 
     /// A `session_load` result, serialized straight from the structs, has the
-    /// shape `SessionLoadData` declares.
+    /// shape `SessionLoadData` declares — its files' metadata, without the
+    /// contents the index holds.
     #[test]
     fn session_load_result_serializes_to_its_wire_shape() {
         let result = SessionLoadResult {
@@ -225,7 +227,6 @@ mod tests {
                 "files": [{
                     "id": "/s/a.txt",
                     "source_dir": "/w/",
-                    "contents": "a",
                     "size": 1,
                     "ctime": 1.5,
                     "mtime": 1.5,

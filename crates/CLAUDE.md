@@ -418,16 +418,18 @@ revocation is the spine `RealtimeCloser` over the WS and SSE registries
 (../docs/backend.md § Auth, item 10).
 
 **Large responses**: `session_load` and `workspace_open` carry every
-indexed file's contents, so they skip the `serde_json::Value` round trip: the
-filer index holds contents as `Arc<String>` (a snapshot clones pointers, not
-text), the handler returns its typed result as a `fuz_actions::ActionOutput`
-(registered with `ActionSpec::new_output`, sized up front from the contents),
-and the spine serializes it once, straight into the response body — so an
+indexed file's metadata (never its contents — those come by `diskfile_read`),
+so a large tree is a large response, and they skip the `serde_json::Value`
+round trip: a snapshot clones the index's nodes, whose contents are shared
+`Arc<String>`s (pointers, not text), the handler returns its typed result as a
+`fuz_actions::ActionOutput` (registered with `ActionSpec::new_output`, sized
+up front from the nodes' paths), and the spine serializes it once, straight
+into the response body — so an
 HTTP response costs about its own size in memory, and a WebSocket one about
 twice that (tungstenite copies each outgoing frame into its write buffer).
 Keys come out in struct declaration order rather than the sorted order of a
 `Value` rendering — the same JSON, which no client may depend on the key
-order of. Responses aren't capped: a workspace of many large files is a large
+order of. Responses aren't capped: a workspace of many files is a large
 response. `diskfile_read` returns its one file's contents (≤ 4 MiB) the same
 way, moved into its typed output rather than copied into a `Value`.
 
@@ -532,15 +534,13 @@ joined after the drain, before PTY teardown.
   (delete+create inside the window becomes `change`, create+delete becomes a
   bare `delete`), every event resolved by `lstat` so late or reordered removes
   can't drop an existing file, rename-aware (old path `delete`, new path
-  `add`), contents sent only when they changed (a change that moved an indexed
-  file's metadata — its `size` or timestamps — and not the contents the index
-  holds for it is a `touch`, whose `disknode` has no `contents` key —
-  `filer::DisknodeMetadata` — unless an unbroadcast `add` / `change` /
-  `delete` for the path is pending, which then carries them; the index holds
-  no contents for a file it didn't load, so every change to one is a
-  `touch`), ignored paths filtered before the bounded
+  `add`), metadata only — each `disknode` is `{id, source_dir, size, ctime,
+  mtime}`, never contents, which clients read with `diskfile_read`; the
+  index still reads and holds each loaded file's text, and any move of the
+  text, `size`, or timestamps it holds for a file (a `touch` included) is a
+  `change`), ignored paths filtered before the bounded
   event channel with a coalesced root rescan on overflow, per-watcher ignore
-  config, in-memory file index returned by `session_load` and
+  config, in-memory file index returned (as metadata) by `session_load` and
   `workspace_open`, symlinks skipped; ignores
   `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` and the
   credential directories (`.ssh`/`.gnupg`/`.aws`/`.kube`/`.docker`/
@@ -631,13 +631,11 @@ joined after the drain, before PTY teardown.
   `fuz_realtime::OUTBOUND_FRAME_OVERHEAD_BYTES`, a frame is always queued into
   an empty queue, and one that doesn't fit closes that socket with
   `fuz_realtime::WS_CLOSE_OUTBOUND_OVERFLOW` (4005), its backlog discarded —
-  the frontend reconnects and reloads `session_load`. The budget is sized by
-  the largest frame zzz pushes: a `filer_change` carries a file's whole text
-  (≤ 4 MiB, `filer::MAX_INDEXED_FILE_SIZE`), and JSON's 6-byte escape of a
-  control character takes one frame to 24 MiB (a `const` assertion in `lib.rs`
-  keeps the budget above that), so the default would deliver any file near the
-  cap only into an empty queue. Requests' responses are written by the
-  connection's loop and never queue. **The budget bounds a burst, it doesn't
+  the frontend reconnects and reloads `session_load`. Every frame zzz pushes
+  is small — a `filer_change` carries a file's metadata, not its text — so
+  the budget is how far a burst can get ahead of a client: a change across a
+  tree queues one `filer_change` per file. Requests' responses are written by
+  the connection's loop and never queue. **The budget bounds a burst, it doesn't
   absorb one of any size**: a sender never waits for a socket, so anything
   that produces faster than a client takes for longer than the budget holds
   closes that client's socket. The filer's flush (`filer::flush_ready`) yields
@@ -645,9 +643,7 @@ joined after the drain, before PTY teardown.
   to take a frame before the next is queued and a batch isn't queued whole —
   it is a turn, not backpressure: a client that takes the batch slower than
   the filer serializes it still falls behind, and is closed once more than the
-  budget is waiting (a batch of `touch`es carries no contents, so `touch`ing a
-  whole tree sends each file's metadata and none of its text; a batch of real
-  changes still carries every changed file whole); terminal output is paced by
+  budget is waiting; terminal output is paced by
   acks instead (see ../docs/backend.md § Design Decisions → PTY terminals →
   Output pacing): a terminal stops reading its PTY once 1 MiB of its output is
   unacknowledged by its fastest acking connection, so it holds about that much
@@ -655,7 +651,7 @@ joined after the drain, before PTY teardown.
   than the budget of output it hasn't taken closes it (the terminal keeps
   running; the reconnect flags the output gap). **Memory**: a client that
   stops reading holds at most the budget plus the one frame its writer has
-  taken (≤ 24 MiB) per socket, until that write passes
+  taken per socket, until that write passes
   `fuz_realtime::WS_WRITE_STALL_TIMEOUT` or the next frame overflows; a
   broadcast's text is one buffer shared by every recipient. Acceptable for the
   same reason as the message cap: authenticated sockets only, on a loopback

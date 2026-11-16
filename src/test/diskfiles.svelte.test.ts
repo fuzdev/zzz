@@ -15,44 +15,43 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import { confirm_unload_with_unsaved_changes, to_file_directories } from '#lib/diskfile_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/ws/');
 const PATH_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
 const PATH_B = parse_or_throw(DiskfilePath, '/ws/b.txt');
 const PATH_C = parse_or_throw(DiskfilePath, '/ws/c.txt');
 
+let app: Frontend;
+let disk: FakeDisk;
+
+/**
+ * The disknode the backend sends for `path` — metadata only — with
+ * `contents` on the fake disk, for a read of the file to find.
+ */
 const create_disknode = (
 	path: DiskfilePath,
 	contents: string | null = 'contents'
-): SerializableDisknode => ({
-	id: path,
-	source_dir: SOURCE_DIR,
-	contents,
-	size: 1,
-	ctime: 1,
-	mtime: 1
-});
-
-let app: Frontend;
-
-const filer_change = (
-	type: Exclude<DiskfileChangeType, 'touch'>,
-	path: DiskfilePath,
-	contents?: string
-): void => {
-	app.diskfiles.handle_change({
-		change: { type, path },
-		disknode: create_disknode(path, type === 'delete' ? null : contents)
-	});
+): SerializableDisknode => {
+	disk.files.set(path, contents);
+	return { id: path, source_dir: SOURCE_DIR, size: 1, ctime: 1, mtime: 1 };
 };
 
-/** A `touch`: the file's timestamps moved, and the notification carries no contents. */
-const filer_touch = (path: DiskfilePath, mtime: number): void => {
-	const { contents: _, ...metadata } = create_disknode(path, null);
-	app.diskfiles.handle_change({
-		change: { type: 'touch', path },
-		disknode: { ...metadata, mtime }
-	});
+/**
+ * A `filer_change`, metadata only. An `add` or `change` writes `contents`
+ * to the fake disk first, and leaves a file nothing holds eagerly loaded
+ * with them, as a read on its next access would (see `FakeDisk.write`).
+ */
+const filer_change = (type: DiskfileChangeType, path: DiskfilePath, contents?: string): void => {
+	if (type === 'delete') {
+		disk.files.delete(path);
+		app.diskfiles.handle_change({
+			change: { type, path },
+			disknode: { id: path, source_dir: SOURCE_DIR, size: null, ctime: null, mtime: null }
+		});
+		return;
+	}
+	disk.write(path, contents ?? 'contents', type);
 };
 
 const count_by_path = (path: DiskfilePath): number => {
@@ -65,36 +64,40 @@ const count_by_path = (path: DiskfilePath): number => {
 
 beforeEach(() => {
 	app = monkeypatch_zzz_for_tests(new Frontend());
+	disk = install_fake_disk(app, SOURCE_DIR);
 });
 
 describe('upsert by path', () => {
-	test('an unchanged file is left untouched', () => {
-		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
+	test('a resync of an unchanged file keeps it and its updated time', () => {
+		filer_change('add', PATH_A, 'same');
 		const diskfile = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(diskfile);
 		diskfile.updated = '2000-01-01T00:00:00.000Z' as typeof diskfile.updated;
 
-		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
+		app.diskfiles.add_initial([disk.disknode(PATH_A)]);
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile);
 		assert.strictEqual(diskfile.updated, '2000-01-01T00:00:00.000Z', 'not bumped');
-
-		app.diskfiles.add_initial([create_disknode(PATH_A, 'different')]);
-		assert.strictEqual(diskfile.content, 'different');
-		assert.notStrictEqual(diskfile.updated, '2000-01-01T00:00:00.000Z');
 	});
 
-	test('a rewrite to the same content moves only the mtime', () => {
+	test('a change takes the size and mtime, and the updated time from the mtime', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
 		const diskfile = app.diskfiles.get_by_path(PATH_A)!;
 		assert.strictEqual(diskfile.mtime, 1);
 		diskfile.updated = '2000-01-01T00:00:00.000Z' as typeof diskfile.updated;
 
-		app.diskfiles.upsert({ ...create_disknode(PATH_A, 'same'), mtime: 2 });
-		assert.strictEqual(diskfile.mtime, 2);
-		assert.strictEqual(diskfile.updated, '2000-01-01T00:00:00.000Z', 'otherwise untouched');
+		app.diskfiles.upsert({ ...create_disknode(PATH_A, 'same'), size: 4, mtime: 2_000 });
+		assert.strictEqual(diskfile.size, 4);
+		assert.strictEqual(diskfile.mtime, 2_000);
+		assert.strictEqual(diskfile.updated, new Date(2_000).toISOString());
+
+		// an unknown mtime leaves the updated time as it was
+		app.diskfiles.upsert({ ...create_disknode(PATH_A, 'same'), mtime: null });
+		assert.isNull(diskfile.mtime);
+		assert.strictEqual(diskfile.updated, new Date(2_000).toISOString());
 	});
 
 	test('a file whose content is not loaded still shows that its bytes changed', () => {
-		// a recording grows, or is finalized: `contents` is `null` before and after
+		// a recording grows, or is finalized: its content is never loaded
 		app.diskfiles.add_initial([create_disknode(PATH_A, null)]);
 		const diskfile = app.diskfiles.get_by_path(PATH_A)!;
 		assert.ok(!diskfile.content_loaded);
@@ -109,7 +112,7 @@ describe('upsert by path', () => {
 		assert.strictEqual(count_by_path(PATH_A), 1);
 	});
 
-	test('the size on disk arrives whether or not the content is loaded, and moves with changes and touches', () => {
+	test('the size on disk arrives whether or not the content is loaded, and moves with changes', () => {
 		app.diskfiles.add_initial([{ ...create_disknode(PATH_A, null), size: 5_000_000 }]);
 		const diskfile = app.diskfiles.get_by_path(PATH_A)!;
 		assert.isNull(diskfile.content);
@@ -120,13 +123,6 @@ describe('upsert by path', () => {
 			disknode: { ...create_disknode(PATH_A, null), size: 6_000_000 }
 		});
 		assert.strictEqual(diskfile.size, 6_000_000);
-
-		const { contents: _, ...metadata } = create_disknode(PATH_A, null);
-		app.diskfiles.handle_change({
-			change: { type: 'touch', path: PATH_A },
-			disknode: { ...metadata, size: 7_000_000 }
-		});
-		assert.strictEqual(diskfile.size, 7_000_000);
 
 		app.diskfiles.add_initial([{ ...create_disknode(PATH_B, 'b'), size: null }]);
 		assert.isNull(app.diskfiles.get_by_path(PATH_B)?.size, 'unknown stays unknown');
@@ -142,99 +138,103 @@ describe('upsert by path', () => {
 		assert.strictEqual(diskfile.source_dir, other_dir);
 	});
 
-	test('add for an existing path updates it in place', () => {
-		filer_change('add', PATH_A, 'one');
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.ok(diskfile);
+	test('add for an existing path updates it in place', async () => {
+		const diskfile = await disk.load(PATH_A, 'one');
+		assert.strictEqual(diskfile.content, 'one');
 
 		filer_change('add', PATH_A, 'two');
 
 		assert.strictEqual(count_by_path(PATH_A), 1);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile);
+		// held by nothing, so its old content is dropped, to be read again
+		assert.strictEqual(diskfile.content_status, 'unrequested');
+		await app.diskfiles.ensure_content(diskfile);
 		assert.strictEqual(diskfile.content, 'two');
 	});
 
-	test('a touch moves the mtime and drops the content nothing holds', () => {
-		filer_change('add', PATH_A, 'one');
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.ok(diskfile);
-		const { updated } = diskfile;
+	test('a change drops the loaded content nothing holds, to be read on its next use', async () => {
+		const diskfile = await disk.load(PATH_A, 'one');
+		assert.strictEqual(diskfile.content, 'one');
+		const reads_before = disk.reads.length;
 
-		filer_touch(PATH_A, 7);
+		disk.files.set(PATH_A, 'two');
+		app.diskfiles.handle_change({
+			change: { type: 'change', path: PATH_A },
+			disknode: { ...disk.disknode(PATH_A), mtime: 7 }
+		});
 
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile);
-		// no contents key is not `contents: null` — the content is unknown, not unloadable
 		assert.strictEqual(diskfile.content_status, 'unrequested');
 		assert.isNull(diskfile.content);
 		assert.strictEqual(diskfile.mtime, 7);
-		assert.strictEqual(diskfile.updated, updated, 'nothing but the mtime and content changed');
+		await flush_reads();
+		assert.strictEqual(disk.reads.length, reads_before, 'not read until something needs it');
+
+		await app.diskfiles.ensure_content(diskfile);
+		assert.strictEqual(diskfile.content, 'two');
 	});
 
-	test('a touch moves the mtime of a file whose content is not loaded', () => {
-		app.diskfiles.handle_change({
-			change: { type: 'add', path: PATH_A },
-			disknode: create_disknode(PATH_A, null)
-		});
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.ok(diskfile);
-		filer_touch(PATH_A, 7);
-		assert.isNull(diskfile.content);
-		assert.strictEqual(diskfile.mtime, 7);
-	});
-
-	test('a touch for an unknown path adds nothing', () => {
-		filer_touch(PATH_A, 7);
-		assert.strictEqual(count_by_path(PATH_A), 0, 'there are no contents to add it with');
-	});
-
-	test("a touch leaves a diskfile kept after its file's delete alone", () => {
-		filer_change('add', PATH_A, 'one');
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.ok(diskfile);
-		diskfile.deleted_on_disk = true;
-		filer_touch(PATH_A, 7);
-		assert.ok(diskfile.deleted_on_disk);
-		assert.strictEqual(diskfile.mtime, 1);
-	});
-
-	test('a touch does not disturb a draft', () => {
-		filer_change('add', PATH_A, 'one');
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.ok(diskfile);
+	test('a change to a file with an editing state reads it again, keeping the content until then', async () => {
+		const diskfile = await disk.load(PATH_A, 'one');
 		const editor_state = app.diskfiles.get_editor_state(diskfile);
+		disk.reads.length = 0;
+
+		disk.files.set(PATH_A, 'two');
+		app.diskfiles.handle_change({
+			change: { type: 'change', path: PATH_A },
+			disknode: { ...disk.disknode(PATH_A), mtime: 7 }
+		});
+		assert.strictEqual(diskfile.content, 'one', 'kept while the read is in flight');
+		assert.strictEqual(diskfile.content_status, 'loaded');
+
+		await flush_reads();
+		assert.deepEqual(disk.reads, [PATH_A]);
+		assert.strictEqual(diskfile.content, 'two');
+		assert.strictEqual(editor_state.current_content, 'two', 'a clean editor follows the disk');
+	});
+
+	test('a change with the same bytes does not disturb a draft', async () => {
+		const diskfile = await disk.load(PATH_A, 'one');
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
+		disk.reads.length = 0;
 		editor_state.current_content = 'one, edited';
+		const entries_before = editor_state.history.entries.length;
 
-		filer_touch(PATH_A, 7);
+		// a `touch`: the metadata moves, the bytes don't
+		app.diskfiles.handle_change({
+			change: { type: 'change', path: PATH_A },
+			disknode: { ...disk.disknode(PATH_A), mtime: 7 }
+		});
+		await flush_reads();
 
+		assert.deepEqual(disk.reads, [PATH_A], 'read again, held eagerly');
+		assert.strictEqual(diskfile.mtime, 7);
 		assert.strictEqual(editor_state.current_content, 'one, edited');
 		assert.strictEqual(editor_state.last_seen_disk_content, 'one');
+		assert.strictEqual(editor_state.history.entries.length, entries_before, 'nothing recorded');
 		assert.ok(!editor_state.has_conflict, 'the file on disk still has what the draft started from');
 	});
 
-	test('a tracker records touches apart from full changes, the latest per path', () => {
+	test('a tracker records every path reported while it runs', () => {
 		filer_change('add', PATH_A, 'one');
 		const tracker = app.diskfiles.track_changes();
-		filer_touch(PATH_A, 7);
-		filer_touch(PATH_A, 5);
+		filer_change('change', PATH_A, 'two');
 		// not held here, and recorded all the same
-		filer_touch(PATH_B, 7);
-		filer_change('change', PATH_C, 'c');
+		filer_change('delete', PATH_B);
+		filer_change('add', PATH_C, 'c');
 		tracker.stop();
-		filer_touch(PATH_C, 7);
+		filer_change('change', PATH_A, 'three');
 
-		assert.deepEqual([...tracker.paths], [PATH_C]);
-		assert.deepEqual(
-			[...tracker.touches].map(([path, metadata]) => [path, metadata.mtime]),
-			[
-				[PATH_A, 5],
-				[PATH_B, 7]
-			]
-		);
+		assert.deepEqual([...tracker.paths], [PATH_A, PATH_B, PATH_C]);
 	});
 
-	test('change for an unknown path adds it', () => {
+	test('change for an unknown path adds it', async () => {
 		filer_change('change', PATH_A, 'one');
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.content, 'one');
+		const diskfile = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(diskfile);
+		assert.strictEqual(diskfile.content_status, 'unrequested');
+		await app.diskfiles.ensure_content(diskfile);
+		assert.strictEqual(diskfile.content, 'one');
 	});
 
 	test('a delete after a duplicate add leaves no ghost', () => {
@@ -246,28 +246,38 @@ describe('upsert by path', () => {
 		assert.isUndefined(app.diskfiles.get_by_path(PATH_A));
 	});
 
-	test('add_initial upserts overlapping seeds', () => {
+	test('add_initial upserts overlapping seeds', async () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'a1'), create_disknode(PATH_B, 'b1')]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
+		await app.diskfiles.ensure_content(a);
+		assert.strictEqual(a.content, 'a1');
 
 		// e.g. `workspace_open` files overlapping `session_load`'s
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'a2'), create_disknode(PATH_C, 'c1')]);
 
 		assert.strictEqual(app.diskfiles.items.size, 3);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
-		assert.strictEqual(a.content, 'a2');
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_B)?.content, 'b1');
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_C)?.content, 'c1');
+		// a seed carries no contents: one nothing holds drops what it had
+		assert.strictEqual(a.content_status, 'unrequested');
+		for (const [path, content] of [
+			[PATH_A, 'a2'],
+			[PATH_B, 'b1'],
+			[PATH_C, 'c1']
+		] as const) {
+			const diskfile = app.diskfiles.get_by_path(path);
+			assert.ok(diskfile);
+			await app.diskfiles.ensure_content(diskfile);
+			assert.strictEqual(diskfile.content, content);
+		}
 	});
 });
 
-describe('a touch while a snapshot is in flight', () => {
-	const snapshot_node = (
-		path: DiskfilePath,
-		contents: string,
-		mtime: number
-	): SerializableDisknode => ({ ...create_disknode(path, contents), mtime });
+describe('a change while a snapshot is in flight', () => {
+	const snapshot_node = (path: DiskfilePath, mtime: number): SerializableDisknode => ({
+		...disk.disknode(path),
+		mtime
+	});
 
 	/** Applies `files` as the snapshot `tracker` was started for. */
 	const reconcile = (files: Array<SerializableDisknode>, tracker: DiskfileChangeTracker): void => {
@@ -275,124 +285,51 @@ describe('a touch while a snapshot is in flight', () => {
 		app.diskfiles.reconcile(files, [SOURCE_DIR], { changes: tracker });
 	};
 
-	test('never keeps contents the snapshot replaces', () => {
-		// held from before a connection gap in which the file changed on disk
-		filer_change('add', PATH_A, 'old');
-		const tracker = app.diskfiles.track_changes();
-		filer_touch(PATH_A, 9);
-		reconcile([snapshot_node(PATH_A, 'new', 5)], tracker);
-
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.strictEqual(diskfile?.content, 'new', 'a touch says nothing about the contents');
-		assert.strictEqual(diskfile?.mtime, 9, 'and its metadata is applied over the snapshot');
-	});
-
-	test('is applied over a seed that only adds, too', () => {
-		filer_change('add', PATH_A, 'old');
-		const tracker = app.diskfiles.track_changes();
-		filer_touch(PATH_A, 9);
-		tracker.stop();
-		app.diskfiles.add_initial([snapshot_node(PATH_A, 'new', 5)], tracker);
-
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.strictEqual(diskfile?.content, 'new');
-		assert.strictEqual(diskfile?.mtime, 9);
-	});
-
-	test('wins over the snapshot with a lower mtime as well', () => {
+	test('the snapshot yields to it, whichever mtime is higher', () => {
 		// an mtime can move backwards, and the two can't be ordered from here:
 		// if the snapshot was the newer, another notification is still to come
-		filer_change('add', PATH_A, 'old');
-		const tracker = app.diskfiles.track_changes();
-		filer_touch(PATH_A, 3);
-		reconcile([snapshot_node(PATH_A, 'new', 5)], tracker);
+		for (const snapshot_mtime of [3, 50]) {
+			filer_change('add', PATH_A, 'old');
+			const tracker = app.diskfiles.track_changes();
+			app.diskfiles.handle_change({
+				change: { type: 'change', path: PATH_A },
+				disknode: { ...disk.disknode(PATH_A), mtime: 9 }
+			});
+			reconcile([snapshot_node(PATH_A, snapshot_mtime)], tracker);
 
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.strictEqual(diskfile?.content, 'new');
-		assert.strictEqual(diskfile?.mtime, 3);
+			assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.mtime, 9, `${snapshot_mtime}`);
+			filer_change('delete', PATH_A);
+		}
 	});
 
-	test('the latest of several is the one applied', () => {
+	test('a seed that only adds yields to it too', () => {
 		filer_change('add', PATH_A, 'old');
 		const tracker = app.diskfiles.track_changes();
-		filer_touch(PATH_A, 9);
-		filer_touch(PATH_A, 4);
-		reconcile([snapshot_node(PATH_A, 'new', 5)], tracker);
+		app.diskfiles.handle_change({
+			change: { type: 'change', path: PATH_A },
+			disknode: { ...disk.disknode(PATH_A), mtime: 9 }
+		});
+		tracker.stop();
+		app.diskfiles.add_initial([snapshot_node(PATH_A, 5)], tracker);
 
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.mtime, 4);
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.mtime, 9);
 	});
 
-	test('a change after it stands, with its own mtime', () => {
+	test('a delete is not undone', () => {
 		filer_change('add', PATH_A, 'old');
 		const tracker = app.diskfiles.track_changes();
-		filer_touch(PATH_A, 9);
-		filer_change('change', PATH_A, 'changed');
-		reconcile([snapshot_node(PATH_A, 'snapshot', 5)], tracker);
-
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.strictEqual(diskfile?.content, 'changed', 'the snapshot yields to a change');
-		assert.strictEqual(diskfile?.mtime, 1, 'the earlier touch is not applied over the change');
-	});
-
-	test('a change before it stands, with the mtime of the touch', () => {
-		filer_change('add', PATH_A, 'old');
-		const tracker = app.diskfiles.track_changes();
-		filer_change('change', PATH_A, 'changed');
-		filer_touch(PATH_A, 9);
-		reconcile([snapshot_node(PATH_A, 'snapshot', 5)], tracker);
-
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		// the touch dropped the content nothing holds, and the snapshot's older contents weren't taken
-		assert.strictEqual(diskfile?.content_status, 'unrequested');
-		assert.strictEqual(diskfile?.mtime, 9);
-	});
-
-	test('a delete after it is not undone', () => {
-		filer_change('add', PATH_A, 'old');
-		const tracker = app.diskfiles.track_changes();
-		filer_touch(PATH_A, 9);
 		filer_change('delete', PATH_A);
-		reconcile([snapshot_node(PATH_A, 'snapshot', 5)], tracker);
+		reconcile([snapshot_node(PATH_A, 5)], tracker);
 
 		assert.strictEqual(count_by_path(PATH_A), 0);
 	});
 
-	test('a delete before it is not undone', () => {
-		filer_change('add', PATH_A, 'old');
+	test('a file it added is not pruned for the snapshot lacking it', () => {
 		const tracker = app.diskfiles.track_changes();
-		filer_change('delete', PATH_A);
-		filer_touch(PATH_A, 9);
-		reconcile([snapshot_node(PATH_A, 'snapshot', 5)], tracker);
-
-		assert.strictEqual(count_by_path(PATH_A), 0);
-	});
-
-	test('does not keep a file the snapshot lacks', () => {
-		filer_change('add', PATH_A, 'old');
-		filer_change('add', PATH_B, 'draft base');
-		const b = app.diskfiles.get_by_path(PATH_B);
-		assert.ok(b);
-		app.diskfiles.get_editor_state(b).current_content = 'draft';
-		const tracker = app.diskfiles.track_changes();
-		filer_touch(PATH_A, 9);
-		filer_touch(PATH_B, 9);
+		filer_change('add', PATH_A, 'new');
 		reconcile([], tracker);
 
-		assert.strictEqual(count_by_path(PATH_A), 0, 'pruned like any file the snapshot lacks');
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b, 'kept for its draft');
-		assert.ok(b.deleted_on_disk, 'and not brought back by the touch');
-	});
-
-	test('for a file not held here leaves the snapshot to bring it', () => {
-		const tracker = app.diskfiles.track_changes();
-		filer_touch(PATH_A, 9);
-		filer_touch(PATH_B, 9);
-		reconcile([snapshot_node(PATH_A, 'new', 5)], tracker);
-
-		const diskfile = app.diskfiles.get_by_path(PATH_A);
-		assert.strictEqual(diskfile?.content, 'new', 'the touch did not hide the entry');
-		assert.strictEqual(diskfile?.mtime, 9);
-		assert.strictEqual(count_by_path(PATH_B), 0, 'nothing to add a file with');
+		assert.strictEqual(count_by_path(PATH_A), 1);
 	});
 });
 
@@ -502,8 +439,8 @@ describe('has_unsaved_changes and the unload guard', () => {
 		return event;
 	};
 
-	test('is false with no drafts, true with one, false again once discarded', () => {
-		app.diskfiles.add_initial([create_disknode(PATH_A, 'a')]);
+	test('is false with no drafts, true with one, false again once discarded', async () => {
+		await disk.load(PATH_A, 'a');
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
 		const editor_state = app.diskfiles.get_editor_state(a);
@@ -516,8 +453,8 @@ describe('has_unsaved_changes and the unload guard', () => {
 		assert.ok(!app.diskfiles.has_unsaved_changes);
 	});
 
-	test('confirm_unload_with_unsaved_changes cancels the unload only with unsaved changes', () => {
-		app.diskfiles.add_initial([create_disknode(PATH_A, 'a')]);
+	test('confirm_unload_with_unsaved_changes cancels the unload only with unsaved changes', async () => {
+		await disk.load(PATH_A, 'a');
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
 
@@ -537,8 +474,9 @@ describe('has_unsaved_changes and the unload guard', () => {
 });
 
 describe('delete with unsaved edits keeps the tab', () => {
-	const setup_dirty = () => {
-		app.diskfiles.add_initial([create_disknode(PATH_A, 'a'), create_disknode(PATH_B, 'b')]);
+	const setup_dirty = async () => {
+		await disk.load(PATH_A, 'a');
+		await disk.load(PATH_B, 'b');
 		const a = app.diskfiles.get_by_path(PATH_A);
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
@@ -550,8 +488,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		return { a, b, editor_state, tabs: app.diskfiles.editor.tabs };
 	};
 
-	test('the diskfile, tab, selection, and history stay, flagged deleted', () => {
-		const { b, tabs } = setup_dirty();
+	test('the diskfile, tab, selection, and history stay, flagged deleted', async () => {
+		const { b, tabs } = await setup_dirty();
 
 		filer_change('delete', PATH_B);
 
@@ -565,12 +503,13 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(app.diskfiles.on_disk.length, 1);
 	});
 
-	test('recreating the path reattaches the same diskfile and clears the flag', () => {
-		const { b, tabs, editor_state } = setup_dirty();
+	test('recreating the path reattaches the same diskfile and clears the flag', async () => {
+		const { b, tabs, editor_state } = await setup_dirty();
 		const tab = tabs.by_diskfile_id.get(b.id);
 		filer_change('delete', PATH_B);
 
 		filer_change('add', PATH_B, 'b recreated');
+		await flush_reads();
 
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
 		assert.strictEqual(count_by_path(PATH_B), 1);
@@ -583,7 +522,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 	});
 
 	test('saving writes the path back', async () => {
-		const { editor_state } = setup_dirty();
+		const { editor_state } = await setup_dirty();
 		const writes: Array<[string, string]> = [];
 		app.diskfiles.update = (path, content) => {
 			writes.push([path, content]);
@@ -596,8 +535,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.deepEqual(writes, [[PATH_B, 'b edited']]);
 	});
 
-	test('closing the tab after discarding the draft forgets the diskfile ("don\'t save")', () => {
-		const { a, b, tabs, editor_state } = setup_dirty();
+	test('closing the tab after discarding the draft forgets the diskfile ("don\'t save")', async () => {
+		const { a, b, tabs, editor_state } = await setup_dirty();
 		filer_change('delete', PATH_B);
 		const tab = tabs.by_diskfile_id.get(b.id);
 		assert.ok(tab);
@@ -613,8 +552,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.isUndefined(tabs.by_diskfile_id.get(b.id));
 	});
 
-	test('closing the tab with the draft kept keeps the diskfile, listed for the draft', () => {
-		const { b, tabs } = setup_dirty();
+	test('closing the tab with the draft kept keeps the diskfile, listed for the draft', async () => {
+		const { b, tabs } = await setup_dirty();
 		filer_change('delete', PATH_B);
 		const tab = tabs.by_diskfile_id.get(b.id);
 		assert.ok(tab);
@@ -626,8 +565,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.notInclude(app.diskfiles.on_disk, b);
 		assert.strictEqual(app.diskfiles.find_editor_state(b.id)?.current_content, 'b edited');
 	});
-	test('closing all tabs keeps the draft too', () => {
-		const { b, tabs } = setup_dirty();
+	test('closing all tabs keeps the draft too', async () => {
+		const { b, tabs } = await setup_dirty();
 		filer_change('delete', PATH_B);
 
 		tabs.close_all_tabs();
@@ -636,8 +575,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.ok(app.diskfiles.get_by_path(PATH_A));
 		assert.isTrue(app.diskfiles.find_editor_state(b.id)?.has_unsaved_edits);
 	});
-	test('closing a tab of a file still on disk keeps it', () => {
-		const { a, tabs } = setup_dirty();
+	test('closing a tab of a file still on disk keeps it', async () => {
+		const { a, tabs } = await setup_dirty();
 		const tab = tabs.by_diskfile_id.get(a.id);
 		assert.ok(tab);
 
@@ -646,8 +585,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
 	});
 
-	test('unsaved edits without an open tab keep a deleted file too', () => {
-		const { b, tabs } = setup_dirty();
+	test('unsaved edits without an open tab keep a deleted file too', async () => {
+		const { b, tabs } = await setup_dirty();
 		const tab = tabs.by_diskfile_id.get(b.id);
 		assert.ok(tab);
 		tabs.close_tab(tab.id);
@@ -658,8 +597,9 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.isTrue(b.deleted_on_disk);
 	});
 
-	test('a draft from a file part (never in a tab) keeps a deleted or pruned file', () => {
-		app.diskfiles.add_initial([create_disknode(PATH_A, 'a'), create_disknode(PATH_B, 'b')]);
+	test('a draft from a file part (never in a tab) keeps a deleted or pruned file', async () => {
+		await disk.load(PATH_A, 'a');
+		await disk.load(PATH_B, 'b');
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(b);
 		const part = app.cell_registry.instantiate('DiskfilePart', { type: 'diskfile', path: PATH_B });
@@ -680,8 +620,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.isUndefined(part.diskfile);
 	});
 
-	test('a file without a draft is not kept', () => {
-		app.diskfiles.add_initial([create_disknode(PATH_B, 'b')]);
+	test('a file without a draft is not kept', async () => {
+		await disk.load(PATH_B, 'b');
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(b);
 		app.diskfiles.get_editor_state(b);
@@ -691,7 +631,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
 	});
 	test('saving recreates the file even with nothing left to save', async () => {
-		const { b, editor_state } = setup_dirty();
+		const { b, editor_state } = await setup_dirty();
 		// back to the original entry: history keeps the unsaved alternate while
 		// the editor matches disk
 		const original = editor_state.history.entries.find((entry) => entry.is_original_state);
@@ -713,8 +653,9 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.deepEqual(writes, [[PATH_B, 'b']]);
 	});
 
-	test('reusing a preview tab away from the file keeps its draft', () => {
-		app.diskfiles.add_initial([create_disknode(PATH_A, 'a'), create_disknode(PATH_B, 'b')]);
+	test('reusing a preview tab away from the file keeps its draft', async () => {
+		await disk.load(PATH_A, 'a');
+		await disk.load(PATH_B, 'b');
 		const a = app.diskfiles.get_by_path(PATH_A);
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
@@ -732,8 +673,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
 		assert.include(app.diskfiles.listed, b);
 	});
-	test('a repeated delete keeps it flagged', () => {
-		const { b, tabs } = setup_dirty();
+	test('a repeated delete keeps it flagged', async () => {
+		const { b, tabs } = await setup_dirty();
 		filer_change('delete', PATH_B);
 		filer_change('delete', PATH_B);
 
@@ -743,8 +684,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(count_by_path(PATH_B), 1);
 	});
 
-	test('a diskfile part shows a flagged file for its draft', () => {
-		const { b, editor_state } = setup_dirty();
+	test('a diskfile part shows a flagged file for its draft', async () => {
+		const { b, editor_state } = await setup_dirty();
 		const part = app.cell_registry.instantiate('DiskfilePart', { type: 'diskfile', path: PATH_B });
 		assert.strictEqual(part.diskfile, b);
 		// the part sends the draft, marked
@@ -758,6 +699,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(part.draft_status, 'deleted');
 
 		filer_change('add', PATH_B, 'b back');
+		await flush_reads();
 		assert.strictEqual(part.diskfile, b);
 		// the draft is kept over the recreated file, as a conflict
 		assert.strictEqual(part.content, 'b edited');
@@ -769,8 +711,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.isNull(part.draft_status);
 	});
 
-	test('a diskfile part sends the draft, not an older entry an editor views', () => {
-		const { editor_state } = setup_dirty();
+	test('a diskfile part sends the draft, not an older entry an editor views', async () => {
+		const { editor_state } = await setup_dirty();
 		const part = app.cell_registry.instantiate('DiskfilePart', { type: 'diskfile', path: PATH_B });
 		const original = editor_state.history.entries.find((entry) => entry.is_original_state);
 		assert.ok(original);
@@ -1348,8 +1290,8 @@ describe('directory_paths', () => {
 		assert.deepEqual(dirs(), []);
 	});
 
-	test('a file kept deleted on disk for its draft holds no folder until it returns', () => {
-		const diskfile = app.diskfiles.upsert(node_at('/ws/a/x.md'));
+	test('a file kept deleted on disk for its draft holds no folder until it returns', async () => {
+		const diskfile = await disk.load('/ws/a/x.md', 'x');
 		app.diskfiles.select(diskfile.id, true);
 		app.diskfiles.get_editor_state(diskfile).current_content = 'edited';
 		filer_change('delete', parse_or_throw(DiskfilePath, '/ws/a/x.md'));
@@ -1366,8 +1308,8 @@ describe('directory_paths', () => {
 	});
 
 	test('a file re-rooted by another snapshot moves to the new root', () => {
-		app.diskfiles.upsert({ ...node_at('/ws/a/x.md'), contents: 'one' });
-		app.diskfiles.upsert({ ...node_at('/ws/a/x.md', '/ws/a/'), contents: 'two' });
+		app.diskfiles.upsert(node_at('/ws/a/x.md'));
+		app.diskfiles.upsert(node_at('/ws/a/x.md', '/ws/a/'));
 		assert.deepEqual(dirs(), ['/ws/a/']);
 	});
 
@@ -1394,7 +1336,7 @@ describe('directory_paths', () => {
 			if (step % 3 === 2) {
 				filer_change('delete', path);
 			} else {
-				app.diskfiles.upsert({ ...node_at(path), contents: `v${step}` });
+				app.diskfiles.upsert({ ...node_at(path), mtime: step });
 			}
 			assert.deepEqual(dirs(), rebuilt(), `step ${step}`);
 		}

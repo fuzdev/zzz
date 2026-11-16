@@ -819,7 +819,6 @@ describe('ActionEvent', () => {
 				disknode: {
 					id: '/test.txt',
 					source_dir: '/',
-					contents: 'test content',
 					size: 12,
 					ctime: Date.now(),
 					mtime: Date.now()

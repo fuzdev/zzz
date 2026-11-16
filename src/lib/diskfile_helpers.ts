@@ -269,7 +269,7 @@ export const disknode_to_diskfile_json = (
 		id: existing_id,
 		source_dir: disknode.source_dir,
 		path: disknode.id, // notice the Disknode `id` is a path
-		content: disknode.contents ?? null, // notice `contents` -> `content`, absent until loaded
+		content: null, // a disknode is metadata only — `Diskfiles` loads the content on demand
 		size: disknode.size,
 		mtime: disknode.mtime,
 		created,

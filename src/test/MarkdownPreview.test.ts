@@ -20,6 +20,7 @@ import FrontendContextHarness from './FrontendContextHarness.svelte';
 import MdzCodeLinkHarness from './MdzCodeLinkHarness.svelte';
 import { create_reactive_props } from './reactive_test_helpers.svelte.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
 
 const cleanups: Array<() => void> = [];
 
@@ -185,22 +186,17 @@ describe('MarkdownPreview in-zzz links', () => {
 	const GUIDE = parse_or_throw(DiskfilePath, '/w/docs/guide.md');
 
 	let app: Frontend;
+	let disk: FakeDisk;
 
 	beforeEach(() => {
 		vi.spyOn(console, 'log').mockImplementation(() => undefined);
 		app = monkeypatch_zzz_for_tests(new Frontend());
+		disk = install_fake_disk(app, SOURCE_DIR);
 		app.zzz_dir = '/w/';
 	});
 
-	const add_file = (path: string, contents: string | null = ''): Diskfile =>
-		app.diskfiles.upsert({
-			id: parse_or_throw(DiskfilePath, path),
-			source_dir: SOURCE_DIR,
-			contents,
-			size: 1,
-			ctime: 1,
-			mtime: 1
-		});
+	const add_file = (path: string, contents: string | null = ''): Promise<Diskfile> =>
+		disk.load(path, contents);
 
 	const render_in_app = (props: Record<string, unknown>): HTMLElement => {
 		const target = document.createElement('div');
@@ -220,19 +216,19 @@ describe('MarkdownPreview in-zzz links', () => {
 	const status_of = (target: HTMLElement, text: string): string | undefined =>
 		find_link(target, text).dataset.linkStatus;
 
-	test('a relative link to an indexed file opens it in a preview tab, without navigating', () => {
-		add_file(GUIDE);
-		const x = add_file('/w/docs/x.md');
+	test('a relative link to an indexed file opens it in a preview tab, without navigating', async () => {
+		await add_file(GUIDE);
+		const x = await add_file('/w/docs/x.md');
 		const target = render_in_app({ path: GUIDE, content: '[x](./x.md)' });
 		assert.isTrue(click_link(target, 'x'));
 		assert.strictEqual(app.diskfiles.selected_file_id, x.id);
 		assert.strictEqual(app.diskfiles.editor.tabs.preview_tab?.diskfile_id, x.id);
 	});
 
-	test('a middle click or Ctrl-click opens a kept tab, never a browser tab', () => {
-		add_file(GUIDE);
-		const x = add_file('/w/docs/x.md');
-		const y = add_file('/w/y.md');
+	test('a middle click or Ctrl-click opens a kept tab, never a browser tab', async () => {
+		await add_file(GUIDE);
+		const x = await add_file('/w/docs/x.md');
+		const y = await add_file('/w/y.md');
 		const target = render_in_app({ path: GUIDE, content: '[x](x.md) [y](../y.md)' });
 
 		assert.isTrue(middle_click_link(target, 'x'));
@@ -244,26 +240,26 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.isUndefined(app.diskfiles.editor.tabs.preview_tab);
 	});
 
-	test('a root-relative link opens from the root holding the file', () => {
-		add_file(GUIDE);
-		const a = add_file('/w/src/a.md');
+	test('a root-relative link opens from the root holding the file', async () => {
+		await add_file(GUIDE);
+		const a = await add_file('/w/src/a.md');
 		const target = render_in_app({ path: GUIDE, content: '[a](/src/a.md)' });
 		assert.isTrue(click_link(target, 'a'));
 		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
 	});
 
-	test('a fragment on a markdown file is left for its view to reveal', () => {
-		add_file(GUIDE);
-		const x = add_file('/w/docs/x.md', '# x\n\n## Part Two');
+	test('a fragment on a markdown file is left for its view to reveal', async () => {
+		await add_file(GUIDE);
+		const x = await add_file('/w/docs/x.md', '# x\n\n## Part Two');
 		const target = render_in_app({ path: GUIDE, content: '[x](./x.md#part-two)' });
 		assert.isTrue(click_link(target, 'x'));
 		assert.strictEqual(app.diskfiles.get_editor_state(x).markdown_pending_fragment, 'part-two');
 	});
 
-	test('a link to a folder opens its README, and marks one without as a folder', () => {
-		add_file(GUIDE);
-		const readme = add_file('/w/sub/README.md');
-		add_file('/w/bare/x.txt');
+	test('a link to a folder opens its README, and marks one without as a folder', async () => {
+		await add_file(GUIDE);
+		const readme = await add_file('/w/sub/README.md');
+		await add_file('/w/bare/x.txt');
 		const target = render_in_app({ path: GUIDE, content: '[sub](../sub/) [bare](../bare)' });
 		assert.isTrue(click_link(target, 'sub'));
 		assert.strictEqual(app.diskfiles.selected_file_id, readme.id);
@@ -275,8 +271,8 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.isUndefined(status_of(target, 'bare'));
 	});
 
-	test('a missing file inside the index is marked broken, and clicking it does nothing', () => {
-		add_file(GUIDE);
+	test('a missing file inside the index is marked broken, and clicking it does nothing', async () => {
+		await add_file(GUIDE);
 		app.diskfiles.select(null);
 		const target = render_in_app({ path: GUIDE, content: '[gone](./gone.md) [ok](guide.md)' });
 		assert.strictEqual(status_of(target, 'gone'), 'broken');
@@ -287,8 +283,8 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.isNull(app.diskfiles.selected_file_id);
 	});
 
-	test('what the index can not see is marked unknown, never broken', () => {
-		add_file(GUIDE);
+	test('what the index can not see is marked unknown, never broken', async () => {
+		await add_file(GUIDE);
 		const target = render_in_app({
 			path: GUIDE,
 			content: '[far](../../far.md) [nm](../node_modules/x/README.md) [root](/nope.md)'
@@ -299,9 +295,9 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.strictEqual(status_of(target, 'root'), 'unknown');
 	});
 
-	test('marks follow the index and the content', () => {
+	test('marks follow the index and the content', async () => {
 		// a diskfile's content is reactive state, standing in for an editor's draft
-		const guide = add_file(GUIDE, '[a](./a.md)');
+		const guide = await add_file(GUIDE, '[a](./a.md)');
 		const target = render_in_app({
 			path: GUIDE,
 			get content() {
@@ -310,7 +306,7 @@ describe('MarkdownPreview in-zzz links', () => {
 		});
 		assert.strictEqual(status_of(target, 'a'), 'broken');
 
-		add_file('/w/docs/a.md');
+		await add_file('/w/docs/a.md');
 		flushSync();
 		assert.isUndefined(status_of(target, 'a'), 'the file appeared');
 		assert.isNull(find_link(target, 'a').getAttribute('title'));
@@ -321,8 +317,8 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.isUndefined(status_of(target, 'a'));
 	});
 
-	test('a mark never outlives its link, even where the rendered href stays the same', () => {
-		const guide = add_file('/w/docs/readme.md', '[a](/nope/x.md)');
+	test('a mark never outlives its link, even where the rendered href stays the same', async () => {
+		const guide = await add_file('/w/docs/readme.md', '[a](/nope/x.md)');
 		const target = render_in_app({
 			path: guide.path,
 			get content() {
@@ -343,9 +339,9 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.strictEqual(status_of(target, 'b'), 'broken');
 	});
 
-	test('a click follows the reference, not the rendered href', () => {
-		const readme = add_file('/w/readme.md');
-		add_file(GUIDE);
+	test('a click follows the reference, not the rendered href', async () => {
+		const readme = await add_file('/w/readme.md');
+		await add_file(GUIDE);
 		// rendered `/docs/guide.md`, an indexed file, but written protocol-relative, so inert
 		const target = render_in_app({
 			path: readme.path,
@@ -359,18 +355,18 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.strictEqual(app.diskfiles.selected_file?.path, GUIDE);
 	});
 
-	test('a title the marking did not set is left alone', () => {
-		add_file(GUIDE);
+	test('a title the marking did not set is left alone', async () => {
+		await add_file(GUIDE);
 		const target = render_in_app({ path: GUIDE, content: '[ok](guide.md)' });
 		const anchor = find_link(target, 'ok');
 		anchor.title = 'from elsewhere';
-		add_file('/w/docs/other.md');
+		await add_file('/w/docs/other.md');
 		flushSync();
 		assert.strictEqual(anchor.title, 'from elsewhere');
 	});
 
-	test('an anchor an injected component renders is left alone, and the links keep their marks', () => {
-		add_file(GUIDE);
+	test('an anchor an injected component renders is left alone, and the links keep their marks', async () => {
+		await add_file(GUIDE);
 		app.diskfiles.select(null);
 		const target = document.createElement('div');
 		document.body.append(target);
@@ -410,8 +406,8 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.strictEqual(app.diskfiles.selected_file?.path, GUIDE);
 	});
 
-	test('without a path, nothing is marked or opened', () => {
-		add_file('/w/docs/x.md');
+	test('without a path, nothing is marked or opened', async () => {
+		await add_file('/w/docs/x.md');
 		const target = render_in_app({ content: '[x](/w/docs/x.md) [gone](./gone.md)' });
 		assert.isUndefined(status_of(target, 'gone'));
 		assert.isTrue(click_link(target, 'x'));

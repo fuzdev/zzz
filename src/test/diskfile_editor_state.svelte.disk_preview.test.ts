@@ -10,6 +10,7 @@ import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import { DiskfilePart } from '#lib/part.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
 
 /**
  * During a conflict the views can show the disk content (`showing_disk`,
@@ -24,12 +25,15 @@ let app: Frontend;
 let diskfile: Diskfile;
 let editor_state: DiskfileEditorState;
 
-/** A `filer_change` for the file, as the backend broadcasts it. */
-const broadcast = (contents: string): void => {
-	app.diskfiles.handle_change({
-		change: { type: 'change', path: PATH },
-		disknode: { id: PATH, source_dir: SOURCE_DIR, contents, size: 1, ctime: 1, mtime: 1 }
-	});
+let disk: FakeDisk;
+
+/**
+ * A write to the file on disk: its `filer_change` (metadata only), and the
+ * read of the new content it sets off, landed.
+ */
+const broadcast = async (contents: string): Promise<void> => {
+	disk.write(PATH, contents);
+	await flush_reads();
 };
 
 /** Makes `app.diskfiles.update` record its writes and succeed. */
@@ -43,9 +47,9 @@ const capture_writes = (): Array<string> => {
 };
 
 /** A draft `mine` under a disk change to `theirs`, shown as the disk. */
-const preview_conflict = (): void => {
+const preview_conflict = async (): Promise<void> => {
 	editor_state.current_content = 'mine';
-	broadcast('theirs');
+	await broadcast('theirs');
 	assert.isTrue(editor_state.has_conflict);
 	editor_state.set_showing_disk(true);
 	assert.isTrue(editor_state.showing_disk);
@@ -62,14 +66,15 @@ const snapshot_history = () =>
 
 beforeEach(() => {
 	app = monkeypatch_zzz_for_tests(new Frontend());
+	disk = install_fake_disk(app, SOURCE_DIR);
 	diskfile = app.diskfiles.add({ path: PATH, source_dir: SOURCE_DIR, content: 'v1' });
 	editor_state = app.diskfiles.get_editor_state(diskfile);
 });
 
 describe('showing the disk version', () => {
-	test('shows the disk content, read-only, leaving the edit as it is', () => {
+	test('shows the disk content, read-only, leaving the edit as it is', async () => {
 		editor_state.current_content = 'mine';
-		broadcast('theirs');
+		await broadcast('theirs');
 		const history_before = snapshot_history();
 		const selected_before = editor_state.selected_history_entry_id;
 
@@ -88,8 +93,8 @@ describe('showing the disk version', () => {
 		assert.deepEqual(snapshot_history(), history_before);
 	});
 
-	test('toggling back shows the draft again, editable', () => {
-		preview_conflict();
+	test('toggling back shows the draft again, editable', async () => {
+		await preview_conflict();
 
 		editor_state.set_showing_disk(false);
 
@@ -99,8 +104,8 @@ describe('showing the disk version', () => {
 		assert.isTrue(editor_state.has_conflict);
 	});
 
-	test('edits are ignored while showing it', () => {
-		preview_conflict();
+	test('edits are ignored while showing it', async () => {
+		await preview_conflict();
 		const history_before = snapshot_history();
 
 		editor_state.current_content = 'typed into the disk version';
@@ -123,10 +128,10 @@ describe('showing the disk version', () => {
 		assert.strictEqual(editor_state.shown_content, 'mine');
 	});
 
-	test('follows a newer disk change', () => {
-		preview_conflict();
+	test('follows a newer disk change', async () => {
+		await preview_conflict();
 
-		broadcast('theirs again');
+		await broadcast('theirs again');
 
 		assert.isTrue(editor_state.showing_disk);
 		assert.strictEqual(editor_state.shown_content, 'theirs again');
@@ -134,7 +139,7 @@ describe('showing the disk version', () => {
 	});
 
 	test('a plain save while showing it stays blocked', async () => {
-		preview_conflict();
+		await preview_conflict();
 		const writes = capture_writes();
 
 		assert.isFalse(await editor_state.save_changes());
@@ -143,18 +148,18 @@ describe('showing the disk version', () => {
 		assert.isTrue(editor_state.showing_disk);
 	});
 
-	test('a file part sends the draft while the disk is shown', () => {
+	test('a file part sends the draft while the disk is shown', async () => {
 		const part = new DiskfilePart({ app, json: { path: PATH } });
-		preview_conflict();
+		await preview_conflict();
 
 		assert.strictEqual(part.content, 'mine');
 		assert.strictEqual(part.draft_status, 'conflict');
 	});
 
-	test('a picked older entry is shown back the same way', () => {
+	test('a picked older entry is shown back the same way', async () => {
 		const older = editor_state.history.add_entry('older', { created: 1 });
 		editor_state.set_content_from_history(older.id);
-		broadcast('theirs');
+		await broadcast('theirs');
 
 		editor_state.set_showing_disk(true);
 		assert.strictEqual(editor_state.shown_content, 'theirs');
@@ -165,7 +170,7 @@ describe('showing the disk version', () => {
 
 describe('showing the disk version ends with the conflict', () => {
 	test('overwriting with the draft saves the draft, never the disk content', async () => {
-		preview_conflict();
+		await preview_conflict();
 		const writes = capture_writes();
 
 		const saving = editor_state.save_draft({ overwrite: true });
@@ -178,8 +183,8 @@ describe('showing the disk version ends with the conflict', () => {
 		assert.isFalse(editor_state.showing_disk);
 	});
 
-	test('keeping the disk version', () => {
-		preview_conflict();
+	test('keeping the disk version', async () => {
+		await preview_conflict();
 
 		editor_state.discard_draft();
 
@@ -188,19 +193,19 @@ describe('showing the disk version ends with the conflict', () => {
 		assert.strictEqual(editor_state.shown_content, 'theirs');
 	});
 
-	test('the disk landing on the draft', () => {
-		preview_conflict();
+	test('the disk landing on the draft', async () => {
+		await preview_conflict();
 
-		broadcast('mine');
+		await broadcast('mine');
 
 		assert.isFalse(editor_state.has_conflict);
 		assert.isFalse(editor_state.showing_disk);
 		assert.isTrue(editor_state.can_edit);
 	});
 
-	test('a file deleted on disk shows its draft, and offers no disk version', () => {
+	test('a file deleted on disk shows its draft, and offers no disk version', async () => {
 		const part = new DiskfilePart({ app, json: { path: PATH } });
-		preview_conflict();
+		await preview_conflict();
 
 		app.diskfiles.remove_by_path(PATH);
 
@@ -213,14 +218,14 @@ describe('showing the disk version ends with the conflict', () => {
 		assert.strictEqual(part.content, 'mine');
 	});
 
-	test('a file deleted on disk and back shows its draft, not the disk', () => {
-		preview_conflict();
+	test('a file deleted on disk and back shows its draft, not the disk', async () => {
+		await preview_conflict();
 		app.diskfiles.remove_by_path(PATH);
 		// kept, not forgotten - so the delete's clear, not `dispose`, ended the preview
 		assert.isTrue(diskfile.deleted_on_disk);
 		assert.isFalse(editor_state.showing_disk);
 
-		broadcast('theirs again');
+		await broadcast('theirs again');
 
 		assert.isFalse(diskfile.deleted_on_disk);
 		assert.isTrue(editor_state.has_conflict);
@@ -228,30 +233,30 @@ describe('showing the disk version ends with the conflict', () => {
 		assert.strictEqual(editor_state.shown_content, 'mine');
 	});
 
-	test('asking to show a file deleted on disk does nothing, even once it is back', () => {
+	test('asking to show a file deleted on disk does nothing, even once it is back', async () => {
 		editor_state.current_content = 'mine';
-		broadcast('theirs');
+		await broadcast('theirs');
 		app.diskfiles.remove_by_path(PATH);
 		assert.isTrue(diskfile.deleted_on_disk);
 		assert.isTrue(editor_state.has_conflict);
 
 		editor_state.set_showing_disk(true);
-		broadcast('theirs again');
+		await broadcast('theirs again');
 
 		assert.isTrue(editor_state.has_conflict);
 		assert.isFalse(editor_state.showing_disk);
 		assert.strictEqual(editor_state.shown_content, 'mine');
 	});
 
-	test('the disk landing on a picked entry, with a draft elsewhere', () => {
+	test('the disk landing on a picked entry, with a draft elsewhere', async () => {
 		editor_state.current_content = 'mine';
 		const older = editor_state.history.add_entry('older', { created: 1 });
 		editor_state.set_content_from_history(older.id);
-		broadcast('theirs');
+		await broadcast('theirs');
 		editor_state.set_showing_disk(true);
 		assert.isTrue(editor_state.showing_disk);
 
-		broadcast('older');
+		await broadcast('older');
 
 		// the draft still predates the disk, but nothing shown differs from it
 		assert.isTrue(editor_state.disk_conflict);
@@ -260,8 +265,8 @@ describe('showing the disk version ends with the conflict', () => {
 		assert.isTrue(editor_state.can_edit);
 	});
 
-	test('picking a history entry', () => {
-		preview_conflict();
+	test('picking a history entry', async () => {
+		await preview_conflict();
 		const disk_entry = editor_state.history.entries.find((entry) => entry.content === 'theirs');
 		assert.ok(disk_entry);
 		const draft_id = editor_state.unsaved_edit_entry_id;
@@ -278,31 +283,31 @@ describe('showing the disk version ends with the conflict', () => {
 	});
 
 	test('a later conflict starts on the edit, not the disk', async () => {
-		preview_conflict();
+		await preview_conflict();
 		capture_writes();
 		assert.isTrue(await editor_state.save_draft({ overwrite: true }));
 
 		editor_state.current_content = 'mine again';
-		broadcast('theirs again');
+		await broadcast('theirs again');
 
 		assert.isTrue(editor_state.has_conflict);
 		assert.isFalse(editor_state.showing_disk);
 		assert.strictEqual(editor_state.shown_content, 'mine again');
 	});
 
-	test('a later conflict after keeping the disk version starts on the edit too', () => {
-		preview_conflict();
+	test('a later conflict after keeping the disk version starts on the edit too', async () => {
+		await preview_conflict();
 		editor_state.discard_draft();
 
 		editor_state.current_content = 'mine again';
-		broadcast('theirs again');
+		await broadcast('theirs again');
 
 		assert.isTrue(editor_state.has_conflict);
 		assert.isFalse(editor_state.showing_disk);
 	});
 
 	test('a failed overwrite keeps the draft shown', async () => {
-		preview_conflict();
+		await preview_conflict();
 		app.diskfiles.update = () =>
 			Promise.resolve({ ok: false, error: { code: -32603, message: 'disk full' } as const });
 
@@ -314,8 +319,8 @@ describe('showing the disk version ends with the conflict', () => {
 		assert.strictEqual(editor_state.shown_content, 'mine');
 	});
 
-	test('the last tab closing resets the view to the draft', () => {
-		preview_conflict();
+	test('the last tab closing resets the view to the draft', async () => {
+		await preview_conflict();
 
 		editor_state.reset_view();
 
@@ -323,8 +328,8 @@ describe('showing the disk version ends with the conflict', () => {
 		assert.strictEqual(editor_state.shown_content, 'mine');
 	});
 
-	test('disposing', () => {
-		preview_conflict();
+	test('disposing', async () => {
+		await preview_conflict();
 
 		editor_state.dispose();
 

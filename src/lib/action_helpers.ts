@@ -42,8 +42,8 @@ export const create_quiet_action_log = (log: ActionLog = console_action_log): Ac
  * action's `input`, `output`, `progress`, request params, response result,
  * notification params, or error data. A larger payload is replaced by an
  * `ActionPayloadOmitted` marker, so the log's 512 entries stay small even when
- * calls carry file contents (`session_load`, `diskfile_update`) or whole chat
- * histories (`completion_create`).
+ * calls carry file contents (`diskfile_read`, `diskfile_update`), whole file
+ * trees (`session_load`), or whole chat histories (`completion_create`).
  */
 export const ACTION_PAYLOAD_BUDGET = 8192;
 

@@ -71,7 +71,10 @@
 		<button
 			class="flex:1 palette_f"
 			type="button"
-			disabled={!editor_state.can_save || editor_state.saving || editor_state.has_conflict}
+			disabled={!editor_state.can_save ||
+				editor_state.saving ||
+				editor_state.save_pending ||
+				editor_state.has_conflict}
 			title={editor_state.has_conflict
 				? 'changed on disk since you edited it — overwrite or keep the disk version above'
 				: undefined}

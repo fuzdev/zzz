@@ -226,10 +226,9 @@ describe('DiskfileTreeState', () => {
 			disknode: {
 				id: parse_or_throw(DiskfilePath, path),
 				source_dir: SOURCE_DIR,
-				contents: null,
-				size: 1,
-				ctime: 1,
-				mtime: 1
+				size: null,
+				ctime: null,
+				mtime: null
 			}
 		});
 	};

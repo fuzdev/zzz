@@ -23,13 +23,13 @@ const PATH_A = parse_or_throw(DiskfilePath, '/zzz/a.txt');
 const PATH_B = parse_or_throw(DiskfilePath, '/zzz/b.txt');
 const PATH_C = parse_or_throw(DiskfilePath, '/zzz/c.txt');
 
-const create_disknode = (path: DiskfilePath, contents: string | null): SerializableDisknode => ({
+/** A disknode as the backend sends it — metadata only, `mtime` telling versions apart. */
+const create_disknode = (path: DiskfilePath, mtime = 1): SerializableDisknode => ({
 	id: path,
 	source_dir: ZZZ_DIR,
-	contents,
 	size: 1,
 	ctime: 1,
-	mtime: 1
+	mtime
 });
 
 const SERVER_INSTANCE_ID = create_uuid();
@@ -73,14 +73,10 @@ const succeed = (index: number, files?: Array<SerializableDisknode>): void =>
 const fail = (index: number, message = 'backend down'): void =>
 	calls[index]!({ ok: false, error: { code: -32603, message } });
 
-const filer_change = (
-	type: Exclude<DiskfileChangeType, 'touch'>,
-	path: DiskfilePath,
-	contents?: string
-): void => {
+const filer_change = (type: DiskfileChangeType, path: DiskfilePath, mtime?: number): void => {
 	app.diskfiles.handle_change({
 		change: { type, path },
-		disknode: create_disknode(path, type === 'delete' ? null : (contents ?? null))
+		disknode: create_disknode(path, mtime)
 	});
 };
 
@@ -88,12 +84,15 @@ describe('Frontend.load_session', () => {
 	test('applies the snapshot', async () => {
 		const loaded = app.load_session();
 		assert.strictEqual(app.session_status, 'pending');
-		succeed(0, [create_disknode(PATH_A, 'a')]);
+		succeed(0, [create_disknode(PATH_A, 5)]);
 
 		assert.ok(await loaded);
 		assert.strictEqual(app.session_status, 'success');
 		assert.strictEqual(app.zzz_dir, ZZZ_DIR);
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.content, 'a');
+		const a = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(a);
+		assert.strictEqual(a.mtime, 5);
+		assert.strictEqual(a.content_status, 'unrequested', 'metadata only, read when needed');
 	});
 
 	test('re-pings a backend whose last ping failed, restoring the filesystem capability', async () => {
@@ -237,7 +236,7 @@ describe('Frontend.load_session', () => {
 	test('a response after dispose is ignored', async () => {
 		const loaded = app.load_session();
 		app.dispose();
-		succeed(0, [create_disknode(PATH_A, 'a')]);
+		succeed(0, [create_disknode(PATH_A)]);
 
 		assert.ok(!(await loaded));
 		assert.strictEqual(app.zzz_dir, null);
@@ -247,29 +246,29 @@ describe('Frontend.load_session', () => {
 	test('`filer_change` during the request wins over the older snapshot', async () => {
 		const loaded = app.load_session();
 		filer_change('delete', PATH_A);
-		filer_change('change', PATH_B, 'b new');
+		filer_change('change', PATH_B, 3);
 
 		succeed(0, [
-			create_disknode(PATH_A, 'a old'),
-			create_disknode(PATH_B, 'b old'),
-			create_disknode(PATH_C, 'c')
+			create_disknode(PATH_A, 2),
+			create_disknode(PATH_B, 2),
+			create_disknode(PATH_C, 2)
 		]);
 		assert.ok(await loaded);
 
 		assert.ok(!app.diskfiles.get_by_path(PATH_A), 'a file deleted in flight stays deleted');
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_B)?.content, 'b new');
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_C)?.content, 'c');
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B)?.mtime, 3);
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_C)?.mtime, 2);
 	});
 
 	test('changes before or after the request are not tracked', async () => {
-		filer_change('change', PATH_A, 'a before');
+		filer_change('change', PATH_A, 3);
 		const loaded = app.load_session();
-		succeed(0, [create_disknode(PATH_A, 'a snapshot')]);
+		succeed(0, [create_disknode(PATH_A, 4)]);
 		await loaded;
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.content, 'a snapshot');
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A)?.mtime, 4);
 
 		// a later snapshot (e.g. a retry) isn't affected by the earlier request's window
-		app.diskfiles.add_initial([create_disknode(PATH_B, 'b')]);
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_B)?.content, 'b');
+		app.diskfiles.add_initial([create_disknode(PATH_B, 5)]);
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B)?.mtime, 5);
 	});
 });

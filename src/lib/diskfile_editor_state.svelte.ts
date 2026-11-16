@@ -135,6 +135,16 @@ export class DiskfileEditorState {
 	/** Whether a `save_changes` write is in flight. */
 	saving: boolean = $state.raw(false);
 
+	/** How many saves wait for a read of the file before deciding (`save_pending`). */
+	#save_waits: number = $state.raw(0);
+
+	/**
+	 * Whether a save waits for a read of the file to land before it decides
+	 * whether to write (see `save_changes`) — busy like `saving`, before the
+	 * write starts.
+	 */
+	readonly save_pending: boolean = $derived.by(() => this.#save_waits > 0);
+
 	/** The error message from the last failed save, cleared when a save starts. */
 	save_error: string | null = $state.raw(null);
 
@@ -498,7 +508,15 @@ export class DiskfileEditorState {
 	 *
 	 * Refuses, writing nothing, while `has_conflict` — unless `overwrite` — so
 	 * a change made on disk under the edit is never overwritten silently. A
-	 * file whose content isn't loaded is never saved: this sets `save_error`.
+	 * change on disk arrives as metadata and the content follows by a read, so
+	 * a save waits for a read of the file in flight or queued
+	 * (`Diskfiles.pending_read`, `save_pending` meanwhile) and then decides as
+	 * above, on the content it brought. If the file's last read failed
+	 * (`content_error`) — the disk may hold a change it never brought — the
+	 * save reads it once more and decides on that; a second failure refuses,
+	 * with `save_error` saying the file couldn't be checked. An `overwrite`
+	 * writes without that retry. A file whose content isn't loaded is never
+	 * saved: this sets `save_error`.
 	 *
 	 * @returns whether the content was written — for a queued follow-up with
 	 * nothing left to write, whether the in-flight save succeeded
@@ -525,6 +543,13 @@ export class DiskfileEditorState {
 			});
 			return this.#queued_save;
 		}
+		// a change on disk was reported and its content is still on the way, or
+		// the last read failed — decide once it's checked, so a save can't write
+		// over a change it hasn't seen
+		const pending_read = this.app.diskfiles.pending_read(this.diskfile);
+		if (pending_read || this.#must_check_failed_read(options)) {
+			return this.#save_after_read(pending_read, options);
+		}
 		if (!this.can_save) return Promise.resolve(false);
 		if (this.has_conflict && !options?.overwrite) return Promise.resolve(false);
 
@@ -537,6 +562,48 @@ export class DiskfileEditorState {
 		this.#in_flight_save = in_flight_save;
 		in_flight_save.saving = this.#save(in_flight_save);
 		return in_flight_save.saving;
+	}
+
+	/**
+	 * Whether the file's last read failed (`content_error`) with the old
+	 * content kept, so the disk may hold a change that never arrived — a save
+	 * checks first, unless it's an `overwrite` or the file is deleted on disk
+	 * (writing recreates it, over nothing).
+	 */
+	#must_check_failed_read(options: DiskfileSaveOptions | undefined): boolean {
+		return (
+			this.diskfile.content_error !== null && !options?.overwrite && !this.diskfile.deleted_on_disk
+		);
+	}
+
+	/**
+	 * Waits for `pending_read`, then — unless `overwrite` — retries a failed
+	 * read once (`Diskfiles.read_again`), then decides again from the top
+	 * (`save_changes`). Bounded per call, not per file: a retry that fails too
+	 * refuses rather than retrying again (a second save made during the wait
+	 * makes its own one retry), and only a newer change reported meanwhile
+	 * makes the re-run wait again.
+	 */
+	async #save_after_read(
+		pending_read: Promise<void> | null,
+		options: DiskfileSaveOptions | undefined
+	): Promise<boolean> {
+		this.#save_waits++;
+		try {
+			if (pending_read) await pending_read;
+			if (this.#must_check_failed_read(options)) {
+				// a save is an explicit ask, so the failed read gets one more try
+				await this.app.diskfiles.read_again(this.diskfile);
+				const error = this.diskfile.content_error;
+				if (error !== null) {
+					this.save_error = `not saved — couldn't check the file on disk: ${error}`;
+					return false;
+				}
+			}
+		} finally {
+			this.#save_waits--;
+		}
+		return this.save_changes(options);
 	}
 
 	/**
