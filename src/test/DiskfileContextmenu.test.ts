@@ -248,28 +248,19 @@ describe('DiskfileContextmenu copy file content', () => {
 		assert.deepEqual(write_text.mock.calls, [['lazy text']]);
 	});
 
-	test('an empty file not loaded yet copies as empty', async () => {
-		const write_text = vi.fn((_text: string) => Promise.resolve());
-		Object.defineProperty(navigator, 'clipboard', {
-			value: { writeText: write_text },
-			configurable: true
-		});
-		(app as unknown as { api: unknown }).api = {
-			diskfile_read: () =>
-				Promise.resolve({
-					ok: true,
-					value: { contents: '', unloaded_reason: null, size: 0, ctime: 1, mtime: 1 }
-				})
-		};
-		const path = parse_or_throw(DiskfilePath, '/w/empty.txt');
-		app.diskfiles.add_initial([{ id: path, source_dir: SOURCE_DIR, size: 0, ctime: 1, mtime: 1 }]);
-		const target = render(app.diskfiles.get_by_path(path)!);
+	test('is not offered for an empty file, by its size before it loads', async () => {
+		const empty = disk.write('/w/empty.txt', '');
+		const target = render(empty);
 		open_menu(target);
 		await open_submenu(target, 'file');
+		assert.strictEqual(empty.content_status, 'unrequested');
+		assert.strictEqual(empty.size, 0);
+		assert.isUndefined(find_copy_entry(target), 'not before it loads');
 
-		find_copy_entry(target)!.click();
-		for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-		assert.deepEqual(write_text.mock.calls, [['']]);
+		await app.diskfiles.ensure_content(empty);
+		flushSync();
+		assert.strictEqual(empty.content, '');
+		assert.isUndefined(find_copy_entry(target), 'nor after');
 	});
 
 	test('is not offered for a file that can not load', async () => {

@@ -40,11 +40,11 @@
 	<ContextmenuSubmenu icon={icon_thread}>
 		thread
 		{#snippet menu()}
-			<!-- its file parts' contents are loaded on click when they aren't yet -->
+			<!-- its file parts' contents are loaded on click when they aren't yet, a failed read retried once -->
 			{#if thread.content || thread.content_loading}
 				<ContextmenuEntryCopyToClipboard
 					content={thread.content}
-					load_content={thread.content_loading ? () => thread.load_content() : undefined}
+					load_content={thread.content_pending_read ? () => thread.load_content() : undefined}
 					label="copy conversation"
 					preview={thread.content_preview}
 				/>

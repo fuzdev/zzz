@@ -14,7 +14,7 @@ import { reorder_list } from './list_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { format_prompt_content } from './prompt_helpers.ts';
-import { are_parts_loading, ensure_parts_content } from './part_helpers.ts';
+import { are_parts_loading, are_parts_pending_read, load_parts_content } from './part_helpers.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 
 export interface PromptMessage {
@@ -70,12 +70,16 @@ export class Prompt extends Cell<typeof PromptJson> {
 		this.init();
 	}
 
+	/** Whether `load_content` has reading to do — see `are_parts_pending_read`. */
+	readonly content_pending_read: boolean = $derived(are_parts_pending_read(this.parts));
+
 	/**
-	 * Loads every file part's content, then returns the formatted prompt —
-	 * `content` with no loading placeholder in it.
+	 * Loads every file part's content, a failed read retried once
+	 * (`load_parts_content`), then returns the formatted prompt — `content`
+	 * with no loading placeholder in it.
 	 */
 	async load_content(): Promise<string> {
-		await ensure_parts_content(this.parts);
+		await load_parts_content(() => this.parts);
 		return format_prompt_content(this.parts);
 	}
 

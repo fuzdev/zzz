@@ -61,17 +61,9 @@ export const ERROR_INVALID_PATH = 'invalid_path';
 export const ERROR_CONTENT_NOT_LOADED = 'content_not_loaded';
 
 /**
- * Stands in for a file part's content in a formatted prompt when the file's
- * content wasn't loaded, so the omission is visible — to the user in the
- * preview and copied text, and to a model — instead of the file silently
- * dropping out.
- */
-export const DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER = `[${DISKFILE_CONTENT_NOT_LOADED_MESSAGE}]`;
-
-/**
  * Stands in for a file part's content in a formatted prompt while the file's
  * content is loading — what a preview shows until it arrives. Sending or
- * copying awaits the content instead (`ensure_parts_content`), so neither
+ * copying awaits the content instead (`load_parts_content`), so neither
  * carries this.
  */
 export const DISKFILE_CONTENT_LOADING_PLACEHOLDER = `[${DISKFILE_CONTENT_LOADING_MESSAGE}]`;

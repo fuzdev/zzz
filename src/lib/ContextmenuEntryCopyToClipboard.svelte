@@ -20,13 +20,16 @@
 	}: OmitStrict<ComponentProps<typeof ContextmenuEntry>, 'run' | 'children'> & {
 		content: string | Thunk<string> | undefined;
 		/**
-		 * Given only while `content` isn't ready (a file's content still to
-		 * load): a click awaits it and copies what it resolves to, `''`
-		 * included, nothing for `null` or `undefined`; a rejection's message
-		 * shows on the entry, which stays open. `content` and `preview` then
-		 * only preview. Without it a click copies `content` at once, with no
-		 * await before the write, so the browser still sees the click's user
-		 * activation.
+		 * Given only while `content` may change on loading — a file still to
+		 * load, or a failed read to retry once: a click awaits it and copies
+		 * what it resolves to, `''` included, nothing for `null` or
+		 * `undefined`; a rejection's message shows on the entry, which stays
+		 * open. `content` and `preview` then only preview. Without it a click
+		 * copies `content` at once, with no await before the write, so the
+		 * browser still sees the click's user activation. When the write after
+		 * a load is refused (the wait outlasted the click's user activation),
+		 * the entry stays open saying "loaded — copy again", and its next click
+		 * writes what was loaded at once, without loading again.
 		 */
 		load_content?: (() => Promise<string | null | undefined>) | undefined;
 		label?: string | undefined;
@@ -42,7 +45,16 @@
 		show_preview ? to_preview(preview ?? read_content(), preview_limit) : undefined
 	);
 
+	/**
+	 * What a load resolved to when its write was refused — the next click
+	 * writes it at once, so "copy again" never waits on another load (a read
+	 * that keeps failing would ask again forever). This entry's own: it
+	 * unmounts with its menu.
+	 */
+	let loaded: string | null = null;
+
 	const copy_to_clipboard = (): ContextmenuActivateResult | Promise<ContextmenuActivateResult> => {
+		if (loaded !== null) return copy_now(loaded);
 		if (load_content) return copy_loaded(load_content);
 		const c = read_content();
 		if (!c) return;
@@ -50,6 +62,22 @@
 			// no await before the write — see `load_content`
 			return navigator.clipboard.writeText(c).then(
 				() => undefined,
+				(error: unknown) => {
+					console.error('failed to copy text: ', error);
+				}
+			);
+		} catch (error) {
+			console.error('failed to copy text: ', error);
+		}
+	};
+
+	/** Writes what an earlier load got, with no await before the write. */
+	const copy_now = (c: string): ContextmenuActivateResult | Promise<ContextmenuActivateResult> => {
+		try {
+			return navigator.clipboard.writeText(c).then(
+				() => {
+					loaded = null;
+				},
 				(error: unknown) => {
 					console.error('failed to copy text: ', error);
 				}
@@ -72,6 +100,7 @@
 			// the wait can outlast the click's user activation — loaded now, so
 			// the menu stays open and a second click copies at once
 			console.error('failed to copy text: ', error);
+			loaded = c;
 			return { ok: false, message: 'loaded — copy again' };
 		}
 	};

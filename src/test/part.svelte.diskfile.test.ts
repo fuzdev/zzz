@@ -13,7 +13,7 @@ import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import { format_prompt_content } from '#lib/prompt_helpers.ts';
 import {
 	DISKFILE_CONTENT_LOADING_PLACEHOLDER,
-	DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER
+	DISKFILE_CONTENT_NOT_LOADED_MESSAGE
 } from '#lib/diskfile_helpers.ts';
 import { Prompt } from '#lib/prompt.svelte.ts';
 import { Part } from '#lib/part.svelte.ts';
@@ -205,14 +205,24 @@ describe('DiskfilePart content access', () => {
 		assert.strictEqual(part.content, TEST_CONTENT.BASIC);
 		// the file's editor shows '' for an unloaded file
 		const editor_state = app.diskfiles.get_editor_state(diskfile);
-		// the file grew past what loads, say
+		// unloadable for an unknown reason
 		diskfile.unloaded_status = 'unloadable';
 		diskfile.content = null;
 		assert.strictEqual(editor_state.current_content, '');
 
 		assert.isNull(part.content);
 		// marked in the formatted prompt, not silently dropped
-		assert.include(format_prompt_content([part]), DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER);
+		assert.include(format_prompt_content([part]), `\n[${DISKFILE_CONTENT_NOT_LOADED_MESSAGE}]\n`);
+		// inside its tag, it says why when it's known
+		diskfile.unloaded_reason = 'too_large';
+		const too_large = 'content not loaded — the file is over 4 MiB';
+		assert.include(format_prompt_content([part]), `\n[${too_large}]\n</File>`);
+		// without its XML tag, the marker names the file too
+		part.has_xml_tag = false;
+		assert.strictEqual(
+			format_prompt_content([part]),
+			`[${diskfile.path_relative ?? path}: ${too_large}]`
+		);
 	});
 
 	test('content is undefined when diskfile not found', () => {
@@ -549,7 +559,7 @@ describe('DiskfilePart content still loading', () => {
 	test('previews a loading placeholder, and load_content awaits the text', async () => {
 		const { prompt, read } = setup();
 		assert.include(prompt.content, DISKFILE_CONTENT_LOADING_PLACEHOLDER);
-		assert.notInclude(prompt.content, DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER);
+		assert.notInclude(prompt.content, 'content not loaded');
 		assert.isTrue(prompt.content_loading);
 
 		const loading = prompt.load_content();
@@ -563,6 +573,30 @@ describe('DiskfilePart content still loading', () => {
 		assert.isFalse(prompt.content_loading);
 	});
 
+	test('load_content reads a failed file once more', async () => {
+		const answers = [
+			{ ok: false, error: { code: -32603, message: 'connection lost' } },
+			{
+				ok: true,
+				value: { contents: 'lazy text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+			}
+		];
+		let reads = 0;
+		(app as unknown as { api: unknown }).api = {
+			diskfile_read: () => Promise.resolve(answers[reads++])
+		};
+		app.diskfiles.add_initial([
+			{ id: LAZY_PATH, source_dir: TEST_DIR, size: 4, ctime: 1, mtime: 1 }
+		]);
+		const prompt = new Prompt({ app });
+		prompt.add_part(Part.create(app, { type: 'diskfile', path: LAZY_PATH }));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.include(prompt.content, 'content not loaded — connection lost');
+		assert.isTrue(prompt.content_pending_read);
+		assert.include(await prompt.load_content(), 'lazy text');
+		assert.strictEqual(reads, 2);
+	});
+
 	test('a file that can not load is marked as not loaded once its read says so', async () => {
 		const { prompt, read } = setup();
 		const loading = prompt.load_content();
@@ -570,6 +604,6 @@ describe('DiskfilePart content still loading', () => {
 			ok: true,
 			value: { contents: null, unloaded_reason: 'not_utf8', size: 9, ctime: 1, mtime: 1 }
 		});
-		assert.include(await loading, DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER);
+		assert.include(await loading, "[content not loaded — the file isn't UTF-8 text]");
 	});
 });

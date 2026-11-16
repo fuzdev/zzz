@@ -466,7 +466,7 @@ User types message in Chat UI
   → Thread.send_message(content)
     → Create user Turn with TextPart
     → Create empty assistant Turn (progressToken = turn.id), `pending` set
-    → Await the history's file parts still loading (`ensure_parts_content`)
+    → Await the history's file parts still loading, retrying a failed read once (`load_parts_content`)
     → Build CompletionMessage[] from thread history (before the new message,
       which is sent as `prompt`)
     → app.api.completion_create(request)
@@ -1321,14 +1321,22 @@ the selected tab's file first, then the other tabs'. A read never touches
 - **Sending and copying** await what's missing: `Thread.send_message`
   creates the turns and sets `pending` at once, then awaits the history's
   file parts still loading before building the request (a cancel meanwhile
-  sends nothing). A part whose read failed (`content_error`) stops the send:
-  nothing is sent and the assistant turn shows the error. A part whose file
-  can't load as text is left out of the request, as `Turn.content` leaves
-  it out. The copy entries for a file, part, prompt, turn, and thread copy
-  loaded content at once, with no await before the clipboard write; content
-  still to load is loaded on click (`ensure_parts_content`,
-  `Prompt.load_content`), and if that wait cost the click's user activation
-  the entry stays open saying "loaded — copy again".
+  sends nothing). A part whose read failed (`content_error`) is read once
+  more, the send being an explicit ask; if that fails too, it stops the
+  send: nothing is sent and the assistant turn shows the error, naming each
+  such file and saying to remove the parts or disable their turns to send
+  without them. A part whose file can't load as text is sent as a marker
+  naming the file and why (`[/home/me/big.log: content not loaded — the file
+  is over 4 MiB]`, the path relative only inside the app directory, as the
+  XML `path` attribute has it), which is what `Turn.content` holds for it,
+  so a turn's copy says it too. The copy entries for a file, part, prompt,
+  turn, and thread copy loaded content at once, with no await before the
+  clipboard write; content still to load is loaded on click, and a read that
+  failed is retried once, as a send does (`load_parts_content`,
+  `Diskfiles.load_content`); if that wait cost the click's user activation
+  the entry stays open saying "loaded — copy again". A file's and a file
+  part's entry never shows for an empty file — known by its `size` before
+  its content loads.
 
 A file is held eagerly while it has an editing state or a `DiskfilePart`
 references it. Every disknode that arrives for a file already held — an
@@ -1893,11 +1901,14 @@ Population, per capability:
   `Diskfiles.update` refuses to write over it too, with `conflict` /
   `content_not_loaded`), since a save would overwrite a file nobody has seen
   — as for a file whose content is still loading. A file part for it
-  contributes a `[content not loaded — …]` placeholder to a formatted prompt
-  instead of silently dropping out, but a chat turn's request leaves it out
-  (as `Turn.content` does). A failed read settles a file unloadable until
-  its next change on disk — a send needing it stops with an error — and a
-  failed re-read keeps the content it had
+  contributes a `[content not loaded — …]` placeholder saying why to a
+  formatted prompt (inside its XML tag, or naming the file without one) and
+  a marker naming the file to a chat turn's text and request
+  (`Turn.content`) instead of silently dropping out. A failed read settles a
+  file unloadable until its next change on disk or an explicit ask — a copy
+  entry's click or a send needing it, which reads it once more; the send
+  stops with an error if that fails too — and a failed re-read keeps the
+  content it had
 - **No persistent undo** — saves overwrite the file on disk; the editor keeps
   an in-memory per-file history (`DiskfileHistory`) you can restore from, lost
   on reload, as are unsaved drafts — leaving the page while any file has

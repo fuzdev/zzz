@@ -38,10 +38,10 @@
 		prompt
 		{#snippet menu()}
 			<!-- TODO @many maybe a copy submenu on this item with copy id, name, etc, leverage generic cells -->
-			<!-- its file parts' contents are loaded on click when they aren't yet -->
+			<!-- its file parts' contents are loaded on click when they aren't yet, a failed read retried once -->
 			<ContextmenuEntryCopyToClipboard
 				content={prompt.content}
-				load_content={prompt.content_loading ? () => prompt.load_content() : undefined}
+				load_content={prompt.content_pending_read ? () => prompt.load_content() : undefined}
 				label="copy content"
 				preview={prompt.content_preview}
 			/>

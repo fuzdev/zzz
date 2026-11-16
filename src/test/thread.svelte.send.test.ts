@@ -280,15 +280,17 @@ describe('a file part still loading when sent', () => {
 		await sent;
 	});
 
-	test('a failed read stops the send with an error, sending nothing', async () => {
-		const { thread, read } = setup();
+	test('a failed read, failing again on its one retry, stops the send with an error', async () => {
+		const { thread, read, read_paths } = setup();
 		const sent = thread.send_message('what does it say?');
 		read.resolve({ ok: false, error: { code: -32603, message: 'connection lost' } });
 		const assistant_turn = await sent;
 		assert.ok(assistant_turn);
 		assert.strictEqual(calls.length, 0);
+		assert.deepEqual(read_paths, [FILE_PATH, FILE_PATH], 'read, then retried once');
 		assert.include(assistant_turn.error_message, FILE_PATH);
 		assert.include(assistant_turn.error_message, 'connection lost');
+		assert.include(assistant_turn.error_message, 'remove the part or disable its turn');
 		assert.ok(!thread.pending);
 	});
 
@@ -315,7 +317,7 @@ describe('a file part still loading when sent', () => {
 		assert.isUndefined(assistant_turn?.error_message);
 	});
 
-	test('a file too large to load is left out, as before, and the send goes', async () => {
+	test('a file too large to load is sent as a marker naming it, and the send goes', async () => {
 		const { thread, read } = setup();
 		const sent = thread.send_message('what does it say?');
 		read.resolve({
@@ -324,7 +326,9 @@ describe('a file part still loading when sent', () => {
 		});
 		await flush();
 		assert.strictEqual(calls.length, 1);
-		assert.deepEqual(calls[0]!.completion_request.completion_messages, []);
+		assert.deepEqual(calls[0]!.completion_request.completion_messages, [
+			{ role: 'user', content: `[${FILE_PATH}: content not loaded — the file is over 4 MiB]` }
+		]);
 		calls[0]!.resolve();
 		const assistant_turn = await sent;
 		assert.isUndefined(assistant_turn?.error_message);
@@ -341,6 +345,145 @@ describe('a file part still loading when sent', () => {
 		});
 		assert.strictEqual(await sent, assistant_turn);
 		assert.ok(assistant_turn.cancelled);
+		assert.strictEqual(calls.length, 0);
+	});
+});
+
+describe('a file part whose read failed when sent', () => {
+	type ReadResult = { ok: true; value: unknown } | { ok: false; error: unknown };
+	const failed = (message: string): ReadResult => ({
+		ok: false,
+		error: { code: -32603, message }
+	});
+	const LOADED: ReadResult = {
+		ok: true,
+		value: { contents: 'file text', unloaded_reason: null, size: 9, ctime: 1, mtime: 1 }
+	};
+	const OTHER_PATH = parse_or_throw(DiskfilePath, '/test/other.txt');
+
+	/**
+	 * A turn of file parts, one per entry of `paths`, whose files' first reads
+	 * failed. Each later read waits for the test to answer it, in order.
+	 */
+	const setup = async (paths: Array<DiskfilePath> = [FILE_PATH]) => {
+		const answers: Array<(result: ReadResult) => void> = [];
+		const read_paths: Array<string> = [];
+		const seen: Set<string> = new Set();
+		(app.api as unknown as Record<string, unknown>).diskfile_read = ({
+			path
+		}: {
+			path: string;
+		}) => {
+			read_paths.push(path);
+			if (!seen.has(path)) {
+				seen.add(path);
+				return Promise.resolve(failed('connection lost'));
+			}
+			const read = create_deferred<ReadResult>();
+			answers.push(read.resolve);
+			return read.promise;
+		};
+		app.diskfiles.add_initial(
+			Array.from(new Set(paths), (id) => ({
+				id,
+				source_dir: SOURCE_DIR,
+				size: 9,
+				ctime: 1,
+				mtime: 1
+			}))
+		);
+		const thread = create_thread();
+		const part_ids = paths.map((path) => app.parts.add({ type: 'diskfile', path }).id);
+		thread.add_turn(new Turn({ app, json: { role: 'user', part_ids } }));
+		await flush();
+		for (const path of paths) {
+			assert.strictEqual(app.diskfiles.get_by_path(path)?.content_error, 'connection lost');
+		}
+		read_paths.length = 0;
+		return { thread, answers, read_paths };
+	};
+	const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+	test('is read once more, and the send goes with its content when that succeeds', async () => {
+		const { thread, answers, read_paths } = await setup();
+		const sent = thread.send_message('what does it say?');
+		await flush();
+		assert.deepEqual(read_paths, [FILE_PATH], 'one retry');
+		assert.strictEqual(calls.length, 0, 'waits for the retry');
+		answers[0]!(LOADED);
+		await flush();
+		assert.strictEqual(calls.length, 1);
+		assert.deepEqual(calls[0]!.completion_request.completion_messages, [
+			{ role: 'user', content: 'file text' }
+		]);
+		calls[0]!.resolve();
+		const assistant_turn = await sent;
+		assert.isUndefined(assistant_turn?.error_message);
+		assert.deepEqual(read_paths, [FILE_PATH]);
+	});
+
+	test('stops the send when the retry fails too, saying how to send without it', async () => {
+		const { thread, answers, read_paths } = await setup();
+		const sent = thread.send_message('what does it say?');
+		await flush();
+		answers[0]!(failed('permission denied'));
+		const assistant_turn = await sent;
+		assert.strictEqual(calls.length, 0);
+		assert.deepEqual(read_paths, [FILE_PATH], 'exactly one retry');
+		assert.strictEqual(
+			assistant_turn?.error_message,
+			`couldn't load ${FILE_PATH}: permission denied — remove the part or disable its turn to send without it`
+		);
+		assert.ok(!thread.pending);
+	});
+
+	test('names every file whose retry failed, each once', async () => {
+		const { thread, answers } = await setup([FILE_PATH, OTHER_PATH, FILE_PATH]);
+		const sent = thread.send_message('hi');
+		await flush();
+		answers[0]!(failed('permission denied'));
+		answers[1]!(failed('is a directory'));
+		const assistant_turn = await sent;
+		assert.strictEqual(calls.length, 0);
+		assert.strictEqual(
+			assistant_turn?.error_message,
+			`couldn't load ${FILE_PATH}: permission denied; ${OTHER_PATH}: is a directory — remove the parts or disable their turns to send without them`
+		);
+	});
+
+	test('two parts on one failed file share one retry read', async () => {
+		const { thread, answers, read_paths } = await setup([FILE_PATH, FILE_PATH]);
+		const sent = thread.send_message('hi');
+		await flush();
+		assert.deepEqual(read_paths, [FILE_PATH]);
+		answers[0]!(LOADED);
+		await flush();
+		assert.strictEqual(calls.length, 1);
+		calls[0]!.resolve();
+		await sent;
+	});
+
+	test('cancelling during the retry sends nothing', async () => {
+		const { thread, answers } = await setup();
+		const sent = thread.send_message('hi');
+		await flush();
+		const assistant_turn = Array.from(thread.turns.by_id.values()).at(-1)!;
+		thread.cancel_pending();
+		answers[0]!(LOADED);
+		await flush();
+		assert.strictEqual(calls.length, 0, 'no request after the retry lands');
+		assert.strictEqual(await sent, assistant_turn);
+		assert.ok(assistant_turn.cancelled);
+	});
+
+	test('cancelling before the retry starts skips it', async () => {
+		const { thread, answers, read_paths } = await setup();
+		const sent = thread.send_message('hi');
+		thread.cancel_pending(); // before the loads settle
+		await flush();
+		assert.deepEqual(read_paths, [], 'not retried');
+		answers[0]?.(LOADED); // were it retried, let the send end
+		await sent;
 		assert.strictEqual(calls.length, 0);
 	});
 });

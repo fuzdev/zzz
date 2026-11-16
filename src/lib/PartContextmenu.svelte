@@ -37,10 +37,12 @@
 
 		{#snippet menu()}
 			<!-- TODO @many maybe a copy submenu on this item with copy id, name, etc, leverage generic cells -->
-			<!-- a file part's content is loaded on click when it isn't yet; kept after a failed read, to say why -->
+			<!-- a file part's content is loaded on click when it isn't yet; kept after a failed read,
+			to say why; never for an empty file, by its content (maybe a draft) once loaded, else its size on disk -->
 			{#if part.type !== 'diskfile' ||
 				(part.content_status !== undefined &&
-					(part.content_status !== 'unloadable' || part.diskfile?.content_error != null))
+					(part.content_status !== 'unloadable' || part.diskfile?.content_error != null) &&
+					(part.content == null ? part.diskfile?.size !== 0 : part.content !== ''))
 			}
 				<ContextmenuEntryCopyToClipboard
 					content={part.content ?? undefined}

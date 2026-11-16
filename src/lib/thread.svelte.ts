@@ -4,7 +4,12 @@ import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Model } from './model.svelte.ts';
 import { Turn, create_turn_from_text } from './turn.svelte.ts';
 import type { PartUnion } from './part.svelte.ts';
-import { are_parts_loading, ensure_parts_content, find_failed_file_part } from './part_helpers.ts';
+import {
+	are_parts_pending_read,
+	filter_failed_file_parts,
+	load_parts_content,
+	to_failed_file_parts_message
+} from './part_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { ThreadJson } from './thread_types.ts';
 import { CompletionRequest } from './completion_types.ts';
@@ -57,9 +62,19 @@ export class Thread extends Cell<typeof ThreadJson> {
 		Array.from(this.turns.by_id.values()).some((turn) => turn.content_loading)
 	);
 
-	/** Loads every file part's content in the turns, then returns `content`. */
+	/** Whether `load_content` has reading to do — see `are_parts_pending_read`. */
+	readonly content_pending_read: boolean = $derived(
+		Array.from(this.turns.by_id.values()).some((turn) => turn.content_pending_read)
+	);
+
+	/**
+	 * Loads every file part's content in the turns, a failed read retried
+	 * once (`load_parts_content`), then returns `content`.
+	 */
 	async load_content(): Promise<string> {
-		await ensure_parts_content(Array.from(this.turns.by_id.values()).flatMap((turn) => turn.parts));
+		await load_parts_content(() =>
+			Array.from(this.turns.by_id.values()).flatMap((turn) => turn.parts)
+		);
 		return this.content;
 	}
 
@@ -175,11 +190,14 @@ export class Thread extends Cell<typeof ThreadJson> {
 	 *
 	 * The turns are created and `pending` set synchronously. A file part in
 	 * the history whose content is still on its way is awaited before the
-	 * request is built (`ensure_parts_content`); cancelling meanwhile sends
-	 * nothing. A file part whose read failed (`Diskfile.content_error`) stops
-	 * the send: nothing is sent and the assistant turn takes the error. One
-	 * whose file can't load as text (over 4 MiB, not UTF-8) is left out of
-	 * the request, as its `Turn.content` leaves it out.
+	 * request is built, and one whose read failed (`Diskfile.content_error`)
+	 * is read once more — a send is an explicit ask, so a transient error
+	 * doesn't block it (`load_parts_content`); cancelling meanwhile sends
+	 * nothing. A read that fails again stops the send: nothing is sent and
+	 * the assistant turn takes the error, naming each such file and how to
+	 * send without them (`to_failed_file_parts_message`). A file part whose
+	 * file can't load as text (over 4 MiB, not UTF-8) is sent as the marker
+	 * its `Turn.content` holds.
 	 */
 	async send_message(content: string): Promise<Turn | null> {
 		// TODO rethink this API with the completion request/response (see OpenAI/MCP/A2A)
@@ -210,8 +228,7 @@ export class Thread extends Cell<typeof ThreadJson> {
 		// disabled turns (and errored ones, which hold no file parts)
 		const history_parts = (): Array<PartUnion> =>
 			history.filter((turn) => turn.enabled).flatMap((turn) => turn.parts);
-		const history_waits =
-			are_parts_loading(history_parts()) || !!find_failed_file_part(history_parts());
+		const history_waits = are_parts_pending_read(history_parts());
 
 		const user_turn = this.add_user_turn(content);
 
@@ -246,13 +263,14 @@ export class Thread extends Cell<typeof ThreadJson> {
 		this.pending = true;
 		try {
 			if (!completion_request) {
-				await ensure_parts_content(history_parts());
+				// the signal skips the retry of failed reads once cancelled
+				await load_parts_content(history_parts, controller.signal);
 				// cancelled while the contents loaded — nothing was sent
 				if (controller.signal.aborted) return assistant_turn;
 				// a file the history needs couldn't be read — sending without it would mislead
-				const failed = find_failed_file_part(history_parts());
-				if (failed) {
-					assistant_turn.error_message = `couldn't load ${failed.path}: ${failed.diskfile?.content_error}`;
+				const failed = filter_failed_file_parts(history_parts());
+				if (failed.length) {
+					assistant_turn.error_message = to_failed_file_parts_message(failed);
 					return assistant_turn;
 				}
 				completion_request = create_request();

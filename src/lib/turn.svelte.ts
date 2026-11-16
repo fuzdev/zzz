@@ -5,7 +5,12 @@ import { estimate_token_count_from_length } from './helpers.ts';
 import { joined_content_length } from './thread_helpers.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import type { PartUnion, TextPart } from './part.svelte.ts';
-import { are_parts_loading, ensure_parts_content } from './part_helpers.ts';
+import {
+	are_parts_loading,
+	are_parts_pending_read,
+	load_parts_content,
+	to_part_not_loaded_marker
+} from './part_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import type { Thread } from './thread.svelte.ts';
 import { TurnJson } from './turn_types.ts';
@@ -43,13 +48,16 @@ export class Turn extends Cell<typeof TurnJson> {
 	}
 
 	/**
-	 * The parts' text joined, skipping a part without any — a file part whose
-	 * content isn't loaded included, so what sends or copies it awaits
-	 * `load_content` (or `ensure_parts_content` over the turns) first.
+	 * The parts' text joined. A file part whose file can't load (over 4 MiB,
+	 * not UTF-8 text, or unreadable) contributes a marker naming the file and
+	 * why (`to_part_not_loaded_marker`), so a send or a copy never silently
+	 * drops it. A file part still loading, or with no file at its path,
+	 * contributes nothing, so what sends or copies the turn awaits
+	 * `load_content` (or `load_parts_content` over the turns) first.
 	 */
 	get content(): string {
 		return this.parts
-			.map((part) => part.content)
+			.map((part) => to_part_not_loaded_marker(part) ?? part.content)
 			.filter((c) => c != null)
 			.join('\n\n');
 	}
@@ -57,9 +65,15 @@ export class Turn extends Cell<typeof TurnJson> {
 	/** Whether a file part's content is still on its way, so `content` lacks it for now. */
 	readonly content_loading: boolean = $derived(are_parts_loading(this.parts));
 
-	/** Loads every file part's content, then returns `content`. */
+	/** Whether `load_content` has reading to do — see `are_parts_pending_read`. */
+	readonly content_pending_read: boolean = $derived(are_parts_pending_read(this.parts));
+
+	/**
+	 * Loads every file part's content, a failed read retried once
+	 * (`load_parts_content`), then returns `content`.
+	 */
 	async load_content(): Promise<string> {
-		await ensure_parts_content(this.parts);
+		await load_parts_content(() => this.parts);
 		return this.content;
 	}
 
@@ -77,7 +91,11 @@ export class Turn extends Cell<typeof TurnJson> {
 	});
 
 	/** `content.length`, summed from the parts' lengths rather than by joining their content. */
-	readonly length: number = $derived(joined_content_length(this.parts.map((part) => part.length)));
+	readonly length: number = $derived(
+		joined_content_length(
+			this.parts.map((part) => to_part_not_loaded_marker(part)?.length ?? part.length)
+		)
+	);
 	readonly token_count: number = $derived(estimate_token_count_from_length(this.length));
 
 	readonly raw_content: string | null | undefined = $derived(this.parts[0]?.content);

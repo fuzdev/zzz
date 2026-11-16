@@ -98,9 +98,10 @@
 
 				<DiskfileCopyPathEntries path={diskfile.path} />
 
-				<!-- loaded on click when it isn't yet; kept after a failed read, to say why -->
+				<!-- loaded on click when it isn't yet; kept after a failed read, to say why;
+				never for an empty file, by its content once loaded, else its size on disk -->
 				{#if (diskfile.content_status !== 'unloadable' || diskfile.content_error !== null) &&
-					diskfile.content !== ''
+					(diskfile.content === null ? diskfile.size !== 0 : diskfile.content !== '')
 				}
 					<ContextmenuEntryCopyToClipboard
 						content={diskfile.content ?? undefined}

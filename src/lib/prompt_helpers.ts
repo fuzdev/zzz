@@ -1,8 +1,6 @@
 import type { PartUnion } from './part.svelte.ts';
-import {
-	DISKFILE_CONTENT_LOADING_PLACEHOLDER,
-	DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER
-} from './diskfile_helpers.ts';
+import { DISKFILE_CONTENT_LOADING_PLACEHOLDER } from './diskfile_helpers.ts';
+import { to_part_not_loaded_marker, to_part_not_loaded_message } from './part_helpers.ts';
 
 /**
  * The XML attributes `format_prompt_content` sets on a file part's tag to say
@@ -21,11 +19,14 @@ export const DISKFILE_PART_STATUS_ATTRIBUTES: ReadonlySet<string> = new Set([
  * applying XML tags and attributes where specified.
  *
  * A file part whose file content can't be loaded (over 4 MiB, not UTF-8 text,
- * or unreadable) contributes `DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER` in its
- * place, so the prompt shows the file is missing rather than dropping it. One
- * whose content is still on its way contributes
- * `DISKFILE_CONTENT_LOADING_PLACEHOLDER` — fine for a preview, so what sends
- * or copies the result awaits `ensure_parts_content` first (`Prompt.load_content`).
+ * or unreadable) is marked rather than dropped, so the omission is visible —
+ * to the user in the preview and copied text, and to a model: inside its XML
+ * tag, why in brackets (`to_part_not_loaded_message`, as in `[content not
+ * loaded — the file is over 4 MiB]`); without a tag, the marker naming the
+ * file too (`to_part_not_loaded_marker`), as in `Turn.content`. One whose
+ * content is still on its way contributes `DISKFILE_CONTENT_LOADING_PLACEHOLDER`
+ * — fine for a preview, so what sends or copies the result awaits
+ * `load_parts_content` first (`Prompt.load_content`).
  *
  * A file part sends the file's unsaved draft when it has one
  * (`DiskfilePart.draft_status`); its XML tag then says so with `unsaved="true"`,
@@ -41,12 +42,15 @@ export const format_prompt_content = (parts: Array<PartUnion>): string => {
 		if (!part.enabled) continue;
 
 		// a file whose content isn't loaded is marked, never silently dropped
+		const not_loaded = to_part_not_loaded_message(part);
 		const content =
-			part.type === 'diskfile' && part.content === null
-				? part.content_status === 'unloadable'
-					? DISKFILE_CONTENT_NOT_LOADED_PLACEHOLDER
-					: DISKFILE_CONTENT_LOADING_PLACEHOLDER
-				: part.content?.trim();
+			not_loaded !== null
+				? part.has_xml_tag
+					? `[${not_loaded}]`
+					: to_part_not_loaded_marker(part)
+				: part.type === 'diskfile' && part.content === null
+					? DISKFILE_CONTENT_LOADING_PLACEHOLDER
+					: part.content?.trim();
 		if (!content) continue;
 
 		if (!part.has_xml_tag) {
