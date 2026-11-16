@@ -1,7 +1,7 @@
 //! `ActionSpec` builders for AI provider methods.
 //!
-//! - `provider_load_status` — authenticated read.
-//! - `completion_create` — authenticated write. The notify routing lives in
+//! - `provider_load_status` — account-grain read.
+//! - `completion_create` — account-grain write. The notify routing lives in
 //!   `handlers::provider::completion_create`: `Arc<ConnectionRegistry>::send_to(conn_id, …)`
 //!   routes streaming `completion_progress` notifications to the originating
 //!   WS socket via `ctx.connection_id`.
@@ -31,7 +31,7 @@ fn provider_load_status_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::read_only(
         "provider_load_status",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )
@@ -44,7 +44,7 @@ fn completion_create_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "completion_create",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )

@@ -2,7 +2,7 @@
 //!
 //! Mirrors `src/lib/action_specs.ts`'s `diskfile_read` (read-only) and
 //! `diskfile_update`, `diskfile_create`, `diskfile_delete`,
-//! `directory_create` (`side_effects: true`), all `authenticated`. None touch
+//! `directory_create` (`side_effects: true`), all account-grain. None touch
 //! the DB today — `side_effects` is set to match the spec and to keep the
 //! transactional-audit boundary intact when filesystem audit emission lands.
 
@@ -34,7 +34,7 @@ fn diskfile_read_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::new_output(
         "diskfile_read",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         false,
         handler,
@@ -48,7 +48,7 @@ fn diskfile_update_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "diskfile_update",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )
@@ -61,7 +61,7 @@ fn diskfile_create_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "diskfile_create",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )
@@ -74,7 +74,7 @@ fn diskfile_delete_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "diskfile_delete",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )
@@ -87,7 +87,7 @@ fn directory_create_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "directory_create",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )

@@ -36,6 +36,13 @@ pub use terminal::build_terminal_specs;
 /// Exists so the permissive-surface census below sees the whole owned surface
 /// structurally — a new domain builder wired here is censused automatically
 /// rather than needing the test to be remembered.
+///
+/// Every one but the public `ping` is **account-grain** (`account: required`,
+/// `actor: none`, [`fuz_auth::AuthSpec::account_grain`]), like its TS spec in
+/// `src/lib/action_specs.ts`: zzz's domain belongs to the account — terminals
+/// and jobs are owned by it, and no handler reads an actor. The census below
+/// holds the rule; the `action_manifest` cross suite holds each spec to its
+/// TS twin.
 pub fn build_zzz_owned_specs(
     app: &std::sync::Arc<crate::handlers::App>,
 ) -> Vec<fuz_actions::ActionSpec> {
@@ -69,6 +76,9 @@ pub fn build_zzz_owned_specs(
 ///
 /// This test exists so that stays a *statement* rather than an omission — a
 /// narrowing shows up as a diff against an exact (empty) list.
+///
+/// Beside it, the grain census: every spec zzz registers, the test-only ones
+/// included, is public or account-grain ([`build_zzz_owned_specs`]).
 #[cfg(test)]
 mod any_credential_surface {
     use std::sync::Arc;
@@ -123,6 +133,27 @@ mod any_credential_surface {
         assert!(
             gated.is_empty(),
             "zzz-owned specs are all Any by decision — record a narrowing of {gated:?} here",
+        );
+    }
+
+    #[test]
+    fn every_zzz_owned_spec_is_public_or_account_grain() {
+        let app = inert_app();
+
+        let mut specs = super::build_zzz_owned_specs(&app);
+        specs.extend(super::build_testing_specs(Arc::clone(&app)));
+        let off_grain: Vec<&str> = specs
+            .iter()
+            .filter(|s| {
+                !s.auth.is_public()
+                    && (s.auth.account != fuz_auth::AuthAxis::Required
+                        || s.auth.actor != fuz_auth::AuthAxis::None)
+            })
+            .map(|s| s.method)
+            .collect();
+        assert!(
+            off_grain.is_empty(),
+            "zzz-owned specs are public or account-grain, like their TS specs: {off_grain:?}",
         );
     }
 }

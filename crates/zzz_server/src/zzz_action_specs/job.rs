@@ -1,7 +1,7 @@
 //! `ActionSpec` builders for the generic job methods.
 //!
 //! Mirrors `src/lib/action_specs.ts`'s `job_cancel` (`side_effects: true`,
-//! `authenticated`). Jobs live in daemon memory; nothing here touches the DB.
+//! account-grain). Jobs live in daemon memory; nothing here touches the DB.
 //! Each kind of job has its own create action (`transcription_create`, with
 //! the media specs); what's here works on any job.
 
@@ -27,7 +27,7 @@ fn job_cancel_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "job_cancel",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )

@@ -26,10 +26,10 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   stays loopback, only the port is overridable), and `drain_timeout`), `args`
   (the parsed command line), `force_test_actions` (overrides the
   `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets
-  the test binary inject `_testing_reset` and `_testing_drain_effects` without
-  putting `fuz_testing` in the production dep graph). The core's emitter is
-  also held on `App` (`audit_emitter`), where the test binary's specs factory
-  reaches it. `src/main.rs` is the thin production entry — parses the command
+  the test binary inject `_testing_reset`, `_testing_drain_effects`, and
+  `_testing_action_manifest` without putting `fuz_testing` in the production
+  dep graph). The core's emitter is also held on `App` (`audit_emitter`),
+  where the test binary's specs factory reaches it. `src/main.rs` is the thin production entry — parses the command
   line, constructs `Argon2idHasher`, calls `run_app` with
   `SpineRunOptions::production`.
 - `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target
@@ -41,7 +41,11 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `fuz_testing::create_testing_drain_effects_action_spec`
   (`_testing_drain_effects`, the barrier awaiting in-flight fire-and-forget
   audit writes — a real one because this binary passes
-  `audit_inflight_tracking: true`). zzz's reset closure ignores the in-tx
+  `audit_inflight_tracking: true`), and
+  `fuz_testing::create_testing_action_manifest_action_spec`
+  (`_testing_action_manifest`, over zzz's own specs alone —
+  `build_zzz_owned_specs` and `build_testing_specs` — not the spine's
+  bundle). zzz's reset closure ignores the in-tx
   `ActionDb` handle (its domain state is in-memory, not in PG) — it closes
   every zzz project through the production close path
   (`handlers::project::project_close_all` — filers stopped, `ScopedFs`
@@ -239,8 +243,12 @@ orientation; the spine crates are authoritative:
    roles?, credential_types?, required_scope?}`; see `src/lib/action_specs.ts`
    and the generated `docs/reference.md`):
    - `public` — `{account: 'none', actor: 'none'}`; no auth required (`ping`)
-   - `authenticated` — `{account: 'required', actor: 'none'}`; valid session
-     or bearer token required (project_*, session_load, etc.)
+   - `account-grain` — `{account: 'required', actor: 'none'}`; valid session
+     or bearer token required. Every zzz action but `ping`: its domain
+     belongs to the account, and no handler reads an actor. The Rust
+     builders use `AuthSpec::account_grain` (not `authenticated`, which
+     also requires an actor); `action_manifest.cross.test.ts` holds the two
+     sides together
    - `keeper` — `{account: 'required', actor: 'required', roles: ['keeper'],
      credential_types: ['daemon_token']}`; requires `DaemonToken` credential
      type AND keeper role grant. No zzz action uses this shape today — the
@@ -362,11 +370,18 @@ commands):
   `create_rust_spine_consumer_surface_spec` over `all_action_specs` with
   `host_gate: true` — no backend dependency. Excluded with its reason shown in
   the run: `actor_lookup` (no resolver mounted). The capabilities, including
-  `testing_backdoors` (`_testing_reset` and `_testing_drain_effects`, the two
-  `testing_zzzd` mounts), are stated in `zzz_backend_config.ts`; the
-  testing-backdoor suite checks that list against the binary, and the suites
-  needing another backdoor (`credential_deadline`, `origin_conformance`,
-  `ws_outbound_overflow`) skip themselves, naming it.
+  `testing_backdoors` (`_testing_reset`, `_testing_drain_effects`, and
+  `_testing_action_manifest`, the ones `testing_zzzd` mounts), are stated in
+  `zzz_backend_config.ts`; the testing-backdoor suite checks that list
+  against the binary, and the suites needing another backdoor
+  (`credential_deadline`, `origin_conformance`, `ws_outbound_overflow`) skip
+  themselves, naming it.
+- **`action_manifest.cross.test.ts`** — zzz's own request specs against
+  their Rust twins: the methods registered, and each one's input shape, auth
+  axes, role and credential gates, `side_effects`, and rate-limit class
+  (`_testing_action_manifest` against `build_action_manifest` over
+  `all_action_specs` and the test-only `_testing_emit_notifications`). A
+  spec added, dropped, or changed on one side alone fails.
 - **`session.cross.test.ts`** — the per-port session cookie
   (`zzz_session_<port>`: set on login, the shared `fuz_session` name not
   read; fuz_app's hardened-attribute suite runs under it in

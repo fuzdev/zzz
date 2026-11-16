@@ -11,9 +11,9 @@ OpenAI, and Gemini (all full).
   spine's server toolkit (`fuz_actions::server`); `src/main.rs` is the thin
   production entry.
 - `testing_zzz_server/` — the test binary `testing_zzzd`: fast argon2,
-  `_testing_reset` and `_testing_drain_effects`, default port 4462. **Never
-  ships in a release** (`fuz_release`'s `testing_` filter and `cargo xtask
-  check-release`).
+  `_testing_reset`, `_testing_drain_effects`, and `_testing_action_manifest`,
+  default port 4462. **Never ships in a release** (`fuz_release`'s `testing_`
+  filter and `cargo xtask check-release`).
 - `xtask/` — `cargo xtask dev`, `dev-setup` / `prod-setup`, `check-release`,
   `ghostty-vt`; pure `std` + `fuz_audit`, marked `dev_only`.
 - `zzz/` — the CLI: `daemon_launch.rs`, `opener.rs`, `daemon_lifecycle.rs`,

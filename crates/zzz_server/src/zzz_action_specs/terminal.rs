@@ -28,7 +28,7 @@ fn terminal_create_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "terminal_create",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )
@@ -41,7 +41,7 @@ fn terminal_data_send_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "terminal_data_send",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )
@@ -54,7 +54,7 @@ fn terminal_resize_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "terminal_resize",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )
@@ -67,7 +67,7 @@ fn terminal_ack_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "terminal_ack",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )
@@ -80,7 +80,7 @@ fn terminal_close_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "terminal_close",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )

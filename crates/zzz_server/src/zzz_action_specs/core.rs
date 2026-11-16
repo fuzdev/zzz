@@ -1,5 +1,5 @@
 //! Core `ActionSpec` builders — `ping` (public) and `session_load`
-//! (authenticated), plus the test-only `_testing_emit_notifications`
+//! (account-grain), plus the test-only `_testing_emit_notifications`
 //! builder gated on `App.enable_test_actions`.
 //!
 //! Both methods are zzz-namespaced (not in `fuz_actions::PROTOCOL_ACTION_SPECS`
@@ -60,7 +60,7 @@ fn testing_emit_notifications_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::read_only(
         "_testing_emit_notifications",
-        AuthSpec::authenticated(CredentialGate::Any),
+        AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,
     )

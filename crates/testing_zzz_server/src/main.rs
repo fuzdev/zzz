@@ -10,7 +10,10 @@
 //! `_testing_drain_effects` from
 //! [`fuz_testing::create_testing_drain_effects_action_spec`], the barrier
 //! that awaits in-flight fire-and-forget audit writes (a signup's, a
-//! failure audit, a WebSocket mutation's) before a test reads the audit log.
+//! failure audit, a WebSocket mutation's) before a test reads the audit log;
+//! and `_testing_action_manifest` from
+//! [`fuz_testing::create_testing_action_manifest_action_spec`], over zzz's own
+//! specs alone.
 //! The drain is a real barrier because this binary builds the app's audit
 //! emitter with in-flight tracking ([`fuz_testing::testing_backend_options`]);
 //! over an untracked emitter it would return at once.
@@ -146,7 +149,18 @@ async fn main() -> ExitCode {
                 Ok(())
             })
         });
-        testing_reset_specs(&runtime, Some(reset_state))
+        let mut specs = testing_reset_specs(&runtime, Some(reset_state))?;
+        // zzz's own surface, the test-only specs included, for the cross
+        // suite that holds each spec to its TS twin. The spine's standard
+        // bundle is fuz_app's to compare.
+        let mut zzz_specs = zzz_server::zzz_action_specs::build_zzz_owned_specs(&app);
+        zzz_specs.extend(zzz_server::zzz_action_specs::build_testing_specs(
+            Arc::clone(&app),
+        ));
+        specs.push(fuz_testing::create_testing_action_manifest_action_spec(
+            &zzz_specs,
+        ));
+        Ok(specs)
     });
 
     match zzz_server::run_app(zzz_server::RunAppOptions {
