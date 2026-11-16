@@ -111,11 +111,11 @@ const click_button = (target: HTMLElement, text: string): void => {
 	flushSync();
 };
 
-/** Gives the drawer's wrapper a transition, as a browser with motion allowed computes it. */
+/** Gives the drawer's panel a transition, as a browser with motion allowed computes it. */
 const allow_motion = (): void => {
 	const original = window.getComputedStyle.bind(window);
 	vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) =>
-		el.classList.contains('markdown-drawer')
+		el.classList.contains('markdown-drawer-panel')
 			? ({ transitionDuration: '0.2s' } as CSSStyleDeclaration)
 			: original(el, pseudo)
 	);
@@ -975,7 +975,7 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
 	});
 
-	test('a closing drawer measures nothing as its wrapper shrinks', () => {
+	test('a closing drawer measures nothing as its content slides out', () => {
 		allow_motion();
 		const a = write_externally(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
@@ -1053,90 +1053,158 @@ describe('DiskfileMarkdownView details drawer', () => {
 		assert.ok(el);
 		return el;
 	};
+	/** Whether the wrapper takes the drawer's width in the flow. */
+	const in_flow = (target: HTMLElement): boolean => drawer(target).classList.contains('open');
 	const content = (target: HTMLElement): HTMLElement | null =>
 		target.querySelector<HTMLElement>('.markdown-drawer-content');
+	const panel = (target: HTMLElement): HTMLElement => {
+		const el = target.querySelector<HTMLElement>('.markdown-drawer-panel');
+		assert.ok(el);
+		return el;
+	};
 
-	const end_transition = (el: Element, property_name = 'width', type = 'transitionend'): void => {
+	const end_transition = (
+		el: Element,
+		property_name = 'transform',
+		type = 'transitionend'
+	): void => {
 		const event = new Event(type, { bubbles: true });
 		Object.defineProperty(event, 'propertyName', { value: property_name });
 		el.dispatchEvent(event);
 		flushSync();
 	};
 
+	/**
+	 * Records each layout read of the panel, which styles it where it is, and
+	 * whether the wrapper was open then - so a read with it closed means the
+	 * panel starts off the drawer's edge and slides in.
+	 */
+	const watch_panel_reads = (): Array<boolean> => {
+		const reads: Array<boolean> = [];
+		const original = Element.prototype.getBoundingClientRect;
+		vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+			this: Element
+		) {
+			if (this.classList.contains('markdown-drawer-panel')) {
+				reads.push(!!this.closest('.markdown-drawer.open'));
+			}
+			return original.call(this);
+		});
+		return reads;
+	};
+
 	test('opens at once on first render, with nothing to animate', () => {
+		const reads = watch_panel_reads();
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		assert.isTrue(drawer(view.target).classList.contains('open'));
+		assert.isTrue(in_flow(view.target));
 		const shown = content(view.target);
 		assert.ok(shown);
 		assert.isFalse(shown.inert);
+		assert.deepEqual(reads, [], 'mounted in place, never styled off the edge');
 	});
 
-	test('closing keeps the content, inert, until its wrapper finishes shrinking; reopening shows it at once', () => {
+	test('opening takes the flow at once, and the content, mounted off the edge, slides in', () => {
+		allow_motion();
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		end_transition(panel(view.target));
+		assert.isNull(content(view.target), 'closed');
+
+		const reads = watch_panel_reads();
+		click_button(view.target, 'details');
+		assert.isTrue(in_flow(view.target), 'the panes resize at once');
+		assert.deepEqual(reads, [false], 'styled off the edge before the drawer opened');
+		const shown = content(view.target);
+		assert.ok(shown);
+		assert.isFalse(shown.inert, 'usable as it slides in');
+
+		end_transition(panel(view.target));
+		assert.ok(content(view.target), 'the end of the open changes nothing');
+		assert.deepEqual(reads, [false]);
+	});
+
+	test('closing leaves the flow at once, and the content stays, inert, until its own slide ends', () => {
 		allow_motion();
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 
 		click_button(view.target, 'details');
-		assert.isFalse(drawer(view.target).classList.contains('open'), 'the wrapper shrinks');
+		assert.isFalse(in_flow(view.target), 'the panes widen at once');
 		const closing = content(view.target);
-		assert.ok(closing, 'the content stays while the wrapper shrinks');
+		assert.ok(closing, 'the content stays as it slides out');
 		assert.isTrue(closing.inert, 'out of the tab order and the accessibility tree');
 
-		// a transition inside the drawer ends nothing
-		end_transition(closing.querySelector('h4') ?? closing, 'opacity');
+		// only the panel's own transform ends it
+		const inner = panel(view.target).querySelector('h4');
+		assert.ok(inner);
+		end_transition(inner);
+		end_transition(panel(view.target), 'opacity');
 		end_transition(closing);
-		end_transition(drawer(view.target), 'opacity');
-		assert.ok(content(view.target), "only the wrapper's own width");
-
 		end_transition(drawer(view.target));
-		assert.isNull(content(view.target), 'closed');
+		end_transition(drawer(view.target), 'width');
+		assert.ok(content(view.target), "only the panel's own transform");
 
-		click_button(view.target, 'details');
-		assert.isTrue(drawer(view.target).classList.contains('open'));
-		const reopened = content(view.target);
-		assert.ok(reopened, 'shown as the wrapper grows');
-		assert.isFalse(reopened.inert);
+		end_transition(panel(view.target));
+		assert.isNull(content(view.target), 'closed');
+		assert.isFalse(in_flow(view.target));
 	});
 
-	test('reopening mid-close keeps the content', () => {
+	test('reopening mid-close keeps the content, usable at once, sliding back from where it is', () => {
 		allow_motion();
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
+		const original = panel(view.target);
 		click_button(view.target, 'details');
+
+		const reads = watch_panel_reads();
 		click_button(view.target, 'details');
-		// the close's transition is cancelled, unheard, and the open's own ends with the drawer open
-		end_transition(drawer(view.target));
+		assert.isTrue(in_flow(view.target));
+		assert.strictEqual(panel(view.target), original, 'not remounted');
+		assert.deepEqual(reads, [], 'not restarted off the edge');
 		const shown = content(view.target);
 		assert.ok(shown);
 		assert.isFalse(shown.inert);
+
+		// the close's slide is cancelled, unheard, and the open's own ends with the drawer open
+		end_transition(panel(view.target));
+		assert.ok(content(view.target));
 	});
 
-	test("closing during the open's transition keeps the content for the close's own", () => {
+	test("closing during the open's slide keeps the content for the close's own", () => {
 		allow_motion();
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		click_button(view.target, 'details');
-		end_transition(drawer(view.target));
+		end_transition(panel(view.target));
 		assert.isNull(content(view.target), 'closed');
 
 		click_button(view.target, 'details');
 		click_button(view.target, 'details');
-		// the browser cancels the open's transition as the close's starts
-		end_transition(drawer(view.target), 'width', 'transitioncancel');
+		assert.isFalse(in_flow(view.target));
+		// the browser cancels the open's slide as the close's starts
+		end_transition(panel(view.target), 'transform', 'transitioncancel');
 		const closing = content(view.target);
-		assert.ok(closing, 'still shown as the wrapper shrinks');
+		assert.ok(closing, 'still sliding out');
 		assert.isTrue(closing.inert);
 
-		end_transition(drawer(view.target));
+		end_transition(panel(view.target));
 		assert.isNull(content(view.target), 'closed');
 	});
 
-	test('with no motion, closing hides the content at once', () => {
+	test('with no motion, closing hides the content at once, and opening shows it', () => {
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		click_button(view.target, 'details');
+		assert.isFalse(in_flow(view.target));
 		assert.isNull(content(view.target));
+
+		click_button(view.target, 'details');
+		assert.isTrue(in_flow(view.target));
+		const shown = content(view.target);
+		assert.ok(shown);
+		assert.isFalse(shown.inert);
 	});
 
 	test('a closed drawer stays closed across remounts, with nothing to animate', () => {
@@ -1147,7 +1215,7 @@ describe('DiskfileMarkdownView details drawer', () => {
 		assert.isFalse(app.ui.show_markdown_details);
 
 		const second = render(DiskfileMarkdownView, { diskfile: a });
-		assert.isFalse(drawer(second.target).classList.contains('open'));
+		assert.isFalse(in_flow(second.target));
 		assert.isNull(content(second.target));
 	});
 });

@@ -1113,10 +1113,13 @@ a modal dialog is open. The editor's sidebar is a
 drawer there, adding the document's outline and its broken links: clicking
 either scrolls the preview to it and puts the editor's caret at its source,
 in whichever panes are shown. The drawer is open by default and its state is
-app-wide (`Ui.show_markdown_details`), so it holds across files. It closes by
-shrinking its wrapper's width, which the panes beside it follow, while its
-content keeps the drawer's width, clipped rather than re-wrapped, inert, and
-gone once the wrapper's transition ends (at once with reduced motion).
+app-wide (`Ui.show_markdown_details`), so it holds across files. Toggling it
+resizes the panes beside it once, at the start — its wrapper takes the
+drawer's width in the flow, or gives it up, at once — and only its content
+animates, sliding in from beyond the view's edge or back out over the
+widened panes, at the drawer's width so nothing re-wraps, clipped to the
+drawer's box. Closing, the content is inert, and gone once its slide ends
+(at once with reduced motion).
 `DiskfileView` keys the view on the file, so a switch mounts a fresh one and
 nothing a view holds for its file — a caret, the outline's lights, a playback
 position — carries over to the next, and a return to a file shows it from
