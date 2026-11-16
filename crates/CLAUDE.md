@@ -533,11 +533,12 @@ joined after the drain, before PTY teardown.
   bare `delete`), every event resolved by `lstat` so late or reordered removes
   can't drop an existing file, rename-aware (old path `delete`, new path
   `add`), contents sent only when they changed (a change that moved an indexed
-  file's timestamps and not the contents the index holds for it is a `touch`,
-  whose `disknode` has no `contents` key — `filer::DisknodeMetadata` — unless
-  an unbroadcast `add` / `change` / `delete` for the path is pending, which
-  then carries them; the index holds no contents for a file it didn't load, so
-  every change to one is a `touch`), ignored paths filtered before the bounded
+  file's metadata — its `size` or timestamps — and not the contents the index
+  holds for it is a `touch`, whose `disknode` has no `contents` key —
+  `filer::DisknodeMetadata` — unless an unbroadcast `add` / `change` /
+  `delete` for the path is pending, which then carries them; the index holds
+  no contents for a file it didn't load, so every change to one is a
+  `touch`), ignored paths filtered before the bounded
   event channel with a coalesced root rescan on overflow, per-watcher ignore
   config, in-memory file index returned by `session_load` and
   `workspace_open`, symlinks skipped; ignores

@@ -251,6 +251,28 @@ describe('Sortable', () => {
 			assert.strictEqual(item3.value, 5);
 		});
 
+		test('sorts null and undefined values last in both directions, ties by cid', () => {
+			const a = new TestCell(app, create_uuid(), 'a', 0, 100);
+			const b = new TestCell(app, create_uuid(), 'b', 10, 200);
+			const c = new TestCell(app, create_uuid(), 'c', 0, 300);
+			const d = new TestCell(app, create_uuid(), 'd', 5, 400);
+			// the schema refuses a missing value, so set them past it, as an unknown size arrives
+			a.value = null as unknown as number;
+			c.value = undefined as unknown as number;
+			const mixed = [a, b, c, d];
+
+			const asc = [...mixed].sort(sort_by_numeric<TestCell>('v', 'V', 'value').fn);
+			assert.deepEqual(
+				asc.map((cell) => cell.name),
+				['d', 'b', 'c', 'a']
+			);
+			const desc = [...mixed].sort(sort_by_numeric<TestCell>('v', 'V', 'value', 'desc').fn);
+			assert.deepEqual(
+				desc.map((cell) => cell.name),
+				['b', 'd', 'c', 'a']
+			);
+		});
+
 		test('maintains stable sort order with equal values using cid', () => {
 			// Create items with equal values but different cids
 			const equal_items = [

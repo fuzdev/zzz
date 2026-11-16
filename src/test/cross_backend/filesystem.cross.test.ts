@@ -897,6 +897,7 @@ describe('filesystem cross-backend', () => {
 		}
 	});
 	test('filer_change_sends_contents_only_when_they_changed', async () => {
+		const CHANGED = 'chängéd';
 		const fixture = await setup_test();
 		const tmp_dir = join(tmpdir(), `zzz_cross_filer_${randomUUID()}`);
 		await mkdir(tmp_dir, { recursive: true });
@@ -933,13 +934,14 @@ describe('filesystem cross-backend', () => {
 					return parse_or_throw(FilerChangeInput, msg.params);
 				};
 
-				// an mtime-only change: the timestamps, and no contents key at all
+				// an mtime-only change: the metadata, and no contents key at all
 				let from = ws.messages.length;
 				await utimes(path, new Date(1_000_000), new Date(1_000_000));
 				const touched = await next_change(from);
 				assert.equal(touched.change.type, 'touch');
 				assert.notProperty(touched.disknode, 'contents');
 				assert.equal(touched.disknode.mtime, 1_000_000);
+				assert.equal(touched.disknode.size, 'unchanged'.length);
 
 				// a rewrite of the same bytes is the same
 				from = ws.messages.length;
@@ -949,12 +951,13 @@ describe('filesystem cross-backend', () => {
 				assert.equal(rewritten.change.type, 'touch');
 				assert.notProperty(rewritten.disknode, 'contents');
 
-				// new contents are sent
+				// new contents are sent, with the size in bytes, not characters
 				from = ws.messages.length;
-				await writeFile(path, 'changed', 'utf-8');
+				await writeFile(path, CHANGED, 'utf-8');
 				const changed = await next_change(from);
 				assert.equal(changed.change.type, 'change');
-				assert.propertyVal(changed.disknode, 'contents', 'changed');
+				assert.propertyVal(changed.disknode, 'contents', CHANGED);
+				assert.equal(changed.disknode.size, Buffer.byteLength(CHANGED));
 
 				// a snapshot still has the file whole, with the latest timestamps
 				const session = await rpc_call({
@@ -966,7 +969,9 @@ describe('filesystem cross-backend', () => {
 				assert.ok(session.ok);
 				const files = ((session.result as Record<string, unknown>).data as Record<string, unknown>)
 					.files as Array<Record<string, unknown>>;
-				assert.equal(files.find((f) => f.id === path)?.contents, 'changed');
+				const snapshot_file = files.find((f) => f.id === path);
+				assert.equal(snapshot_file?.contents, CHANGED);
+				assert.equal(snapshot_file?.size, Buffer.byteLength(CHANGED));
 			} finally {
 				await ws.close();
 			}

@@ -226,8 +226,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Applies a `touch`: the file's metadata changed on disk and the contents
 	 * the backend holds for it did not, so the diskfile keeps the content it
-	 * has — loaded or not — and takes the new `mtime`. For a file whose
-	 * content isn't loaded the backend holds none, so every change to it
+	 * has — loaded or not — and takes the new `size` and `mtime`. For a file
+	 * whose content isn't loaded the backend holds none, so every change to it
 	 * arrives this way. Nothing else changes: no editor state is notified,
 	 * since there's no new content to weigh against a draft.
 	 *
@@ -240,6 +240,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	touch(metadata: DisknodeMetadata): boolean {
 		const existing = this.items.by_optional('by_path', metadata.id);
 		if (!existing || existing.deleted_on_disk) return false;
+		if (existing.size !== metadata.size) existing.size = metadata.size;
 		if (existing.mtime !== metadata.mtime) existing.mtime = metadata.mtime;
 		return true;
 	}
@@ -311,10 +312,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * path in place — keeping its id, so tabs, selection, and parts stay attached.
 	 * A diskfile kept after a delete (see `remove_by_path`) is reattached this
 	 * way when its path reappears on disk. An existing diskfile whose content
-	 * and dependency data already match is left untouched but for its `mtime`,
-	 * so a resync that re-sends every file doesn't churn the unchanged ones. A content change is
-	 * recorded in the file's editing state, if it has one
-	 * (`DiskfileEditorState.check_disk_changes`).
+	 * and dependency data already match is left untouched but for its `size`
+	 * and `mtime`, so a resync that re-sends every file doesn't churn the
+	 * unchanged ones. A content change is recorded in the file's editing
+	 * state, if it has one (`DiskfileEditorState.check_disk_changes`).
 	 */
 	upsert(disknode: SerializableDisknode): Diskfile {
 		const existing = this.items.by_optional('by_path', disknode.id);
@@ -322,8 +323,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			return this.add(disknode_to_diskfile_json(disknode));
 		}
 		if (!existing.deleted_on_disk && diskfile_matches(existing, disknode)) {
-			// the one thing a rewrite to the same content changes — and the only
+			// the metadata a rewrite to the same content changes — and the only
 			// sign of a change to a file whose content isn't loaded
+			if (existing.size !== disknode.size) existing.size = disknode.size;
 			if (existing.mtime !== disknode.mtime) existing.mtime = disknode.mtime;
 			return existing;
 		}

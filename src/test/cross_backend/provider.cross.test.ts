@@ -141,6 +141,7 @@ describe('provider + session cross-backend', () => {
 			assert.notProperty(test_file, 'dependents');
 			assert.notProperty(test_file, 'dependencies');
 			assert.equal(typeof test_file.mtime, 'number');
+			assert.equal(test_file.size, Buffer.byteLength(content), 'size in bytes');
 		} finally {
 			await rm(file_path, { force: true });
 		}

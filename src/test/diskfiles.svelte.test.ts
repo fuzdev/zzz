@@ -28,6 +28,7 @@ const create_disknode = (
 	id: path,
 	source_dir: SOURCE_DIR,
 	contents,
+	size: 1,
 	ctime: 1,
 	mtime: 1
 });
@@ -106,6 +107,29 @@ describe('upsert by path', () => {
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), diskfile);
 		assert.strictEqual(diskfile.mtime, 5);
 		assert.strictEqual(count_by_path(PATH_A), 1);
+	});
+
+	test('the size on disk arrives whether or not the content is loaded, and moves with changes and touches', () => {
+		app.diskfiles.add_initial([{ ...create_disknode(PATH_A, null), size: 5_000_000 }]);
+		const diskfile = app.diskfiles.get_by_path(PATH_A)!;
+		assert.isNull(diskfile.content);
+		assert.strictEqual(diskfile.size, 5_000_000);
+
+		app.diskfiles.handle_change({
+			change: { type: 'change', path: PATH_A },
+			disknode: { ...create_disknode(PATH_A, null), size: 6_000_000 }
+		});
+		assert.strictEqual(diskfile.size, 6_000_000);
+
+		const { contents: _, ...metadata } = create_disknode(PATH_A, null);
+		app.diskfiles.handle_change({
+			change: { type: 'touch', path: PATH_A },
+			disknode: { ...metadata, size: 7_000_000 }
+		});
+		assert.strictEqual(diskfile.size, 7_000_000);
+
+		app.diskfiles.add_initial([{ ...create_disknode(PATH_B, 'b'), size: null }]);
+		assert.isNull(app.diskfiles.get_by_path(PATH_B)?.size, 'unknown stays unknown');
 	});
 
 	test('a source_dir change alone still upserts', () => {

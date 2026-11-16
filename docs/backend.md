@@ -418,7 +418,8 @@ commands):
   broadcasts in an open workspace (file create; rename → `delete` of the old
   path + `add` of the new; an mtime-only change or a rewrite of the same
   bytes → a `touch` with no `contents` key, new contents → a `change` with
-  them, each parsed against the TS spec).
+  them, each parsed against the TS spec, and each disknode's `size` the
+  file's bytes).
 - **`file_bytes.cross.test.ts`** — the byte routes (`/api/files/bytes`),
   which sit outside the action system, so this suite is what pins their
   posture: reads (whole, `Range` → 206 / 416, HEAD), the response-header
@@ -498,7 +499,7 @@ commands):
   and other accounts' not), and a self-deleted account's terminal processes
   being reaped.
 - **`provider.cross.test.ts`** — `provider_load_status` (no-key status) plus `session_load`
-  (zzz_dir file listing with contents + recursive subdirectory walk; `file_roots`
+  (zzz_dir file listing with contents and size + recursive subdirectory walk; `file_roots`
   covering `zzz_dir`, the scoped dirs, and every file; a stable
   `server_instance_id`).
 - **`completion.cross.test.ts`** — `completion_create` on a provider with no

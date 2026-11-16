@@ -28,7 +28,7 @@ let editor_state: DiskfileEditorState;
 const broadcast = (contents: string): void => {
 	app.diskfiles.handle_change({
 		change: { type: 'change', path: PATH },
-		disknode: { id: PATH, source_dir: SOURCE_DIR, contents, ctime: 1, mtime: 1 }
+		disknode: { id: PATH, source_dir: SOURCE_DIR, contents, size: 1, ctime: 1, mtime: 1 }
 	});
 };
 

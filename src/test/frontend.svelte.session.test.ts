@@ -27,6 +27,7 @@ const create_disknode = (path: DiskfilePath, contents: string | null): Serializa
 	id: path,
 	source_dir: ZZZ_DIR,
 	contents,
+	size: 1,
 	ctime: 1,
 	mtime: 1
 });

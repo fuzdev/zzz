@@ -66,10 +66,17 @@ export const DiskfileUnloadedReason = one_of(['too_large', 'not_utf8']);
 export type DiskfileUnloadedReason = Infer<typeof DiskfileUnloadedReason>;
 
 // TODO hacky, uses the serializable form of the Gro `Disknode` (which uses maps)
+/**
+ * A file the backend indexes. `size` is the file's size in bytes, known
+ * whether or not its contents are loaded — `null` when the backend can't
+ * say (a deleted file's node). `ctime` / `mtime` are milliseconds since the
+ * epoch, `null` when the backend can't say.
+ */
 export const SerializableDisknode = object({
 	id: DiskfilePath,
 	source_dir: DiskfileDirectoryPath,
 	contents: nullable(string),
+	size: nullable(number),
 	ctime: nullable(number),
 	mtime: nullable(number)
 });
@@ -95,6 +102,11 @@ export const DiskfileJson = cell_json_schema(
 		path: DiskfilePath,
 		source_dir: DiskfileDirectoryPath,
 		content: with_default(nullable(string), null),
+		/**
+		 * The file's size on disk in bytes — `null` when the backend couldn't
+		 * say. Known whether or not `content` is loaded.
+		 */
+		size: with_default(nullable(number), null),
 		/**
 		 * When the file was last modified on disk, in milliseconds since the
 		 * epoch — `null` when the backend couldn't say. It moves whenever the

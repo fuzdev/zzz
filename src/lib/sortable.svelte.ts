@@ -151,6 +151,8 @@ export const sort_by_text = <T extends Cell<any>>(
 // TODO @many these arent used in a typesafe way, asserting cell subtypes, maybe require the cell?
 /**
  * Creates a numeric sorter with optional direction.
+ * A `null` or `undefined` value (unknown, like a file's size the backend
+ * couldn't say) sorts after every known one in both directions.
  * Falls back to cell's `cid` for equal values.
  */
 export const sort_by_numeric = <T extends Cell<any>>(
@@ -165,8 +167,14 @@ export const sort_by_numeric = <T extends Cell<any>>(
 		fn: (item_a: T, item_b: T) => {
 			const a = item_a[field];
 			const b = item_b[field];
-			const result =
-				direction === 'asc' ? (a < b ? -1 : a > b ? 1 : 0) : a > b ? -1 : a < b ? 1 : 0;
+			let result: number;
+			if (a == null || b == null) {
+				// unknown values last, whichever the direction
+				result = Number(a == null) - Number(b == null);
+			} else {
+				result = a < b ? -1 : a > b ? 1 : 0;
+				if (direction === 'desc') result = -result;
+			}
 			// If values are equal, sort by cid for stable ordering
 			return result !== 0 ? result : item_b.cid - item_a.cid;
 		}

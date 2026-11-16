@@ -226,6 +226,7 @@ mod tests {
                     "id": "/s/a.txt",
                     "source_dir": "/w/",
                     "contents": "a",
+                    "size": 1,
                     "ctime": 1.5,
                     "mtime": 1.5,
                 }],

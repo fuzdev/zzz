@@ -34,6 +34,7 @@ const create_disknode = (path: DiskfilePath, contents: string): SerializableDisk
 	id: path,
 	source_dir: SOURCE_DIR,
 	contents,
+	size: 1,
 	ctime: 1,
 	mtime: 1
 });

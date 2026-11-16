@@ -115,6 +115,7 @@ export const disknode_to_diskfile_json = (
 		source_dir: disknode.source_dir,
 		path: disknode.id, // notice the Disknode `id` is a path
 		content: disknode.contents, // notice `contents` -> `content`
+		size: disknode.size,
 		mtime: disknode.mtime,
 		created,
 		updated:

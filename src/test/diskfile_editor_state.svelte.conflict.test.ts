@@ -32,6 +32,7 @@ const broadcast = (contents: string): void => {
 			id: PATH,
 			source_dir: SOURCE_DIR,
 			contents,
+			size: 1,
 			ctime: 1,
 			mtime: 1
 		}

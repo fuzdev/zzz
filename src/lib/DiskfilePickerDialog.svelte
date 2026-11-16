@@ -1,3 +1,25 @@
+<script lang="ts" module>
+	import type { Diskfile } from './diskfile.svelte.ts';
+	import { sort_by_text, sort_by_numeric, type Sorter } from './sortable.svelte.ts';
+
+	/**
+	 * The picker's sort orders. The size orders go by the size on disk, so a
+	 * file whose content isn't loaded sorts by its bytes too, and a file of
+	 * unknown size goes last either way.
+	 */
+	export const diskfile_picker_sorters: Array<Sorter<Diskfile>> = [
+		// TODO @many rework API to avoid casting
+		sort_by_text<Diskfile>('path_asc', 'path (a-z)', 'path'),
+		sort_by_text<Diskfile>('path_desc', 'path (z-a)', 'path', 'desc'),
+		sort_by_numeric('created_newest', 'newest first', 'created_date', 'desc'),
+		sort_by_numeric('created_oldest', 'oldest first', 'created_date', 'asc'),
+		sort_by_numeric('updated_recently', 'recently updated', 'updated_date', 'desc'),
+		sort_by_numeric('updated_oldest', 'least recently updated', 'updated_date', 'asc'),
+		sort_by_numeric<Diskfile>('size_largest', 'largest first', 'size', 'desc'),
+		sort_by_numeric<Diskfile>('size_smallest', 'smallest first', 'size', 'asc')
+	];
+</script>
+
 <script lang="ts">
 	import type { ComponentProps } from 'svelte';
 	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
@@ -6,8 +28,6 @@
 
 	import PickerDialog from './PickerDialog.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
-	import type { Diskfile } from './diskfile.svelte.ts';
-	import { sort_by_text, sort_by_numeric } from './sortable.svelte.ts';
 	import DiskfileListitem from './DiskfileListitem.svelte';
 
 	let {
@@ -37,17 +57,7 @@
 	{filter}
 	{exclude_ids}
 	{dialog_props}
-	sorters={[
-		// TODO @many rework API to avoid casting
-		sort_by_text<Diskfile>('path_asc', 'path (a-z)', 'path'),
-		sort_by_text<Diskfile>('path_desc', 'path (z-a)', 'path', 'desc'),
-		sort_by_numeric('created_newest', 'newest first', 'created_date', 'desc'),
-		sort_by_numeric('created_oldest', 'oldest first', 'created_date', 'asc'),
-		sort_by_numeric('updated_recently', 'recently updated', 'updated_date', 'desc'),
-		sort_by_numeric('updated_oldest', 'least recently updated', 'updated_date', 'asc'),
-		sort_by_numeric<Diskfile>('font_size_largest', 'largest first', 'content_length', 'desc'),
-		sort_by_numeric<Diskfile>('font_size_smallest', 'smallest first', 'content_length', 'asc')
-	]}
+	sorters={diskfile_picker_sorters}
 	sort_key_default="path_asc"
 	show_sort_controls
 	heading="Pick a file"

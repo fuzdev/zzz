@@ -521,6 +521,7 @@ mod tests {
                         "id": "/w/b.bin",
                         "source_dir": "/w/",
                         "contents": null,
+                        "size": null,
                         "ctime": null,
                         "mtime": null,
                     }],

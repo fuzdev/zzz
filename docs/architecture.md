@@ -334,7 +334,7 @@ is not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 - `Capabilities` (`capabilities.svelte.ts`) — Feature capability tracking
 - `Chat` (`chat.svelte.ts`) — Chat container with threads
 - `Chats` (`chats.svelte.ts`) — Collection of chats
-- `Diskfile` (`diskfile.svelte.ts`) — Single file on disk (its content when loaded, and its `mtime`)
+- `Diskfile` (`diskfile.svelte.ts`) — Single file on disk (its content when loaded, its `size` in bytes, and its `mtime`)
 - `DiskfileTab` (`diskfile_tab.svelte.ts`) — Editor tab for a file
 - `DiskfileTabs` (`diskfile_tabs.svelte.ts`) — Tab manager
 - `DiskfileHistory` (`diskfile_history.svelte.ts`) — File edit history (owned by the file's app-level `DiskfileEditorState`)
@@ -1084,7 +1084,7 @@ These routes are outside the action system — they don't appear in the actions 
 
 ### Filer
 
-`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. A change that moved an indexed file's timestamps and left the contents the index holds for it as they were (a `touch`, a rewrite of the same bytes) is a `touch`: its `disknode` is the file's metadata with no `contents` key (`DisknodeMetadata`), so the contents aren't sent again — a client holding the file keeps the content it has (`Diskfiles.touch`), and one that doesn't ignores it. The index holds no contents for a file it didn't load, so every change to such a file is a `touch`, and what shows it changed is its `mtime`. Every other change carries the whole disknode, where `contents: null` keeps its one meaning: not loaded. A touch folded into an unbroadcast `add` or `change` is sent as that change, contents included. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
+`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, contents, size, ctime, mtime}`: `id` is its path, `contents` its text or `null` when not loaded, and `size` its bytes from the `lstat` the filer read it after — known whether or not the contents are loaded, `null` only on a `delete`'s node. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. A change that moved an indexed file's metadata (its size or timestamps) and left the contents the index holds for it as they were (a `touch`, a rewrite of the same bytes) is a `touch`: its `disknode` is the file's metadata with no `contents` key (`DisknodeMetadata`), so the contents aren't sent again — a client holding the file keeps the content it has (`Diskfiles.touch`), and one that doesn't ignores it. The index holds no contents for a file it didn't load, so every change to such a file is a `touch`, and what shows it changed is its `size` and `mtime`. Every other change carries the whole disknode, where `contents: null` keeps its one meaning: not loaded. A touch folded into an unbroadcast `add` or `change` is sent as that change, contents included. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
 
 Watches are per directory: the filer's own walk (on a blocking thread) adds one non-recursive watch to each directory it indexes — never inside ignored, symlinked, or non-UTF-8 directories — watching each before listing it, so nothing created in between is missed. A directory that appears gets watches for its subtree when it's synced; one that's removed or renamed away has them dropped (two paths sharing one inode, like a renamed directory's old and new path or a bind mount, share one kernel watch, removed only with its last path). An unreadable subdirectory is skipped and logged once, and picked up once it's readable again; one made unreadable later drops out of the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's indexed under it and retries. Rescans (`session_load`, overflow recovery) re-read only files whose `lstat` identity or change stamps moved, and trust a stamp only once the file has been still for two seconds (git's "racily clean" rule), since same-size writes within one timestamp tick look identical.
 
@@ -1455,9 +1455,11 @@ The explorer and the file picker stay responsive with tens of thousands of
 files: their `SortableList`s are `windowed`, rendering only the rows in or near
 the scroll viewport (every row the same, measured height) with padding standing
 in for the rest, and re-sorting from the previous order (`sort_with_hint`), so
-a file added or removed doesn't pay for a full sort. The picker also filters by
-path (case-insensitive substring). Rows scrolled out of range unmount, so focus
-on one is lost when it scrolls away.
+a file added or removed doesn't pay for a full sort. The picker's size orders
+go by `Diskfile.size`, the bytes on disk, so files whose content isn't loaded
+sort among the rest, and a file of unknown size goes last in both directions.
+The picker also filters by path (case-insensitive substring). Rows scrolled
+out of range unmount, so focus on one is lost when it scrolls away.
 
 ## Spaces and Workspaces
 
@@ -1710,7 +1712,7 @@ Population, per capability:
   changes is sent with a yield after each, so each socket's writer can take a
   frame before the next is queued — a client that keeps up gets the batch
   frame by frame, and one that falls more than the budget behind is closed
-  like any other. A change that only moved a file's timestamps (a `touch`, a
+  like any other. A change that only moved a file's metadata (a `touch`, a
   rewrite of the same bytes) is sent without the contents, so it never weighs
   on the budget; a large batch of files whose contents did change still does.
   Terminal output is paced instead (see Terminal output pacing below), so a

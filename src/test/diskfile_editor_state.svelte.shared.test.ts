@@ -27,6 +27,7 @@ const upsert = (path: DiskfilePath, contents: string): Diskfile =>
 		id: path,
 		source_dir: SOURCE_DIR,
 		contents,
+		size: 1,
 		ctime: 1,
 		mtime: 1
 	});

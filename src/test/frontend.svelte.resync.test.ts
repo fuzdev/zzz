@@ -36,6 +36,7 @@ const create_disknode = (path: DiskfilePath, contents = 'contents'): Serializabl
 	id: path,
 	source_dir: path.startsWith(WS_DIR) ? WS_DIR : ZZZ_DIR,
 	contents,
+	size: 1,
 	ctime: 1,
 	mtime: 1
 });

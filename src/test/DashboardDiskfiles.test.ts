@@ -74,6 +74,7 @@ const write_file = (path: string, contents: string): Diskfile =>
 		id: parse_or_throw(DiskfilePath, path),
 		source_dir: SOURCE_DIR,
 		contents,
+		size: 1,
 		ctime: 1,
 		mtime: 1
 	});

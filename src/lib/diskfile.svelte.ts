@@ -13,6 +13,8 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 
 	content: string | null = $state.raw()!;
 
+	size: number | null = $state.raw()!;
+
 	mtime: number | null = $state.raw()!;
 
 	/**
