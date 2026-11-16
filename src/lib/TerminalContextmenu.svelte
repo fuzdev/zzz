@@ -45,5 +45,8 @@
 	{#if get_terminal_text}
 		<ContextmenuEntryCopyToClipboard content={get_terminal_text} label="copy output" />
 	{/if}
-	<ContextmenuEntryCopyToClipboard content={'$ ' + display_command} label="copy command" />
+	<!-- a bare shell (`Terminals.open_shell`) has no command to copy -->
+	{#if display_command}
+		<ContextmenuEntryCopyToClipboard content={'$ ' + display_command} label="copy command" />
+	{/if}
 {/snippet}

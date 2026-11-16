@@ -129,6 +129,17 @@ export class Terminal extends Cell<typeof TerminalJson> {
 
 	readonly display_command: string = $derived(format_terminal_command(this.command, this.args));
 
+	/**
+	 * What the terminal is called where it's shown: `$` and its command line,
+	 * or for a bare shell (`Terminals.open_shell`), which types no command, the
+	 * folder it started in.
+	 */
+	readonly display_label: string = $derived(
+		this.display_command
+			? `$ ${this.display_command}`
+			: `shell in ${this.cwd ?? 'the daemon’s folder'}`
+	);
+
 	readonly running: boolean = $derived(this.status === 'running');
 
 	/** Output kept for replay into views mounted after it arrived. */

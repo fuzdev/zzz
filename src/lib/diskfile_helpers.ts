@@ -76,12 +76,67 @@ export const to_relative_path = (path: string, parent: string): string => {
 };
 
 /**
- * Directory names the file index never enters, wherever they appear under a
- * root — the backend filer's default ignores (`DEFAULT_IGNORED_DIRS` in
- * `crates/zzz_server/src/filer.rs`) and the credential directories it skips
- * too (`CREDENTIAL_DIR_NAMES` in `crates/zzz_server/src/scoped_fs.rs`), which
- * a test holds this to. A link into one is `skipped`, not `broken`, and the
- * file tree shows none as a folder (see `to_diskfile_tree_rows`).
+ * The innermost of `roots` holding `path` below it — the root the file tree
+ * shows `path` under (`DiskfileTreeState.reveal`), and the one a copied
+ * relative path is relative to. A root isn't below itself, so a root's own
+ * path finds only a root around it.
+ *
+ * @param path - a file's path, or a folder's with a trailing `/`
+ * @param roots - the indexed roots, each with a trailing `/`
+ * @returns the innermost root holding `path`, `null` when none does
+ */
+export const to_innermost_root = (path: string, roots: ReadonlyArray<string>): string | null => {
+	let found: string | null = null;
+	for (const root of roots) {
+		if (path.length > root.length && path.startsWith(root)) {
+			if (!found || root.length > found.length) found = root;
+		}
+	}
+	return found;
+};
+
+/** What a contextmenu copies for a file or folder — see `to_diskfile_copy_paths`. */
+export interface DiskfileCopyPaths {
+	/** The absolute path, without a folder's trailing `/`. */
+	absolute: string;
+	/** Relative to the innermost root holding it (`to_innermost_root`), `null` under none. */
+	relative: string | null;
+	/** The last segment. */
+	name: string;
+}
+
+/**
+ * The paths a file's or folder's contextmenu copies. A folder's are written
+ * without its trailing `/`, as a shell or another editor takes them. Relative
+ * paths go from the innermost root, whichever root the row is shown under, so
+ * a file copies the same relative path from the list, a tab, or either of two
+ * overlapping roots.
+ *
+ * @param path - a file's path, or a folder's with a trailing `/`
+ * @param roots - the indexed roots, each with a trailing `/`
+ */
+export const to_diskfile_copy_paths = (
+	path: string,
+	roots: ReadonlyArray<string>
+): DiskfileCopyPaths => {
+	const absolute = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+	const root = to_innermost_root(path, roots);
+	return {
+		absolute,
+		relative: root && absolute.slice(root.length),
+		name: absolute.slice(absolute.lastIndexOf('/') + 1)
+	};
+};
+
+/**
+ * Names the file index never enters or lists, wherever they appear under a
+ * root — a folder's or a file's — the backend filer's default ignores
+ * (`DEFAULT_IGNORED_DIRS` in `crates/zzz_server/src/filer.rs`) and the
+ * credential directories it skips too (`CREDENTIAL_DIR_NAMES` in
+ * `crates/zzz_server/src/scoped_fs.rs`), which a test holds this to. Read
+ * through `is_file_index_ignored_name`: a link into one is `skipped`, not
+ * `broken`, and the file tree shows none as a folder (see
+ * `to_diskfile_tree_rows`).
  */
 export const FILE_INDEX_IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
 	'.git',
@@ -104,6 +159,35 @@ export const FILE_INDEX_IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
  * holds this to).
  */
 export const FILE_INDEX_TEMP_FILE_PREFIX = '.zzz-tmp-';
+
+/**
+ * Whether the file index skips any path part named `name`, file or folder:
+ * an ignored name (`FILE_INDEX_IGNORED_DIR_NAMES`) or a staging file's
+ * (`FILE_INDEX_TEMP_FILE_PREFIX`) — the filer's `is_ignored_name` in
+ * `crates/zzz_server/src/filer.rs`. The one rule the explorer, the tree, and
+ * markdown links share.
+ */
+export const is_file_index_ignored_name = (name: string): boolean =>
+	FILE_INDEX_IGNORED_DIR_NAMES.has(name) || name.startsWith(FILE_INDEX_TEMP_FILE_PREFIX);
+
+/**
+ * The first part of `path` below `root` that the file index skips: a part
+ * with an ignored name (the filer skips a file named so too) or a staging
+ * file's name — see `is_file_index_ignored_name`. The filer never lists such
+ * a path from `root`, so a file or folder created there never shows.
+ *
+ * @param path - a normalized file path, or a folder's with a trailing `/`
+ * @param root - the root it's under, with a trailing `/`
+ * @returns the skipped part's name, `null` when the index enters it all
+ */
+export const to_unindexed_segment = (path: string, root: string): string | null => {
+	if (!path.startsWith(root)) return null;
+	const rest = path.slice(root.length);
+	for (const segment of (rest.endsWith('/') ? rest.slice(0, -1) : rest).split('/')) {
+		if (is_file_index_ignored_name(segment)) return segment;
+	}
+	return null;
+};
 
 /**
  * The directories holding the file at `path`, each with a trailing `/`:

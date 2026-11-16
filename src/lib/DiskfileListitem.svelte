@@ -12,11 +12,14 @@
 	const {
 		diskfile,
 		selected = false,
+		reveal_in_tree = false,
 		attrs,
 		onselect
 	}: {
 		diskfile: Diskfile;
 		selected?: boolean | undefined;
+		/** Whether its contextmenu offers "reveal in tree" — see `DiskfileContextmenu`. */
+		reveal_in_tree?: boolean | undefined;
 		attrs?: Record<string, unknown>;
 		/**
 		 * `open_not_preview` indicates a "open_not_preview select"
@@ -32,7 +35,7 @@
 	// TODO add a visible status when open in a tab
 </script>
 
-<DiskfileContextmenu {diskfile}>
+<DiskfileContextmenu {diskfile} {reveal_in_tree}>
 	<div
 		role="button"
 		tabindex="0"

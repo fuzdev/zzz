@@ -1008,11 +1008,15 @@ in a non-writable directory fails with `directory_not_writable`. Only regular
 files are written — a directory, FIFO, socket, or device node target is
 refused. A crash mid-save can orphan a staging file; the filer's walk deletes
 exact `.zzz-tmp-<uuid>` regular files older than an hour (ones inside ignored
-directories stay). The files page's new file and new folder go in the active
-workspace (`Diskfiles.new_files_dir`) and are disabled while no workspace is
-open; a failure (say a non-writable directory) is reported, never silent, as
-is a failed delete (each alert leads with the name or path). The entered
-name is trimmed, leading slashes dropped; refused (`parse_new_diskfile_name`):
+directories stay). The files page's header buttons for a new file and a new
+folder create in the active workspace (`Diskfiles.new_files_dir`) and are
+disabled while no workspace is open; the file tree's folder menu creates in
+that folder (see § File Editing, creating in the tree). In the list the
+name is asked for with a prompt, and a failure (say a non-writable
+directory) is reported in an alert, never silent, as is a failed delete (each
+alert leads with the name or path); in the tree it's typed inline, and a
+failure shows there. The entered name is trimmed, leading slashes dropped;
+refused (`parse_new_diskfile_name`):
 a blank name, one naming the workspace itself, a whitespace-only path
 segment, a `..` climbing out of the workspace, and a file name whose last
 segment is empty, `.`, or `..`. "New
@@ -1471,12 +1475,14 @@ path, and under it folders before files, each sorted by name (case-insensitive,
 numbers by value), with names relative to their folder. A chain of folders that
 each hold only the next shows as one row, `a/b/c`, expanded or collapsed as one.
 Folders come from the files (`Diskfiles.tree_index`, kept in step as files come
-and go), so an empty folder doesn't show; a root nested in another shows under
-it as a folder holding the same files, once it holds any, and those files stay
-in the outer root after the nested one closes — unless the outer root's walk
-never enters it (the app directory, whatever its name; a `.git`, `node_modules`,
-or other ignored folder; a `.zzz-tmp-` staging name), where it shows only as its
-own root. A file deleted on disk but kept for its draft stays in its folder,
+and go), so an empty folder doesn't show — except one created from the tree,
+which it keeps until a reload (`DiskfileTreeState.created_dirs`; one deleted
+meanwhile by another program lingers until then too); a root nested in another
+shows under it as a folder holding the same files, once it holds any, and those
+files stay in the outer root after the nested one closes — unless the outer
+root's walk never enters it (the app directory, whatever its name; a `.git`,
+`node_modules`, or other ignored name; a `.zzz-tmp-` staging name), where it
+shows only as its own root. A file deleted on disk but kept for its draft stays in its folder,
 marked like in the list. The expanded folders live on `DiskfilesEditor.tree`
 (`DiskfileTreeState`), so they survive a switch to the list and back. The tree
 is one flat, windowed list of its visible rows, and deriving them walks only the
@@ -1484,11 +1490,55 @@ expanded folders, so a large index costs what is open, not what is indexed.
 Keyboard: Up and Down move, Right expands a folder or moves into it, Left
 collapses it or moves to the parent, Home and End jump, Enter opens a file in a
 permanent tab, Space previews it, and either toggles a folder; the ContextMenu
-key (or Shift+F10) opens the active file's menu. Focus stays on the tree, which
+key (or Shift+F10) opens the active row's menu. Focus stays on the tree, which
 names the active row by `aria-activedescendant`, so it survives the row
 scrolling away. A click previews a file, a double click opens it, and a click
-toggles a folder. File rows have the file contextmenu; folder and root rows have
-none yet.
+toggles a folder.
+
+**The explorer's contextmenus.** A file's menu (`DiskfileContextmenu`, on list
+and tree rows, tabs, and the file views) copies the file's absolute path, its
+path relative to the innermost indexed root holding it (the same from any row
+showing it, `to_diskfile_copy_paths`), and its name; opens a terminal in its
+folder, unless the file is deleted on disk (a shell with that `cwd`, shown on
+the terminals page and named by its folder, since it runs no command); and, on
+list rows and tabs, reveals it in the tree (`DiskfilesEditor.reveal_in_tree`:
+switches the explorer to the tree, expands its folders, makes its row active,
+and scrolls to it). A folder or root row's menu (`DiskfileDirectoryContextmenu`)
+creates a new file or folder inside it, opens a terminal there, expands every
+folder below it or collapses them, and copies its path, relative path, and name
+— a root only its path. Expanding skips the folders the rows never show, and
+past `EXPAND_ALL_BELOW_CONFIRM_FILE_COUNT` files below (counted from the index's
+links, not walked) asks first: every file then shows, and each file change
+under it rederives them all. A compact row acts on its innermost folder.
+Rename, move, and deleting a folder wait on backend actions.
+
+**Creating in the tree** names the new file or folder inline, VS Code style: an
+input (`DiskfileTreeCreateInput`) shows as the folder's first child, expanded
+first; in tree mode the header's create buttons open it at the workspace's root
+row. Enter creates and Escape cancels, both returning focus to the tree unless
+the user has moved it elsewhere meanwhile; the tree leaves every key typed in
+the input to it, and its own arrows pass over the input's row. Leaving the
+input creates a valid name and drops a blank or refused one (a name the backend
+already refused isn't sent again), but not when the whole window lost focus or
+the row scrolled out of the window — the name being typed lives on the state
+(`DiskfileTreeState.creating`), and the input refocuses when it remounts with
+focus lost — if focus went elsewhere meanwhile, it's dropped instead. An input
+is dropped too when its folder stops showing (collapsed, emptied, its root
+closed) or the tree goes (a switch to the list). A name's problem shows under the row as it's typed,
+announced politely, except a file name's trailing `/`, a step on the way to
+`sub/x.md`; a refused commit's shows the same place as an alert. The box sits
+over the rows below — they keep one height for windowing — and lets clicks
+through. A `/` in the name creates the folders on the way. A new file opens in
+a permanent tab and is revealed in the tree, now or when its `filer_change`
+arrives, unless another input has opened meanwhile; a new folder is revealed
+and expanded. What the file index skips (any part with an ignored name, such
+as a folder `node_modules` on the way or a file named `dist`, or a `.zzz-tmp-`
+name — `to_unindexed_segment`, over the filer's own rule) is created but never
+shows, so a note says why, kept in view at the top of the tree until it's
+dismissed, the next key in the tree, or the next create — not a click, which
+would shift the rows under a double click — and a file there isn't waited for. Any file this client creates
+(`Diskfiles.create_file_at`) is revealed the same way, an audio or transcript
+view's "edit a copy" included.
 
 ## Spaces and Workspaces
 

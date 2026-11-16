@@ -51,7 +51,7 @@
 >
 	<div class="terminal-run-item">
 		<div class="run-header">
-			<span class="run-command">$ {terminal.display_command}</span>
+			<span class="run-command">{terminal.display_label}</span>
 			<span class="run-status">
 				{#if terminal.status === 'starting'}
 					<span>starting</span>

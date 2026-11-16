@@ -89,6 +89,17 @@ export class ListViewport {
 	};
 
 	/**
+	 * Measures the attached list again now — for a layout change its observers
+	 * miss: something above the list coming or going moves it without resizing
+	 * it or its scroller, and scrolls nothing. Does nothing before `measure` is
+	 * attached.
+	 */
+	remeasure(): void {
+		const measure = this.#measure;
+		if (measure) untrack(measure);
+	}
+
+	/**
 	 * The index of the first row whose top is in the visible area, of `count`
 	 * rows — `0` before a measurement, and the last row when the area is past
 	 * the end. A row clipped by a pixel or less still counts, since layout

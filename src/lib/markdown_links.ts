@@ -18,7 +18,7 @@
 import type { MdzNode, MdzNodeHeading } from '@fuzdev/mdz/mdz.ts';
 import { mdz_is_safe_reference } from '@fuzdev/mdz/mdz_helpers.ts';
 
-import { FILE_INDEX_IGNORED_DIR_NAMES, FILE_INDEX_TEMP_FILE_PREFIX } from './diskfile_helpers.ts';
+import { is_file_index_ignored_name } from './diskfile_helpers.ts';
 
 /**
  * Where a link in a markdown file leads:
@@ -182,8 +182,8 @@ export interface MarkdownLinkIndex {
  *   list it, yet nothing is there
  * - the index can't say (see `MarkdownLinkMark`'s `unknown`):
  *   - `outside` — outside every root the index covers
- *   - `skipped` — inside a folder the index never enters
- *     (`FILE_INDEX_IGNORED_DIR_NAMES`)
+ *   - `skipped` — a path part the index never enters or lists
+ *     (`is_file_index_ignored_name`)
  *   - `root_relative` — written `/…` and not found from the workspace's
  *     root, which may not be the repository's
  */
@@ -210,12 +210,7 @@ export const to_markdown_link_status = (
 	const root = to_root_dir(dir_path, index.roots);
 	if (root === null) return 'outside';
 	for (const segment of dir_path.slice(root.length).split('/')) {
-		if (
-			FILE_INDEX_IGNORED_DIR_NAMES.has(segment) ||
-			segment.startsWith(FILE_INDEX_TEMP_FILE_PREFIX)
-		) {
-			return 'skipped';
-		}
+		if (is_file_index_ignored_name(segment)) return 'skipped';
 	}
 	return 'broken';
 };

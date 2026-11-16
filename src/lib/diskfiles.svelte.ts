@@ -31,7 +31,9 @@ import {
 	normalize_path,
 	parse_new_diskfile_name,
 	to_file_directories,
-	to_relative_path
+	to_innermost_root,
+	to_relative_path,
+	to_unindexed_segment
 } from './diskfile_helpers.ts';
 import { to_diskfile_content_kind } from './diskfile_content_kind.ts';
 import type { MarkdownLinkIndex } from './markdown_links.ts';
@@ -258,17 +260,19 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		if (diskfile.path === this.#select_on_arrival) {
 			this.#select_on_arrival = null;
 			this.select(diskfile.id, true);
+			this.editor.tree.reveal_created(diskfile.path);
 		}
 		return diskfile;
 	}
 
 	/**
 	 * The file `create_file` created whose `filer_change` hasn't arrived yet,
-	 * selected when it does. Not reactive. Dropped when it's selected, when
-	 * the user selects anything else (`select`, or a tab change through
-	 * `DiskfilesEditor` — `follow_selected_tab`), when its workspace is removed
-	 * (`handle_workspace_removed`), or by the next `create_file` — so a file the
-	 * filer never reports (say under `node_modules/`) can't take the selection
+	 * selected and revealed in the tree when it does. Not reactive. Dropped
+	 * when it's selected, when the user selects anything else (`select`, or a
+	 * tab change through `DiskfilesEditor` — `follow_selected_tab`), when its
+	 * workspace is removed (`handle_workspace_removed`), or by the next
+	 * `create_file` — so a file the filer never reports (say under
+	 * `node_modules/`) can't take the selection
 	 * later.
 	 */
 	#select_on_arrival: DiskfilePath | null = null;
@@ -715,7 +719,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Creates a new file at an absolute path — never overwriting one, like
 	 * `create_file` — and selects it, opened in a permanent tab, now or when
-	 * its `filer_change` arrives.
+	 * its `filer_change` arrives — never, for a path the index skips
+	 * (`to_unindexed_segment`), which isn't waited for. It's revealed in the
+	 * tree then too (`DiskfileTreeState.reveal_created`), which the tree mode
+	 * shows, now or on a later switch to it — so a copy made by "edit a copy"
+	 * in the audio and transcript views is revealed as well.
 	 *
 	 * @param path - the new file's absolute path
 	 * @param content - the new file's content
@@ -735,8 +743,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const created = this.get_by_path(created_path);
 		if (created) {
 			this.select(created.id, true);
+			this.editor.tree.reveal_created(created_path);
 		} else {
-			this.#select_on_arrival = created_path;
+			// a path the file index skips never arrives — don't wait for it
+			const root = to_innermost_root(created_path, this.indexed_roots);
+			if (root && to_unindexed_segment(created_path, root) === null) {
+				this.#select_on_arrival = created_path;
+			}
 		}
 	}
 
@@ -777,8 +790,19 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const parsed = parse_new_diskfile_name(dirname, 'folder');
 		if (!parsed.ok) throw new Error(parsed.message);
 
-		const path = parse_or_throw(DiskfilePath, `${dir}${parsed.value}`);
+		await this.create_directory_at(parse_or_throw(DiskfilePath, `${dir}${parsed.value}`));
+	}
 
+	/**
+	 * Creates a new directory at an absolute path, and any missing parents —
+	 * never reusing an existing one, like `create_directory`. The index lists
+	 * files only, so an empty directory never arrives in it; the file tree
+	 * keeps one it created itself (`DiskfileTreeState.created_dirs`).
+	 *
+	 * @param path - the new directory's absolute path
+	 * @throws Error when the path is taken, or the backend refuses
+	 */
+	async create_directory_at(path: DiskfilePath): Promise<void> {
 		const result = await this.app.api.directory_create({ path });
 		if (!result.ok) {
 			const { reason } = (result.error.data ?? {}) as { reason?: unknown };

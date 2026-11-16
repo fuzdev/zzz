@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { test, describe, beforeEach, assert } from 'vitest';
+import { test, describe, beforeEach, assert, vi } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
@@ -15,6 +15,11 @@ import {
 	stub_terminal_api,
 	type StubbedTerminalCall
 } from './terminal_test_helpers.ts';
+
+// `open_shell` shows the terminals page from the files page
+const navigation = vi.hoisted(() => ({ goto: vi.fn((_url: string) => Promise.resolve()) }));
+vi.mock('$app/navigation', () => navigation);
+vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/files') } }));
 
 let app: Frontend;
 let calls: Array<StubbedTerminalCall>;
@@ -358,5 +363,46 @@ describe('Terminals.remove', () => {
 		await removing;
 		assert.strictEqual(app.terminals.items.size, 1);
 		assert.ok(app.cell_registry.all.has(terminal.id));
+	});
+});
+
+describe('Terminals.open_shell', () => {
+	beforeEach(() => {
+		navigation.goto.mockClear();
+	});
+
+	test('spawns a shell in the folder, typing nothing, and shows the terminals page', async () => {
+		const opened = app.terminals.open_shell('/w/a');
+		assert.deepEqual(last_call('terminal_create').input, {
+			command: 'sh',
+			args: [],
+			cwd: '/w/a'
+		});
+		assert.deepEqual(
+			navigation.goto.mock.calls.map((call) => call[0]),
+			['/terminals']
+		);
+		last_call('terminal_create').resolve(result_ok({ terminal_id: create_uuid() }));
+		const terminal = await opened;
+		assert.strictEqual(terminal.status, 'running');
+		assert.strictEqual(terminal.display_label, 'shell in /w/a', 'named by its folder');
+		assert.strictEqual(calls_of(calls, 'terminal_data_send').length, 0);
+	});
+
+	test('a failed spawn names the folder, not an empty command', async () => {
+		const opened = app.terminals.open_shell('/w/gone');
+		last_call('terminal_create').resolve(
+			result_error(JSONRPC_ERROR_CODES.internal_error, 'no such directory')
+		);
+		const terminal = await opened;
+		assert.strictEqual(
+			terminal.error_message,
+			'failed to start a shell in /w/gone: no such directory'
+		);
+	});
+
+	test('a terminal with a command is named by it', () => {
+		const terminal = app.terminals.add({ command: 'ls', args: [' -la'], cwd: '/w/a' });
+		assert.strictEqual(terminal.display_label, '$ ls -la');
 	});
 });

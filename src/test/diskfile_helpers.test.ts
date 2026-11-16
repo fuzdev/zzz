@@ -6,8 +6,11 @@ import {
 	normalize_path,
 	parse_new_diskfile_name,
 	prompt_create_diskfile,
+	to_diskfile_copy_paths,
 	to_file_directories,
-	to_relative_path
+	to_innermost_root,
+	to_relative_path,
+	to_unindexed_segment
 } from '#lib/diskfile_helpers.ts';
 import type { Diskfiles } from '#lib/diskfiles.svelte.ts';
 import { DiskfilePath } from '#lib/diskfile_types.ts';
@@ -258,5 +261,57 @@ describe('to_file_directories', () => {
 
 	test('the filesystem root as a root ends the walk', () => {
 		assert.deepEqual(to_file_directories('/a/b.md', '/'), ['/a/', '/']);
+	});
+});
+
+describe('to_innermost_root', () => {
+	test('the innermost root holding the path, in any order of roots', () => {
+		const roots = ['/w/a/src/', '/w/', '/s/'];
+		assert.strictEqual(to_innermost_root('/w/a/src/x.ts', roots), '/w/a/src/');
+		assert.strictEqual(to_innermost_root('/w/a/x.ts', roots), '/w/');
+		assert.strictEqual(to_innermost_root('/w/a/src/', roots), '/w/', 'a root isn’t below itself');
+		assert.strictEqual(to_innermost_root('/s/notes.md', roots), '/s/');
+		assert.isNull(to_innermost_root('/w/', roots));
+		assert.isNull(to_innermost_root('/elsewhere/x.ts', roots));
+		assert.isNull(to_innermost_root('/wx/a.md', roots), 'a sibling sharing a prefix isn’t inside');
+	});
+});
+
+describe('to_diskfile_copy_paths', () => {
+	const roots = ['/w/', '/w/a/src/', '/s/'];
+	const cases: Array<
+		[label: string, path: string, absolute: string, relative: string | null, name: string]
+	> = [
+		['a file in a root', '/w/README.md', '/w/README.md', 'README.md', 'README.md'],
+		['a file in a folder', '/w/a/b.md', '/w/a/b.md', 'a/b.md', 'b.md'],
+		['a file in a nested root, from it', '/w/a/src/x.ts', '/w/a/src/x.ts', 'x.ts', 'x.ts'],
+		['a folder, without its slash', '/w/a/b/', '/w/a/b', 'a/b', 'b'],
+		['a nested root, from the outer', '/w/a/src/', '/w/a/src', 'a/src', 'src'],
+		['a root under none', '/w/', '/w', null, 'w'],
+		['a path under no root', '/x/y.md', '/x/y.md', null, 'y.md']
+	];
+	test.each(cases)('%s', (_label, path, absolute, relative, name) => {
+		assert.deepEqual(to_diskfile_copy_paths(path, roots), { absolute, relative, name });
+	});
+});
+
+describe('to_unindexed_segment', () => {
+	const cases: Array<[label: string, path: string, expected: string | null]> = [
+		['a plain file', '/w/a/b.ts', null],
+		['a file in an ignored folder', '/w/node_modules/x.js', 'node_modules'],
+		['a folder deep in one', '/w/p/node_modules/q/', 'node_modules'],
+		['an ignored folder itself', '/w/.git/', '.git'],
+		['a file with an ignored name', '/w/target', 'target'],
+		['a staging-named file', '/w/a/.zzz-tmp-x', '.zzz-tmp-x'],
+		['a staging-named folder', '/w/.zzz-tmp-x/a.md', '.zzz-tmp-x'],
+		['the first skipped part', '/w/dist/node_modules/x', 'dist'],
+		['a path outside the root', '/elsewhere/node_modules/x', null]
+	];
+	test.each(cases)('%s', (_label, path, expected) => {
+		assert.strictEqual(to_unindexed_segment(path, '/w/'), expected);
+	});
+
+	test('only what’s below the root counts', () => {
+		assert.isNull(to_unindexed_segment('/w/node_modules/pkg/x.js', '/w/node_modules/pkg/'));
 	});
 });

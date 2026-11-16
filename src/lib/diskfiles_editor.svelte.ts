@@ -223,4 +223,17 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	): void {
 		this.explorer_mode = value;
 	}
+
+	/**
+	 * Switches the file explorer to its tree and shows the file or folder at
+	 * `path` there (`DiskfileTreeState.reveal`) — "reveal in tree" from a list
+	 * row or a tab, both on the files page beside the explorer.
+	 *
+	 * @param path - a file's path, or a folder's with a trailing `/`
+	 * @returns whether the path is in the tree
+	 */
+	reveal_in_tree(path: string): boolean {
+		this.explorer_mode = 'tree';
+		return this.tree.reveal(path);
+	}
 }

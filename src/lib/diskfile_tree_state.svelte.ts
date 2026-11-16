@@ -1,18 +1,24 @@
 import { SvelteSet } from 'svelte/reactivity';
+import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
+import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 
 import type { Frontend } from './frontend.svelte.ts';
-import type { DiskfilePath } from './diskfile_types.ts';
+import { DiskfilePath } from './diskfile_types.ts';
 import {
-	FILE_INDEX_IGNORED_DIR_NAMES,
-	FILE_INDEX_TEMP_FILE_PREFIX,
-	to_file_directories
+	is_file_index_ignored_name,
+	normalize_path,
+	parse_new_diskfile_name,
+	to_file_directories,
+	to_innermost_root,
+	to_relative_path,
+	to_unindexed_segment
 } from './diskfile_helpers.ts';
 
 /**
  * The file tree as the explorer's tree mode shows it: the expanded folders,
- * the active row the keyboard moves, and the visible rows derived from them.
- * Lives on `DiskfilesEditor`, so the expanded set outlives a switch to the list
- * and back, and any remount of the tree.
+ * the active row the keyboard moves, the inline create in progress, and the
+ * visible rows derived from them. Lives on `DiskfilesEditor`, so the expanded
+ * set outlives a switch to the list and back, and any remount of the tree.
  *
  * The rows come from `Diskfiles.tree_index`, kept in step as files come and go,
  * and only expanded folders are walked: deriving the rows costs what they show,
@@ -20,6 +26,17 @@ import {
  *
  * @module
  */
+
+/**
+ * How many files below a folder make "expand all below" ask first. Expanding
+ * shows every file below, and every file change under an expanded folder
+ * rederives all the visible rows, so a burst of changes there — a build's
+ * output — pays for the whole subtree each time. A judgment, not a
+ * measurement: a couple thousand rows is past what a person scrolls through,
+ * and a rederive of that many stays small beside the explorer's other
+ * per-change passes.
+ */
+export const EXPAND_ALL_BELOW_CONFIRM_FILE_COUNT = 2000;
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -160,6 +177,21 @@ export class DiskfileTreeIndex {
 	}
 
 	/**
+	 * How many files are below folder `dir`, at any depth — read off the
+	 * counted links, so it costs `dir`'s children, not its subtree. Includes a
+	 * nested root's files inside a folder the rows never show, so "expand all
+	 * below" can ask when it needn't. Reruns a reader on any change.
+	 */
+	count_files_below(dir: string): number {
+		this.#track();
+		const entry = this.#entries.get(dir);
+		if (!entry) return 0;
+		let count = entry.files.size;
+		for (const n of entry.dirs.values()) count += n;
+		return count;
+	}
+
+	/**
 	 * The one child of folder `dir` when it holds a single folder and no files —
 	 * the chain compact folders collapse into one row — else `null`. Reruns a
 	 * reader on any change.
@@ -212,8 +244,51 @@ export interface DiskfileTreeFileRow extends DiskfileTreeRowBase {
 	readonly kind: 'file';
 }
 
+/**
+ * The inline input naming a new file or folder (`DiskfileTreeState.creating`),
+ * shown as the first child of the folder it creates in. Not a file-system
+ * row: its `label` is empty, its `path` is the folder's, and it isn't counted
+ * among its siblings (`setsize` and `posinset` are `0`, not rendered).
+ */
+export interface DiskfileTreeCreateRow extends DiskfileTreeRowBase {
+	readonly kind: 'create';
+	readonly parent_key: string;
+	readonly create_kind: DiskfileCreateKind;
+}
+
 /** One visible row of the file tree. */
-export type DiskfileTreeRow = DiskfileTreeDirRow | DiskfileTreeFileRow;
+export type DiskfileTreeRow = DiskfileTreeDirRow | DiskfileTreeFileRow | DiskfileTreeCreateRow;
+
+/** What an inline create makes. */
+export type DiskfileCreateKind = 'file' | 'folder';
+
+/**
+ * An inline create in progress: where, what, and the name being typed. The
+ * name lives here, not in the input, so it survives the input's row scrolling
+ * out of the tree's window and back.
+ */
+export class DiskfileTreeCreate {
+	readonly root: string;
+	/** The folder it creates in, with a trailing `/`. */
+	readonly dir: string;
+	readonly kind: DiskfileCreateKind;
+	name: string = $state.raw('');
+	/** Why the last attempt was refused, by the name's parse or the backend. */
+	error: string | null = $state.raw(null);
+	/** Whether a create is in flight. */
+	pending: boolean = $state.raw(false);
+	/**
+	 * Whether the input should take focus when it mounts — at the start, not
+	 * when it remounts after scrolling. Not reactive.
+	 */
+	focus_pending: boolean = true;
+
+	constructor(root: string, dir: string, kind: DiskfileCreateKind) {
+		this.root = root;
+		this.dir = dir;
+		this.kind = kind;
+	}
+}
 
 /** What `to_diskfile_tree_rows` reads the tree through. */
 export interface DiskfileTreeSource {
@@ -233,6 +308,14 @@ export interface DiskfileTreeSource {
 
 /** The `key` of the row for `path` under `root` — NUL can't appear in a path. */
 export const to_diskfile_tree_row_key = (root: string, path: string): string => `${root}\0${path}`;
+
+/**
+ * The `key` of the inline create row in folder `dir` under `root`: the
+ * folder row's key and a suffix no path holds. Made active, a missing one
+ * falls back to its folder (see `DiskfileTreeState.active_index`).
+ */
+export const to_diskfile_tree_create_key = (root: string, dir: string): string =>
+	`${to_diskfile_tree_row_key(root, dir)}\0create`;
 
 /**
  * Flattens the tree into its visible rows, in display order: each root (once,
@@ -368,17 +451,35 @@ export class DiskfileTreeState {
 	scroll_request: number = $state.raw(0);
 
 	/**
+	 * The folders created here this page load (`commit_create`), each with a
+	 * trailing `/`. The index lists files only, so an empty folder exists for
+	 * the tree only through this; it lasts until a reload, and a folder later
+	 * deleted by another program stays until then too.
+	 */
+	readonly created_dirs: SvelteSet<string> = new SvelteSet();
+
+	/** The inline create in progress, if any — see `start_create`. */
+	creating: DiskfileTreeCreate | null = $state.raw(null);
+
+	/**
+	 * A note on the last inline create, when what it made won't show — the
+	 * file index skips it (`to_unindexed_segment`). Cleared by the next
+	 * create, and by the tree on the next key or the note's dismiss button.
+	 */
+	notice: string | null = $state.raw(null);
+
+	/**
 	 * What the tree shows that `Diskfiles.tree_index` lacks, merged into the
 	 * children it lists: files deleted on disk but kept for their drafts
-	 * (`Diskfiles.listed_deleted`), with their folders up to `/` like the
-	 * index's — the index holds files on disk only. Rarely more than a few, so
-	 * it's rebuilt whole.
+	 * (`Diskfiles.listed_deleted`) and the folders in `created_dirs`, with
+	 * their folders up to `/` like the index's — the index holds files on disk
+	 * only. Rarely more than a few, so it's rebuilt whole.
 	 */
 	readonly #extra: Map<string, DiskfileTreeExtraEntry> = $derived.by(() => {
 		const extra: Map<string, DiskfileTreeExtraEntry> = new Map();
-		for (const diskfile of this.app.diskfiles.listed_deleted) {
-			let child: string = diskfile.path;
-			const dirs = to_file_directories(diskfile.path, '/');
+		const link = (path: string, is_dir: boolean): void => {
+			let child = path;
+			const dirs = to_file_directories(is_dir ? path.slice(0, -1) : path, '/');
 			for (let i = 0; i < dirs.length; i++) {
 				const dir = dirs[i]!;
 				let entry = extra.get(dir);
@@ -386,14 +487,16 @@ export class DiskfileTreeState {
 					entry = { dirs: new Set(), files: [] };
 					extra.set(dir, entry);
 				}
-				if (i === 0) {
+				if (i === 0 && !is_dir) {
 					entry.files.push(child);
 				} else {
 					entry.dirs.add(child);
 				}
 				child = dir;
 			}
-		}
+		};
+		for (const diskfile of this.app.diskfiles.listed_deleted) link(diskfile.path, false);
+		for (const dir of this.created_dirs) link(dir, true);
 		return extra;
 	});
 
@@ -406,22 +509,46 @@ export class DiskfileTreeState {
 		},
 		is_expanded: (path, kind) =>
 			kind === 'root' ? !this.collapsed_roots.has(path) : this.expanded.has(path),
-		// the filer's rules: ignored names and staging names anywhere, and the app
-		// directory by its path — which only another root's walk can reach
-		is_ignored_dir: (child, dir) => {
-			const name = child.slice(dir.length, -1);
-			return (
-				FILE_INDEX_IGNORED_DIR_NAMES.has(name) ||
-				name.startsWith(FILE_INDEX_TEMP_FILE_PREFIX) ||
-				child === this.app.zzz_dir
-			);
-		}
+		// the filer's rule for names, and the app directory by its path — which only
+		// another root's walk can reach
+		is_ignored_dir: (child, dir) =>
+			is_file_index_ignored_name(child.slice(dir.length, -1)) || child === this.app.zzz_dir
 	};
 
-	/** The visible rows, in display order — see `to_diskfile_tree_rows`. */
+	/**
+	 * The visible rows, in display order — see `to_diskfile_tree_rows` — with
+	 * `creating`'s input as the first child of its folder while that's shown
+	 * and expanded.
+	 */
 	readonly rows: Array<DiskfileTreeRow> = $derived.by(() => {
-		return to_diskfile_tree_rows(this.app.diskfiles.indexed_roots, this.#source);
+		const rows = to_diskfile_tree_rows(this.app.diskfiles.indexed_roots, this.#source);
+		const { creating } = this;
+		if (creating) {
+			const parent_key = to_diskfile_tree_row_key(creating.root, creating.dir);
+			const index = rows.findIndex((row) => row.key === parent_key);
+			const parent = rows[index];
+			if (parent && (parent.kind === 'root' || parent.kind === 'dir') && parent.expanded) {
+				rows.splice(index + 1, 0, {
+					kind: 'create',
+					key: to_diskfile_tree_create_key(creating.root, creating.dir),
+					root: creating.root,
+					path: creating.dir,
+					label: '',
+					depth: parent.depth + 1,
+					setsize: 0,
+					posinset: 0,
+					parent_key,
+					create_kind: creating.kind
+				});
+			}
+		}
+		return rows;
 	});
+
+	/** The index of `creating`'s input row in `rows`, `-1` when none shows. */
+	readonly create_index: number = $derived(
+		this.creating ? this.rows.findIndex((row) => row.kind === 'create') : -1
+	);
 
 	/**
 	 * The index of `active_row` in `rows`, `-1` when there's none. When the
@@ -441,7 +568,13 @@ export class DiskfileTreeState {
 		let found = -1;
 		for (let i = 0; i < rows.length; i++) {
 			const row = rows[i]!;
-			if (row.kind !== 'file' && row.root === root && path.startsWith(row.chain[0]!)) found = i;
+			if (
+				(row.kind === 'root' || row.kind === 'dir') &&
+				row.root === root &&
+				path.startsWith(row.chain[0]!)
+			) {
+				found = i;
+			}
 		}
 		return found;
 	});
@@ -509,18 +642,156 @@ export class DiskfileTreeState {
 		}
 	}
 
-	/** Makes row `index` (clamped to the rows) active and asks for it to scroll into view. */
-	move_to(index: number): void {
+	/** How many files are below the folder at `path` — see `DiskfileTreeIndex.count_files_below`. */
+	count_files_below(path: string): number {
+		return this.app.diskfiles.tree_index.count_files_below(path);
+	}
+
+	/**
+	 * Expands `row` and every folder below it, except the folders the rows
+	 * never show (the source's `is_ignored_dir`). Walks every folder below it,
+	 * and the rows then list every file below it: on a large root that's the
+	 * whole subtree, which windowing keeps cheap to render but not to derive.
+	 */
+	expand_all_below(row: DiskfileTreeDirRow): void {
+		this.set_expanded(row, true);
+		const stack = [row.path];
+		while (stack.length) {
+			const dir = stack.pop()!;
+			for (const child of this.get_children(dir).dirs) {
+				if (this.#source.is_ignored_dir(child, dir)) continue;
+				this.expanded.add(child);
+				stack.push(child);
+			}
+		}
+	}
+
+	/**
+	 * Collapses `row` and every folder below it, so expanding it again shows
+	 * one level. Expansion is by path, so a nested root's own row shows the
+	 * folders below it collapsed too.
+	 */
+	collapse_below(row: DiskfileTreeDirRow): void {
+		this.set_expanded(row, false);
+		const top = row.chain[0]!;
+		for (const folder of Array.from(this.expanded)) {
+			if (folder.startsWith(top)) this.expanded.delete(folder);
+		}
+	}
+
+	/**
+	 * Starts naming a new file or folder inline, inside root or folder `row`
+	 * (a compact row's innermost folder): expands it and shows the input as its
+	 * first child, made active so the tree scrolls to it. Replaces any create
+	 * in progress.
+	 */
+	start_create(row: DiskfileTreeDirRow, kind: DiskfileCreateKind): void {
+		this.notice = null;
+		this.set_expanded(row, true);
+		this.creating = new DiskfileTreeCreate(row.root, row.path, kind);
+		this.active_key = to_diskfile_tree_create_key(row.root, row.path);
+		this.scroll_request++;
+	}
+
+	/** Ends the create in progress, the active row going back to its folder. */
+	cancel_create(): void {
+		const { creating } = this;
+		if (!creating) return;
+		this.creating = null;
+		if (this.active_key === to_diskfile_tree_create_key(creating.root, creating.dir)) {
+			this.active_key = to_diskfile_tree_row_key(creating.root, creating.dir);
+		}
+	}
+
+	/**
+	 * Creates what `creating` names inside its folder, then ends it. The name is
+	 * parsed by `parse_new_diskfile_name`, so `a/b.ts` creates the folders on
+	 * the way. A new file is selected in a permanent tab and revealed
+	 * (`Diskfiles.create_file_at`); a new folder joins `created_dirs` — it's
+	 * empty, so the index won't list it — and is revealed and expanded. An
+	 * empty name ends it creating nothing; a refused name or a failed create
+	 * keeps it open with `error` set. What the file index skips can't show, so
+	 * `notice` says why. A create started while this one was in flight keeps
+	 * the tree at its input: nothing is revealed.
+	 *
+	 * @returns whether something was created
+	 */
+	async commit_create(): Promise<boolean> {
+		const { creating } = this;
+		if (!creating || creating.pending) return false;
+		if (!creating.name) {
+			this.cancel_create();
+			return false;
+		}
+		const parsed = parse_new_diskfile_name(creating.name, creating.kind);
+		if (!parsed.ok) {
+			creating.error = parsed.message;
+			return false;
+		}
+		// `dir` has a trailing slash, and the parsed name has no leading one
+		const path = parse_or_throw(DiskfilePath, creating.dir + parsed.value);
+		const { diskfiles } = this.app;
+		creating.error = null;
+		creating.pending = true;
+		try {
+			if (creating.kind === 'file') {
+				await diskfiles.create_file_at(path);
+			} else {
+				await diskfiles.create_directory_at(path);
+			}
+		} catch (error) {
+			creating.error = to_error_message(error);
+			return false;
+		} finally {
+			creating.pending = false;
+		}
+		// a create started meanwhile keeps the tree at its input
+		const replaced = this.creating !== null && this.creating !== creating;
+		if (this.creating === creating) this.cancel_create();
+		const created = normalize_path(path);
+		const root = to_innermost_root(created, this.app.diskfiles.indexed_roots);
+		if (creating.kind === 'folder') {
+			const dir = created + '/';
+			this.created_dirs.add(dir);
+			if (!replaced && this.reveal(dir)) {
+				const row = this.active_row;
+				if (row?.kind === 'dir' && row.path === dir) this.set_expanded(row, true);
+			}
+		}
+		const skipped =
+			root && to_unindexed_segment(creating.kind === 'folder' ? created + '/' : created, root);
+		if (skipped && !replaced) {
+			this.notice = `created ${to_relative_path(created, root)}, which the tree doesn’t show: the file index skips "${skipped}"`;
+		}
+		return true;
+	}
+
+	/**
+	 * Makes row `index` (clamped to the rows) active and asks for it to scroll
+	 * into view. The keyboard passes over `creating`'s input row, which it
+	 * can't act on — to the next row in `direction`, else the one before — so
+	 * focus never moves into the input without the user choosing it.
+	 *
+	 * @param direction - which way to pass over the input row
+	 */
+	move_to(index: number, direction: 1 | -1 = 1): void {
 		const { rows } = this;
 		if (!rows.length) return;
-		this.active_key = rows[Math.max(0, Math.min(rows.length - 1, index))]!.key;
+		let i = Math.max(0, Math.min(rows.length - 1, index));
+		if (rows[i]!.kind === 'create') {
+			const past = i + direction;
+			i = past >= 0 && past < rows.length ? past : i - direction;
+		}
+		const row = rows[i];
+		if (!row || row.kind === 'create') return;
+		this.active_key = row.key;
 		this.scroll_request++;
 	}
 
 	/** Moves the active row by `delta` rows — from the first row when none is active. */
 	move(delta: number): void {
 		const index = this.active_index;
-		this.move_to(index === -1 ? 0 : index + delta);
+		this.move_to(index === -1 ? 0 : index + delta, delta < 0 ? -1 : 1);
 	}
 
 	/**
@@ -541,13 +812,15 @@ export class DiskfileTreeState {
 			this.move_to(0);
 			return;
 		}
-		if (row.kind === 'file') return;
+		if (row.kind === 'file' || row.kind === 'create') return;
 		if (!row.expanded) {
 			this.set_expanded(row, true);
 			return;
 		}
-		const next = this.rows[this.active_index + 1];
-		if (next?.parent_key === row.key) this.move_to(this.active_index + 1);
+		// into its first child past `creating`'s input row — none, when the input is all it holds
+		let next = this.active_index + 1;
+		if (this.rows[next]?.kind === 'create') next++;
+		if (this.rows[next]?.parent_key === row.key) this.move_to(next);
 	}
 
 	/** ArrowLeft: collapses an expanded folder, or moves to the parent row. */
@@ -557,7 +830,7 @@ export class DiskfileTreeState {
 			this.move_to(0);
 			return;
 		}
-		if (row.kind !== 'file' && row.expanded) {
+		if ((row.kind === 'root' || row.kind === 'dir') && row.expanded) {
 			this.set_expanded(row, false);
 			return;
 		}
@@ -570,17 +843,30 @@ export class DiskfileTreeState {
 	/**
 	 * Enter and Space: opens the active file — in a permanent tab if
 	 * `open_not_preview`, else a preview (see `Diskfiles.select`) — or toggles
-	 * the active folder.
+	 * the active folder. Does nothing on `creating`'s input row.
 	 */
 	open_active(open_not_preview: boolean): void {
 		const row = this.#take_active_row();
-		if (!row) return;
+		if (!row || row.kind === 'create') return;
 		if (row.kind === 'file') {
 			const diskfile = this.app.diskfiles.get_by_path(row.path as DiskfilePath);
 			if (diskfile) this.app.diskfiles.select(diskfile.id, open_not_preview);
 		} else {
 			this.toggle(row);
 		}
+	}
+
+	/**
+	 * Reveals a file this client just created (`Diskfiles.create_file_at`) —
+	 * unless an inline create other than one in flight is open, which keeps the
+	 * tree at its input.
+	 *
+	 * @returns whether it was revealed
+	 */
+	reveal_created(path: string): boolean {
+		const { creating } = this;
+		if (creating && !creating.pending) return false;
+		return this.reveal(path);
 	}
 
 	/**
@@ -600,7 +886,7 @@ export class DiskfileTreeState {
 			this.scroll_request++;
 			return true;
 		}
-		const root = this.#to_root(path);
+		const root = to_innermost_root(path, this.app.diskfiles.indexed_roots);
 		if (!root) return false;
 		const dirs = to_file_directories(path.endsWith('/') ? path.slice(0, -1) : path, root);
 		const parent = dirs[0];
@@ -633,7 +919,7 @@ export class DiskfileTreeState {
 		// the shortest folder row under the root whose path starts with it
 		let found: DiskfileTreeRow | undefined;
 		for (const row of this.rows) {
-			if (row.root !== root || !row.path.startsWith(path)) continue;
+			if (row.kind === 'create' || row.root !== root || !row.path.startsWith(path)) continue;
 			if (row.path === path) {
 				found = row;
 				break;
@@ -644,16 +930,5 @@ export class DiskfileTreeState {
 		this.active_key = found.key;
 		this.scroll_request++;
 		return true;
-	}
-
-	/** The root `path` shows under for `reveal`: the innermost holding it. */
-	#to_root(path: string): string | null {
-		let found: string | null = null;
-		for (const root of this.app.diskfiles.indexed_roots) {
-			if (path.length > root.length && path.startsWith(root)) {
-				if (!found || root.length > found.length) found = root;
-			}
-		}
-		return found;
 	}
 }

@@ -27,6 +27,7 @@ afterEach(() => {
 const render = (props: {
 	paste: ((text: Promise<string>) => unknown) | null;
 	read_clipboard: () => Promise<string>;
+	display_command?: string;
 }): HTMLElement => {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -107,5 +108,29 @@ describe('TerminalContextmenu paste', () => {
 		assert.strictEqual(item.getAttribute('aria-disabled'), 'true');
 		await click(item);
 		assert.strictEqual(reads, 0);
+	});
+});
+
+describe('TerminalContextmenu copy command', () => {
+	const has_copy_command = (): boolean =>
+		Array.from(document.querySelectorAll('[role="menuitem"]')).some((el) =>
+			el.textContent.trim().startsWith('copy command')
+		);
+
+	test('a terminal with a command offers to copy it', () => {
+		const target = render({ paste: null, read_clipboard: () => Promise.resolve('') });
+		open_menu(target);
+		assert.isTrue(has_copy_command());
+	});
+
+	test('a bare shell, with no command, doesn’t', () => {
+		const target = render({
+			paste: null,
+			read_clipboard: () => Promise.resolve(''),
+			display_command: ''
+		});
+		open_menu(target);
+		assert.ok(find_menuitem('paste'), 'the menu is open');
+		assert.isFalse(has_copy_command());
 	});
 });

@@ -2,32 +2,38 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
-import { flushSync, mount, unmount } from 'svelte';
+import { flushSync } from 'svelte';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { DiskfilePath } from '#lib/diskfile_types.ts';
 
-import FrontendContextHarness from './FrontendContextHarness.svelte';
-import DiskfileExplorerHarness from './DiskfileExplorerHarness.svelte';
-import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import {
+	ResizeObserverStub,
+	mount_explorer,
+	mount_tree,
+	stub_layout,
+	write_diskfile,
+	type MountedExplorer,
+	active_text,
+	click,
+	find_row,
+	menuitem_labels,
+	mode_button,
+	open_contextmenu,
+	press,
+	row_texts,
+	tree_el
+} from './diskfile_tree_test_helpers.ts';
 
 /**
  * The file explorer's tree mode, driven as a user would: the mode switch in
  * the header, then the tree by keyboard and pointer.
  */
 
-const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
-
 let app: Frontend;
 const cleanups: Array<() => void> = [];
-
-// jsdom has no `ResizeObserver`, which windowing uses
-class ResizeObserverStub {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
 
 beforeEach(() => {
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
@@ -41,97 +47,9 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-const write = (path: string): Diskfile =>
-	app.diskfiles.upsert({
-		id: parse_or_throw(DiskfilePath, path),
-		source_dir: SOURCE_DIR,
-		contents: 'x',
-		size: 1,
-		ctime: 1,
-		mtime: 1
-	});
-
-interface Rendered {
-	target: HTMLElement;
-	destroy: () => void;
-}
-
-const render = (): Rendered => {
-	const target = document.createElement('div');
-	document.body.append(target);
-	const mounted = mount(FrontendContextHarness, {
-		target,
-		props: { app, component: DiskfileExplorerHarness, props: {} }
-	});
-	flushSync();
-	let destroyed = false;
-	const destroy = (): void => {
-		if (destroyed) return;
-		destroyed = true;
-		void unmount(mounted);
-		target.remove();
-		flushSync();
-	};
-	cleanups.push(destroy);
-	return { target, destroy };
-};
-
-const mode_button = (target: HTMLElement): HTMLButtonElement => {
-	const button = target.querySelector<HTMLButtonElement>(
-		'button[aria-label="show files as a tree"]'
-	);
-	assert.ok(button, 'the mode switch');
-	return button;
-};
-
-const tree_el = (target: HTMLElement): HTMLElement => {
-	const el = target.querySelector<HTMLElement>('[role="tree"]');
-	assert.ok(el, 'a tree');
-	return el;
-};
-
-/** The rendered rows' visible text, in order. */
-const row_texts = (target: HTMLElement): Array<string> =>
-	Array.from(target.querySelectorAll('[role="treeitem"]')).map((el) => to_visible_text(el));
-
-const find_row = (target: HTMLElement, text: string): HTMLElement => {
-	const row = Array.from(target.querySelectorAll<HTMLElement>('[role="treeitem"]')).find(
-		(el) => to_visible_text(el) === text
-	);
-	assert.ok(row, `a "${text}" row`);
-	return row;
-};
-
-const press = (target: HTMLElement, key: string): void => {
-	tree_el(target).dispatchEvent(
-		new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
-	);
-	flushSync();
-};
-
-/** A click on a row's content, as the `detail`th click of a sequence (2 for a double click). */
-const click = (row: HTMLElement, detail: number = 1): void => {
-	const content = row.querySelector('.menuitem');
-	assert.ok(content);
-	content.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail }));
-	flushSync();
-};
-
-/** The text of the row `aria-activedescendant` names. */
-const active_text = (target: HTMLElement): string | null => {
-	const id = tree_el(target).getAttribute('aria-activedescendant');
-	if (!id) return null;
-	const row = document.getElementById(id);
-	assert.ok(row, 'names a rendered row');
-	return to_visible_text(row);
-};
-
-const render_tree = (): Rendered => {
-	const rendered = render();
-	mode_button(rendered.target).click();
-	flushSync();
-	return rendered;
-};
+const write = (path: string): Diskfile => write_diskfile(app, path);
+const render = (): MountedExplorer => mount_explorer(app, cleanups);
+const render_tree = (): MountedExplorer => mount_tree(app, cleanups);
 
 describe('the mode switch', () => {
 	test('switches the list to the tree and back, and the sort toggle is the list’s', () => {
@@ -232,28 +150,16 @@ describe('the tree’s ARIA', () => {
 		}
 	});
 
-	test('file rows have the file contextmenu, folder rows none', () => {
+	test('file rows have the file contextmenu, folder and root rows the folder one', () => {
 		write('/w/a/x.md');
 		write('/w/b.md');
 		const { target } = render_tree();
-		const open_menu = (row: HTMLElement): boolean => {
-			const event = new MouseEvent('contextmenu', {
-				bubbles: true,
-				cancelable: true,
-				clientX: 10,
-				clientY: 10
-			});
-			row.querySelector('.menuitem')!.dispatchEvent(event);
-			flushSync();
-			return event.defaultPrevented;
-		};
-		assert.isFalse(open_menu(find_row(target, 'a')), 'a folder: the browser’s menu');
-		assert.isTrue(open_menu(find_row(target, 'b.md')), 'a file: zzz’s menu');
-		assert.ok(
-			Array.from(target.querySelectorAll('[role="menuitem"]')).some(
-				(el) => el.textContent.trim() === 'file'
-			)
-		);
+		assert.isTrue(open_contextmenu(find_row(target, 'b.md')), 'a file');
+		assert.deepEqual(menuitem_labels(), ['file', 'view']);
+		assert.isTrue(open_contextmenu(find_row(target, 'a')), 'a folder');
+		assert.deepEqual(menuitem_labels(), ['folder'], 'only its own entries, no other row’s');
+		assert.isTrue(open_contextmenu(find_row(target, '/w/')), 'a root');
+		assert.deepEqual(menuitem_labels(), ['folder']);
 	});
 });
 
@@ -294,7 +200,7 @@ describe('the tree’s keyboard', () => {
 		assert.deepEqual(row_texts(target), ['/w/', 'a', 'x.md', 'b.md'], 'enter toggles a folder');
 	});
 
-	test('the menu key opens the active file’s menu, and nothing for a folder', () => {
+	test('the menu key opens the active row’s menu: a file’s, a folder’s, a root’s', () => {
 		write('/w/a/x.md');
 		write('/w/b.md');
 		const { target } = render_tree();
@@ -305,21 +211,22 @@ describe('the tree’s keyboard', () => {
 			flushSync();
 			return event.defaultPrevented;
 		};
-		const menu_open = (): boolean =>
-			Array.from(document.querySelectorAll('[role="menuitem"]')).some(
-				(el) => el.textContent.trim() === 'file'
-			);
 
 		tree_el(target).focus();
+		flushSync();
+		assert.strictEqual(active_text(target), '/w/');
+		assert.isTrue(menu_key(), 'a root');
+		assert.deepEqual(menuitem_labels(), ['folder']);
+
 		press(target, 'ArrowDown');
 		assert.strictEqual(active_text(target), 'a');
-		assert.isFalse(menu_key(), 'a folder: no menu');
-		assert.isFalse(menu_open());
+		assert.isTrue(menu_key(), 'a folder');
+		assert.deepEqual(menuitem_labels(), ['folder']);
 
 		press(target, 'End');
 		assert.strictEqual(active_text(target), 'b.md');
 		assert.isTrue(menu_key());
-		assert.isTrue(menu_open(), 'the file menu');
+		assert.deepEqual(menuitem_labels(), ['file', 'view'], 'the file menu');
 	});
 
 	test('it claims only the keys it handles, unmodified', () => {
@@ -371,30 +278,6 @@ describe('the tree’s pointer', () => {
 		assert.deepEqual(row_texts(target), ['/w/', 'a/b/c', 'x.md']);
 	});
 });
-
-const ROW = 20;
-
-/**
- * A layout for jsdom, which has none: the page scrolls (no scrolling ancestor
- * has `overflow` styles here), the tree at the top of the page, every row
- * `ROW` tall. `window.scrollBy` moves it, and the result records each call.
- */
-const stub_layout = (scrolled: number = 0): { scrolled: number; scroll_calls: Array<number> } => {
-	const layout = { scrolled, scroll_calls: [] as Array<number> };
-	const rect = (top: number, height: number): DOMRect =>
-		({ top, bottom: top + height, left: 0, right: 0, width: 0, height, x: 0, y: top }) as DOMRect;
-	vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-		if (this.matches('[role="tree"]')) return rect(-layout.scrolled, 0);
-		const item = this.closest('[data-index]');
-		if (item) return rect(Number(item.getAttribute('data-index')) * ROW - layout.scrolled, ROW);
-		return rect(0, 0);
-	});
-	vi.spyOn(window, 'scrollBy').mockImplementation((_x: number, y: number) => {
-		layout.scroll_calls.push(y);
-		layout.scrolled += y;
-	});
-	return layout;
-};
 
 describe('the tree’s window', () => {
 	test('focus by Tab starts at the first row on screen, not the top', () => {

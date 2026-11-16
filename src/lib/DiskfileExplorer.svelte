@@ -17,6 +17,7 @@
 	} from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
 	import { prompt_create_diskfile } from './diskfile_helpers.ts';
+	import type { DiskfileCreateKind, DiskfileTreeDirRow } from './diskfile_tree_state.svelte.ts';
 	import { icon_microphone } from './media_icons.ts';
 
 	const {
@@ -36,6 +37,20 @@
 	// TODO need awaitable websocket calls?
 	const TODO_create_file_pending = false;
 	const TODO_create_folder_pending = false;
+
+	// the tree names it inline in the workspace's root row; the list asks with a prompt
+	const create = (kind: DiskfileCreateKind): void => {
+		if (tree_mode) {
+			const root_row = editor.tree.rows.find(
+				(row): row is DiskfileTreeDirRow => row.kind === 'root' && row.path === new_files_dir
+			);
+			if (root_row) {
+				editor.tree.start_create(root_row, kind);
+				return;
+			}
+		}
+		void prompt_create_diskfile(diskfiles, kind);
+	};
 </script>
 
 <div class="height:100% overflow:auto scrollbar-width:thin">
@@ -67,7 +82,7 @@
 						? `create file in ${new_files_dir}`
 						: 'open a workspace to create files'}
 					disabled={!new_files_dir}
-					onclick={() => prompt_create_diskfile(diskfiles, 'file')}
+					onclick={() => create('file')}
 				>
 					<Icon data={icon_create_file} />
 				</PendingButton>
@@ -95,7 +110,7 @@
 						? `create folder in ${new_files_dir}`
 						: 'open a workspace to create folders'}
 					disabled={!new_files_dir}
-					onclick={() => prompt_create_diskfile(diskfiles, 'folder')}
+					onclick={() => create('folder')}
 				>
 					<Icon data={icon_create_directory} />
 				</PendingButton>

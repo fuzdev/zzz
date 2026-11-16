@@ -9,13 +9,16 @@
 	import {
 		icon_checkmark,
 		icon_delete,
+		icon_directory,
 		icon_file,
 		icon_remove,
+		icon_terminal,
 		icon_view
 	} from '@fuzdev/fuz_ui/icons.ts';
 	import { frontend_context } from './frontend.svelte.ts';
 	import { delete_diskfile } from './diskfile_helpers.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
+	import DiskfileCopyPathEntries from './DiskfileCopyPathEntries.svelte';
 	import { to_diskfile_content_kind } from './diskfile_content_kind.ts';
 	import {
 		MARKDOWN_VIEW_MODES,
@@ -25,14 +28,23 @@
 
 	const {
 		diskfile,
+		reveal_in_tree = false,
 		children,
 		...rest
 	}: OmitStrict<ComponentProps<typeof Contextmenu>, 'entries'> & {
 		diskfile: Diskfile | null | undefined;
+		/**
+		 * Whether to offer "reveal in tree" — on the files page's list rows and
+		 * tabs, beside the explorer, not on the tree's own rows.
+		 */
+		reveal_in_tree?: boolean | undefined;
 		children: Snippet;
 	} = $props();
 
 	const app = frontend_context.get();
+
+	// the folder holding `path`, without a trailing slash, as a terminal's `cwd`
+	const to_parent_dir = (path: string): string => path.slice(0, path.lastIndexOf('/')) || '/';
 </script>
 
 {#if diskfile}
@@ -84,12 +96,7 @@
 					</ContextmenuEntry>
 				{/if}
 
-				{#if diskfile.path_relative}
-					<ContextmenuEntryCopyToClipboard
-						content={diskfile.path_relative}
-						label="copy file path"
-					/>
-				{/if}
+				<DiskfileCopyPathEntries path={diskfile.path} />
 
 				{#if diskfile.content}
 					<ContextmenuEntryCopyToClipboard
@@ -98,6 +105,30 @@
 						preview={diskfile.content_preview}
 					/>
 				{/if}
+
+				{#if reveal_in_tree}
+					<ContextmenuEntry
+						icon={icon_directory}
+						run={() => {
+							diskfiles.editor.reveal_in_tree(diskfile.path);
+						}}
+					>
+						<span>reveal in tree</span>
+					</ContextmenuEntry>
+				{/if}
+
+				<!-- a file deleted on disk may have taken its folder with it -->
+				{#if !diskfile.deleted_on_disk}
+					<ContextmenuEntry
+						icon={icon_terminal}
+						run={() => {
+							void app.terminals.open_shell(to_parent_dir(diskfile.path));
+						}}
+					>
+						<span>open terminal in its folder</span>
+					</ContextmenuEntry>
+				{/if}
+
 				<ContextmenuEntry
 					icon={icon_delete}
 					run={async () => {
@@ -110,6 +141,8 @@
 				>
 					<span>delete file</span>
 				</ContextmenuEntry>
+
+				<!-- TODO rename and move, once the backend has actions for them -->
 			{/snippet}
 		</ContextmenuSubmenu>
 		{#if to_diskfile_content_kind(diskfile.path) === 'markdown'}

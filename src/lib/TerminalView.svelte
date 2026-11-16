@@ -156,7 +156,7 @@
 					bind:this={view}
 					module={load_module()}
 					scrollback_max_bytes={TERMINAL_SCROLLBACK_MAX_BYTES}
-					label="terminal: {terminal.display_command}"
+					label="terminal: {terminal.display_label}"
 					{accepts_input}
 					ondata={(data) => link?.send(data)}
 					onresize={(size) => link?.resize(size)}

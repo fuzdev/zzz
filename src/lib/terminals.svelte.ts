@@ -1,5 +1,6 @@
 import { array, with_default_fn, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { resolve } from '$app/paths';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Terminal, TerminalJson, type TerminalJsonInput } from './terminal.svelte.ts';
@@ -7,6 +8,7 @@ import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { TerminalOutputBuffer } from './terminal_helpers.ts';
+import { goto_unless_current } from './nav.ts';
 
 export const TerminalsJson = cell_json_schema(
 	{
@@ -111,6 +113,19 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 		this.#queue_command_line(terminal);
 		await this.#spawn(terminal);
 		return terminal;
+	}
+
+	/**
+	 * Spawns a shell in the directory `cwd`, with no command typed, and shows
+	 * it on the terminals page, where a terminal started from its command
+	 * input shows — "open a terminal here" from a file or folder elsewhere.
+	 *
+	 * @param cwd - an absolute path
+	 */
+	open_shell(cwd: string): Promise<Terminal> {
+		const created = this.create({ cwd });
+		void goto_unless_current(resolve('/terminals'));
+		return created;
 	}
 
 	/**
@@ -261,7 +276,10 @@ export class Terminals extends Cell<typeof TerminalsJson> {
 				...(terminal.cwd === undefined ? {} : { cwd: terminal.cwd })
 			});
 			if (!result.ok) {
-				terminal.fail(`failed to run "${terminal.display_command}": ${result.error.message}`);
+				const what = terminal.display_command
+					? `run "${terminal.display_command}"`
+					: `start a ${terminal.display_label}`;
+				terminal.fail(`failed to ${what}: ${result.error.message}`);
 				return;
 			}
 			const { terminal_id } = result.value;

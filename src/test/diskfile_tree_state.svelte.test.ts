@@ -13,18 +13,11 @@ import {
 	sort_diskfile_tree_children,
 	to_diskfile_tree_row_key,
 	to_diskfile_tree_rows,
-	type DiskfileTreeRow,
 	type DiskfileTreeSource
 } from '#lib/diskfile_tree_state.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-
-/** Each row as `depth label`, with `+`/`-` for an expanded or collapsed folder — the tree at a glance. */
-const outline = (rows: ReadonlyArray<DiskfileTreeRow>): Array<string> =>
-	rows.map(
-		(row) =>
-			`${'  '.repeat(row.depth)}${row.kind === 'file' ? '' : row.expanded ? '- ' : '+ '}${row.label}`
-	);
+import { outline, write_diskfile } from './diskfile_tree_test_helpers.ts';
 
 describe('compare_natural', () => {
 	test('sorts case-insensitively, numbers by value, ties broken for a total order', () => {
@@ -224,15 +217,8 @@ describe('DiskfileTreeState', () => {
 		app.zzz_dir = '/w/';
 	});
 
-	const write = (path: string, source_dir: string = SOURCE_DIR): Diskfile =>
-		app.diskfiles.upsert({
-			id: parse_or_throw(DiskfilePath, path),
-			source_dir: parse_or_throw(SerializableDisknode.def.source_dir, source_dir),
-			contents: 'x',
-			size: 1,
-			ctime: 1,
-			mtime: 1
-		});
+	const write = (path: string, source_dir?: string): Diskfile =>
+		write_diskfile(app, path, source_dir);
 
 	const delete_on_disk = (path: string): void => {
 		app.diskfiles.handle_change({

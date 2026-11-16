@@ -43,6 +43,7 @@
 		<DiskfileListitem
 			{diskfile}
 			{selected}
+			reveal_in_tree
 			onselect={(diskfile, open_not_preview) => {
 				// TODO this needs to navigate to the path of the file (so should be a link, not this onselect callback)
 				diskfiles.select(diskfile.id, open_not_preview);

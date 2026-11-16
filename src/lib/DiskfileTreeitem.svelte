@@ -7,9 +7,10 @@
 	} from '@fuzdev/fuz_ui/icons.ts';
 
 	import { frontend_context } from './frontend.svelte.ts';
-	import type { DiskfileTreeRow } from './diskfile_tree_state.svelte.ts';
+	import type { DiskfileTreeDirRow, DiskfileTreeFileRow } from './diskfile_tree_state.svelte.ts';
 	import type { DiskfilePath } from './diskfile_types.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
+	import DiskfileDirectoryContextmenu from './DiskfileDirectoryContextmenu.svelte';
 	import DiskfileStatusLabel from './DiskfileStatusLabel.svelte';
 	import Icon from './Icon.svelte';
 	import {
@@ -22,7 +23,9 @@
 	 * One row of `DiskfileTree`: a `treeitem` with its ARIA state, indented by
 	 * its depth. Presentational — the tree handles its pointer and keyboard
 	 * input, so the row is never focused itself (`aria-activedescendant`).
-	 * A file row has the file contextmenu.
+	 * A file row has the file contextmenu, a folder or root row the folder one
+	 * (`DiskfileDirectoryContextmenu`). Each row is its own `li`, never inside
+	 * another's, so a row's menu gathers no other row's entries.
 	 *
 	 * @module
 	 */
@@ -33,7 +36,7 @@
 		index,
 		active = false
 	}: {
-		row: DiskfileTreeRow;
+		row: DiskfileTreeDirRow | DiskfileTreeFileRow;
 		/** The element id the tree's `aria-activedescendant` names. */
 		id: string;
 		/** The row's position in `DiskfileTreeState.rows`, which the tree's click handler reads back. */
@@ -71,10 +74,11 @@
 		<DiskfileContextmenu {diskfile}>
 			{@render content()}
 		</DiskfileContextmenu>
+	{:else if row.kind !== 'file'}
+		<DiskfileDirectoryContextmenu {row}>
+			{@render content()}
+		</DiskfileDirectoryContextmenu>
 	{:else}
-		<!-- TODO folder and root rows: a `DiskfileDirectoryContextmenu` (new file and new folder
-		here, open a terminal here, expand all and collapse below, copy path variants); rename,
-		move, and delete folder wait on backend actions -->
 		{@render content()}
 	{/if}
 </li>
