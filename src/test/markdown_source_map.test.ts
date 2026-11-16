@@ -188,7 +188,9 @@ describe('to_markdown_scroll_anchors', () => {
 	test("anchors on each leaf block's top and bottom, in source order", () => {
 		const content = '# h\n\n- a\n- b\n  - c\n\np';
 		const { container, destroy } = render_mdz(content);
-		const anchors = to_markdown_scroll_anchors(query_markdown_blocks(container, content.length));
+		const anchors = to_markdown_scroll_anchors(
+			to_markdown_leaf_blocks(query_markdown_blocks(container, content.length))
+		);
 		assert.deepEqual(describe_anchors(anchors), [
 			'H1:top:0',
 			'H1:bottom:3',
@@ -212,7 +214,7 @@ describe('to_markdown_scroll_anchors', () => {
 			blocks.some((b) => b.element.tagName === 'TD'),
 			'the cells are blocks, for the caret mark'
 		);
-		const anchors = to_markdown_scroll_anchors(blocks);
+		const anchors = to_markdown_scroll_anchors(to_markdown_leaf_blocks(blocks));
 		const row = (text: string): Array<string> => {
 			const start = content.indexOf(text);
 			return [`TR:top:${start}`, `TR:bottom:${start + text.length}`];
@@ -253,7 +255,7 @@ describe('to_markdown_scroll_anchors', () => {
 				container.querySelector('table strong, table code, table em'),
 				`the cells hold inline marks: ${content}`
 			);
-			const anchors = to_markdown_scroll_anchors(blocks);
+			const anchors = to_markdown_scroll_anchors(to_markdown_leaf_blocks(blocks));
 			assert.deepEqual(
 				describe_anchors(anchors),
 				row_anchors(content, ['| x | **y** |', '| `1` | 2 |', '| 3 | _4_ |']),
@@ -268,7 +270,9 @@ describe('to_markdown_scroll_anchors', () => {
 		const content = 'p\n\n| x | y |\n| - | - |\n\nq';
 		const { container, destroy } = render_mdz(content);
 		assert.strictEqual(container.querySelectorAll('tr').length, 1, 'renders as a table');
-		const anchors = to_markdown_scroll_anchors(query_markdown_blocks(container, content.length));
+		const anchors = to_markdown_scroll_anchors(
+			to_markdown_leaf_blocks(query_markdown_blocks(container, content.length))
+		);
 		assert.deepEqual(describe_anchors(anchors), [
 			'P:top:0',
 			'P:bottom:1',

@@ -2,6 +2,7 @@
 	import { flushSync, onDestroy } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import { inside_editable, is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
+	import { deep_equal } from '@fuzdev/fuz_util/deep_equal.ts';
 	import { mdz_parse } from '@fuzdev/mdz/mdz.ts';
 	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import {
@@ -304,7 +305,7 @@
 			sections,
 			pane?.measure_visible(view_top, view_bottom) ?? null
 		);
-		if (!same_set(onscreen, onscreen_sections)) onscreen_sections = onscreen;
+		if (!deep_equal(onscreen, onscreen_sections)) onscreen_sections = onscreen;
 		// followed only while no caret says, so a stale one never holds when the caret goes
 		followed_heading =
 			pane && !has_caret
@@ -361,12 +362,6 @@
 		// inert and clipped off the drawer's edge, until the next close
 		if (event.target !== event.currentTarget || event.propertyName !== 'transform') return;
 		if (!drawer_open) drawer_content_shown = false;
-	};
-
-	const same_set = (a: ReadonlySet<number>, b: ReadonlySet<number>): boolean => {
-		if (a.size !== b.size) return false;
-		for (const n of a) if (!b.has(n)) return false;
-		return true;
 	};
 
 	const scroll_sync = new MarkdownScrollSync({

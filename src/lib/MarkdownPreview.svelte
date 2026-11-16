@@ -183,8 +183,10 @@
 	// the rendered blocks, queried once per render - the caret mark, scroll sync, and an outline
 	// read these, so a caret move or a scroll never queries the preview
 	let blocks: Array<MarkdownBlock> = $state.raw([]);
-	const scroll_anchors: Array<MarkdownScrollAnchor> = $derived(to_markdown_scroll_anchors(blocks));
 	const leaf_blocks: Array<MarkdownBlock> = $derived(to_markdown_leaf_blocks(blocks));
+	const scroll_anchors: Array<MarkdownScrollAnchor> = $derived(
+		to_markdown_scroll_anchors(leaf_blocks)
+	);
 	const heading_elements: Array<Element> = $derived(
 		blocks.filter((block) => HEADING_TAGS.has(block.element.localName)).map((b) => b.element)
 	);

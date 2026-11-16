@@ -18,6 +18,7 @@
  */
 
 import type { Attachment } from 'svelte/attachments';
+import { clamp } from '@fuzdev/fuz_util/maths.ts';
 
 import type { MarkdownScrollAnchor } from './markdown_source_map.ts';
 
@@ -37,8 +38,6 @@ const to_scroll_metrics = (element: Element): MarkdownScrollMetrics => ({
 	scroll_height: element.scrollHeight,
 	client_height: element.clientHeight
 });
-
-const clamp = (n: number, min: number, max: number): number => Math.max(min, Math.min(n, max));
 
 /**
  * The scroll position for the follower that matches the leader's, mapped

@@ -14,6 +14,8 @@
  * @module
  */
 
+import { clamp } from '@fuzdev/fuz_util/maths.ts';
+
 /**
  * `text` as a `<textarea>`'s `value` reads it: each `\r\n` and lone `\r` a
  * `\n`. Parsing this, rather than the raw text, keeps the offsets mdz
@@ -53,8 +55,6 @@ const to_integer = (value: string | null): number | null => {
 	const n = Number(value);
 	return Number.isInteger(n) ? n : null;
 };
-
-const clamp = (n: number, min: number, max: number): number => Math.max(min, Math.min(n, max));
 
 /**
  * The block-level elements mdz renders with source offsets — what the caret
@@ -165,16 +165,16 @@ export const to_markdown_leaf_blocks = (
 };
 
 /**
- * The scroll-sync anchors of `blocks`: the top and bottom of each leaf
- * (`to_markdown_leaf_blocks`), so they run in source order down both panes.
+ * The scroll-sync anchors of `leaves`: the top and bottom of each, so they
+ * run in source order down both panes.
  *
- * @param blocks - the rendered blocks in document order, as `query_markdown_blocks` returns
+ * @param leaves - the rendered leaf blocks, as `to_markdown_leaf_blocks` returns
  */
 export const to_markdown_scroll_anchors = (
-	blocks: ReadonlyArray<MarkdownBlock>
+	leaves: ReadonlyArray<MarkdownBlock>
 ): Array<MarkdownScrollAnchor> => {
 	const anchors: Array<MarkdownScrollAnchor> = [];
-	for (const block of to_markdown_leaf_blocks(blocks)) {
+	for (const block of leaves) {
 		anchors.push({ offset: block.start, edge: 'top', element: block.element });
 		anchors.push({ offset: block.end, edge: 'bottom', element: block.element });
 	}
