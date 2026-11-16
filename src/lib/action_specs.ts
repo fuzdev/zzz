@@ -403,9 +403,30 @@ export type TerminalExitedInput = Infer<typeof TerminalExitedInput>;
 
 /** Input for `project_open`: a file or directory, in the project to open. */
 export const ProjectOpenInput = object({
-	path: DiskfilePath
+	path: DiskfilePath,
+	/**
+	 * Registry entry dirs to focus once the open lands, beyond the path's own —
+	 * a reopen restores a project's whole focus in one call. Each lands or is
+	 * refused alone (`ProjectOpenOutput.refused`).
+	 */
+	focus: optional(array(DiskfileDirectoryPath))
 });
 export type ProjectOpenInput = Infer<typeof ProjectOpenInput>;
+
+/**
+ * A requested focus of `project_open` that didn't land, with the code
+ * `repo_focus` would refuse it with: `repo_not_in_project`,
+ * `repo_not_present` (missing, refused, or gone or replaced by a file since
+ * the resolve),
+ * `project_not_registry` (a checkout's or plain directory's root is its one
+ * focus), `permission_denied`, or `repo_index_failed` (unlistable otherwise —
+ * the one a later open may get past).
+ */
+export const ProjectFocusRefusal = object({
+	dir: DiskfileDirectoryPath,
+	reason: string
+});
+export type ProjectFocusRefusal = Infer<typeof ProjectFocusRefusal>;
 
 /** Output for `project_open`. */
 export const ProjectOpenOutput = object({
@@ -414,7 +435,9 @@ export const ProjectOpenOutput = object({
 	focus: nullable(DiskfileDirectoryPath),
 	/** The index of every filer of the project: the root's and each focused directory's. */
 	files: array(SerializableDisknode),
-	watch_status: ProjectWatchStatus
+	watch_status: ProjectWatchStatus,
+	/** Each requested `focus` that didn't land. */
+	refused: array(ProjectFocusRefusal)
 });
 export type ProjectOpenOutput = Infer<typeof ProjectOpenOutput>;
 
@@ -812,7 +835,7 @@ export const project_open_action_spec = {
 	output: ProjectOpenOutput,
 	async: true,
 	description:
-		"Open the project holding a file or directory — a trusted `repos.toml`'s root found above it, else its git checkout, else the directory — adding the root to ScopedFs and focusing the repo holding the path, whose files are then indexed and watched (a registry's root alone is indexed at its top level). The root must be strictly inside the daemon's home directory or named by `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, the home directory or an ancestor of it, a pseudo-filesystem, or a protected directory (`forbidden` / `root_not_allowed`, `root_outside_home`, `protected_dir_not_allowed`); an untrusted or unconfined registry refuses the open (`forbidden` / `registry_untrusted`, `registry_not_confined`), as does one that can't be read or doesn't parse (`invalid_params` / `registry_unreadable`, `registry_invalid`) or was replaced while it was checked (`conflict` / `registry_changed`, opening again reads the new one), or a walk that can't be bounded (`internal_error` / `bound_unusable`); a registry entry that escapes the root is refused alone, its reason on the entry."
+		"Open the project holding a file or directory — a trusted `repos.toml`'s root found above it, else its git checkout, else the directory — adding the root to ScopedFs and focusing the repo holding the path, whose files are then indexed and watched (a registry's root alone is indexed at its top level). The root must be strictly inside the daemon's home directory or named by `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, the home directory or an ancestor of it, a pseudo-filesystem, or a protected directory (`forbidden` / `root_not_allowed`, `root_outside_home`, `protected_dir_not_allowed`); an untrusted or unconfined registry refuses the open (`forbidden` / `registry_untrusted`, `registry_not_confined`), as does one that can't be read or doesn't parse (`invalid_params` / `registry_unreadable`, `registry_invalid`) or was replaced while it was checked (`conflict` / `registry_changed`, opening again reads the new one), or a walk that can't be bounded (`internal_error` / `bound_unusable`); a registry entry that escapes the root is refused alone, its reason on the entry. `focus` asks for more registry entries to focus in the same open, each landing or refused alone (`refused`, with the code `repo_focus` would refuse it with); the root or the path's own focus that can't be listed fails the open."
 } satisfies RequestResponseActionSpec;
 
 export const project_close_action_spec = {

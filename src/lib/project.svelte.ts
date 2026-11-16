@@ -142,8 +142,9 @@ export class Project extends Cell<typeof ProjectJson> {
 	);
 
 	/**
-	 * The directories a reopen opens to restore this project's focus after a
-	 * daemon restart: each focused one, or the root when none is.
+	 * What a reopen restores after a daemon restart: each focused directory,
+	 * requested as the focus of an open of the root, or the root alone when
+	 * none is.
 	 */
 	readonly reopen_paths: Array<DiskfileDirectoryPath> = $derived(
 		this.focused.length ? this.focused : [this.root]

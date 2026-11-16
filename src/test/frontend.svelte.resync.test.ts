@@ -12,9 +12,9 @@ import {
 	type DiskfileChangeType
 } from '#lib/diskfile_types.ts';
 import { Frontend, SESSION_BOOT_FALLBACK_DELAY } from '#lib/frontend.svelte.ts';
-import type { RepoFocusOutput, SessionLoadData } from '#lib/action_specs.ts';
+import type { ProjectFocusRefusal, RepoFocusOutput, SessionLoadData } from '#lib/action_specs.ts';
 import type { ProjectInfoJson } from '#lib/project.svelte.ts';
-import { ERROR_PROJECT_NOT_OPEN } from '#lib/project_helpers.ts';
+import { ERROR_PROJECT_NOT_OPEN, ERROR_REPO_INDEX_FAILED } from '#lib/project_helpers.ts';
 import type { Terminal } from '#lib/terminal.svelte.ts';
 import {
 	TERMINAL_LOST_TO_RESTART_MESSAGE,
@@ -79,6 +79,7 @@ type ProjectOpenResult =
 				focus: DiskfileDirectoryPath | null;
 				files: Array<SerializableDisknode>;
 				watch_status: 'full';
+				refused: Array<ProjectFocusRefusal>;
 			};
 	  }
 	| { ok: false; error: { code: number; message: string } };
@@ -90,8 +91,12 @@ let disk: Map<string, string>;
 let reads: Array<string>;
 /** Pending `session_load` calls, resolved by the test. */
 let calls: Array<(result: SessionLoadResult) => void>;
-/** Pending `project_open` calls, resolved by the test. */
-let open_calls: Array<{ path: string; resolve: (result: ProjectOpenResult) => void }>;
+/** Pending `project_open` calls, each its path and requested focus, resolved by the test. */
+let open_calls: Array<{
+	path: string;
+	focus: Array<string>;
+	resolve: (result: ProjectOpenResult) => void;
+}>;
 /** Pending `repo_focus` calls, resolved by the test. */
 let focus_calls: Array<(result: { ok: true; value: RepoFocusOutput }) => void>;
 
@@ -120,8 +125,10 @@ beforeEach(() => {
 				}
 			});
 		},
-		project_open: ({ path }: { path: string }) =>
-			new Promise<ProjectOpenResult>((resolve) => open_calls.push({ path, resolve })),
+		project_open: ({ path, focus }: { path: string; focus?: Array<string> }) =>
+			new Promise<ProjectOpenResult>((resolve) =>
+				open_calls.push({ path, focus: focus ?? [], resolve })
+			),
 		repo_focus: () => new Promise((resolve) => focus_calls.push(resolve))
 	};
 });
@@ -523,8 +530,9 @@ describe('projects after a restart', () => {
 		assert.strictEqual(app.projects.get_by_root(WS_DIR), project, 'kept while reopening');
 		assert.ok(app.diskfiles.get_by_path(WS_A), 'files kept while reopening');
 		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[WS_DIR]
+			open_calls.map((c) => [c.path, c.focus]),
+			[[WS_DIR, []]],
+			'its root, the one focus of a plain directory'
 		);
 
 		// reopened: WS_B was deleted while zzzd was down
@@ -534,7 +542,8 @@ describe('projects after a restart', () => {
 				project: create_project_info(WS_DIR),
 				focus: WS_DIR,
 				files: [create_disknode(WS_A)],
-				watch_status: 'full'
+				watch_status: 'full',
+				refused: []
 			}
 		});
 		await flush();
@@ -635,7 +644,8 @@ describe('projects after a restart', () => {
 			project: create_project_info(WS_DIR),
 			focus: WS_DIR,
 			files: [create_disknode(WS_A)],
-			watch_status: 'full'
+			watch_status: 'full',
+			refused: []
 		}
 	};
 
@@ -758,62 +768,40 @@ describe('a registry project after a restart', () => {
 		await load();
 	};
 
-	test('reopens each focused repo in turn, keeping the files of the rest', async () => {
+	/** The `project_open` calls so far, each its path and requested focus. */
+	const opens = () => open_calls.map((c) => [c.path, c.focus]);
+
+	/** A reopen's reply: the project focusing `focused`, `refused` the rest. */
+	const reply = (
+		focused: Array<DiskfileDirectoryPath>,
+		refused: Array<ProjectFocusRefusal> = []
+	): ProjectOpenResult => ({
+		ok: true,
+		value: {
+			project: registry_info(focused),
+			focus: null,
+			files: focused.includes(APP) ? [node(APP_A)] : [],
+			watch_status: 'full',
+			refused
+		}
+	});
+	const transient = {
+		ok: false as const,
+		error: { code: JSONRPC_ERROR_CODES.service_unavailable, message: 'socket closed' }
+	};
+
+	test('reopens it in one open of its root, requesting the whole focus', async () => {
 		await setup_restarted();
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP],
-			'one at a time'
-		);
-		open_calls[0]!.resolve({
-			ok: true,
-			value: {
-				project: registry_info([APP]),
-				focus: APP,
-				files: [node(APP_A)],
-				watch_status: 'full'
-			}
-		});
-		await flush();
-		assert.ok(app.diskfiles.get_by_path(SITE_A), 'not pruned before its repo reopens');
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE]
-		);
-		open_calls[1]!.resolve({
-			ok: true,
-			value: {
-				project: registry_info([APP, SITE]),
-				focus: SITE,
-				files: [node(APP_A)],
-				watch_status: 'full'
-			}
-		});
+		assert.deepEqual(opens(), [[DEV, [APP, SITE]]]);
+		// `site`'s file was deleted while zzzd was down
+		open_calls[0]!.resolve(reply([APP, SITE]));
 		await flush();
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
 		assert.ok(app.diskfiles.get_by_path(APP_A));
 		assert.ok(!app.diskfiles.get_by_path(SITE_A), 'gone from its reopened repo');
 		await load({ projects: [registry_info([APP, SITE])], file_roots: [ZZZ_DIR, DEV, APP, SITE] });
-		assert.strictEqual(open_calls.length, 2, 'reopened, so no retry');
+		assert.strictEqual(open_calls.length, 1, 'reopened, so no retry');
 	});
-
-	const reply = (focused: Array<DiskfileDirectoryPath>, focus: DiskfileDirectoryPath) => ({
-		ok: true as const,
-		value: {
-			project: registry_info(focused),
-			focus,
-			files: focused.includes(APP) ? [node(APP_A)] : [],
-			watch_status: 'full' as const
-		}
-	});
-	const refusal = {
-		ok: false as const,
-		error: { code: JSONRPC_ERROR_CODES.not_found, message: 'failed to open project: gone' }
-	};
-	const transient = {
-		ok: false as const,
-		error: { code: JSONRPC_ERROR_CODES.service_unavailable, message: 'socket closed' }
-	};
 
 	test('a repo focused from the tree reopens with the rest of the focus', async () => {
 		await load({
@@ -833,110 +821,93 @@ describe('a registry project after a restart', () => {
 		assert.ok((await focused).ok);
 		server_instance_id = create_uuid();
 		await load();
-		open_calls[0]!.resolve(reply([APP], APP));
-		await flush();
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE],
-			'each by `project_open` of its dir, which focuses that entry'
-		);
-		open_calls[1]!.resolve(reply([APP, SITE], SITE));
+		assert.deepEqual(opens(), [[DEV, [APP, SITE]]]);
+		open_calls[0]!.resolve(reply([APP, SITE]));
 		await flush();
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
 		assert.strictEqual(focus_calls.length, 1, 'no `repo_focus` on a reopen');
 	});
 
-	test('a partial reopen keeps the project and drops the refused focus', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+	test('a refused focus is dropped and the rest of the project reopens', async () => {
 		await setup_restarted();
-		open_calls[0]!.resolve(reply([APP], APP));
-		await flush();
-		open_calls[1]!.resolve(refusal);
+		// unlistable now: the entry stays present, so only `refused` says so
+		open_calls[0]!.resolve(reply([APP], [{ dir: SITE, reason: 'permission_denied' }]));
 		await flush();
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP]);
 		await load({ projects: [registry_info([APP])], file_roots: [ZZZ_DIR, DEV, APP] });
-		assert.strictEqual(open_calls.length, 2, 'nothing left to retry');
+		assert.strictEqual(open_calls.length, 1, 'nothing left to retry');
 	});
 
-	test('a refused focus and a transient failure keep the project, and retry only the failure', async () => {
+	test('a focus that failed to index is kept and retried alone', async () => {
+		await setup_restarted();
+		open_calls[0]!.resolve(reply([APP], [{ dir: SITE, reason: ERROR_REPO_INDEX_FAILED }]));
+		await flush();
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE], 'kept while retried');
+
+		// listed, with `app` reopened and `site` not: `site` is retried
+		await load({ projects: [registry_info([APP])], file_roots: [ZZZ_DIR, DEV, APP] });
+		assert.deepEqual(opens(), [
+			[DEV, [APP, SITE]],
+			[DEV, [SITE]]
+		]);
+		open_calls[1]!.resolve(reply([APP, SITE]));
+		await flush();
+		await load({ projects: [registry_info([APP, SITE])], file_roots: [ZZZ_DIR, DEV, APP, SITE] });
+		assert.strictEqual(open_calls.length, 2, 'reopened, so no more retries');
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
+	});
+
+	test('an open that fails transiently keeps the project and retries its whole focus', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 		await setup_restarted();
 		open_calls[0]!.resolve(transient);
 		await flush();
-		open_calls[1]!.resolve(refusal);
-		await flush();
 		assert.ok(app.projects.get_by_root(DEV), 'kept for the retry');
 		assert.ok(app.diskfiles.get_by_path(APP_A), 'its files kept');
-		assert.deepEqual(
-			app.projects.get_by_root(DEV)?.focused,
-			[APP],
-			'the refused focus is dropped at once, though nothing landed'
-		);
+		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
 
-		// the next snapshot (same instance, the project still lost) retries `app` alone
+		// the next snapshot (same instance, the project still lost) retries it
 		await load();
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE, APP]
-		);
-		open_calls[2]!.resolve(reply([APP], APP));
-		await flush();
-		await load({ projects: [registry_info([APP])], file_roots: [ZZZ_DIR, DEV, APP] });
-		assert.strictEqual(open_calls.length, 3, 'reopened, so no more retries');
-		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP], "the backend's focus");
+		assert.deepEqual(opens(), [
+			[DEV, [APP, SITE]],
+			[DEV, [APP, SITE]]
+		]);
 	});
 
 	test('after a restart, a project another client reopened first gets the rest of the focus', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 		const OTHER = parse_or_throw(DiskfileDirectoryPath, '/dev/other/');
 		await setup_restarted();
-		open_calls[0]!.resolve(reply([APP], APP));
-		await flush();
-		open_calls[1]!.resolve(transient);
+		open_calls[0]!.resolve(reply([APP], [{ dir: SITE, reason: ERROR_REPO_INDEX_FAILED }]));
 		await flush();
 		// zzzd restarts again, and another client reopens the project on `other` alone
 		server_instance_id = create_uuid();
 		await load({ projects: [registry_info([OTHER])], file_roots: [ZZZ_DIR, DEV, OTHER] });
 		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE, APP],
+			opens(),
+			[
+				[DEV, [APP, SITE]],
+				[DEV, [APP, SITE]]
+			],
 			'`app` too, not only the pending `site`'
-		);
-		open_calls[2]!.resolve(reply([APP, OTHER], APP));
-		await flush();
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE, APP, SITE]
 		);
 	});
 
 	test('a restart during a reopen queues its whole focus again once it settles', async () => {
 		await setup_restarted();
-		// zzzd restarts again while `app` is reopening: the snapshot skips the project
+		// zzzd restarts again while the project is reopening: the snapshot skips it
 		server_instance_id = create_uuid();
 		await load();
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP]
-		);
-		// both land — on the instance that's gone
-		open_calls[0]!.resolve(reply([APP], APP));
+		assert.strictEqual(open_calls.length, 1);
+		// it lands — on the instance that's gone
+		open_calls[0]!.resolve(reply([APP, SITE]));
 		await flush();
-		open_calls[1]!.resolve(reply([APP, SITE], SITE));
-		await flush();
-		// a resync was asked for, and it retries the whole focus
+		// a resync was asked for, and it reopens the whole focus
 		assert.strictEqual(calls.length, 4, 'a session load follows the reopen');
 		await succeed(3);
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE, APP]
-		);
-		open_calls[2]!.resolve(reply([APP], APP));
-		await flush();
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE, APP, SITE]
-		);
+		assert.deepEqual(opens(), [
+			[DEV, [APP, SITE]],
+			[DEV, [APP, SITE]]
+		]);
 	});
 
 	test('an update while a snapshot is in flight asks for another', async () => {
@@ -954,55 +925,45 @@ describe('a registry project after a restart', () => {
 	});
 
 	test('another restart before a retry reopens the whole focus, not just the retry', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 		await setup_restarted();
-		open_calls[0]!.resolve(reply([APP], APP));
-		await flush();
-		open_calls[1]!.resolve(transient);
+		open_calls[0]!.resolve(reply([APP], [{ dir: SITE, reason: ERROR_REPO_INDEX_FAILED }]));
 		await flush();
 		// zzzd restarts again before any snapshot retried `site`
 		server_instance_id = create_uuid();
 		await load();
 		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE, APP],
+			opens(),
+			[
+				[DEV, [APP, SITE]],
+				[DEV, [APP, SITE]]
+			],
 			'the lost project reopens from its whole focus'
 		);
-		open_calls[2]!.resolve(reply([APP], APP));
-		await flush();
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE, APP, SITE]
-		);
 	});
 
-	test('a retry of a partial reopen survives a snapshot listing the project', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
-		await setup_restarted();
-		open_calls[0]!.resolve(reply([APP], APP));
-		await flush();
-		open_calls[1]!.resolve(transient);
-		await flush();
-		// listed, with `app` reopened and `site` not: `site` is retried
-		await load({ projects: [registry_info([APP])], file_roots: [ZZZ_DIR, DEV, APP] });
-		assert.deepEqual(
-			open_calls.map((c) => c.path),
-			[APP, SITE, SITE]
-		);
-		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE], 'kept while retried');
-	});
-
-	test('a close between two focus opens stops the reopen and closes it again', async () => {
+	test('a close during the reopen closes it again once it lands', async () => {
 		await setup_restarted();
 		const close_calls: Array<{ root: string; resolve: (result: unknown) => void }> = [];
 		(app.api as unknown as Record<string, unknown>).project_close = ({ root }: { root: string }) =>
 			new Promise((resolve) => close_calls.push({ root, resolve }));
-		open_calls[0]!.resolve(reply([APP], APP));
 		const closed = app.close_project(DEV);
-		await flush();
-		assert.strictEqual(open_calls.length, 1, '`site` is never opened');
-		close_calls[0]!.resolve({ ok: true, value: null });
+		close_calls[0]!.resolve({
+			ok: false,
+			error: {
+				code: JSONRPC_ERROR_CODES.invalid_params,
+				message: `project not open: ${DEV}`,
+				data: { reason: ERROR_PROJECT_NOT_OPEN }
+			}
+		});
 		assert.ok((await closed).ok);
+		open_calls[0]!.resolve(reply([APP, SITE]));
+		await flush();
+		assert.deepEqual(
+			close_calls.map((c) => c.root),
+			[DEV, DEV],
+			'the open that landed anyway is closed again'
+		);
+		close_calls[1]!.resolve({ ok: true, value: null });
 		await flush();
 		assert.ok(!app.projects.get_by_root(DEV));
 	});
@@ -1012,14 +973,13 @@ describe('a registry project after a restart', () => {
 		const close_calls: Array<{ root: string; resolve: (result: unknown) => void }> = [];
 		(app.api as unknown as Record<string, unknown>).project_close = ({ root }: { root: string }) =>
 			new Promise((resolve) => close_calls.push({ root, resolve }));
-		// the other client's close lands while `app` is reopening
+		// the other client's close lands while the project is reopening
 		(
 			app.action_handlers.project_changed as unknown as { receive: (event: unknown) => void }
 		).receive({ data: { input: { type: 'close', project: registry_info([]) } } });
 		assert.ok(!app.projects.get_by_root(DEV), 'removed here');
-		open_calls[0]!.resolve(reply([APP], APP));
+		open_calls[0]!.resolve(reply([APP, SITE]));
 		await flush();
-		assert.strictEqual(open_calls.length, 1, '`site` is never opened');
 		assert.deepEqual(
 			close_calls.map((c) => c.root),
 			[DEV],
@@ -1032,29 +992,52 @@ describe('a registry project after a restart', () => {
 		assert.strictEqual(open_calls.length, 1, 'no retry');
 	});
 
-	test('a reopen resolving to another project drops the old one, not the new one', async () => {
+	test('a root that is no longer a registry reopens as what it is, its focus refused', async () => {
 		await setup_restarted();
-		// the registry is gone: each repo now opens as its own checkout
-		for (const [i, dir, file] of [
-			[0, APP, APP_A],
-			[1, SITE, SITE_A]
-		] as const) {
-			open_calls[i]!.resolve({
-				ok: true,
-				value: {
-					project: { ...create_project_info(dir), kind: 'git_repo' },
-					focus: dir,
-					files: [node(file)],
-					watch_status: 'full'
-				}
-			});
-			await flush();
-		}
+		const loads = calls.length;
+		// `repos.toml` is gone: the root opens as a plain directory
+		open_calls[0]!.resolve({
+			ok: true,
+			value: {
+				project: create_project_info(DEV),
+				focus: DEV,
+				files: [node(APP_A), node(SITE_A)],
+				watch_status: 'full',
+				refused: [
+					{ dir: APP, reason: 'project_not_registry' },
+					{ dir: SITE, reason: 'project_not_registry' }
+				]
+			}
+		});
+		await flush();
+		const project = app.projects.get_by_root(DEV);
+		assert.ok(project);
+		assert.strictEqual(project.kind, 'plain_dir');
+		assert.deepEqual(project.focused, [DEV]);
+		// the kind change resyncs, as any narrowing reply does
+		assert.strictEqual(calls.length, loads + 1);
+		await succeed(loads, { projects: [create_project_info(DEV)], file_roots: [ZZZ_DIR, DEV] });
+		assert.strictEqual(open_calls.length, 1, 'nothing left to retry');
+	});
+
+	test('a reopen resolving to another project drops the old one, not the new one', async () => {
+		const UPPER = parse_or_throw(DiskfileDirectoryPath, '/');
+		await setup_restarted();
+		open_calls[0]!.resolve({
+			ok: true,
+			value: {
+				project: { ...create_project_info(UPPER), kind: 'git_repo' },
+				focus: UPPER,
+				files: [node(APP_A)],
+				watch_status: 'full',
+				// another project's refusals say nothing of this one's focus
+				refused: [{ dir: SITE, reason: ERROR_REPO_INDEX_FAILED }]
+			}
+		});
+		await flush();
 		assert.ok(!app.projects.get_by_root(DEV), 'the registry project is dropped');
-		assert.ok(app.projects.get_by_root(APP));
-		assert.ok(app.projects.get_by_root(SITE));
-		assert.ok(app.diskfiles.get_by_path(APP_A), "the new projects' files stay");
-		assert.ok(app.diskfiles.get_by_path(SITE_A));
+		assert.ok(app.projects.get_by_root(UPPER));
+		assert.ok(app.diskfiles.get_by_path(APP_A), "the new project's files stay");
 	});
 });
 

@@ -397,7 +397,7 @@ commands):
   closing a plain one revokes it), `_testing_reset` closing every project
   and restoring the boot-time scope, `project_open` returning the project
   (`plain_dir` or `git_repo`, focused on its root), the open's `focus`, its
-  files (metadata, no contents), and `watch_status` (first, concurrent, and
+  files (metadata, no contents), `watch_status`, and `refused` (first, concurrent, and
   idempotent open; a file opening its directory; a subdirectory of a
   checkout rooting at the checkout, `.git` unindexed; symlinks and link
   loops skipped; an unreadable subdirectory skipped while its siblings are
@@ -421,7 +421,11 @@ commands):
   root refused `entry_not_confined`), focused on that repo, indexing the
   root's loose files and the focused repo alone (not an unregistered
   directory); the root alone focuses nothing, and a later open of a repo
-  adds its focus with a `project_changed` `update`; `repo_focus` of an
+  adds its focus with a `project_changed` `update`; an open of the root
+  requesting a focus (a reopen's shape) lands the present entry and
+  refuses the rest per dir in `refused` (`repo_not_present` for one not
+  cloned and one refused, `repo_not_in_project` for an unregistered
+  directory); `repo_focus` of an
   entry indexes it, replies with that repo's files alone, and notifies
   another socket, which pulls the repo with `repo_files`, again changes
   nothing, and `repo_unfocus` drops it from that socket's next snapshot,
@@ -723,9 +727,15 @@ commands):
   untrusted or unconfined one → `forbidden` / `registry_untrusted`,
   `registry_not_confined`; one replaced while it was checked → `conflict`
   / `registry_changed`; an unusable walk bound → `internal_error` /
-  `bound_unusable`; a root or focused directory whose listing is refused →
-  `forbidden` / `permission_denied`. A refused registry entry fails
-  nothing: its `entry_*` reason is on the entry. On canonical paths, so no
+  `bound_unusable`; the root or the path's own focus whose listing is
+  refused → `forbidden` / `permission_denied`. A refused registry entry fails
+  nothing: its `entry_*` reason is on the entry. Nor does a focus the open
+  requested (`focus`) that doesn't land: each is reported in the reply's
+  `refused` with the reason `repo_focus` would give it
+  (`handlers::project::focus_refusal_reason` — `repo_not_in_project`,
+  `repo_not_present`, `project_not_registry`, `permission_denied`), or
+  `repo_index_failed` (`ERROR_REPO_INDEX_FAILED`) for a listing that failed
+  otherwise, the one a client retries. On canonical paths, so no
   symlink or `..` spelling gets around either, it holds the opened
   directory and the project root to the root rules (`root_policy::RootPolicy::admit`: strictly inside `$HOME` or
   in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor of it, or
@@ -1057,7 +1067,15 @@ commands):
   halfway. `project_open` starts the filers — the initial walks and
   watches — before taking the lock, then re-ensures them under the lock (a
   dedup hit, unless a racing close stopped one), so a large tree's scan
-  doesn't hold up other opens and closes; `repo_focus` does the same with
+  doesn't hold up other opens and closes. The filers the fresh project
+  keeps itself are required — one that fails, before the lock or in the
+  commit, fails the open with everything it started released — while each
+  focus the open requested is scanned and then, under the lock, ensured
+  again one by one before the commit (`ProjectManager::open`), so a
+  requested focus that can't be listed, or was stopped and removed since
+  its scan, is dropped from the next state and refused alone, and the
+  commit finds every filer it needs running; what its scan widened is
+  released by the commit like anything else the operation started; `repo_focus` does the same with
   its repo's filer, checking the entry before the scan and again under the
   lock. A filer is stopped only when no
   open project keeps it; one an open project no longer needs whole — a

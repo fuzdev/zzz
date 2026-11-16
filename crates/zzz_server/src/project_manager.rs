@@ -298,6 +298,31 @@ pub struct Landed {
     pub filers: Filers,
 }
 
+/// An open as it landed ([`ProjectManager::open`]): the project and its
+/// filers, and each requested focus that didn't land.
+#[derive(Debug)]
+pub struct Opened {
+    pub landed: Landed,
+    /// Those refused before the lock — by the fresh resolve, then by a
+    /// listing that failed — then those whose filer was stopped by the time
+    /// the lock was taken, each group in the order requested. A focus
+    /// refused before the lock that a racing commit focused since landed,
+    /// and isn't among them.
+    pub refused: Vec<FocusRefused>,
+}
+
+/// A focus an open was asked for that didn't land, and why.
+///
+/// The error is [`LifecycleError::RepoNotInProject`],
+/// [`LifecycleError::RepoMissing`], [`LifecycleError::RepoRefused`],
+/// [`LifecycleError::NotRegistry`], or [`LifecycleError::Filer`].
+#[derive(Debug)]
+pub struct FocusRefused {
+    /// The directory as requested (trailing `/`).
+    pub dir: String,
+    pub error: LifecycleError,
+}
+
 /// A focused directory's index as one commit left it
 /// ([`ProjectManager::focused_files`]).
 #[derive(Debug)]
@@ -422,6 +447,32 @@ fn check_focusable(project: &OpenProject, dir: &str) -> Result<(), LifecycleErro
             reason,
         }),
     }
+}
+
+/// Split the focuses an open of `fresh` was asked for into those to scan
+/// and those refused by the fresh resolve, by the rule [`merge_project`]
+/// keeps a focus by: a present entry of a registry. Duplicates collapse; a
+/// focus `fresh` has already (the opened path's) lands without a scan of
+/// its own. A checkout's or plain directory's root is its one focus, so a
+/// request for it lands and any other is [`LifecycleError::NotRegistry`] —
+/// refused per directory rather than failing the open, since a client
+/// reopening a registry can't know it's since become a checkout.
+fn check_requested(fresh: &OpenProject, requested: &[String]) -> (Vec<String>, Vec<FocusRefused>) {
+    let focused = fresh.focused();
+    let mut seen = BTreeSet::new();
+    let mut wanted = Vec::new();
+    let mut refused = Vec::new();
+    for dir in requested {
+        let dir = with_trailing_slash(dir.clone());
+        if focused.contains(&dir.as_str()) || !seen.insert(dir.clone()) {
+            continue;
+        }
+        match check_focusable(fresh, &dir) {
+            Ok(()) => wanted.push(dir),
+            Err(error) => refused.push(FocusRefused { dir, error }),
+        }
+    }
+    (wanted, refused)
 }
 
 /// `key` as a directory key: with a trailing `/`.
@@ -578,28 +629,78 @@ impl ProjectManager {
     /// Open `fresh` — a project as just resolved, focusing what the open
     /// focuses — or update the open project at its root with it
     /// ([`merge_project`]): the fresh kind and entries, the focus of both.
+    /// `requested` are more directories to focus once it lands, each checked
+    /// against `fresh` ([`check_requested`]) and landing or refused alone.
+    ///
+    /// The filers `fresh` itself keeps (its root, the opened path's focus)
+    /// are required: one that can't start fails the open. A requested focus
+    /// is scanned before the lock like them, but one that can't be listed —
+    /// then, or under the lock, where a racing unfocus may have stopped its
+    /// filer since — is refused alone and the rest of the open lands. Under
+    /// the lock each landing focus's filer is ensured before the commit, so
+    /// the commit's own ensure finds every filer running and can fail only
+    /// on a required one, as before.
     ///
     /// Broadcasts `project_changed` — `open` for a new project, `update` for
     /// an open one this changed, nothing for one it didn't.
     ///
     /// # Errors
     ///
-    /// [`LifecycleError::Filer`] when the root or a focused directory can't
-    /// be listed, leaving nothing new open; [`LifecycleError::Notify`].
-    pub async fn open(&self, app: &Arc<App>, fresh: OpenProject) -> Result<Landed, LifecycleError> {
-        // the scans run before the lock (see the module docs); a directory
-        // that can't be listed fails the open here, before anything is recorded
-        let started = filers_of(&fresh);
+    /// [`LifecycleError::Filer`] when the root or the opened path's focus
+    /// can't be listed, leaving nothing new open; [`LifecycleError::Notify`].
+    pub async fn open(
+        &self,
+        app: &Arc<App>,
+        fresh: OpenProject,
+        requested: &[String],
+    ) -> Result<Opened, LifecycleError> {
+        let (wanted, mut refused) = check_requested(&fresh, requested);
+
+        // the scans run before the lock (see the module docs); a required
+        // directory that can't be listed fails the open here, before
+        // anything is recorded
+        let mut started = filers_of(&fresh);
         if let Err(error) = ensure_filers(app, &started).await {
             let projects = self.projects.lock().await;
             release(app, &started, &desired_filers(projects.values())).await;
             return Err(error);
         }
+        let mut scanned = Vec::new();
+        for dir in wanted {
+            let one = Filers::from([(dir.clone(), FilerDepth::Tree)]);
+            match ensure_filers(app, &one).await {
+                Ok(()) => {
+                    started.insert(dir.clone(), FilerDepth::Tree);
+                    scanned.push(dir);
+                }
+                // a failed start leaves no filer of its own behind
+                Err(error) => refused.push(FocusRefused { dir, error }),
+            }
+        }
 
         let mut projects = self.projects.lock().await;
         let previous = projects.get(&fresh.root);
-        let project =
+        let mut project =
             previous.map_or_else(|| fresh.clone(), |existing| merge_project(existing, &fresh));
+        if let OpenKind::Registry { focused, .. } = &mut project.kind {
+            for dir in scanned {
+                // a dedup hit unless something stopped the filer since its
+                // scan — then a refusal here, before the commit could fail
+                // the whole open on it; a scan that widened it is released
+                // by the commit, `started` naming it
+                let one = Filers::from([(dir.clone(), FilerDepth::Tree)]);
+                match ensure_filers(app, &one).await {
+                    Ok(()) => {
+                        focused.insert(dir);
+                    }
+                    Err(error) => refused.push(FocusRefused { dir, error }),
+                }
+            }
+        }
+        // a focus refused before the lock that another commit focused since —
+        // a racing `repo_focus`, or an open — landed after all
+        let landed = project.focused();
+        refused.retain(|refusal| !landed.contains(&refusal.dir.as_str()));
         let change = match previous {
             None => Some(ProjectChange::Open),
             Some(previous) if *previous != project => Some(ProjectChange::Update),
@@ -613,7 +714,10 @@ impl ProjectManager {
         drop(projects);
 
         let filers = filers_of(&project);
-        Ok(Landed { project, filers })
+        Ok(Opened {
+            landed: Landed { project, filers },
+            refused,
+        })
     }
 
     /// Close the open project at `root` — matched as given (plus a trailing
@@ -1118,11 +1222,11 @@ mod tests {
         // a registry focusing `app` whole, and a registry rooted at `app`,
         // which keeps only its top level
         app.projects
-            .open(&app, registry_at(&root, &["app"], &["app"]))
+            .open(&app, registry_at(&root, &["app"], &["app"]), &[])
             .await
             .unwrap();
         app.projects
-            .open(&app, registry_at(&app_dir, &[], &[]))
+            .open(&app, registry_at(&app_dir, &[], &[]), &[])
             .await
             .unwrap();
         assert_eq!(app.filer_manager.files_for(&app_dir).await.len(), 2);
@@ -1150,11 +1254,11 @@ mod tests {
         let app = inert_app();
         let (root, app_dir) = (tmp.key("w/"), tmp.key("w/app/"));
         app.projects
-            .open(&app, registry_at(&root, &["app"], &[]))
+            .open(&app, registry_at(&root, &["app"], &[]), &[])
             .await
             .unwrap();
         app.projects
-            .open(&app, registry_at(&app_dir, &[], &[]))
+            .open(&app, registry_at(&app_dir, &[], &[]), &[])
             .await
             .unwrap();
 
@@ -1183,7 +1287,7 @@ mod tests {
         let app = inert_app();
         let (root, app_dir) = (tmp.key("w/"), tmp.key("w/app/"));
         app.projects
-            .open(&app, registry_at(&root, &["app"], &["app"]))
+            .open(&app, registry_at(&root, &["app"], &["app"]), &[])
             .await
             .unwrap();
 
@@ -1220,7 +1324,7 @@ mod tests {
         let app = inert_app();
         let (root, app_dir) = (tmp.key("w/"), tmp.key("w/app/"));
         app.projects
-            .open(&app, registry_at(&root, &["app"], &["app"]))
+            .open(&app, registry_at(&root, &["app"], &["app"]), &[])
             .await
             .unwrap();
         let read = app
@@ -1275,12 +1379,12 @@ mod tests {
         let (root, app_dir, site_dir) = (tmp.key("w/"), tmp.key("w/app/"), tmp.key("w/site/"));
         let manager = &app.projects;
         manager
-            .open(&app, registry_at(&root, &["app", "site"], &["app"]))
+            .open(&app, registry_at(&root, &["app", "site"], &["app"]), &[])
             .await
             .unwrap();
         // an open that changes nothing broadcasts nothing
         manager
-            .open(&app, registry_at(&root, &["app", "site"], &["app"]))
+            .open(&app, registry_at(&root, &["app", "site"], &["app"]), &[])
             .await
             .unwrap();
         manager.focus(&app, &root, &site_dir).await.unwrap();
@@ -1319,12 +1423,12 @@ mod tests {
         let (app, _connection, mut rx) = app_with_socket();
         let (root, app_dir, gone) = (tmp.key("w/"), tmp.key("w/app/"), tmp.key("w/gone/"));
         app.projects
-            .open(&app, registry_at(&root, &["app", "gone"], &[]))
+            .open(&app, registry_at(&root, &["app", "gone"], &[]), &[])
             .await
             .unwrap();
         // the registry nested in `app` keeps it at its top level
         app.projects
-            .open(&app, registry_at(&app_dir, &[], &[]))
+            .open(&app, registry_at(&app_dir, &[], &[]), &[])
             .await
             .unwrap();
         let filers = app.filer_manager.project_filers().await;
@@ -1363,7 +1467,7 @@ mod tests {
         let (app, _connection, mut rx) = app_with_socket();
         let (root, app_dir) = (tmp.key("w/"), tmp.key("w/app/"));
         app.projects
-            .open(&app, registry_at(&root, &["app"], &[]))
+            .open(&app, registry_at(&root, &["app"], &[]), &[])
             .await
             .unwrap();
         project_changes(&mut rx);
@@ -1385,6 +1489,350 @@ mod tests {
         );
         assert!(app.projects.published().projects[0].focused().is_empty());
         assert!(project_changes(&mut rx).is_empty());
+        assert_settled(&app).await;
+    }
+
+    /// The requested focuses an open refused, each its dir and its error's
+    /// variant name.
+    fn refusals(opened: &Opened) -> Vec<(String, String)> {
+        opened
+            .refused
+            .iter()
+            .map(|FocusRefused { dir, error }| {
+                let variant = format!("{error:?}");
+                let name = variant.split([' ', '{', '(']).next().unwrap().to_owned();
+                (dir.clone(), name)
+            })
+            .collect()
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_open_lands_every_requested_focus_in_one_commit() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/site/b.txt"] {
+            tmp.write(rel);
+        }
+        let (app, _connection, mut rx) = app_with_socket();
+        let (root, app_dir, site_dir) = (tmp.key("w/"), tmp.key("w/app/"), tmp.key("w/site/"));
+        // the root opened, its repos requested — a trailing slash optional,
+        // a duplicate collapsed
+        let opened = app
+            .projects
+            .open(
+                &app,
+                registry_at(&root, &["app", "site"], &[]),
+                &[site_dir.clone(), tmp.key("w/app"), app_dir.clone()],
+            )
+            .await
+            .unwrap();
+        assert!(opened.refused.is_empty(), "{:?}", opened.refused);
+        assert_eq!(opened.landed.project.focused(), [&app_dir, &site_dir]);
+        assert_eq!(
+            opened.landed.filers.keys().collect::<Vec<_>>(),
+            [&root, &app_dir, &site_dir]
+        );
+        let focus = serde_json::json!([app_dir, site_dir]);
+        assert_eq!(
+            project_changes(&mut rx),
+            [("open".to_owned(), root.clone(), focus.clone())],
+            "one notification for the open and its focuses"
+        );
+
+        // again, on the open project: nothing changes, nothing is broadcast
+        let again = app
+            .projects
+            .open(
+                &app,
+                registry_at(&root, &["app", "site"], &[]),
+                std::slice::from_ref(&app_dir),
+            )
+            .await
+            .unwrap();
+        assert!(again.refused.is_empty());
+        assert!(project_changes(&mut rx).is_empty());
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_open_refuses_each_requested_focus_that_isnt_a_present_entry_alone() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/site/b.txt"] {
+            tmp.write(rel);
+        }
+        let app = inert_app();
+        let (root, app_dir, site_dir, keys_dir, nope) = (
+            tmp.key("w/"),
+            tmp.key("w/app/"),
+            tmp.key("w/site/"),
+            tmp.key("w/keys/"),
+            tmp.key("w/nope/"),
+        );
+        // `site` not cloned and `keys` refused as just resolved
+        let mut fresh = registry_at(&root, &["app", "site", "keys"], &[]);
+        if let OpenKind::Registry { entries, .. } = &mut fresh.kind {
+            entries[1].state = EntryState::Missing;
+            entries[2].state = EntryState::Refused {
+                reason: "entry_not_confined",
+            };
+        }
+        let opened = app
+            .projects
+            .open(
+                &app,
+                fresh,
+                &[
+                    site_dir.clone(),
+                    app_dir.clone(),
+                    keys_dir.clone(),
+                    nope.clone(),
+                    nope.clone(),
+                ],
+            )
+            .await
+            .unwrap();
+        assert_eq!(opened.landed.project.focused(), [&app_dir]);
+        assert_eq!(
+            refusals(&opened),
+            [
+                (site_dir, "RepoMissing".to_owned()),
+                (keys_dir, "RepoRefused".to_owned()),
+                (nope, "RepoNotInProject".to_owned()),
+            ]
+        );
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_unlistable_requested_focus_is_refused_alone_and_leaves_no_filer() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/app/sub/c.txt"] {
+            tmp.write(rel);
+        }
+        let (app, _connection, mut rx) = app_with_socket();
+        let (root, app_dir, gone) = (tmp.key("w/"), tmp.key("w/app/"), tmp.key("w/gone/"));
+        // `gone` is present as resolved, and vanished before its scan
+        let opened = app
+            .projects
+            .open(
+                &app,
+                registry_at(&root, &["app", "gone"], &[]),
+                &[gone.clone(), app_dir.clone()],
+            )
+            .await
+            .unwrap();
+        assert_eq!(opened.landed.project.focused(), [&app_dir]);
+        assert!(
+            matches!(&opened.refused[..], [FocusRefused { dir, error: LifecycleError::Filer { source, .. } }]
+                if dir == &gone && source.kind() == std::io::ErrorKind::NotFound),
+            "{:?}",
+            opened.refused
+        );
+        assert_eq!(
+            project_changes(&mut rx),
+            [("open".to_owned(), root, serde_json::json!([app_dir]))]
+        );
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_requested_focus_stopped_before_the_lock_is_refused_and_its_widening_released() {
+        let tmp = TempDir::new();
+        for rel in [
+            "w/README.md",
+            "w/app/a.txt",
+            "w/app/sub/c.txt",
+            "w/site/b.txt",
+        ] {
+            tmp.write(rel);
+        }
+        let (app, _connection, mut rx) = app_with_socket();
+        let (root, app_dir, site_dir) = (tmp.key("w/"), tmp.key("w/app/"), tmp.key("w/site/"));
+        // the registry nested in `app` keeps it at its top level
+        app.projects
+            .open(&app, registry_at(&app_dir, &[], &[]), &[])
+            .await
+            .unwrap();
+        project_changes(&mut rx);
+
+        // the open's scans run while the lock is held elsewhere — `app`
+        // widened to its whole tree — and it waits on the lock
+        let mut projects = app.projects.projects.lock().await;
+        let opening = tokio::spawn({
+            let (app, root, app_dir, site_dir) = (
+                Arc::clone(&app),
+                root.clone(),
+                app_dir.clone(),
+                site_dir.clone(),
+            );
+            async move {
+                app.projects
+                    .open(
+                        &app,
+                        registry_at(&root, &["app", "site"], &[]),
+                        &[app_dir, site_dir],
+                    )
+                    .await
+            }
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while app.filer_manager.depth_of(&app_dir).await.map(|(d, _)| d)
+                != Some(FilerDepth::Tree)
+                || app.filer_manager.depth_of(&site_dir).await.is_none()
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+            }
+        })
+        .await
+        .expect("the open's scans run before the lock");
+
+        // meanwhile the nested registry closes, stopping `app`'s filer, and
+        // `app` is deleted
+        let mut next = projects.clone();
+        let nested = next.remove(&app_dir).unwrap();
+        app.projects
+            .commit(
+                &app,
+                &mut projects,
+                next,
+                &Filers::new(),
+                [(ProjectChange::Close, nested)],
+            )
+            .await
+            .unwrap();
+        assert!(app.filer_manager.depth_of(&app_dir).await.is_none());
+        std::fs::remove_dir_all(tmp.0.join("w/app")).unwrap();
+        drop(projects);
+
+        let opened = opening.await.unwrap().unwrap();
+        assert_eq!(opened.landed.project.focused(), [&site_dir]);
+        assert!(
+            matches!(&opened.refused[..], [FocusRefused { dir, error: LifecycleError::Filer { source, .. } }]
+                if dir == &app_dir && source.kind() == std::io::ErrorKind::NotFound),
+            "{:?}",
+            opened.refused
+        );
+        assert_eq!(
+            project_changes(&mut rx),
+            [
+                ("close".to_owned(), app_dir, serde_json::json!([])),
+                ("open".to_owned(), root, serde_json::json!([site_dir])),
+            ]
+        );
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_requested_focus_refused_before_the_lock_and_focused_since_isnt_refused() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt"] {
+            tmp.write(rel);
+        }
+        let app = inert_app();
+        let (root, app_dir, site_dir) = (tmp.key("w/"), tmp.key("w/app/"), tmp.key("w/site/"));
+        app.projects
+            .open(&app, registry_at(&root, &["app", "site"], &[]), &[])
+            .await
+            .unwrap();
+
+        // the open's scans run while the lock is held elsewhere: `site`, a
+        // present entry as resolved but not on disk yet, fails its scan, then
+        // `app` — scanned after it, in request order — starts its filer
+        let mut projects = app.projects.projects.lock().await;
+        let opening = tokio::spawn({
+            let (app, root, app_dir, site_dir) = (
+                Arc::clone(&app),
+                root.clone(),
+                app_dir.clone(),
+                site_dir.clone(),
+            );
+            async move {
+                app.projects
+                    .open(
+                        &app,
+                        registry_at(&root, &["app", "site"], &[]),
+                        &[site_dir, app_dir],
+                    )
+                    .await
+            }
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while app.filer_manager.depth_of(&app_dir).await.is_none() {
+                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+            }
+        })
+        .await
+        .expect("the open's scans run before the lock");
+        assert!(app.filer_manager.depth_of(&site_dir).await.is_none());
+
+        // meanwhile `site` appears, and another client's focus of it commits
+        tmp.write("w/site/b.txt");
+        let started = Filers::from([(site_dir.clone(), FilerDepth::Tree)]);
+        ensure_filers(&app, &started).await.unwrap();
+        let mut next = projects.clone();
+        let mut project = next.get(&root).unwrap().clone();
+        focused_mut(&mut project).unwrap().insert(site_dir.clone());
+        next.insert(root.clone(), project);
+        app.projects
+            .commit(&app, &mut projects, next, &started, [])
+            .await
+            .unwrap();
+        drop(projects);
+
+        // the open's refusal of `site` is stale: it's focused, not refused
+        let opened = opening.await.unwrap().unwrap();
+        assert_eq!(opened.landed.project.focused(), [&app_dir, &site_dir]);
+        assert!(opened.refused.is_empty(), "{:?}", refusals(&opened));
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_requested_focus_the_fresh_resolve_drops_is_refused_though_focused_before() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/site/b.txt"] {
+            tmp.write(rel);
+        }
+        let app = inert_app();
+        let (root, site_dir) = (tmp.key("w/"), tmp.key("w/site/"));
+        app.projects
+            .open(&app, registry_at(&root, &["app", "site"], &["site"]), &[])
+            .await
+            .unwrap();
+
+        // `site` left the registry since: the reopen drops its focus and
+        // refuses the request for it, though the open project focused it
+        let opened = app
+            .projects
+            .open(
+                &app,
+                registry_at(&root, &["app"], &[]),
+                std::slice::from_ref(&site_dir),
+            )
+            .await
+            .unwrap();
+        assert!(opened.landed.project.focused().is_empty());
+        assert_eq!(
+            refusals(&opened),
+            [(site_dir, "RepoNotInProject".to_owned())]
+        );
+        assert_settled(&app).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_checkout_or_plain_dir_lands_a_requested_root_and_refuses_any_other_focus() {
+        let tmp = TempDir::new();
+        for rel in ["p/x.txt", "p/deep/y.txt"] {
+            tmp.write(rel);
+        }
+        let app = inert_app();
+        let (plain, deep) = (tmp.key("p/"), tmp.key("p/deep/"));
+        // a reopen of what was a registry here, its focus requested
+        let opened = app
+            .projects
+            .open(&app, plain_at(&plain), &[plain.clone(), deep.clone()])
+            .await
+            .unwrap();
+        assert_eq!(opened.landed.project.focused(), [&plain]);
+        assert_eq!(refusals(&opened), [(deep, "NotRegistry".to_owned())]);
         assert_settled(&app).await;
     }
 
@@ -1435,28 +1883,38 @@ mod tests {
                     site_dir.clone(),
                     plain.clone(),
                 );
-                let op = rng.next(9);
+                let op = rng.next(10);
                 tasks.push(tokio::spawn(async move {
                     let manager = &app.projects;
                     match op {
                         0 => manager
-                            .open(&app, registry_at(&root, &["app", "site"], &["app"]))
+                            .open(&app, registry_at(&root, &["app", "site"], &["app"]), &[])
                             .await
                             .map(drop),
                         1 => manager
-                            .open(&app, registry_at(&root, &["app", "site"], &[]))
+                            .open(&app, registry_at(&root, &["app", "site"], &[]), &[])
                             .await
                             .map(drop),
                         // the registry nested in the first one's entry
                         2 => manager
-                            .open(&app, registry_at(&app_dir, &[], &[]))
+                            .open(&app, registry_at(&app_dir, &[], &[]), &[])
                             .await
                             .map(drop),
-                        3 => manager.open(&app, plain_at(&plain)).await.map(drop),
+                        3 => manager.open(&app, plain_at(&plain), &[]).await.map(drop),
                         4 => manager.focus(&app, &root, &app_dir).await.map(drop),
                         5 => manager.focus(&app, &root, &site_dir).await.map(drop),
                         6 => manager.unfocus(&app, &root, &app_dir).await.map(drop),
                         7 => manager.close(&app, &root).await.map(drop),
+                        // a reopen: the root, every focus requested, one of
+                        // them no entry
+                        8 => manager
+                            .open(
+                                &app,
+                                registry_at(&root, &["app", "site"], &[]),
+                                &[site_dir, app_dir, format!("{root}nope/")],
+                            )
+                            .await
+                            .map(drop),
                         _ => manager.close(&app, &app_dir).await.map(drop),
                     }
                 }));

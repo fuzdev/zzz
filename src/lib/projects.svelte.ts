@@ -23,6 +23,7 @@ import {
 	type ProjectJsonInput
 } from './project.svelte.ts';
 import type { DiskfileDirectoryPath, DiskfilePath } from './diskfile_types.ts';
+import type { ProjectFocusRefusal } from './action_specs.ts';
 import { ERROR_PROJECT_NOT_OPEN, ERROR_REPO_NOT_FOCUSED } from './project_helpers.ts';
 
 export const ProjectsJson = cell_json_schema(
@@ -45,11 +46,16 @@ export interface ProjectChangeTracker {
 	stop: () => void;
 }
 
-/** What `Projects.open` returns: the project, and the directory the open focused. */
+/**
+ * What `Projects.open` returns: the project, the directory the open focused,
+ * and the requested focuses that didn't land.
+ */
 export interface ProjectOpened {
 	project: Project;
 	/** The directory the open focused, or `null` — a registry's root, or a directory in no entry. */
 	focus: DiskfileDirectoryPath | null;
+	/** Each of `options.focus` that didn't land, with the daemon's reason. */
+	refused: Array<ProjectFocusRefusal>;
 }
 
 /**
@@ -273,24 +279,29 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	 * instead of only adding — for reopening a project whose files the app
 	 * already has. Only focused directories are complete trees, so files
 	 * elsewhere under the root are left alone.
-	 * @returns the project and the open's focus, or the RPC error
+	 * @param options.focus - registry entry dirs to focus in the same open,
+	 * each landing or refused alone (`ProjectOpened.refused`)
+	 * @returns the project, the open's focus, and the refused focuses, or the
+	 * RPC error
 	 */
 	async open(
 		path: DiskfilePath,
-		options?: { reconcile_files?: boolean }
+		options?: { reconcile_files?: boolean; focus?: ReadonlyArray<DiskfileDirectoryPath> }
 	): Promise<Result<{ value: ProjectOpened }, { error: JsonrpcErrorObject }>> {
 		const changes = this.app.diskfiles.track_changes();
 		this.#opening++;
 		try {
 			let result: Awaited<ReturnType<typeof this.app.api.project_open>>;
 			try {
-				result = await this.app.api.project_open({ path });
+				result = await this.app.api.project_open(
+					options?.focus?.length ? { path, focus: [...options.focus] } : { path }
+				);
 			} finally {
 				changes.stop();
 			}
 			if (!result.ok) return result;
 
-			const { project: project_json, focus, watch_status, files } = result.value;
+			const { project: project_json, focus, watch_status, files, refused } = result.value;
 			const project = this.#receive_reply(project_json, [
 				project_json.root,
 				...project_json.focused
@@ -303,7 +314,7 @@ export class Projects extends Cell<typeof ProjectsJson> {
 			} else {
 				this.app.diskfiles.add_initial(files, changes);
 			}
-			return { ok: true, value: { project, focus } };
+			return { ok: true, value: { project, focus, refused } };
 		} finally {
 			// on every exit, a throw included, so deferred remote changes are always fetched
 			this.#opening--;

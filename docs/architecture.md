@@ -1521,23 +1521,25 @@ backoff. `receive_session` reconciles rather than adds:
 - **Projects** are replaced (`Projects.reconcile`): listed ones added or
   updated, the rest removed — another client closed them. After a zzzd
   restart (a new `server_instance_id`), the projects it lost are reopened
-  instead (`Project.reopen_paths`: `Projects.open` of each directory the
-  project had focused, one after another, or of its root when none was —
-  each reconciling only the focused directories' files, the complete trees
-  so far), so their files, tabs, and unsaved edits stay. The project is
-  reopened once an open lands on its root; a focus refused then is
-  dropped, and one that failed otherwise is kept for the next snapshot to
+  instead, each by one `Projects.open` of its root requesting every
+  directory it had focused (`Project.reopen_paths`) as the open's `focus`
+  — reconciling only the focused directories' files, the complete trees
+  so far — so their files, tabs, and unsaved edits stay. The project is
+  reopened once the open lands on its root. A requested focus the daemon
+  refuses (`refused`: no longer a present entry, unlistable, or the root
+  no longer a registry) is dropped, except one that couldn't be indexed
+  for a passing cause (`repo_index_failed`), kept for the next snapshot to
   retry (a snapshot listing the project without it retries it too). When
-  nothing lands on its root and every open is refused (the path gone or
-  forbidden, the registry unusable) or lands on another root (the registry
-  was removed, so each repo opens as its own checkout), the project and the
-  files only it covered are dropped (logged) — files another open root
-  covers stay; when some open failed otherwise, it's kept and the next
-  snapshot retries those once — there's no retry loop. Closing a project
+  the open is refused (the root gone or forbidden, the registry unusable)
+  or lands on another root, the project and the files only it covered are
+  dropped (logged) — files another open root covers stay; when it fails
+  otherwise, it's kept and the next snapshot retries it once — there's no
+  retry loop. A root that's no longer a registry reopens as the checkout
+  or plain directory it is now, its old focus refused. Closing a project
   (`Frontend.close_project`, or another client's close, which arrives as
-  `project_changed`) cancels a pending reopen and stops one in flight
-  before its next path, and a `project_not_open` reply removes it here
-  too, so a project the backend forgot can still be closed. A close while
+  `project_changed`) cancels a pending reopen, and a `project_not_open`
+  reply removes it here too, so a project the backend forgot can still be
+  closed. A close while
   a reopen is in flight sticks: the backend's open scans before
   registering, so the close finds nothing open and the open lands anyway —
   the reopen then closes it again. Another restart while a reopen is in
@@ -1718,25 +1720,37 @@ concerns":
   unfocused, the project closes, or a later open finds its entry gone; a
   checkout's or plain directory's root is its one focus while it's open
   (`project_not_registry`), and a registry may keep none, as opening its
-  root alone leaves it. A focused directory gets a whole-tree filer; a registry's root
+  root alone leaves it. An open may also request more focus (`focus`, the
+  shape a reopen after a restart takes): each requested directory is
+  checked against the fresh resolve as a kept focus is (a present entry;
+  a checkout's or plain directory's root lands, anything else on one is
+  `project_not_registry`) and lands or is refused alone, reported in the
+  reply's `refused` with the code `repo_focus` would refuse it with
+  (`repo_not_in_project`, `repo_not_present`, `permission_denied`, or
+  `repo_index_failed` for a listing that failed otherwise). A focused directory gets a whole-tree filer; a registry's root
   gets one at its top level alone (its loose files) — an unfocused repo
   and an unregistered directory under it aren't indexed, so a root of
   hundreds of thousands of files costs only what's focused. Filers are
   keyed by canonical path, so two entries resolving to one directory share
   one. The root is one `ScopedFs` root, writable whole.
 
-  The filers start before the project manager's lock is taken (a root or
-  focused directory that can't be listed fails the open, with nothing
-  registered, and concurrent opens of one path share a scan), then, under
+  The filers start before the project manager's lock is taken (the root or
+  the path's own focus that can't be listed fails the open, with nothing
+  registered, while a requested focus that can't is refused alone; and
+  concurrent opens of one path share a scan), then, under
   the lock, the project is recorded — merged into an open one with the
   same root: the fresh kind and entries, the union of the focus that the
   fresh resolve still supports (a present entry's dir, or the root of a
   checkout or plain directory; a whole-tree filer on a root now indexed
   at its top level is replaced by a top-level one) — the
   filers re-ensured, the root added to `ScopedFs`, and `project_changed`
-  broadcast (`open`, or `update` when an open project changed); the reply
-  carries the project, the open's `focus`, every filer's files, and the
-  `watch_status`. `repo_focus` checks the entry is present as the
+  broadcast (`open`, or `update` when an open project changed) — one
+  commit and one notification for the open and every focus it requested.
+  Each requested focus's filer is ensured again under the lock before the
+  commit, so one stopped since its scan (a racing unfocus or close) is
+  refused alone rather than failing the commit. The reply carries the
+  project, the open's `focus`, every filer's files (each requested focus
+  that landed included), the `watch_status`, and `refused`. `repo_focus` checks the entry is present as the
   project's last resolve left it (`repo_not_in_project`, or
   `repo_not_present` for one not cloned or refused), starts its filer
   before the lock, then under it records the focus, re-ensures the filers,
@@ -1821,8 +1835,8 @@ A missing or refused entry isn't shown (the projects page says why). A
 repo's folder is always a row of its own, never part of a compact one, so
 its row keeps its identity as it's focused or unfocused. A focused repo's
 folder menu unfocuses it. A restart's reopen restores every focus however
-it was made, by `project_open` of each focused directory, which focuses
-that entry.
+it was made, in one `project_open` of the root with each focused directory
+in its `focus`.
 
 ## Auth gate
 
@@ -1998,7 +2012,7 @@ Population, per capability:
   written are files and stay. The frontend resyncs after every reconnect (a
   restart included): it reloads `session_load` and reconciles — projects the
   daemon no longer has are dropped (after a restart they're reopened instead,
-  focus and all, and dropped only if every reopen is refused or lands on
+  focus and all, and dropped only if the reopen is refused or lands on
   another root), files it no longer
   indexes are pruned (a file with unsaved edits stays, flagged deleted on
   disk), and running terminals it doesn't list become `lost`. Notifications

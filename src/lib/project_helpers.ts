@@ -17,6 +17,14 @@ export const ERROR_PROJECT_NOT_OPEN = 'project_not_open';
 export const ERROR_REPO_NOT_FOCUSED = 'repo_not_focused';
 
 /**
+ * `reason` of a `project_open` `refused` focus whose directory couldn't be
+ * indexed for a cause other than its absence or a refused listing — the one
+ * refusal a later open may get past, so a reopen retries it rather than
+ * dropping the focus.
+ */
+export const ERROR_REPO_INDEX_FAILED = 'repo_index_failed';
+
+/**
  * What to tell the user about a project whose `watch_status` is
  * `degraded`: some of its directories have no file watch, so the daemon
  * rescans them every few seconds instead.

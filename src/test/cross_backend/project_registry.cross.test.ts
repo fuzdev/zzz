@@ -8,7 +8,8 @@
  * Pins what `project_open` resolves (the root, its kind, every entry's
  * state), what it indexes (the root's loose files and the focused repo —
  * never an unfocused repo or an unregistered directory), the focus an open
- * adds to an open project (`project_changed` `update`), what `repo_focus` and
+ * adds to an open project (`project_changed` `update`), the focus an open
+ * requests and what of it it refuses, what `repo_focus` and
  * `repo_unfocus` index and release and what they refuse, what `repo_files`
  * reads for a client pulling another's focus and what it refuses, the refusal of an
  * untrusted registry with its reason, and the scope a close releases.
@@ -55,8 +56,12 @@ const call = (fixture: CrossFixture, method: string, params?: Record<string, unk
 	});
 
 /** `project_open`'s result, parsed by its TS schema. */
-const open_project = async (fixture: CrossFixture, path: string): Promise<ProjectOpenOutput> => {
-	const res = await call(fixture, 'project_open', { path });
+const open_project = async (
+	fixture: CrossFixture,
+	path: string,
+	focus?: Array<string>
+): Promise<ProjectOpenOutput> => {
+	const res = await call(fixture, 'project_open', focus ? { path, focus } : { path });
 	assert.ok(res.ok, `project_open failed: ${JSON.stringify(res)}`);
 	const parsed = parse(ProjectOpenOutput, res.result);
 	assert.ok(parsed.ok, `project_open result: ${JSON.stringify(parsed)}`);
@@ -146,6 +151,33 @@ describe('project registry cross-backend', () => {
 		assert.strictEqual(opened.focus, `${dev}/app/`);
 		// the root's loose files and the focused repo — not the registry's
 		// unregistered `scratch`, nothing through `escape`
+		assert.deepEqual(file_ids(opened), [
+			join(dev, 'README.md'),
+			join(dev, 'app', 'a.ts'),
+			join(dev, 'app', 'src', 'b.ts'),
+			join(dev, 'repos.toml')
+		]);
+	});
+
+	test('an open of the root lands the focus it requests and refuses the rest per dir', async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		// a reopen's shape: the root, with every focus it held requested
+		const opened = await open_project(fixture, dev, [
+			`${dev}/app/`,
+			`${dev}/site/`,
+			join(dev, 'escape'),
+			`${dev}/scratch/`
+		]);
+		assert.strictEqual(opened.project.root, `${dev}/`);
+		assert.strictEqual(opened.focus, null);
+		assert.deepEqual(opened.project.focused, [`${dev}/app/`]);
+		assert.deepEqual(opened.refused, [
+			{ dir: `${dev}/site/`, reason: 'repo_not_present' },
+			{ dir: `${dev}/escape/`, reason: 'repo_not_present' },
+			{ dir: `${dev}/scratch/`, reason: 'repo_not_in_project' }
+		]);
+		// every filer the open keeps: the root's loose files and the focused repo
 		assert.deepEqual(file_ids(opened), [
 			join(dev, 'README.md'),
 			join(dev, 'app', 'a.ts'),

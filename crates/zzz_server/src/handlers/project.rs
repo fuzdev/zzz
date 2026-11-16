@@ -37,7 +37,8 @@ use crate::project::{
     EntryDir, Project, ProjectError, ProjectKind, ResolveOptions, resolve_project,
 };
 use crate::project_manager::{
-    EntryState, Filers, FocusedFiles, LifecycleError, OpenEntry, OpenKind, OpenProject, ProjectInfo,
+    EntryState, Filers, FocusRefused, FocusedFiles, LifecycleError, OpenEntry, OpenKind,
+    OpenProject, Opened, ProjectInfo,
 };
 
 /// `project_close` of a root that isn't an open project (`invalid_params`)
@@ -63,6 +64,13 @@ pub const ERROR_REPO_NOT_PRESENT: &str = "repo_not_present";
 /// too, so a client pulling a focus that's since been dropped can tell.
 pub const ERROR_REPO_NOT_FOCUSED: &str = "repo_not_focused";
 
+/// A requested focus of `project_open` that couldn't be indexed otherwise.
+///
+/// Not its absence or a refused listing: a cause an open later may get
+/// past, where every other refusal holds until the disk or the registry
+/// changes.
+pub const ERROR_REPO_INDEX_FAILED: &str = "repo_index_failed";
+
 // -- Inputs -----------------------------------------------------------------
 
 /// Input for `project_open` — twin of `ProjectOpenInput`.
@@ -70,6 +78,10 @@ pub const ERROR_REPO_NOT_FOCUSED: &str = "repo_not_focused";
 #[serde(deny_unknown_fields)]
 struct ProjectOpenInput {
     path: String,
+    /// Registry entry dirs to focus once the open lands, beyond the path's
+    /// own — a reopen restoring a project's focus in one call.
+    #[serde(default)]
+    focus: Vec<String>,
 }
 
 /// Input for `project_close` — twin of `ProjectCloseInput`.
@@ -109,6 +121,16 @@ struct ProjectOpenResult {
     /// Whether every indexed directory of the project has a file watch —
     /// `degraded` when the OS watch limit left some to periodic rescans.
     watch_status: WatchStatus,
+    /// Each requested focus that didn't land, and why.
+    refused: Vec<FocusRefusal>,
+}
+
+/// A requested focus of a `project_open` that didn't land — twin of
+/// `ProjectFocusRefusal`.
+#[derive(Serialize)]
+struct FocusRefusal {
+    dir: String,
+    reason: &'static str,
 }
 
 #[derive(Serialize)]
@@ -267,6 +289,37 @@ fn lifecycle_error(failed: &str, error: &LifecycleError, focusing: Option<&str>)
     }
 }
 
+/// Why a requested focus of an open didn't land, as `refused[].reason`: the
+/// code `repo_focus` refuses the same focus with — `repo_not_in_project`,
+/// `repo_not_present` (an entry missing or refused as just resolved, or gone
+/// since), `project_not_registry`, `permission_denied` — or
+/// `repo_index_failed` for a listing that failed otherwise. An entry
+/// replaced by a file since is `repo_not_present` too: the filer finds it
+/// gone (`NotFound`), as it does for `repo_focus`, unless it can't watch the
+/// entry and fails to list it instead (`NotADirectory`) — which `repo_focus`
+/// alone answers as an internal error.
+fn focus_refusal_reason(error: &LifecycleError) -> &'static str {
+    match error {
+        LifecycleError::NotRegistry { .. } => ERROR_PROJECT_NOT_REGISTRY,
+        LifecycleError::RepoNotInProject { .. } => ERROR_REPO_NOT_IN_PROJECT,
+        LifecycleError::RepoMissing { .. } | LifecycleError::RepoRefused { .. } => {
+            ERROR_REPO_NOT_PRESENT
+        }
+        LifecycleError::Filer { source, .. } => match source.kind() {
+            std::io::ErrorKind::PermissionDenied => ERROR_PERMISSION_DENIED,
+            // gone since, or replaced by a file — nothing a retry fixes
+            std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => {
+                ERROR_REPO_NOT_PRESENT
+            }
+            _ => ERROR_REPO_INDEX_FAILED,
+        },
+        // never a per-focus outcome — an open refuses no focus for these
+        LifecycleError::NotOpen { .. }
+        | LifecycleError::NotFocused { .. }
+        | LifecycleError::Notify(_) => ERROR_REPO_INDEX_FAILED,
+    }
+}
+
 /// The directory an open of `project` focuses: the deepest present registry
 /// entry holding the opened directory — none for the root itself, a
 /// directory in no entry, or an opened worktree outside the root — or the
@@ -413,13 +466,29 @@ pub async fn project_list(
 /// is broadcast — `open` for a new project, `update` for an open one this
 /// changed (a new focus, or its registry's entries as resolved again).
 ///
-/// Returns the project, the directory this open focused, and the file index
-/// of every filer of the project — on the idempotent path too, so a client
-/// re-opening an open project can seed its tree the same way. A registry
-/// entry that's refused (escaping the root, protected, unresolvable, not a
-/// directory) is reported in the project's entries; the rest of the project
-/// still opens. A focused or root directory that can't be listed fails the
-/// open (`forbidden` / `permission_denied`), leaving nothing new open.
+/// `focus` names more registry entry dirs to focus once the open lands — a
+/// client reopening a project after a daemon restart restores its whole
+/// focus in one call. Each is checked against the registry as just resolved
+/// (a present entry, as a reopen keeps a focus) and lands or is refused
+/// alone, reported in `refused` with the code `repo_focus` would refuse it
+/// with ([`focus_refusal_reason`]): none of the entries
+/// (`repo_not_in_project`), missing, refused, or gone since the resolve
+/// (`repo_not_present`), not a registry (`project_not_registry` — a
+/// checkout's or plain directory's root is its one focus, so a request for
+/// it lands), or unlistable (`permission_denied`, `repo_index_failed`). The
+/// kind isn't the client's to know before the resolve, so a focus on a
+/// project that's no longer a registry is refused per directory rather than
+/// failing the open.
+///
+/// Returns the project, the directory the opened path focused, the file
+/// index of every filer of the project — each requested focus that landed
+/// included — and the refused focuses; on the idempotent path too, so a
+/// client re-opening an open project can seed its tree the same way. A
+/// registry entry that's refused (escaping the root, protected,
+/// unresolvable, not a directory) is reported in the project's entries; the
+/// rest of the project still opens. The root or the opened path's focus
+/// that can't be listed fails the open (`forbidden` / `permission_denied`),
+/// leaving nothing new open.
 ///
 /// # Errors
 ///
@@ -436,7 +505,10 @@ pub async fn project_open(
     _ctx: ActionContext<'_>,
     app: Arc<App>,
 ) -> Result<ActionOutput, JsonrpcError> {
-    let ProjectOpenInput { path } = parse_strict_params(params)?;
+    let ProjectOpenInput {
+        path,
+        focus: requested,
+    } = parse_strict_params(params)?;
 
     let resolving = Arc::clone(&app);
     let project = tokio::task::spawn_blocking(move || {
@@ -462,7 +534,7 @@ pub async fn project_open(
 
     // Run to completion in its own task, so a caller that goes away mid-open
     // can't leave filers running for a project that never opened.
-    tokio::spawn(open_project(app, fresh, focus))
+    tokio::spawn(open_project(app, fresh, focus, requested))
         .await
         .map_err(|e| internal_error_with_source("failed to open project", &e))?
 }
@@ -472,20 +544,41 @@ async fn open_project(
     app: Arc<App>,
     fresh: OpenProject,
     focus: Option<String>,
+    requested: Vec<String>,
 ) -> Result<ActionOutput, JsonrpcError> {
-    let landed = app
+    let Opened { landed, refused } = app
         .projects
-        .open(&app, fresh)
+        .open(&app, fresh, &requested)
         .await
         .map_err(|e| lifecycle_error(OPEN_PROJECT, &e, None))?;
+    for FocusRefused { dir, error } in &refused {
+        tracing::debug!(
+            path = %dir,
+            error = %fuz_sys::cli::format_error_chain(error),
+            "a requested focus of an open didn't land"
+        );
+    }
+    let refused = refused
+        .iter()
+        .map(|FocusRefused { dir, error }| FocusRefusal {
+            dir: dir.clone(),
+            reason: focus_refusal_reason(error),
+        })
+        .collect::<Vec<_>>();
     let files = files_of(&app, &landed.filers).await;
     let watch_status = watch_status_of(&app, &landed.filers).await;
-    let size_hint = disknodes_json_size_hint(&files) + PROJECT_OPEN_OVERHEAD;
+    let size_hint = disknodes_json_size_hint(&files)
+        + PROJECT_OPEN_OVERHEAD
+        + refused
+            .iter()
+            .map(|refusal| refusal.dir.len() + FOCUS_REFUSAL_OVERHEAD)
+            .sum::<usize>();
     let result = ProjectOpenResult {
         project: landed.project.to_info(),
         focus,
         files,
         watch_status,
+        refused,
     };
     Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
 }
@@ -494,6 +587,10 @@ async fn open_project(
 /// response, budgeted on top of the files' size hint — the registry's entries
 /// included.
 const PROJECT_OPEN_OVERHEAD: usize = 16 * 1024;
+
+/// A `refused` entry's JSON beyond its dir — the keys, the reason, the
+/// punctuation — budgeted per entry, since a request may ask for any number.
+const FOCUS_REFUSAL_OVERHEAD: usize = 64;
 
 /// What fails when an open's filer can't start ([`filer_error`]).
 const OPEN_PROJECT: &str = "open project";
@@ -1047,7 +1144,19 @@ purpose = "a reference"
 
     /// `open_project`'s result as JSON.
     async fn open(app: &Arc<App>, info: OpenProject, focus: Option<String>) -> Value {
-        let output = open_project(Arc::clone(app), info, focus).await.unwrap();
+        open_requesting(app, info, focus, &[]).await
+    }
+
+    /// `open_project`'s result as JSON, `requested` focused besides `focus`.
+    async fn open_requesting(
+        app: &Arc<App>,
+        info: OpenProject,
+        focus: Option<String>,
+        requested: &[String],
+    ) -> Value {
+        let output = open_project(Arc::clone(app), info, focus, requested.to_vec())
+            .await
+            .unwrap();
         let mut out = Vec::new();
         output.write_json(&mut out).unwrap();
         serde_json::from_slice(&out).unwrap()
@@ -1190,13 +1299,130 @@ purpose = "a reference"
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_open_reports_each_requested_focus_that_didnt_land_with_its_reason() {
+        let tmp = TempDir::new();
+        for rel in ["w/README.md", "w/app/a.txt", "w/site/s.txt"] {
+            tmp.write(rel);
+        }
+        let app = inert_app();
+        let (app_dir, site_dir) = (tmp.key("w/app/"), tmp.key("w/site/"));
+        let mut info = registry_info(&tmp, &[]);
+        let OpenKind::Registry { entries, .. } = &mut info.kind else {
+            unreachable!()
+        };
+        entries.push(OpenEntry {
+            key: "keys".to_owned(),
+            kind: EntryKind::Reference,
+            dir: tmp.key("w/keys/"),
+            state: EntryState::Refused {
+                reason: "entry_not_confined",
+            },
+        });
+        entries.push(OpenEntry {
+            key: "gone".to_owned(),
+            kind: EntryKind::Repo,
+            dir: tmp.key("w/gone/"),
+            state: EntryState::Present,
+        });
+        let result = open_requesting(
+            &app,
+            info,
+            None,
+            &[
+                app_dir.clone(),
+                tmp.key("w/keys/"),
+                tmp.key("w/scratch/"),
+                tmp.key("w/gone/"),
+                site_dir.clone(),
+            ],
+        )
+        .await;
+        assert_eq!(result["focus"], Value::Null);
+        assert_eq!(
+            result["project"]["focused"],
+            serde_json::json!([app_dir, site_dir])
+        );
+        assert_eq!(
+            result["refused"],
+            serde_json::json!([
+                {"dir": tmp.key("w/keys/"), "reason": ERROR_REPO_NOT_PRESENT},
+                {"dir": tmp.key("w/scratch/"), "reason": ERROR_REPO_NOT_IN_PROJECT},
+                {"dir": tmp.key("w/gone/"), "reason": ERROR_REPO_NOT_PRESENT},
+            ])
+        );
+        // the files of every focus that landed
+        assert_eq!(
+            file_ids(&result),
+            [
+                tmp.key("w/README.md"),
+                tmp.key("w/app/a.txt"),
+                tmp.key("w/site/s.txt")
+            ]
+        );
+        // an open asking for nothing refuses nothing
+        let again = open(&app, registry_info(&tmp, &[]), None).await;
+        assert_eq!(again["refused"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn a_focus_refusal_takes_the_code_repo_focus_would_refuse_with() {
+        let filer = |kind: std::io::ErrorKind| LifecycleError::Filer {
+            dir: "/w/a/".to_owned(),
+            source: std::io::Error::from(kind),
+        };
+        let cases = [
+            (
+                LifecycleError::NotRegistry {
+                    root: "/p/".to_owned(),
+                },
+                ERROR_PROJECT_NOT_REGISTRY,
+            ),
+            (
+                LifecycleError::RepoNotInProject {
+                    root: "/w/".to_owned(),
+                    dir: "/w/x/".to_owned(),
+                },
+                ERROR_REPO_NOT_IN_PROJECT,
+            ),
+            (
+                LifecycleError::RepoMissing {
+                    key: "a".to_owned(),
+                    dir: "/w/a/".to_owned(),
+                },
+                ERROR_REPO_NOT_PRESENT,
+            ),
+            (
+                LifecycleError::RepoRefused {
+                    key: "a".to_owned(),
+                    dir: "/w/a/".to_owned(),
+                    reason: "entry_not_confined",
+                },
+                ERROR_REPO_NOT_PRESENT,
+            ),
+            (
+                filer(std::io::ErrorKind::PermissionDenied),
+                ERROR_PERMISSION_DENIED,
+            ),
+            (filer(std::io::ErrorKind::NotFound), ERROR_REPO_NOT_PRESENT),
+            (
+                filer(std::io::ErrorKind::NotADirectory),
+                ERROR_REPO_NOT_PRESENT,
+            ),
+            (filer(std::io::ErrorKind::Other), ERROR_REPO_INDEX_FAILED),
+        ];
+        for (error, reason) in cases {
+            assert_eq!(focus_refusal_reason(&error), reason, "{error:?}");
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn an_open_whose_focus_cant_be_indexed_leaves_nothing_new_open() {
         let tmp = TempDir::new();
         tmp.write("w/README.md");
         let app = inert_app();
         // `site` is gone by the time its filer starts
         let info = registry_info(&tmp, &["site"]);
-        let error = open_project(Arc::clone(&app), info, Some(tmp.key("w/site/")))
+        let error = open_project(Arc::clone(&app), info, Some(tmp.key("w/site/")), vec![])
             .await
             .err()
             .unwrap();

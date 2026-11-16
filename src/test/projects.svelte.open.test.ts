@@ -36,6 +36,8 @@ type ProjectOpenResult =
 let app: Frontend;
 let calls: Array<{
 	path: string;
+	/** The input as sent — `focus` absent unless requested. */
+	input: Record<string, unknown>;
 	resolve: (result: ProjectOpenResult) => void;
 	reject: (error: unknown) => void;
 }>;
@@ -63,8 +65,10 @@ beforeEach(() => {
 		server_instance_id: create_uuid()
 	};
 	(app as unknown as { api: unknown }).api = {
-		project_open: ({ path }: { path: string }) =>
-			new Promise<ProjectOpenResult>((resolve, reject) => calls.push({ path, resolve, reject })),
+		project_open: (input: { path: string }) =>
+			new Promise<ProjectOpenResult>((resolve, reject) =>
+				calls.push({ path: input.path, input, resolve, reject })
+			),
 		session_load: () => {
 			session_loads++;
 			return Promise.resolve({ ok: true, value: { data: session } });
@@ -121,7 +125,8 @@ describe('Projects.open', () => {
 				project: WS_INFO,
 				focus: WS_DIR,
 				files: [create_disknode(PATH_A, 5)],
-				watch_status: 'degraded'
+				watch_status: 'degraded',
+				refused: []
 			}
 		});
 
@@ -144,7 +149,8 @@ describe('Projects.open', () => {
 				project: WS_INFO,
 				focus: WS_DIR,
 				files: [create_disknode(PATH_A, 2), create_disknode(PATH_B, 2), create_disknode(PATH_C, 2)],
-				watch_status: 'full'
+				watch_status: 'full',
+				refused: []
 			}
 		});
 		assert.ok((await opened).ok);
@@ -152,6 +158,43 @@ describe('Projects.open', () => {
 		assert.ok(!app.diskfiles.get_by_path(PATH_A), 'a file deleted in flight stays deleted');
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B)?.mtime, 3);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_C)?.mtime, 2);
+	});
+
+	test('requests a focus in the same open and returns what it refused', async () => {
+		const DEV = parse_or_throw(DiskfileDirectoryPath, '/dev/');
+		const APP = parse_or_throw(DiskfileDirectoryPath, '/dev/app/');
+		const SITE = parse_or_throw(DiskfileDirectoryPath, '/dev/site/');
+		const opened = app.projects.open(DEV, { focus: [APP, SITE] });
+		assert.deepEqual(calls[0]!.input, { path: DEV, focus: [APP, SITE] });
+		const refused = [{ dir: SITE, reason: 'repo_not_present' }];
+		calls[0]!.resolve({
+			ok: true,
+			value: {
+				project: {
+					...WS_INFO,
+					root: DEV,
+					kind: 'registry',
+					registry_path: parse_or_throw(DiskfilePath, '/dev/repos.toml'),
+					entries: [
+						{ key: 'app', kind: 'repo', dir: APP, state: 'present' },
+						{ key: 'site', kind: 'repo', dir: SITE, state: 'missing' }
+					],
+					focused: [APP]
+				},
+				focus: null,
+				files: [],
+				watch_status: 'full',
+				refused
+			}
+		});
+		const result = await opened;
+		assert.ok(result.ok);
+		assert.deepEqual(result.value.refused, refused);
+		assert.deepEqual(result.value.project.focused, [APP]);
+
+		// an open asking for no focus sends none
+		void app.projects.open(WS_DIR, { focus: [] });
+		assert.deepEqual(calls[1]!.input, { path: WS_DIR });
 	});
 
 	test('returns the error and adds nothing on failure', async () => {
@@ -200,7 +243,8 @@ describe('Projects.receive_remote_change', () => {
 				project: WS_INFO,
 				focus: WS_DIR,
 				files: [create_disknode(PATH_A, 5)],
-				watch_status: 'full'
+				watch_status: 'full',
+				refused: []
 			}
 		});
 		const result = await opened;
@@ -314,7 +358,8 @@ describe('a registry project', () => {
 				project: registry_info([]),
 				focus: null,
 				files: [node('/dev/README.md')],
-				watch_status: 'full'
+				watch_status: 'full',
+				refused: []
 			}
 		});
 		const result = await opened;
@@ -344,7 +389,7 @@ describe('a registry project', () => {
 		assert.strictEqual(session_loads, 0, 'deferred');
 		calls[0]!.resolve({
 			ok: true,
-			value: { project: without_site, focus: APP, files: [], watch_status: 'full' }
+			value: { project: without_site, focus: APP, files: [], watch_status: 'full', refused: [] }
 		});
 		assert.ok((await opened).ok);
 		assert.strictEqual(session_loads, 1);
@@ -368,7 +413,13 @@ describe('a registry project', () => {
 		// the reply was built before that focus
 		calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([APP]), focus: APP, files: [], watch_status: 'full' }
+			value: {
+				project: registry_info([APP]),
+				focus: APP,
+				files: [],
+				watch_status: 'full',
+				refused: []
+			}
 		});
 		const result = await opened;
 		assert.ok(result.ok);
@@ -391,7 +442,13 @@ describe('a registry project', () => {
 		receive_change(registry_info([APP, SITE]), 'update'); // this open's own notification
 		calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([APP, SITE]), focus: SITE, files: [], watch_status: 'full' }
+			value: {
+				project: registry_info([APP, SITE]),
+				focus: SITE,
+				files: [],
+				watch_status: 'full',
+				refused: []
+			}
 		});
 		assert.ok((await opened).ok);
 		assert.strictEqual(session_loads, 0);
@@ -413,7 +470,8 @@ describe('a registry project', () => {
 				project: registry_info([APP]),
 				focus: APP,
 				files: [node('/dev/README.md', 2), node('/dev/app/a.ts')],
-				watch_status: 'full'
+				watch_status: 'full',
+				refused: []
 			}
 		});
 		const result = await opened;

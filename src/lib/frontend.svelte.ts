@@ -34,7 +34,7 @@ import type { ProjectInfoJson } from './project.svelte.ts';
 import { Terminals } from './terminals.svelte.ts';
 import { Recorder } from './recorder.svelte.ts';
 import { Jobs } from './jobs.svelte.ts';
-import { ERROR_PROJECT_NOT_OPEN } from './project_helpers.ts';
+import { ERROR_PROJECT_NOT_OPEN, ERROR_REPO_INDEX_FAILED } from './project_helpers.ts';
 import { TerminalPresets } from './terminal_presets.svelte.ts';
 import {
 	TERMINAL_LOST_TO_RESTART_MESSAGE,
@@ -83,7 +83,7 @@ export const frontend_context = create_context<Frontend>();
 
 /**
  * The `project_open` errors that mean a lost project can't be reopened from
- * a path — it's gone or forbidden, or its registry can't be used.
+ * its root — it's gone or forbidden, or its registry can't be used.
  */
 const PROJECT_REOPEN_REFUSAL_CODES: ReadonlySet<number> = new Set([
 	JSONRPC_ERROR_CODES.not_found,
@@ -276,8 +276,8 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	/** The socket's `last_connect_time` last seen by `handle_socket_connect`. */
 	#socket_connect_time: number | null = null;
 	/**
-	 * Projects a restarted backend lost, by root, with the paths still to
-	 * reopen (`Project.reopen_paths`, less those reopened or refused) — kept
+	 * Projects a restarted backend lost, by root, with the focus still to
+	 * restore (`Project.reopen_paths`, less what landed or was refused) — kept
 	 * until each is reopened or definitively fails (see `receive_session`).
 	 */
 	readonly #projects_to_reopen: Map<DiskfileDirectoryPath, Array<DiskfileDirectoryPath>> =
@@ -612,11 +612,11 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 * - projects: adds or updates the listed ones and removes the rest
 	 *   (`Projects.reconcile`) — except after a zzzd restart (a new
 	 *   `server_instance_id`), when the ones it lost are reopened instead
-	 *   (`Projects.open` of each directory it had focused, or its root),
-	 *   keeping their files and tabs; a reopen refused because the path is
-	 *   gone or forbidden, or that resolves to another project, drops the
-	 *   project and its files, while any other failure keeps it for the next
-	 *   snapshot to retry
+	 *   (one `Projects.open` of each root, requesting the directories it had
+	 *   focused), keeping their files and tabs; a reopen refused because the
+	 *   root is gone or forbidden, or that resolves to another project, drops
+	 *   the project and its files, while any other failure keeps it for the
+	 *   next snapshot to retry
 	 * - files: upserts the snapshot's, and removes known files it lacks under
 	 *   `file_roots` or a removed project, keeping ones with unsaved edits
 	 *   (`Diskfiles.reconcile`) — files elsewhere are left alone
@@ -741,19 +741,19 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	}
 
 	/**
-	 * Reopens a project a restarted backend lost, opening each of `paths` —
-	 * the directories it had focused, or its root when none — in turn and
-	 * reconciling their files. It's reopened once an open lands on its root;
-	 * a path refused then is dropped from its focus, and one that failed
-	 * otherwise is kept for the next session snapshot to retry. When nothing
-	 * lands on its root and every open is refused — the path is gone or
+	 * Reopens a project a restarted backend lost: one open of its root,
+	 * requesting the rest of `paths` — the directories it had focused — as
+	 * its focus, and reconciling the files. It's reopened once the open lands
+	 * on its root; a focus refused then (`refused`) is dropped from its focus,
+	 * except one that couldn't be indexed for a passing cause
+	 * (`ERROR_REPO_INDEX_FAILED`), kept with the rest for the next session
+	 * snapshot to retry. When the open is refused — the root is gone or
 	 * forbidden, the registry can't be used — or resolves to another project
 	 * (which is then open), the project and the files only it covered are
-	 * dropped; when some open failed otherwise, it's kept for the next
-	 * snapshot to retry, so nothing loops. A close while it's in flight wins
-	 * — this client's `close_project`, or another's, which removes the project
-	 * here: no further path is opened, and a reopen that lands anyway is
-	 * closed again.
+	 * dropped; when it fails otherwise, it's kept for the next snapshot to
+	 * retry, so nothing loops. A close while it's in flight wins — this
+	 * client's `close_project`, or another's, which removes the project here:
+	 * a reopen that lands anyway is closed again.
 	 */
 	async #reopen_project(
 		root: DiskfileDirectoryPath,
@@ -763,32 +763,30 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.#projects_to_reopen.set(root, [...paths]);
 		this.#projects_reopening.add(root);
 		let reopened = false;
-		const failed: Array<DiskfileDirectoryPath> = [];
+		let failed: Array<DiskfileDirectoryPath> = [];
 		const refused: Array<DiskfileDirectoryPath> = [];
 		let cancelled = false;
 		try {
-			for (const path of paths) {
-				if (
-					this.#disposed ||
-					this.#projects_reopen_cancelled.has(root) ||
-					!this.projects.get_by_root(root)
-				) {
-					break;
-				}
-				let error: JsonrpcErrorObject | null = null;
-				try {
-					const result = await this.projects.open(path, { reconcile_files: true });
-					if (result.ok) {
-						if (result.value.project.root === root) reopened = true;
-					} else {
-						error = result.error;
+			let error: JsonrpcErrorObject | null = null;
+			try {
+				const result = await this.projects.open(root, {
+					reconcile_files: true,
+					focus: paths.filter((path) => path !== root)
+				});
+				if (!result.ok) {
+					error = result.error;
+				} else if (result.value.project.root === root) {
+					reopened = true;
+					for (const { dir, reason } of result.value.refused) {
+						(reason === ERROR_REPO_INDEX_FAILED ? failed : refused).push(dir);
 					}
-				} catch (thrown) {
-					error = { code: JSONRPC_ERROR_CODES.internal_error, message: to_error_message(thrown) };
 				}
-				if (!error || this.#disposed) continue;
-				console.error(`[frontend] failed to reopen ${path} after zzzd restarted:`, error);
-				(PROJECT_REOPEN_REFUSAL_CODES.has(error.code) ? refused : failed).push(path);
+			} catch (thrown) {
+				error = { code: JSONRPC_ERROR_CODES.internal_error, message: to_error_message(thrown) };
+			}
+			if (error && !this.#disposed) {
+				console.error(`[frontend] failed to reopen ${root} after zzzd restarted:`, error);
+				if (!PROJECT_REOPEN_REFUSAL_CODES.has(error.code)) failed = [...paths];
 			}
 		} finally {
 			this.#projects_reopening.delete(root);
@@ -813,14 +811,14 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 			this.#projects_to_reopen.delete(root);
 		}
 		// a refused focus won't come back, whether or not the rest landed — kept,
-		// it would be opened again on every retry and restart
+		// it would be requested again on every retry and restart
 		const project = this.projects.get_by_root(root);
 		if (project && refused.length) {
 			project.focused = project.focused.filter((dir) => !refused.includes(dir));
 		}
 		if (this.#projects_restarted_while_reopening.delete(root) && project) {
-			// the opens that landed did so on the instance that restarted since —
-			// queue the whole focus again, and ask for the snapshot that retries it
+			// the open landed on the instance that restarted since — queue the
+			// whole focus again, and ask for the snapshot that retries it
 			const again = Array.from(new Set([...project.reopen_paths, ...failed]));
 			this.#projects_to_reopen.set(root, again);
 			this.resync_session();
@@ -828,7 +826,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		}
 		if (reopened || failed.length) return;
 		this.projects.remove_by_root(root);
-		// what another root covers — a project a reopen resolved to instead,
+		// what another root covers — a project the reopen resolved to instead,
 		// say — stays
 		const covered = [...file_roots, ...this.projects.items.values.map((p) => p.root)];
 		this.diskfiles.reconcile([], [root], { skip_dirs: covered });

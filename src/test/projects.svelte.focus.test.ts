@@ -321,7 +321,8 @@ describe('a remote unfocus', () => {
 				project: registry_info([APP, SITE]),
 				focus: APP,
 				files: [node(APP_A), node(SITE_A)],
-				watch_status: 'full'
+				watch_status: 'full',
+				refused: []
 			}
 		});
 		assert.ok((await opened).ok);
