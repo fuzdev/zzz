@@ -2,6 +2,7 @@
 	import type { SvelteHTMLElements } from 'svelte/elements';
 
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
+	import ToggleButton from './ToggleButton.svelte';
 
 	const {
 		editor_state,
@@ -48,17 +49,17 @@ and both versions are in the history -->
 		<div class="flex gap_xs mt_xs">
 			<!-- a file deleted on disk has no disk version to show -->
 			{#if !editor_state.diskfile.deleted_on_disk}
-				<button
-					type="button"
+				<!-- sized to its wider label, so toggling doesn't shift the buttons after it -->
+				<ToggleButton
+					bind:active={() => editor_state.showing_disk, (v) => editor_state.set_showing_disk(v)}
+					inactive_content="show disk version"
+					active_content="show {yours}"
 					class="sized_sm"
 					disabled={editor_state.saving}
 					title={editor_state.showing_disk
 						? `show ${yours} again, editable`
 						: `show the file on disk, read-only — ${yours} stays as it is`}
-					onclick={() => editor_state.set_showing_disk(!editor_state.showing_disk)}
-				>
-					{editor_state.showing_disk ? `show ${yours}` : 'show disk version'}
-				</button>
+				/>
 			{/if}
 			<button
 				type="button"

@@ -1112,7 +1112,15 @@ types nothing — except an input or contenteditable outside the view, or while
 a modal dialog is open. The editor's sidebar is a
 drawer there, adding the document's outline and its broken links: clicking
 either scrolls the preview to it and puts the editor's caret at its source,
-in whichever panes are shown. The view parses the source once with
+in whichever panes are shown. The drawer is open by default and its state is
+app-wide (`Ui.show_markdown_details`), so it holds across files. It closes by
+shrinking its wrapper's width, which the panes beside it follow, while its
+content keeps the drawer's width, clipped rather than re-wrapped, inert, and
+gone once the wrapper's transition ends (at once with reduced motion).
+`DiskfileView` keys the view on the file, so a switch mounts a fresh one and
+nothing a view holds for its file — a caret, the outline's lights, a playback
+position — carries over to the next, and a return to a file shows it from
+its top. The view parses the source once with
 `mdz_parse` and hands the nodes to the preview, the outline, and the link
 list.
 
@@ -1133,7 +1141,7 @@ re-reads the pane on scroll sync's frame (`onframe`) after a scroll, a
 resize, a re-render, a mode switch, or the drawer opening, measuring by
 binary search a few of the preview's cached leaf blocks or the editor's
 characters, each on its line on the backdrop, and nothing while the drawer
-is closed, whose lights clear as it closes.
+is closed or closing, whose lights clear as it closes.
 
 The preview renders with mdz's source offsets (`source_offsets`: each
 element carries its node's `data-mdz-start` / `data-mdz-end`), which map it

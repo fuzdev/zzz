@@ -29,11 +29,12 @@
 		class:dormant={!part.enabled}
 	>
 		<div class="progress-bar" style:width="{percent}%"></div>
-		<div class="flex:1 pl_sm py_xs3 ellipsis">
-			<Icon data={get_part_type_icon(part)} />&nbsp;
-			{part.name}
+		<!-- the name truncates, the draft label always shows, and the preview takes what's left -->
+		<div class="row gap_xs flex:1 min-width:0 white-space:nowrap pl_sm py_xs3">
+			<Icon data={get_part_type_icon(part)} />
+			<span class="ellipsis">{part.name}</span>
 			{#if part.type === 'diskfile'}<DiskfilePartDraftLabel {part} />{/if}
-			{part.content_preview}
+			<span class="ellipsis flex:1">{part.content_preview}</span>
 		</div>
 		<div class="controls flex gap_xs2">
 			<PartToggleButton {part} />

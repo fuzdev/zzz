@@ -111,7 +111,7 @@
 	</header>
 
 	<!-- open a workspace -->
-	<section class="box mb_xl">
+	<section class="mb_xl">
 		<h2 class="mt_0"><Icon data={icon_add} /> Open Workspace</h2>
 		<form
 			class="row gap_sm"
@@ -137,7 +137,7 @@
 	</section>
 
 	<!-- list open workspaces -->
-	<section class="box">
+	<section>
 		<h2 class="mt_0"><Icon data={icon_directory} /> Open Workspaces</h2>
 		{#if app.workspaces.items.by_id.size === 0}
 			<p class="text_50">

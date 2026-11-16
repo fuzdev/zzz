@@ -11,7 +11,7 @@ import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
-import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
 
 /**
  * The markdown view is the editor view's twin over the same app-level state
@@ -104,11 +104,21 @@ const type_into = (textarea: HTMLTextAreaElement, value: string): void => {
 
 const click_button = (target: HTMLElement, text: string): void => {
 	const button = Array.from(target.querySelectorAll('button')).find(
-		(b) => b.textContent.trim() === text
+		(b) => to_visible_text(b) === text
 	);
 	assert.ok(button, `a "${text}" button`);
 	button.click();
 	flushSync();
+};
+
+/** Gives the drawer's wrapper a transition, as a browser with motion allowed computes it. */
+const allow_motion = (): void => {
+	const original = window.getComputedStyle.bind(window);
+	vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) =>
+		el.classList.contains('markdown-drawer')
+			? ({ transitionDuration: '0.2s' } as CSSStyleDeclaration)
+			: original(el, pseudo)
+	);
 };
 
 const press_save = (target: EventTarget): void => {
@@ -199,34 +209,37 @@ describe('DiskfileMarkdownView', () => {
 		assert.strictEqual(document.activeElement, view.textarea());
 	});
 
-	test('the details drawer is closed until asked for, and the preview shows a picked history entry', () => {
+	test('the details drawer is open until closed, and the preview shows a picked history entry', async () => {
 		const a = write_externally(PATH_A, 'v1');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const editor_state = app.diskfiles.get_editor_state(a);
 		const older = editor_state.history.add_entry('# older', { created: 1 });
 		flushSync();
-		assert.notInclude(view.target.textContent, 'save changes', 'closed by default');
+		assert.include(view.target.textContent, 'save changes', 'open by default');
 
 		click_button(view.target, 'details');
-		assert.include(view.target.textContent, 'save changes');
+		// let the drawer finish its outro
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		flushSync();
+		assert.notInclude(view.target.textContent, 'save changes');
 
 		editor_state.set_content_from_history(older.id);
 		flushSync();
 		assert.strictEqual(view.heading(), 'older');
 	});
 
-	test('a save error shows with the drawer closed, and once with it open', async () => {
+	test('a save error shows once with the drawer open, and with it closed', async () => {
 		const a = write_externally(PATH_A, 'v1');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		app.diskfiles.get_editor_state(a).save_error = 'disk full';
 		flushSync();
 		const count = (): number => view.target.textContent.split('save failed: disk full').length - 1;
-		assert.strictEqual(count(), 1, 'closed drawer');
+		assert.strictEqual(count(), 1, 'open drawer');
 		click_button(view.target, 'details');
-		// let the main column's copy finish its outro
+		// let the drawer's copy finish its outro
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		flushSync();
-		assert.strictEqual(count(), 1, 'open drawer');
+		assert.strictEqual(count(), 1, 'closed drawer');
 	});
 
 	test('in preview mode, a pending focus key is taken by the preview', () => {
@@ -414,7 +427,6 @@ describe('DiskfileMarkdownView outline and links', () => {
 	test('the drawer outlines the headings; a click puts the caret there and scrolls the preview', () => {
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		const h2 = view.target.querySelector('h2');
 		assert.ok(h2);
 		const scroll = vi.fn();
@@ -431,7 +443,6 @@ describe('DiskfileMarkdownView outline and links', () => {
 	test('in source mode the outline only moves the caret; in preview only scrolls', () => {
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		click_button(view.target, 'source');
 		click_button(view.target, 'Top');
 		assert.strictEqual(view.textarea()!.selectionStart, 0);
@@ -449,7 +460,6 @@ describe('DiskfileMarkdownView outline and links', () => {
 		const a = write_externally(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		const section = Array.from(view.target.querySelectorAll('section')).find((el) =>
 			el.textContent.includes('broken links')
 		);
@@ -475,7 +485,6 @@ describe('DiskfileMarkdownView outline and links', () => {
 	test('the list updates as the source changes', () => {
 		const a = write_externally(PATH_A, '# a');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		assert.notInclude(view.target.textContent, 'broken links', 'no section without any');
 		type_into(view.textarea()!, '[x](./x.md)');
 		assert.include(view.target.textContent, 'broken links');
@@ -620,7 +629,6 @@ describe('DiskfileMarkdownView source sync', () => {
 		click(find_by_text(view.target, 'li', 'two bold'));
 		assert.strictEqual(textarea.selectionStart, DOC.indexOf('- two'));
 
-		click_button(view.target, 'details');
 		click_button(view.target, 'Part Two');
 		assert.strictEqual(textarea.selectionStart, DOC.indexOf('## Part Two'));
 
@@ -827,7 +835,6 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		const a = write_externally(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		const preview = lay_out_preview(view.target, 6);
 
 		preview.scroll(DOC.indexOf('## B') + 1);
@@ -846,7 +853,6 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		const a = write_externally(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
@@ -861,7 +867,6 @@ describe('DiskfileMarkdownView outline highlight', () => {
 	test("beside the editor, the caret's innermost section is current, wherever the preview is", () => {
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C'], 'no caret yet: as the preview alone');
@@ -878,7 +883,6 @@ describe('DiskfileMarkdownView outline highlight', () => {
 	test('a caret ends the followed heading, so the preview alone follows afresh', () => {
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(0);
 		assert.deepEqual(lit(view.target), ['A*!', 'B', 'C'], 'no caret: A, followed');
@@ -896,7 +900,6 @@ describe('DiskfileMarkdownView outline highlight', () => {
 	test('a caret placed with no frame since still ends the followed heading', () => {
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(0);
 		preview.scroll(DOC.indexOf('bee') - 1);
@@ -931,7 +934,6 @@ describe('DiskfileMarkdownView outline highlight', () => {
 	test('a mode switch re-reads the pane now being read on the next frame, with no scroll', () => {
 		const a = write_externally(PATH_A, DOC);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C'], 'split: the preview');
@@ -953,7 +955,6 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		const a = write_externally(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'source';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		click_button(view.target, 'details');
 		move_caret(view.textarea()!, DOC.indexOf('see'));
 		run_frames();
 		assert.deepEqual(lit(view.target), ['A', 'B', 'C!'], 'jsdom lays out no lines, so none lit');
@@ -963,6 +964,7 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		const a = write_externally(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
 		assert.strictEqual(preview.measured(), 0);
@@ -973,11 +975,23 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
 	});
 
-	test('closing the drawer clears its lights, so it reopens with none stale', () => {
+	test('a closing drawer measures nothing as its wrapper shrinks', () => {
+		allow_motion();
 		const a = write_externally(PATH_A, DOC);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		click_button(view.target, 'details');
+		assert.ok(view.target.querySelector('.markdown-drawer-content'), 'still closing');
+		const preview = lay_out_preview(view.target, 6);
+		preview.scroll(DOC.indexOf('## B') + 1);
+		assert.strictEqual(preview.measured(), 0);
+		assert.deepEqual(lit(view.target), ['A', 'B', 'C']);
+	});
+
+	test('closing the drawer clears its lights, so it reopens with none stale', () => {
+		const a = write_externally(PATH_A, DOC);
+		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
@@ -988,5 +1002,152 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		assert.deepEqual(lit(view.target), ['A', 'B', 'C'], 'none, until the frame');
 		run_frames();
 		assert.deepEqual(lit(view.target), ['A', 'B', 'C*!']);
+	});
+
+	/** A second file, its headings shaped like `DOC`'s, shown in the same `DiskfileView`. */
+	const PATH_B = parse_or_throw(DiskfilePath, '/w/b.md');
+	const DOC_B = '# P\n\nintro\n\n## Q\n\nqueue\n\n# R\n\nare\n';
+
+	const render_switching = (a: Diskfile) =>
+		render(DiskfileView, {
+			get diskfile() {
+				return app.diskfiles.selected_file ?? a;
+			}
+		});
+
+	test("a file switch starts the outline afresh: the caret's current section stays with its file", () => {
+		const a = write_externally(PATH_A, DOC);
+		const b = write_externally(PATH_B, DOC_B);
+		app.diskfiles.select(a.id, true);
+		const view = render_switching(a);
+		move_caret(view.textarea()!, DOC.indexOf('see'));
+		assert.deepEqual(lit(view.target), ['A', 'B', 'C!']);
+
+		app.diskfiles.select(b.id, true);
+		flushSync();
+		assert.deepEqual(lit(view.target), ['P', 'Q', 'R'], "none of a's");
+	});
+
+	test('a file switch starts the outline afresh: the followed heading and lit sections too', () => {
+		const a = write_externally(PATH_A, DOC);
+		const b = write_externally(PATH_B, DOC_B);
+		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		app.diskfiles.get_editor_state(b).markdown_view_mode_choice = 'preview';
+		app.diskfiles.select(a.id, true);
+		const view = render_switching(a);
+		const preview = lay_out_preview(view.target, 6);
+		preview.scroll(DOC.indexOf('## B') + 1);
+		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
+
+		app.diskfiles.select(b.id, true);
+		flushSync();
+		assert.deepEqual(lit(view.target), ['P', 'Q', 'R'], "none of a's");
+	});
+});
+
+describe('DiskfileMarkdownView details drawer', () => {
+	const DOC = '# A\n\nintro\n\n## B\n\nbee\n';
+
+	const drawer = (target: HTMLElement): HTMLElement => {
+		const el = target.querySelector<HTMLElement>('.markdown-drawer');
+		assert.ok(el);
+		return el;
+	};
+	const content = (target: HTMLElement): HTMLElement | null =>
+		target.querySelector<HTMLElement>('.markdown-drawer-content');
+
+	const end_transition = (el: Element, property_name = 'width', type = 'transitionend'): void => {
+		const event = new Event(type, { bubbles: true });
+		Object.defineProperty(event, 'propertyName', { value: property_name });
+		el.dispatchEvent(event);
+		flushSync();
+	};
+
+	test('opens at once on first render, with nothing to animate', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		assert.isTrue(drawer(view.target).classList.contains('open'));
+		const shown = content(view.target);
+		assert.ok(shown);
+		assert.isFalse(shown.inert);
+	});
+
+	test('closing keeps the content, inert, until its wrapper finishes shrinking; reopening shows it at once', () => {
+		allow_motion();
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+
+		click_button(view.target, 'details');
+		assert.isFalse(drawer(view.target).classList.contains('open'), 'the wrapper shrinks');
+		const closing = content(view.target);
+		assert.ok(closing, 'the content stays while the wrapper shrinks');
+		assert.isTrue(closing.inert, 'out of the tab order and the accessibility tree');
+
+		// a transition inside the drawer ends nothing
+		end_transition(closing.querySelector('h4') ?? closing, 'opacity');
+		end_transition(closing);
+		end_transition(drawer(view.target), 'opacity');
+		assert.ok(content(view.target), "only the wrapper's own width");
+
+		end_transition(drawer(view.target));
+		assert.isNull(content(view.target), 'closed');
+
+		click_button(view.target, 'details');
+		assert.isTrue(drawer(view.target).classList.contains('open'));
+		const reopened = content(view.target);
+		assert.ok(reopened, 'shown as the wrapper grows');
+		assert.isFalse(reopened.inert);
+	});
+
+	test('reopening mid-close keeps the content', () => {
+		allow_motion();
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		click_button(view.target, 'details');
+		// the close's transition is cancelled, unheard, and the open's own ends with the drawer open
+		end_transition(drawer(view.target));
+		const shown = content(view.target);
+		assert.ok(shown);
+		assert.isFalse(shown.inert);
+	});
+
+	test("closing during the open's transition keeps the content for the close's own", () => {
+		allow_motion();
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		end_transition(drawer(view.target));
+		assert.isNull(content(view.target), 'closed');
+
+		click_button(view.target, 'details');
+		click_button(view.target, 'details');
+		// the browser cancels the open's transition as the close's starts
+		end_transition(drawer(view.target), 'width', 'transitioncancel');
+		const closing = content(view.target);
+		assert.ok(closing, 'still shown as the wrapper shrinks');
+		assert.isTrue(closing.inert);
+
+		end_transition(drawer(view.target));
+		assert.isNull(content(view.target), 'closed');
+	});
+
+	test('with no motion, closing hides the content at once', () => {
+		const a = write_externally(PATH_A, DOC);
+		const view = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(view.target, 'details');
+		assert.isNull(content(view.target));
+	});
+
+	test('a closed drawer stays closed across remounts, with nothing to animate', () => {
+		const a = write_externally(PATH_A, DOC);
+		const first = render(DiskfileMarkdownView, { diskfile: a });
+		click_button(first.target, 'details');
+		first.destroy();
+		assert.isFalse(app.ui.show_markdown_details);
+
+		const second = render(DiskfileMarkdownView, { diskfile: a });
+		assert.isFalse(drawer(second.target).classList.contains('open'));
+		assert.isNull(content(second.target));
 	});
 });

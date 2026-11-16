@@ -7,7 +7,9 @@ import { flushSync, mount, unmount, type Component } from 'svelte';
 import DiskfileEditorView from '#lib/DiskfileEditorView.svelte';
 import DiskfileCloseDialog from '#lib/DiskfileCloseDialog.svelte';
 import DiskfileListitem from '#lib/DiskfileListitem.svelte';
+import DiskfileTabListitem from '#lib/DiskfileTabListitem.svelte';
 import PartEditorForDiskfile from '#lib/PartEditorForDiskfile.svelte';
+import PartSummary from '#lib/PartSummary.svelte';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { DiskfilePart } from '#lib/part.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
@@ -15,7 +17,7 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { create_reactive_props } from './reactive_test_helpers.svelte.ts';
-import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 
 /**
@@ -111,7 +113,7 @@ const type_into = (textarea: HTMLTextAreaElement, value: string): void => {
 
 const click_button = (target: HTMLElement, text: string): void => {
 	const button = Array.from(target.querySelectorAll('button')).find(
-		(b) => b.textContent.trim() === text
+		(b) => to_visible_text(b) === text
 	);
 	assert.ok(button, `a "${text}" button`);
 	button.click();
@@ -293,7 +295,7 @@ describe('DiskfileEditorView', () => {
 describe('the conflict notice showing the disk version', () => {
 	const find_button = (target: HTMLElement, text: string): HTMLButtonElement => {
 		const button = Array.from(target.querySelectorAll('button')).find(
-			(b) => b.textContent.trim() === text
+			(b) => to_visible_text(b) === text
 		);
 		assert.ok(button, `a "${text}" button`);
 		return button;
@@ -337,6 +339,21 @@ describe('the conflict notice showing the disk version', () => {
 		assert.isFalse(view.textarea().readOnly);
 		assert.ok(find_button(view.target, 'show disk version'));
 		assert.include(view.alert()?.textContent, 'changed on disk since you edited it');
+	});
+
+	test('the toggle is named by its shown label alone, sized by both, and looks like its siblings', () => {
+		const { view } = setup();
+		const toggle = find_button(view.target, 'show disk version');
+		// the sizing copies are `visibility: hidden`, which leaves them out of the name
+		assert.include(toggle.textContent, 'show your draft');
+		assert.notInclude(to_visible_text(toggle), 'show your draft');
+		assert.isTrue(toggle.classList.contains('sized_sm'));
+		assert.isFalse(toggle.classList.contains('icon-button'));
+		assert.isFalse(toggle.classList.contains('plain'));
+
+		toggle.click();
+		flushSync();
+		assert.strictEqual(to_visible_text(toggle), 'show your draft', 'the same button, relabeled');
 	});
 
 	test('typing into the disk version changes nothing', () => {
@@ -502,9 +519,7 @@ describe('the conflict notice showing the disk version', () => {
 
 		assert.strictEqual(view.textarea().value, 'mine');
 		assert.isFalse(view.textarea().readOnly);
-		const labels = Array.from(view.target.querySelectorAll('button')).map((b) =>
-			b.textContent.trim()
-		);
+		const labels = Array.from(view.target.querySelectorAll('button')).map(to_visible_text);
 		assert.notInclude(labels, 'show disk version');
 		assert.notInclude(labels, 'show your draft');
 	});
@@ -580,6 +595,23 @@ describe('PartEditorForDiskfile deleted on disk', () => {
 	});
 });
 
+/**
+ * The `ellipsis` element truncates a long path, so the unsaved and deleted
+ * markers sit after it, outside it, where truncation can't clip them.
+ */
+const assert_markers_outside_truncation = (target: HTMLElement, path: string): void => {
+	const truncating = Array.from(target.querySelectorAll('.ellipsis'));
+	assert.strictEqual(truncating.length, 1, 'one truncating element');
+	assert.strictEqual(truncating[0]!.textContent.trim(), path, 'holding the path alone');
+	for (const marker of ['●', '(deleted)']) {
+		const el = Array.from(target.querySelectorAll('[aria-hidden="true"]')).find(
+			(e) => e.textContent.trim() === marker
+		);
+		assert.ok(el, `shows ${marker}`);
+		assert.isNull(el.closest('.ellipsis'), `${marker} is outside the truncation`);
+	}
+};
+
 describe('DiskfileListitem', () => {
 	test('marks a file with unsaved changes, without creating editing state', () => {
 		const a = write_externally(PATH_A, 'v1');
@@ -594,6 +626,56 @@ describe('DiskfileListitem', () => {
 
 		assert.include(view.target.textContent, '●');
 		assert.include(item.getAttribute('aria-label'), 'unsaved changes');
+	});
+
+	test('only the path truncates, so its markers show past a long path', () => {
+		app.zzz_dir = '/w/'; // so the path shows relative, as `a.txt`
+		const a = write_externally(PATH_A, 'v1');
+		app.diskfiles.get_editor_state(a).current_content = 'draft';
+		app.diskfiles.remove_by_path(PATH_A); // kept for its draft, deleted on disk
+		flushSync();
+		assert.isTrue(a.deleted_on_disk);
+		const view = render(DiskfileListitem, { diskfile: a });
+		assert_markers_outside_truncation(view.target, 'a.txt');
+	});
+});
+
+describe('PartSummary', () => {
+	test("only the name and preview truncate, so a file part's draft label always shows", () => {
+		const a = write_externally(PATH_A, 'v1');
+		const part = new DiskfilePart({ app, json: { path: PATH_A } });
+		app.diskfiles.get_editor_state(a).current_content = 'draft';
+		const view = render(PartSummary, { part });
+		const label = Array.from(view.target.querySelectorAll('small')).find(
+			(el) => el.textContent.trim() === '(unsaved draft)'
+		);
+		assert.ok(label, 'shows the label');
+		assert.isNull(label.closest('.ellipsis'), 'outside the truncation');
+		const truncating = Array.from(view.target.querySelectorAll('.ellipsis')).map((el) =>
+			el.textContent.trim()
+		);
+		assert.deepEqual(truncating, [part.name, part.content_preview]);
+	});
+});
+
+describe('DiskfileTabListitem', () => {
+	test('only the path truncates, so its markers show past a long path', () => {
+		app.zzz_dir = '/w/'; // so the path shows relative, as `a.txt`
+		const a = write_externally(PATH_A, 'v1');
+		app.diskfiles.select(a.id, true);
+		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		assert.ok(tab);
+		app.diskfiles.get_editor_state(a).current_content = 'draft';
+		app.diskfiles.remove_by_path(PATH_A); // kept for its draft, deleted on disk
+		flushSync();
+		assert.isTrue(a.deleted_on_disk);
+		const view = render(DiskfileTabListitem, {
+			tab,
+			onselect: () => {},
+			onclose: () => {},
+			onopen: () => {}
+		});
+		assert_markers_outside_truncation(view.target, 'a.txt');
 	});
 });
 

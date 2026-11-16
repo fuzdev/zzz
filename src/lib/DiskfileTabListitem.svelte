@@ -79,8 +79,9 @@
 			aria-label={status ? `Tab ${path} (${status})` : `Tab ${path}`}
 			aria-pressed={tab.is_selected}
 		>
-			<div class="ellipsis font-weight:400 flex:1">
-				<small class="ml_xs">{path}</small>
+			<!-- only the path truncates, so the markers after it always show -->
+			<div class="row font-weight:400 flex:1 min-width:0">
+				<small class="ml_xs ellipsis">{path}</small>
 				{#if deleted_on_disk}
 					<small class="ml_xs color_c_60" aria-hidden="true">(deleted)</small>
 				{/if}

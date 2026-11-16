@@ -55,8 +55,8 @@
 		{@attach app.ui.desk_pinned ? null : click_outside(() => app.ui.toggle_desk_menu(false))}
 	>
 		<div>
-			<section class="box mb_xl3">
-				<div class="width:100% row gap_sm mb_xl">
+			<section class="mb_xl3">
+				<div class="row gap_sm mb_xl">
 					<h2 class="mt_0 flex:1">
 						<Icon data={icon_space} /> spaces
 					</h2>
@@ -70,7 +70,7 @@
 						<Icon data={icon_pin} />
 					</button>
 				</div>
-				<ul class="unstyled width:100%">
+				<ul class="unstyled">
 					{#each app.spaces.items.values as space (space.id)}
 						<li class="row gap_xs">
 							<button

@@ -37,7 +37,7 @@
 	<div
 		role="button"
 		tabindex="0"
-		class="menuitem sized_sm ellipsis"
+		class="menuitem sized_sm"
 		class:selected
 		{...attrs}
 		onclick={onselect
@@ -63,14 +63,17 @@
 			.join(', ') || undefined}
 		aria-pressed={selected}
 	>
-		<small class="ellipsis">
+		<!-- only the path truncates, so the markers after it always show -->
+		<small class="row min-width:0">
 			<Icon data={icon_file} />
-			<span class="ml_xs" class:deleted={diskfile.deleted_on_disk}>{diskfile.path_relative}</span>
+			<span class="ml_xs ellipsis" class:deleted={diskfile.deleted_on_disk}>
+				{diskfile.path_relative}
+			</span>
 			{#if diskfile.deleted_on_disk}
-				<span class="color_c_60" aria-hidden="true">(deleted)</span>
+				<span class="ml_xs color_c_60" aria-hidden="true">(deleted)</span>
 			{/if}
 			{#if dirty}
-				<span class:color_c_50={conflict} aria-hidden="true">●</span>
+				<span class="ml_xs" class:color_c_50={conflict} aria-hidden="true">●</span>
 			{/if}
 		</small>
 	</div>

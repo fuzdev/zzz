@@ -102,8 +102,15 @@
 		source: icon_edit
 	};
 
-	// TODO maybe remember this app-wide, it's a layout preference rather than a per-file one
-	let drawer_open = $state(false);
+	// app-wide and open by default, so the outline and the file's actions show without asking, and
+	// a closed drawer stays closed as files switch (each file mounts a fresh view, see `DiskfileView`)
+	const drawer_open = $derived(app.ui.show_markdown_details);
+	// the drawer's content renders until its close animation ends - closing, it's inert, clipped by
+	// the shrinking wrapper at its full width so nothing in it re-wraps; closed, it's gone. Opens
+	// show it at once, and the first render doesn't animate, since the wrapper starts at its width.
+	// only `toggle_drawer` writes `show_markdown_details` - another writer would need this to follow it
+	let drawer_content_shown = $state.raw(app.ui.show_markdown_details);
+	let drawer_el: HTMLElement | undefined = $state.raw();
 
 	let source_editor:
 		| {
@@ -319,13 +326,33 @@
 	};
 
 	const toggle_drawer = (): void => {
-		drawer_open = !drawer_open;
-		// closed, nothing re-reads the lights, so they clear rather than show stale for the frame
-		// before the reopened drawer's re-read
-		if (!drawer_open) {
+		const open = !drawer_open;
+		app.ui.show_markdown_details = open;
+		if (open) {
+			drawer_content_shown = true;
+		} else {
+			// closed, nothing re-reads the lights, so they clear rather than show stale for the frame
+			// before the reopened drawer's re-read
 			onscreen_sections = new Set();
 			followed_heading = -1;
+			// with no motion (`prefers-reduced-motion` unsets fuz_css's durations, so the transition
+			// computes to 0s) no transition ends it
+			if (!has_drawer_motion()) drawer_content_shown = false;
 		}
+	};
+
+	/** Whether the drawer's wrapper animates its width, so a `transitionend` will follow. */
+	const has_drawer_motion = (): boolean =>
+		!!drawer_el && parseFloat(getComputedStyle(drawer_el).transitionDuration) > 0;
+
+	const handle_drawer_transition_end = (event: TransitionEvent): void => {
+		// the wrapper's own width, not a transition inside the drawer - and only once it's closed, so
+		// the end of a reopen mid-close changes nothing. A cancelled transition isn't listened for:
+		// closing during the open's transition cancels it, and the content stays for the close's own.
+		// A close cancelled with none after it (an ancestor hidden mid-close) leaves the content
+		// mounted, inert and unseen in the closed wrapper, until the next close
+		if (event.target !== event.currentTarget || event.propertyName !== 'width') return;
+		if (!drawer_open) drawer_content_shown = false;
 	};
 
 	const same_set = (a: ReadonlySet<number>, b: ReadonlySet<number>): boolean => {
@@ -452,7 +479,7 @@
 				onresolve={() => source_editor?.focus()}
 				attrs={{ class: 'px_md py_xs' }}
 			/>
-			<!-- the drawer's `DiskfileActions` shows it too, but the drawer is usually closed -->
+			<!-- the drawer's `DiskfileActions` shows it too, so this one shows only with the drawer closed -->
 			{#if !drawer_open && editor_state.save_error !== null}
 				<div class="px_md py_xs" transition:slide>
 					<ErrorMessage>
@@ -499,52 +526,77 @@
 			</div>
 		</div>
 
-		{#if drawer_open}
-			<div
-				class="width_atmost_sm width_atleast_sm py_md overflow:auto"
-				transition:slide={{ axis: 'x' }}
-			>
-				<div class="px_md mb_lg">
-					<DiskfileActions {diskfile} {editor_state} readonly={!editor_state.content_loaded} />
-				</div>
+		<!-- the wrapper animates its width, and the content keeps the drawer's -->
+		<div
+			class="markdown-drawer"
+			class:open={drawer_open}
+			bind:this={drawer_el}
+			ontransitionend={handle_drawer_transition_end}
+		>
+			{#if drawer_content_shown}
+				<div class="markdown-drawer-content py_md" inert={!drawer_open}>
+					<div class="px_md mb_lg">
+						<DiskfileActions {diskfile} {editor_state} readonly={!editor_state.content_loaded} />
+					</div>
 
-				<div class="px_md mb_lg">
-					<MarkdownOutline
-						{headings}
-						onscreen={onscreen_sections}
-						current={current_section}
-						onselect={reveal_heading}
-					/>
-				</div>
-
-				<MarkdownBrokenLinks {links} onselect={reveal_link} attrs={{ class: 'px_md mb_lg' }} />
-
-				<div class="px_md mb_lg">
-					<DiskfileEditorNav {editor_state} />
-				</div>
-
-				<div class="px_md mb_lg">
-					<DiskfileInfo {diskfile} {editor_state} />
-				</div>
-
-				{#if editor_state.has_history}
-					<div transition:slide>
-						<DiskfileHistoryView
-							{editor_state}
-							onselectentry={(entry_id) => {
-								editor_state.set_content_from_history(entry_id);
-								source_editor?.focus();
-							}}
+					<div class="px_md mb_lg">
+						<MarkdownOutline
+							{headings}
+							onscreen={onscreen_sections}
+							current={current_section}
+							onselect={reveal_heading}
 						/>
 					</div>
-				{/if}
 
-				<DiskfilePartView {diskfile} />
+					<MarkdownBrokenLinks {links} onselect={reveal_link} attrs={{ class: 'px_md mb_lg' }} />
 
-				<div class="px_md">
-					<TutorialForDiskfiles />
+					<div class="px_md mb_lg">
+						<DiskfileEditorNav {editor_state} />
+					</div>
+
+					<div class="px_md mb_lg">
+						<DiskfileInfo {diskfile} {editor_state} />
+					</div>
+
+					{#if editor_state.has_history}
+						<div transition:slide>
+							<DiskfileHistoryView
+								{editor_state}
+								onselectentry={(entry_id) => {
+									editor_state.set_content_from_history(entry_id);
+									source_editor?.focus();
+								}}
+							/>
+						</div>
+					{/if}
+
+					<DiskfilePartView {diskfile} />
+
+					<div class="px_md">
+						<TutorialForDiskfiles />
+					</div>
 				</div>
-			</div>
-		{/if}
+			{/if}
+		</div>
 	</div>
 </DiskfileContextmenu>
+
+<style>
+	/* the drawer's layout: the wrapper's width animates between the drawer's and none, so the panes
+	beside it reflow as it moves, while the content keeps the drawer's width, clipped rather than
+	re-wrapped - pinned to the wrapper's moving left edge, it slides out to the right as it closes */
+	.markdown-drawer {
+		flex-shrink: 0;
+		width: 0;
+		overflow: hidden;
+		transition: width var(--duration_2) ease-in-out;
+	}
+	.markdown-drawer.open {
+		width: var(--distance_sm);
+	}
+	.markdown-drawer-content {
+		width: var(--distance_sm);
+		height: 100%;
+		overflow: auto;
+	}
+</style>
