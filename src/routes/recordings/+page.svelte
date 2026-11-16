@@ -21,7 +21,7 @@
 	const app = frontend_context.get();
 	const { recorder, diskfiles, jobs } = app;
 
-	// `recordings/` in the app directory: no workspace needed, and out of any repo
+	// `recordings/` in the app directory: no project needed, and out of any repo
 	const recordings_dir = $derived(
 		app.zzz_dir ? parse_or_throw(DiskfileDirectoryPath, to_recordings_dir(app.zzz_dir)) : null
 	);

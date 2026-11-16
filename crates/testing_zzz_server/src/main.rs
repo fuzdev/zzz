@@ -100,25 +100,25 @@ async fn main() -> ExitCode {
     };
 
     // The factory closes over `Arc<App>` so the `_testing_reset`
-    // domain-state reset closure can close zzz workspaces + kill terminals +
+    // domain-state reset closure can close zzz projects + kill terminals +
     // wipe the optional scratch dir.
     let extra_specs_factory: zzz_server::ExtraActionSpecsFactory = Box::new(move |app, runtime| {
         let app_for_reset = Arc::clone(&app);
-        // zzz's domain state is in-memory (workspaces + terminals +
+        // zzz's domain state is in-memory (projects + terminals +
         // scratch dir), so the in-tx `ActionDb` handed in by the spine
         // reset is ignored here — only DB-domain consumers (fuz_forge)
         // use it.
         let reset_state: ResetStateFn = Arc::new(move |_db| {
             let app = Arc::clone(&app_for_reset);
             Box::pin(async move {
-                // Close every open workspace through the production close
-                // path: each workspace's filer is stopped, its `ScopedFs`
-                // root removed, and a `workspace_changed` close broadcast —
+                // Close every open project through the production close
+                // path: each project's filers are stopped, its `ScopedFs`
+                // root removed, and a `project_changed` close broadcast —
                 // so neither scope nor watchers leak into the next test (an
                 // out-of-scope assertion can't pass because an earlier test
-                // left a workspace open). The boot-time `zzz_dir` +
+                // left a project open). The boot-time `zzz_dir` +
                 // `scoped_dirs` roots and filers are permanent and stay.
-                zzz_server::handlers::workspace::workspace_close_all(&app).await?;
+                zzz_server::handlers::project::project_close_all(&app).await?;
 
                 // Kill every active terminal. `kill_all()` drains the
                 // terminal map and waits (bounded) until each child is

@@ -385,7 +385,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     //
     // Composition order: protocol (heartbeat + peer/ping), then the spine's
     // auth families (account + admin self-service), then zzz-specific specs
-    // (`core`, `workspace`, `filesystem`, `terminal`, `provider`).
+    // (`core`, `project`, `filesystem`, `terminal`, `provider`).
     let mut all_specs: Vec<fuz_actions::ActionSpec> = fuz_actions::PROTOCOL_ACTION_SPECS();
     all_specs.extend(backend.auth_spec_set(
         Arc::new(fuz_auth::AdminOfferAuthorize),
@@ -422,6 +422,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     }
 
     start_permanent_filers(&app_state).await;
+    check_git(&app_state).await;
 
     // -- Routes -----------------------------------------------------------
     //
@@ -521,13 +522,31 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     served
 }
 
+/// Check once that the git project resolution calls is usable
+/// (`Git::check_version`), logging what it found. Without a usable git the
+/// daemon still serves: discovery from a linked worktree and the
+/// registry-root-in-an-entry check find nothing.
+async fn check_git(app_state: &Arc<handlers::App>) {
+    let app = Arc::clone(app_state);
+    let checked =
+        tokio::task::spawn_blocking(move || app.git.check_version(Path::new(&app.zzz_dir))).await;
+    match checked {
+        Ok(Ok(version)) => tracing::info!(%version, "git found"),
+        Ok(Err(e)) => tracing::warn!(
+            error = %fuz_sys::cli::format_error_chain(&e),
+            "git is unusable; project resolution goes without it"
+        ),
+        Err(e) => tracing::warn!(error = %e, "the git check didn't finish"),
+    }
+}
+
 /// Start the permanent filers: the app dir's, then each scoped dir's (but
 /// one that is the app dir) that still passes its rules
 /// ([`recheck_scoped_dir`]). A filer that can't start is logged and skipped
 /// — the daemon serves without it.
 async fn start_permanent_filers(app_state: &Arc<handlers::App>) {
     // zzz_dir uses FilerConfig::zzz_dir() (no ignored dirs); scoped_dirs use
-    // workspace config (ignoring zzz_dir when nested inside)
+    // the tree config (ignoring zzz_dir when nested inside)
     match app_state
         .filer_manager
         .start_filer(
@@ -568,7 +587,7 @@ async fn start_permanent_filers(app_state: &Arc<handlers::App>) {
             .start_filer(
                 dir,
                 Arc::clone(app_state),
-                filer::FilerConfig::workspace(dir, &app_state.zzz_dir),
+                filer::FilerConfig::tree(dir, &app_state.zzz_dir),
                 filer::FilerLifetime::Permanent,
             )
             .await
@@ -605,8 +624,8 @@ pub struct Config {
     pub zzz_dir: String,
     /// Which directories can be roots: strictly inside the daemon's home
     /// directory, or in `ZZZ_ROOTS_OUTSIDE_HOME` ([`root_policy`]). The boot
-    /// holds the app dir and `scoped_dirs` to it; `workspace_open` every
-    /// workspace.
+    /// holds the app dir and `scoped_dirs` to it; `project_open` every
+    /// project's root.
     pub root_policy: root_policy::RootPolicy,
     /// Register `_testing_*` actions on live dispatchers. Set by integration
     /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave unset.

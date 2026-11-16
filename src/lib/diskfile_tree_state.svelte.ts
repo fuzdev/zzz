@@ -330,7 +330,7 @@ export const to_diskfile_tree_create_key = (root: string, dir: string): string =
  *
  * A folder the file index never enters from the root around it (the source's
  * `is_ignored_dir`) isn't shown under that root: its files can only come from
- * a root nested inside it — say the app directory inside a workspace — which
+ * a root nested inside it — say the app directory inside a project — which
  * shows as its own root.
  *
  * @param roots - the indexed roots, each with a trailing `/`

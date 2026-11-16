@@ -337,51 +337,51 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'terminal_exited', 'receive', 'handling'>
 		) => void | Promise<void>;
 	};
-	workspace_open?: {
+	project_open?: {
 		send_request?: (
-			action_event: TypedActionEvent<'workspace_open', 'send_request', 'handling'>
+			action_event: TypedActionEvent<'project_open', 'send_request', 'handling'>
 		) => void | Promise<void>;
 		receive_response?: (
-			action_event: TypedActionEvent<'workspace_open', 'receive_response', 'handling'>
+			action_event: TypedActionEvent<'project_open', 'receive_response', 'handling'>
 		) => void | Promise<void>;
 		send_error?: (
-			action_event: TypedActionEvent<'workspace_open', 'send_error', 'handling'>
+			action_event: TypedActionEvent<'project_open', 'send_error', 'handling'>
 		) => void | Promise<void>;
 		receive_error?: (
-			action_event: TypedActionEvent<'workspace_open', 'receive_error', 'handling'>
+			action_event: TypedActionEvent<'project_open', 'receive_error', 'handling'>
 		) => void | Promise<void>;
 	};
-	workspace_close?: {
+	project_close?: {
 		send_request?: (
-			action_event: TypedActionEvent<'workspace_close', 'send_request', 'handling'>
+			action_event: TypedActionEvent<'project_close', 'send_request', 'handling'>
 		) => void | Promise<void>;
 		receive_response?: (
-			action_event: TypedActionEvent<'workspace_close', 'receive_response', 'handling'>
+			action_event: TypedActionEvent<'project_close', 'receive_response', 'handling'>
 		) => void | Promise<void>;
 		send_error?: (
-			action_event: TypedActionEvent<'workspace_close', 'send_error', 'handling'>
+			action_event: TypedActionEvent<'project_close', 'send_error', 'handling'>
 		) => void | Promise<void>;
 		receive_error?: (
-			action_event: TypedActionEvent<'workspace_close', 'receive_error', 'handling'>
+			action_event: TypedActionEvent<'project_close', 'receive_error', 'handling'>
 		) => void | Promise<void>;
 	};
-	workspace_list?: {
+	project_list?: {
 		send_request?: (
-			action_event: TypedActionEvent<'workspace_list', 'send_request', 'handling'>
+			action_event: TypedActionEvent<'project_list', 'send_request', 'handling'>
 		) => void | Promise<void>;
 		receive_response?: (
-			action_event: TypedActionEvent<'workspace_list', 'receive_response', 'handling'>
+			action_event: TypedActionEvent<'project_list', 'receive_response', 'handling'>
 		) => void | Promise<void>;
 		send_error?: (
-			action_event: TypedActionEvent<'workspace_list', 'send_error', 'handling'>
+			action_event: TypedActionEvent<'project_list', 'send_error', 'handling'>
 		) => void | Promise<void>;
 		receive_error?: (
-			action_event: TypedActionEvent<'workspace_list', 'receive_error', 'handling'>
+			action_event: TypedActionEvent<'project_list', 'receive_error', 'handling'>
 		) => void | Promise<void>;
 	};
-	workspace_changed?: {
+	project_changed?: {
 		receive?: (
-			action_event: TypedActionEvent<'workspace_changed', 'receive', 'handling'>
+			action_event: TypedActionEvent<'project_changed', 'receive', 'handling'>
 		) => void | Promise<void>;
 	};
 }

@@ -283,7 +283,7 @@ describe('DiskfileTreeState', () => {
 	});
 
 	test('a root inside a folder the index never enters shows only as its own root', () => {
-		// the default dev layout: the app directory inside the open workspace
+		// the default dev layout: the app directory inside the open project
 		app.zzz_dir = '/h/p/.zzz/';
 		app.scoped_dirs = ['/h/p/', '/h/q/'];
 		write('/h/p/.zzz/recordings/a.webm', '/h/p/.zzz/');

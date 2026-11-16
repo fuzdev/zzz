@@ -23,6 +23,8 @@ const GLOBAL_SETUP = './src/test/cross_backend/global_setup.ts';
 // The proxy variant is its own project: `ZZZ_TRUSTED_PROXIES` is parsed once
 // at boot, so its suite needs a backend spawned with the trust list set.
 const PROXY_TEST = 'src/test/cross_backend/proxy.cross.test.ts';
+// So is the registry suite: its backend runs with a fixture `HOME`, read once at boot.
+const PROJECT_REGISTRY_TEST = 'src/test/cross_backend/project_registry.cross.test.ts';
 
 // The `cross_backend_*` projects spawn the real Rust `zzz_server` binary via
 // `globalSetup` (needs local Postgres; the global setup builds the binary and
@@ -37,12 +39,17 @@ const cross_backend_projects = cross_backend_enabled
 			make_cross_backend_project({
 				name: 'cross_backend_rust',
 				global_setup: GLOBAL_SETUP,
-				exclude: [PROXY_TEST]
+				exclude: [PROXY_TEST, PROJECT_REGISTRY_TEST]
 			}),
 			make_cross_backend_project({
 				name: 'cross_backend_rust_proxy',
 				global_setup: GLOBAL_SETUP,
 				include: [PROXY_TEST]
+			}),
+			make_cross_backend_project({
+				name: 'cross_backend_rust_projects',
+				global_setup: GLOBAL_SETUP,
+				include: [PROJECT_REGISTRY_TEST]
 			})
 		]
 	: [];

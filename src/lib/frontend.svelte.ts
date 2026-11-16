@@ -30,12 +30,12 @@ import { Prompts } from './prompts.svelte.ts';
 import { Parts } from './parts.svelte.ts';
 import { Time } from './time.svelte.ts';
 import { Spaces } from './spaces.svelte.ts';
-import { Workspaces } from './workspaces.svelte.ts';
-import type { Workspace } from './workspace.svelte.ts';
+import { Projects } from './projects.svelte.ts';
+import type { ProjectInfoJson } from './project.svelte.ts';
 import { Terminals } from './terminals.svelte.ts';
 import { Recorder } from './recorder.svelte.ts';
 import { Jobs } from './jobs.svelte.ts';
-import { ERROR_WORKSPACE_NOT_OPEN } from './workspace_helpers.ts';
+import { ERROR_PROJECT_NOT_OPEN } from './project_helpers.ts';
 import { TerminalPresets } from './terminal_presets.svelte.ts';
 import {
 	TERMINAL_LOST_TO_RESTART_MESSAGE,
@@ -83,10 +83,10 @@ import {
 export const frontend_context = create_context<Frontend>();
 
 /**
- * The `workspace_open` errors that mean a lost workspace can't be reopened —
- * its directory is gone, forbidden, or not a directory.
+ * The `project_open` errors that mean a lost project can't be reopened from
+ * a path — it's gone or forbidden, or its registry can't be used.
  */
-const WORKSPACE_REOPEN_REFUSAL_CODES: ReadonlySet<number> = new Set([
+const PROJECT_REOPEN_REFUSAL_CODES: ReadonlySet<number> = new Set([
 	JSONRPC_ERROR_CODES.not_found,
 	JSONRPC_ERROR_CODES.forbidden,
 	JSONRPC_ERROR_CODES.invalid_params
@@ -96,8 +96,8 @@ const WORKSPACE_REOPEN_REFUSAL_CODES: ReadonlySet<number> = new Set([
 export interface SessionSnapshotChanges {
 	/** What `filer_change` reported (`Diskfiles.track_changes`). */
 	file_changes: DiskfileSnapshotChanges;
-	/** Workspace paths opened or closed (`Workspaces.track_changes`). */
-	workspace_paths: ReadonlySet<string>;
+	/** Project roots opened or closed (`Projects.track_changes`). */
+	project_roots: ReadonlySet<string>;
 	/** Backend ids of the terminals running when the snapshot was requested. */
 	running_terminal_ids: ReadonlySet<Uuid>;
 }
@@ -191,7 +191,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly socket: Socket;
 	readonly capabilities: Capabilities;
 	readonly spaces: Spaces;
-	readonly workspaces: Workspaces;
+	readonly projects: Projects;
 	readonly terminals: Terminals;
 	readonly terminal_presets: TerminalPresets;
 	readonly recorder: Recorder;
@@ -278,18 +278,27 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	/** The socket's `last_connect_time` last seen by `handle_socket_connect`. */
 	#socket_connect_time: number | null = null;
 	/**
-	 * Workspaces a restarted backend lost, to reopen — kept until a reopen
-	 * succeeds or definitively fails (see `receive_session`).
+	 * Projects a restarted backend lost, by root, with the paths still to
+	 * reopen (`Project.reopen_paths`, less those reopened or refused) — kept
+	 * until each is reopened or definitively fails (see `receive_session`).
 	 */
-	readonly #workspaces_to_reopen: Set<DiskfileDirectoryPath> = new Set();
-	/** Workspaces with a reopen in flight. */
-	readonly #workspaces_reopening: Set<DiskfileDirectoryPath> = new Set();
+	readonly #projects_to_reopen: Map<DiskfileDirectoryPath, Array<DiskfileDirectoryPath>> =
+		new Map();
+	/** Roots of projects with a reopen in flight. */
+	readonly #projects_reopening: Set<DiskfileDirectoryPath> = new Set();
 	/**
-	 * Workspaces closed while their reopen was in flight — the backend's open
-	 * scans before registering, so a close meanwhile finds nothing to close and
-	 * the open lands anyway; the reopen closes it again when it succeeds.
+	 * Roots of projects closed while their reopen was in flight — the
+	 * backend's open scans before registering, so a close meanwhile finds
+	 * nothing to close and the open lands anyway; the reopen closes it again
+	 * when it succeeds.
 	 */
-	readonly #workspaces_reopen_cancelled: Set<DiskfileDirectoryPath> = new Set();
+	readonly #projects_reopen_cancelled: Set<DiskfileDirectoryPath> = new Set();
+	/**
+	 * Roots of projects whose reopen was in flight when zzzd restarted again —
+	 * what it reopened was on the instance that's gone, so when it settles its
+	 * whole focus is queued again (see `#reopen_project`).
+	 */
+	readonly #projects_restarted_while_reopening: Set<DiskfileDirectoryPath> = new Set();
 	#disposed = false;
 
 	readonly #on_unauthenticated: (() => void) | null;
@@ -326,7 +335,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.socket = new Socket({ app: this });
 		this.capabilities = new Capabilities({ app: this });
 		this.spaces = new Spaces({ app: this });
-		this.workspaces = new Workspaces({ app: this });
+		this.projects = new Projects({ app: this });
 		this.terminals = new Terminals({ app: this });
 		this.terminal_presets = new TerminalPresets({ app: this });
 		this.api_url = options.api_url ?? null;
@@ -425,7 +434,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 *
 	 * Changes that arrive while the request is in flight win over the snapshot:
 	 * files a `filer_change` reported (see `Diskfiles.track_changes`) and
-	 * workspaces opened or closed are left as they are, and only terminals
+	 * projects opened or closed are left as they are, and only terminals
 	 * running when the request was sent can be found lost. The snapshot
 	 * carries no contents: every file held eagerly is read again (the shown
 	 * ones first), and any other loaded file drops its content
@@ -445,11 +454,11 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		let error_message: string;
 		const file_changes = this.diskfiles.track_changes();
-		const workspace_changes = this.workspaces.track_changes();
+		const project_changes = this.projects.track_changes();
 		const running_terminal_ids = this.terminals.running_terminal_ids();
 		const stop_tracking = (): void => {
 			file_changes.stop();
-			workspace_changes.stop();
+			project_changes.stop();
 		};
 		try {
 			const result = await this.api.session_load();
@@ -458,7 +467,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 			if (result.ok) {
 				this.receive_session(result.value.data, {
 					file_changes,
-					workspace_paths: workspace_changes.paths,
+					project_roots: project_changes.roots,
 					running_terminal_ids
 				});
 				this.session_status = 'success';
@@ -535,7 +544,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 *
 	 * Notifications only arrive while the socket is open, so a snapshot loaded
 	 * before this connect may miss changes: those sent while a previous socket
-	 * was down (`filer_change`, `workspace_changed`, `terminal_data`,
+	 * was down (`filer_change`, `project_changed`, `terminal_data`,
 	 * `terminal_exited`), or, on the first connect, those between an HTTP
 	 * boot load and the socket opening. So:
 	 *
@@ -547,7 +556,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	 *   (so over it) needs nothing more
 	 * - otherwise, an earlier load is followed by a resync — the
 	 *   session snapshot is reloaded (after the in-flight load, if any) to
-	 *   reconcile files, workspaces, and terminals, and on a reconnect running
+	 *   reconcile files, projects, and terminals, and on a reconnect running
 	 *   terminals are flagged as possibly missing output
 	 *
 	 * @param connect_time - the socket's `last_connect_time`, `null` before it connects
@@ -574,8 +583,8 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	/**
 	 * Reloads the session snapshot to reconcile state no notification
-	 * carries — after a reconnect, or a workspace opened elsewhere (see
-	 * `Workspaces.receive_remote_open`). With a load in flight, which may
+	 * carries — after a reconnect, or a project opened or focused elsewhere
+	 * (see `Projects.receive_remote_change`). With a load in flight, which may
 	 * predate the change, another follows it.
 	 */
 	resync_session(): void {
@@ -603,14 +612,16 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	/**
 	 * Reconciles the app with a session snapshot — replacing, not just adding:
 	 *
-	 * - workspaces: adds the listed ones and removes the rest
-	 *   (`Workspaces.reconcile`) — except after a zzzd restart (a new
+	 * - projects: adds or updates the listed ones and removes the rest
+	 *   (`Projects.reconcile`) — except after a zzzd restart (a new
 	 *   `server_instance_id`), when the ones it lost are reopened instead
-	 *   (`Workspaces.open`), keeping their files and tabs; a reopen refused
-	 *   because the directory is gone or forbidden drops the workspace and its
-	 *   files, while any other failure keeps it for the next snapshot to retry
+	 *   (`Projects.open` of each directory it had focused, or its root),
+	 *   keeping their files and tabs; a reopen refused because the path is
+	 *   gone or forbidden, or that resolves to another project, drops the
+	 *   project and its files, while any other failure keeps it for the next
+	 *   snapshot to retry
 	 * - files: upserts the snapshot's, and removes known files it lacks under
-	 *   `file_roots` or a removed workspace, keeping ones with unsaved edits
+	 *   `file_roots` or a removed project, keeping ones with unsaved edits
 	 *   (`Diskfiles.reconcile`) — files elsewhere are left alone
 	 * - terminals: running ones the backend no longer has become `lost`
 	 *   (`Terminals.reconcile`)
@@ -631,31 +642,41 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.scoped_dirs = data.scoped_dirs;
 		this.provider_status = data.provider_status;
 
-		// workspaces changed in flight or being reopened are left as they are
-		const skip_workspaces: Set<string> = new Set(changes?.workspace_paths);
-		for (const path of this.#workspaces_reopening) skip_workspaces.add(path);
-		// lost to an earlier restart, their reopen failed without a refusal — retry
-		const listed: Set<string> = new Set(data.workspaces.map((w) => w.path));
-		const retry: Array<DiskfileDirectoryPath> = [];
-		for (const path of this.#workspaces_to_reopen) {
-			if (listed.has(path) || !this.workspaces.get_by_path(path)) {
-				this.#workspaces_to_reopen.delete(path);
-			} else if (!skip_workspaces.has(path)) {
-				retry.push(path);
-			}
+		// projects changed in flight or being reopened are left as they are — a
+		// reopen this restart overtook queues its whole focus once it settles
+		const skip_projects: Set<string> = new Set(changes?.project_roots);
+		for (const root of this.#projects_reopening) {
+			skip_projects.add(root);
+			if (restarted) this.#projects_restarted_while_reopening.add(root);
 		}
-		const unlisted = this.workspaces.reconcile(data.workspaces, {
-			skip_paths: new Set([...skip_workspaces, ...retry]),
+		// lost to an earlier restart, some of their reopen failed without a
+		// refusal — retry what the snapshot doesn't show reopened
+		const listed: Map<string, ProjectInfoJson> = new Map(data.projects.map((p) => [p.root, p]));
+		const retry: Array<DiskfileDirectoryPath> = [];
+		for (const [root, paths] of this.#projects_to_reopen) {
+			const info = listed.get(root);
+			const pending = info
+				? paths.filter((path) => path !== root && !info.focused.includes(path))
+				: paths;
+			if (!pending.length || !this.projects.get_by_root(root)) {
+				this.#projects_to_reopen.delete(root);
+				continue;
+			}
+			this.#projects_to_reopen.set(root, pending);
+			if (!skip_projects.has(root)) retry.push(root);
+		}
+		const unlisted = this.projects.reconcile(data.projects, {
+			skip_roots: new Set([...skip_projects, ...retry]),
 			keep_unlisted: restarted
 		});
 		const reopen = restarted ? [...unlisted, ...retry] : retry;
 		const removed = restarted ? [] : unlisted;
 
-		// a removed workspace's files are gone from the backend's view unless
+		// a removed project's files are gone from the backend's view unless
 		// another root covers them — then they're in the snapshot or pruned there
 		this.diskfiles.reconcile(data.files, [...data.file_roots, ...removed], {
 			changes: changes?.file_changes,
-			skip_dirs: [...skip_workspaces, ...reopen]
+			skip_dirs: [...skip_projects, ...reopen]
 		});
 
 		this.terminals.reconcile(
@@ -667,79 +688,153 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		// jobs live on the backend, so its list is the truth — a restart empties it
 		this.jobs.reconcile(data.jobs);
 
-		for (const path of reopen) void this.#reopen_workspace(path, data.file_roots);
+		for (const root of new Set(reopen)) {
+			const project = this.projects.get_by_root(root);
+			if (!project) continue;
+			const pending = this.#projects_to_reopen.get(root);
+			// after a restart, the whole focus and any pending retry — less what the
+			// backend has focused already, when another client reopened it first;
+			// otherwise only what's pending
+			const info = listed.get(root);
+			const paths = (
+				restarted
+					? Array.from(new Set([...project.reopen_paths, ...(pending ?? [])]))
+					: (pending ?? project.reopen_paths)
+			).filter((path) => !info || (path !== root && !info.focused.includes(path)));
+			if (!paths.length) {
+				this.#projects_to_reopen.delete(root);
+				continue;
+			}
+			void this.#reopen_project(root, paths, data.file_roots);
+		}
 	}
 
 	/**
-	 * Closes the workspace at `path` (`workspace_close`) and removes it here. A
-	 * reply that it isn't open (`ERROR_WORKSPACE_NOT_OPEN` — e.g. a restart
+	 * Closes the project at `root` (`project_close`) and removes it here. A
+	 * reply that it isn't open (`ERROR_PROJECT_NOT_OPEN` — e.g. a restart
 	 * forgot it and its reopen hasn't succeeded) removes it here too, and the
-	 * close always cancels a pending reopen — one in flight closes the workspace
-	 * again once it lands — so a closed workspace stays closed.
+	 * close always cancels a pending reopen — one in flight closes the project
+	 * again once it lands — so a closed project stays closed.
 	 *
 	 * @returns the RPC result — any failure but "not open" is for the caller to surface
 	 */
-	async close_workspace(
-		path: DiskfileDirectoryPath
+	async close_project(
+		root: DiskfileDirectoryPath
 	): Promise<Result<{ value: null }, { error: JsonrpcErrorObject }>> {
-		this.#workspaces_to_reopen.delete(path);
-		if (this.#workspaces_reopening.has(path)) this.#workspaces_reopen_cancelled.add(path);
-		const result = await this.api.workspace_close({ path });
+		this.#projects_to_reopen.delete(root);
+		if (this.#projects_reopening.has(root)) this.#projects_reopen_cancelled.add(root);
+		const result = await this.api.project_close({ root });
 		if (!result.ok) {
 			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
-			if (reason !== ERROR_WORKSPACE_NOT_OPEN) return result;
+			if (reason !== ERROR_PROJECT_NOT_OPEN) return result;
 		}
-		this.workspaces.remove_by_path(path);
+		this.projects.remove_by_root(root);
 		return { ok: true, value: null };
 	}
 
 	/**
-	 * Reopens a workspace a restarted backend lost, reconciling its files. A
-	 * refusal saying the directory is gone or forbidden drops the workspace and
-	 * the files only it covered; any other failure keeps it for the next session
-	 * snapshot to retry, so nothing loops. A `close_workspace` while it's in
-	 * flight wins: a reopen that lands anyway is closed again.
+	 * Handles a `project_changed` close — another client's or this one's:
+	 * removes the project here and cancels a reopen of it, pending or in
+	 * flight (one that lands anyway is closed again, see `#reopen_project`).
 	 */
-	async #reopen_workspace(
-		path: DiskfileDirectoryPath,
+	receive_project_closed(root: DiskfileDirectoryPath): void {
+		this.#projects_to_reopen.delete(root);
+		if (this.#projects_reopening.has(root)) this.#projects_reopen_cancelled.add(root);
+		this.projects.remove_by_root(root);
+	}
+
+	/**
+	 * Reopens a project a restarted backend lost, opening each of `paths` —
+	 * the directories it had focused, or its root when none — in turn and
+	 * reconciling their files. It's reopened once an open lands on its root;
+	 * a path refused then is dropped from its focus, and one that failed
+	 * otherwise is kept for the next session snapshot to retry. When nothing
+	 * lands on its root and every open is refused — the path is gone or
+	 * forbidden, the registry can't be used — or resolves to another project
+	 * (which is then open), the project and the files only it covered are
+	 * dropped; when some open failed otherwise, it's kept for the next
+	 * snapshot to retry, so nothing loops. A close while it's in flight wins
+	 * — this client's `close_project`, or another's, which removes the project
+	 * here: no further path is opened, and a reopen that lands anyway is
+	 * closed again.
+	 */
+	async #reopen_project(
+		root: DiskfileDirectoryPath,
+		paths: ReadonlyArray<DiskfileDirectoryPath>,
 		file_roots: ReadonlyArray<string>
 	): Promise<void> {
-		this.#workspaces_to_reopen.add(path);
-		this.#workspaces_reopening.add(path);
-		let opened: Workspace | null = null;
-		let error: JsonrpcErrorObject | null = null;
+		this.#projects_to_reopen.set(root, [...paths]);
+		this.#projects_reopening.add(root);
+		let reopened = false;
+		const failed: Array<DiskfileDirectoryPath> = [];
+		const refused: Array<DiskfileDirectoryPath> = [];
 		let cancelled = false;
 		try {
-			const result = await this.workspaces.open(path, { reconcile_files: true });
-			if (result.ok) {
-				opened = result.value;
-			} else {
-				error = result.error;
+			for (const path of paths) {
+				if (
+					this.#disposed ||
+					this.#projects_reopen_cancelled.has(root) ||
+					!this.projects.get_by_root(root)
+				) {
+					break;
+				}
+				let error: JsonrpcErrorObject | null = null;
+				try {
+					const result = await this.projects.open(path, { reconcile_files: true });
+					if (result.ok) {
+						if (result.value.project.root === root) reopened = true;
+					} else {
+						error = result.error;
+					}
+				} catch (thrown) {
+					error = { code: JSONRPC_ERROR_CODES.internal_error, message: to_error_message(thrown) };
+				}
+				if (!error || this.#disposed) continue;
+				console.error(`[frontend] failed to reopen ${path} after zzzd restarted:`, error);
+				(PROJECT_REOPEN_REFUSAL_CODES.has(error.code) ? refused : failed).push(path);
 			}
-		} catch (thrown) {
-			error = { code: JSONRPC_ERROR_CODES.internal_error, message: to_error_message(thrown) };
 		} finally {
-			this.#workspaces_reopening.delete(path);
-			cancelled = this.#workspaces_reopen_cancelled.delete(path);
+			this.#projects_reopening.delete(root);
+			// closed here, or by another client (its `project_changed` removed it)
+			cancelled = this.#projects_reopen_cancelled.delete(root) || !this.projects.get_by_root(root);
 		}
-		if (opened) {
-			this.#workspaces_to_reopen.delete(path);
-			if (cancelled && !this.#disposed) {
+		if (cancelled || this.#disposed) {
+			this.#projects_to_reopen.delete(root);
+			this.#projects_restarted_while_reopening.delete(root);
+			if (reopened && cancelled && !this.#disposed) {
 				// closed while in flight, and the backend opened it anyway — close it again
-				const closed = await this.close_workspace(opened.path);
+				const closed = await this.close_project(root);
 				if (!closed.ok) {
-					console.error(`[frontend] failed to close reopened workspace ${path}:`, closed.error);
+					console.error(`[frontend] failed to close reopened project ${root}:`, closed.error);
 				}
 			}
 			return;
 		}
-		if (!error) return;
-		if (this.#disposed) return;
-		console.error(`[frontend] failed to reopen workspace ${path} after zzzd restarted:`, error);
-		if (!WORKSPACE_REOPEN_REFUSAL_CODES.has(error.code)) return;
-		this.#workspaces_to_reopen.delete(path);
-		this.workspaces.remove_by_path(path);
-		this.diskfiles.reconcile([], [path], { skip_dirs: file_roots });
+		if (failed.length) {
+			this.#projects_to_reopen.set(root, failed);
+		} else {
+			this.#projects_to_reopen.delete(root);
+		}
+		// a refused focus won't come back, whether or not the rest landed — kept,
+		// it would be opened again on every retry and restart
+		const project = this.projects.get_by_root(root);
+		if (project && refused.length) {
+			project.focused = project.focused.filter((dir) => !refused.includes(dir));
+		}
+		if (this.#projects_restarted_while_reopening.delete(root) && project) {
+			// the opens that landed did so on the instance that restarted since —
+			// queue the whole focus again, and ask for the snapshot that retries it
+			const again = Array.from(new Set([...project.reopen_paths, ...failed]));
+			this.#projects_to_reopen.set(root, again);
+			this.resync_session();
+			return;
+		}
+		if (reopened || failed.length) return;
+		this.projects.remove_by_root(root);
+		// what another root covers — a project a reopen resolved to instead,
+		// say — stays
+		const covered = [...file_roots, ...this.projects.items.values.map((p) => p.root)];
+		this.diskfiles.reconcile([], [root], { skip_dirs: covered });
 	}
 
 	add_providers(providers_json: Array<ProviderJsonInput>): void {

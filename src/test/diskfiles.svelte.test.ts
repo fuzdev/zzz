@@ -258,7 +258,7 @@ describe('upsert by path', () => {
 		await app.diskfiles.ensure_content(a);
 		assert.strictEqual(a.content, 'a1');
 
-		// e.g. `workspace_open` files overlapping `session_load`'s
+		// e.g. `project_open` files overlapping `session_load`'s
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'a2'), create_disknode(PATH_C, 'c1')]);
 
 		assert.strictEqual(app.diskfiles.items.size, 3);
@@ -756,7 +756,7 @@ describe('path_relative', () => {
 });
 
 describe('create_file', () => {
-	test('creates in the active workspace through `diskfile_create`, never `diskfile_update`', async () => {
+	test('creates in the active project through `diskfile_create`, never `diskfile_update`', async () => {
 		const calls: Array<[string, unknown]> = [];
 		(app as any).api = {
 			diskfile_create: (input: unknown) => {
@@ -769,14 +769,86 @@ describe('create_file', () => {
 			}
 		};
 		app.zzz_dir = parse_or_throw(SerializableDisknode.def.source_dir, '/zzz/');
-		app.workspaces.add({ path: SOURCE_DIR });
+		app.projects.add({ root: SOURCE_DIR });
 
 		await app.diskfiles.create_file('/new.txt');
 
 		assert.deepEqual(calls, [['diskfile_create', { path: '/ws/new.txt', content: '' }]]);
 	});
 
-	test('refuses when no workspace is open', async () => {
+	describe('in a registry project', () => {
+		const DEV = parse_or_throw(SerializableDisknode.def.source_dir, '/dev/');
+		const APP = parse_or_throw(SerializableDisknode.def.source_dir, '/dev/app/');
+		const SITE = parse_or_throw(SerializableDisknode.def.source_dir, '/dev/site/');
+		const calls: Array<unknown> = [];
+		const setup_registry = () => {
+			calls.length = 0;
+			(app as any).api = {
+				diskfile_create: (input: unknown) => {
+					calls.push(input);
+					return Promise.resolve({ ok: true, value: null });
+				}
+			};
+			app.zzz_dir = parse_or_throw(SerializableDisknode.def.source_dir, '/zzz/');
+			return app.projects.add({ root: DEV, kind: 'registry', focused: [APP, SITE] });
+		};
+
+		test("new files go in the last open's focus, else the root", async () => {
+			const project = setup_registry();
+			assert.strictEqual(app.diskfiles.new_files_dir, DEV);
+			project.last_focus = SITE;
+			assert.strictEqual(app.diskfiles.new_files_dir, SITE);
+			await app.diskfiles.create_file('x.md');
+			assert.deepEqual(calls, [{ path: '/dev/site/x.md', content: '' }]);
+			// a focus the project no longer has falls back to the root
+			project.focused = [APP];
+			assert.strictEqual(app.diskfiles.new_files_dir, DEV);
+		});
+
+		test('a loose file at the root is created', async () => {
+			setup_registry();
+			await app.diskfiles.create_file('notes.md');
+			assert.deepEqual(calls, [{ path: '/dev/notes.md', content: '' }]);
+		});
+
+		test('a file in an unfocused repo is refused before anything is written', async () => {
+			setup_registry();
+			for (const name of ['other/x.md', 'site/../other/x.md']) {
+				const error = await app.diskfiles.create_file(name).then(
+					() => null,
+					(e: unknown) => e
+				);
+				assert.instanceOf(error, Error, name);
+				assert.include(error.message, "isn't in a focused repo", name);
+			}
+			assert.deepEqual(calls, []);
+			// a focused repo's is fine
+			await app.diskfiles.create_file_at(parse_or_throw(DiskfilePath, '/dev/app/y.md'));
+			assert.deepEqual(calls, [{ path: '/dev/app/y.md', content: '' }]);
+		});
+
+		test('a folder whose files would be refused is refused too', async () => {
+			setup_registry();
+			const folders: Array<unknown> = [];
+			(app as any).api.directory_create = (input: unknown) => {
+				folders.push(input);
+				return Promise.resolve({ ok: true, value: null });
+			};
+			for (const name of ['other', 'other/deep/', 'scratch/']) {
+				const error = await app.diskfiles.create_directory(name).then(
+					() => null,
+					(e: unknown) => e
+				);
+				assert.instanceOf(error, Error, name);
+				assert.include(error.message, "isn't in a focused repo", name);
+			}
+			assert.deepEqual(folders, []);
+			await app.diskfiles.create_directory_at(parse_or_throw(DiskfilePath, '/dev/app/sub'));
+			assert.deepEqual(folders, [{ path: '/dev/app/sub' }]);
+		});
+	});
+
+	test('refuses when no project is open', async () => {
 		const calls: Array<unknown> = [];
 		(app as any).api = {
 			diskfile_create: (input: unknown) => {
@@ -792,7 +864,7 @@ describe('create_file', () => {
 			(e: unknown) => e
 		);
 		assert.instanceOf(error, Error);
-		assert.include(error.message, 'no workspace is open');
+		assert.include(error.message, 'no project is open');
 		assert.deepEqual(calls, []);
 	});
 
@@ -808,7 +880,7 @@ describe('create_file', () => {
 				return Promise.resolve({ ok: true, value: null });
 			}
 		};
-		app.workspaces.add({ path: SOURCE_DIR });
+		app.projects.add({ root: SOURCE_DIR });
 
 		for (const create of [
 			() => app.diskfiles.create_file('   '),
@@ -836,7 +908,7 @@ describe('create_file', () => {
 				return Promise.resolve({ ok: true, value: null });
 			}
 		};
-		app.workspaces.add({ path: SOURCE_DIR });
+		app.projects.add({ root: SOURCE_DIR });
 
 		await app.diskfiles.create_file(' new.txt\n');
 		await app.diskfiles.create_directory(' sub/ ');
@@ -856,7 +928,7 @@ describe('create_file', () => {
 					}
 				})
 		};
-		app.workspaces.add({ path: SOURCE_DIR });
+		app.projects.add({ root: SOURCE_DIR });
 
 		const error = await app.diskfiles.create_file('taken.txt').then(
 			() => null,
@@ -1029,7 +1101,7 @@ describe('create_file selects the new file', () => {
 				return Promise.resolve({ ok: true, value: null });
 			}
 		};
-		app.workspaces.add({ path: SOURCE_DIR });
+		app.projects.add({ root: SOURCE_DIR });
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
@@ -1133,11 +1205,11 @@ describe('create_file selects the new file', () => {
 		}
 	});
 
-	test('removing its workspace drops the pending selection', async () => {
+	test('removing its project drops the pending selection', async () => {
 		const a = setup();
 		await app.diskfiles.create_file('b.txt');
 
-		app.workspaces.remove_by_path(SOURCE_DIR);
+		app.projects.remove_by_root(SOURCE_DIR);
 		filer_change('add', PATH_B);
 
 		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
@@ -1171,7 +1243,7 @@ describe('create_file selects the new file', () => {
 });
 
 describe('create_directory', () => {
-	test('creates in the active workspace', async () => {
+	test('creates in the active project', async () => {
 		const calls: Array<unknown> = [];
 		(app as any).api = {
 			directory_create: (input: unknown) => {
@@ -1179,14 +1251,14 @@ describe('create_directory', () => {
 				return Promise.resolve({ ok: true, value: null });
 			}
 		};
-		app.workspaces.add({ path: SOURCE_DIR });
+		app.projects.add({ root: SOURCE_DIR });
 
 		await app.diskfiles.create_directory('sub/dir');
 
 		assert.deepEqual(calls, [{ path: '/ws/sub/dir' }]);
 	});
 
-	test('refuses when no workspace is open', async () => {
+	test('refuses when no project is open', async () => {
 		(app as any).api = {
 			directory_create: () => Promise.resolve({ ok: true, value: null })
 		};
@@ -1196,7 +1268,7 @@ describe('create_directory', () => {
 			(e: unknown) => e
 		);
 		assert.instanceOf(error, Error);
-		assert.include(error.message, 'no workspace is open');
+		assert.include(error.message, 'no project is open');
 	});
 
 	test('throws the backend error instead of swallowing it', async () => {
@@ -1207,7 +1279,7 @@ describe('create_directory', () => {
 					error: { code: -32003, message: 'failed to create directory: permission denied' }
 				})
 		};
-		app.workspaces.add({ path: SOURCE_DIR });
+		app.projects.add({ root: SOURCE_DIR });
 
 		const error = await app.diskfiles.create_directory('sub').then(
 			() => null,
@@ -1229,7 +1301,7 @@ describe('create_directory', () => {
 					}
 				})
 		};
-		app.workspaces.add({ path: SOURCE_DIR });
+		app.projects.add({ root: SOURCE_DIR });
 
 		const error = await app.diskfiles.create_directory('taken').then(
 			() => null,

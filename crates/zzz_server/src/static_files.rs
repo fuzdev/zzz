@@ -346,11 +346,11 @@ mod tests {
             FALLBACK,
         );
         assert_html(
-            &get_path(&fixture, "/workspaces?workspace=/tmp/").await,
+            &get_path(&fixture, "/workspaces?project=/tmp/").await,
             FALLBACK,
         );
         assert_html(
-            &get_path(&fixture, "/workspaces?workspace=%2Ftmp%2F").await,
+            &get_path(&fixture, "/workspaces?project=%2Ftmp%2F").await,
             FALLBACK,
         );
         // dotted dynamic segments (model slugs) are routes, not assets

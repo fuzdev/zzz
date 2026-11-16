@@ -41,10 +41,10 @@ export const ActionSpecs: ActionSpecs = {
 	terminal_resize: specs.terminal_resize_action_spec,
 	terminal_close: specs.terminal_close_action_spec,
 	terminal_exited: specs.terminal_exited_action_spec,
-	workspace_open: specs.workspace_open_action_spec,
-	workspace_close: specs.workspace_close_action_spec,
-	workspace_list: specs.workspace_list_action_spec,
-	workspace_changed: specs.workspace_changed_action_spec
+	project_open: specs.project_open_action_spec,
+	project_close: specs.project_close_action_spec,
+	project_list: specs.project_list_action_spec,
+	project_changed: specs.project_changed_action_spec
 };
 export type ActionSpecs = {
 	readonly heartbeat: typeof specs.heartbeat_action_spec;
@@ -74,10 +74,10 @@ export type ActionSpecs = {
 	readonly terminal_resize: typeof specs.terminal_resize_action_spec;
 	readonly terminal_close: typeof specs.terminal_close_action_spec;
 	readonly terminal_exited: typeof specs.terminal_exited_action_spec;
-	readonly workspace_open: typeof specs.workspace_open_action_spec;
-	readonly workspace_close: typeof specs.workspace_close_action_spec;
-	readonly workspace_list: typeof specs.workspace_list_action_spec;
-	readonly workspace_changed: typeof specs.workspace_changed_action_spec;
+	readonly project_open: typeof specs.project_open_action_spec;
+	readonly project_close: typeof specs.project_close_action_spec;
+	readonly project_list: typeof specs.project_list_action_spec;
+	readonly project_changed: typeof specs.project_changed_action_spec;
 };
 
 export const action_specs: Array<ActionSpecUnion> = Object.values(ActionSpecs);
@@ -114,10 +114,10 @@ export interface ActionInputs {
 	terminal_resize: Infer<typeof specs.terminal_resize_action_spec.input>;
 	terminal_close: Infer<typeof specs.terminal_close_action_spec.input>;
 	terminal_exited: Infer<typeof specs.terminal_exited_action_spec.input>;
-	workspace_open: Infer<typeof specs.workspace_open_action_spec.input>;
-	workspace_close: Infer<typeof specs.workspace_close_action_spec.input>;
-	workspace_list: Infer<typeof specs.workspace_list_action_spec.input>;
-	workspace_changed: Infer<typeof specs.workspace_changed_action_spec.input>;
+	project_open: Infer<typeof specs.project_open_action_spec.input>;
+	project_close: Infer<typeof specs.project_close_action_spec.input>;
+	project_list: Infer<typeof specs.project_list_action_spec.input>;
+	project_changed: Infer<typeof specs.project_changed_action_spec.input>;
 }
 
 /**
@@ -152,10 +152,10 @@ export interface ActionCallInputs {
 	terminal_resize: InferInput<typeof specs.terminal_resize_action_spec.input>;
 	terminal_close: InferInput<typeof specs.terminal_close_action_spec.input>;
 	terminal_exited: InferInput<typeof specs.terminal_exited_action_spec.input>;
-	workspace_open: InferInput<typeof specs.workspace_open_action_spec.input>;
-	workspace_close: InferInput<typeof specs.workspace_close_action_spec.input>;
-	workspace_list: InferInput<typeof specs.workspace_list_action_spec.input>;
-	workspace_changed: InferInput<typeof specs.workspace_changed_action_spec.input>;
+	project_open: InferInput<typeof specs.project_open_action_spec.input>;
+	project_close: InferInput<typeof specs.project_close_action_spec.input>;
+	project_list: InferInput<typeof specs.project_list_action_spec.input>;
+	project_changed: InferInput<typeof specs.project_changed_action_spec.input>;
 }
 
 /**
@@ -190,10 +190,10 @@ export interface ActionOutputs {
 	terminal_resize: Infer<typeof specs.terminal_resize_action_spec.output>;
 	terminal_close: Infer<typeof specs.terminal_close_action_spec.output>;
 	terminal_exited: Infer<typeof specs.terminal_exited_action_spec.output>;
-	workspace_open: Infer<typeof specs.workspace_open_action_spec.output>;
-	workspace_close: Infer<typeof specs.workspace_close_action_spec.output>;
-	workspace_list: Infer<typeof specs.workspace_list_action_spec.output>;
-	workspace_changed: Infer<typeof specs.workspace_changed_action_spec.output>;
+	project_open: Infer<typeof specs.project_open_action_spec.output>;
+	project_close: Infer<typeof specs.project_close_action_spec.output>;
+	project_list: Infer<typeof specs.project_list_action_spec.output>;
+	project_changed: Infer<typeof specs.project_changed_action_spec.output>;
 }
 
 /**
@@ -314,24 +314,24 @@ export interface ActionEventDatas {
 		'terminal_exited',
 		ActionInputs['terminal_exited']
 	>;
-	workspace_open: ActionEventRequestResponseData<
-		'workspace_open',
-		ActionInputs['workspace_open'],
-		ActionOutputs['workspace_open']
+	project_open: ActionEventRequestResponseData<
+		'project_open',
+		ActionInputs['project_open'],
+		ActionOutputs['project_open']
 	>;
-	workspace_close: ActionEventRequestResponseData<
-		'workspace_close',
-		ActionInputs['workspace_close'],
-		ActionOutputs['workspace_close']
+	project_close: ActionEventRequestResponseData<
+		'project_close',
+		ActionInputs['project_close'],
+		ActionOutputs['project_close']
 	>;
-	workspace_list: ActionEventRequestResponseData<
-		'workspace_list',
-		ActionInputs['workspace_list'],
-		ActionOutputs['workspace_list']
+	project_list: ActionEventRequestResponseData<
+		'project_list',
+		ActionInputs['project_list'],
+		ActionOutputs['project_list']
 	>;
-	workspace_changed: ActionEventRemoteNotificationData<
-		'workspace_changed',
-		ActionInputs['workspace_changed']
+	project_changed: ActionEventRemoteNotificationData<
+		'project_changed',
+		ActionInputs['project_changed']
 	>;
 }
 

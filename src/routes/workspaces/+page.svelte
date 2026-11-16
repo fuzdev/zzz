@@ -4,9 +4,10 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { frontend_context } from '#lib/frontend.svelte.ts';
-	import { DiskfileDirectoryPath } from '#lib/diskfile_types.ts';
-	import { parse_workspace_path, WORKSPACE_DEGRADED_NOTICE } from '#lib/workspace_helpers.ts';
-	import { icon_add, icon_delete, icon_directory, icon_workspace } from '@fuzdev/fuz_ui/icons.ts';
+	import type { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
+	import type { Project } from '#lib/project.svelte.ts';
+	import { parse_project_path, PROJECT_DEGRADED_NOTICE } from '#lib/project_helpers.ts';
+	import { icon_add, icon_delete, icon_directory, icon_project } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from '#lib/Icon.svelte';
 	import PageFooter from '#routes/PageFooter.svelte';
 
@@ -16,55 +17,56 @@
 	let opening = $state.raw(false);
 	let error_message: string | null = $state.raw(null);
 
+	const KIND_LABELS: Record<Project['kind'], string> = {
+		registry: 'registry',
+		git_repo: 'git repo',
+		plain_dir: 'directory'
+	};
+
 	/**
-	 * Open the workspace at `path` and activate it. Activates by the path the
-	 * daemon returns — it canonicalizes (`/a/./b/` → `/a/b/`, symlinks
-	 * resolved), so the input path may not match the stored workspace.
+	 * Open the project holding `path` and activate it — by the project the
+	 * daemon returns, whose root may be far above `path`.
 	 *
 	 * @returns an error message, or `null` on success
 	 */
-	const open_and_activate = async (path: DiskfileDirectoryPath): Promise<string | null> => {
-		const result = await app.workspaces.open(path);
+	const open_and_activate = async (path: DiskfilePath): Promise<string | null> => {
+		const result = await app.projects.open(path);
 		if (!result.ok) return result.error.message;
-		app.workspaces.activate(result.value.id);
+		app.projects.activate(result.value.project.id);
 		return null;
 	};
 
-	// Auto-open/activate workspace from query param (e.g. from `zzz <dir>` CLI)
-	const workspace_param = $derived(page.url.searchParams.get('workspace'));
+	// Auto-open/activate a project from the query param (e.g. from `zzz <path>`)
+	const project_param = $derived(page.url.searchParams.get('project'));
 
 	// Non-reactive: each param value is handled once, then stripped from the URL.
 	// Reset when the param clears so navigating to the same value again reopens.
 	let last_handled_param: string | null = null;
 
 	$effect(() => {
-		const param = workspace_param;
+		const param = project_param;
 		if (param === null) {
 			last_handled_param = null;
 			return;
 		}
 		if (param === last_handled_param) return;
 		last_handled_param = param;
-		// untracked so workspace collection changes (a close, another open)
-		// never re-run this — which would reopen a just-closed workspace or
+		// untracked so project collection changes (a close, another open)
+		// never re-run this — which would reopen a just-closed project or
 		// steal the user's selection
-		untrack(() => void handle_workspace_param(param));
+		untrack(() => void handle_project_param(param));
 	});
 
-	const handle_workspace_param = async (param: string): Promise<void> => {
-		// strip first so a reload never re-opens a workspace the user has since closed
+	const handle_project_param = async (param: string): Promise<void> => {
+		// strip first so a reload never re-opens a project the user has since closed
 		void goto(resolve('/workspaces'), { replace: true, reset: false });
 
-		const parsed = parse_workspace_path(param);
+		const parsed = parse_project_path(param);
 		if (!parsed.ok) {
-			error_message = `can't open workspace from URL: ${parsed.message}`;
+			error_message = `can't open project from URL: ${parsed.message}`;
 			return;
 		}
-		const existing = app.workspaces.get_by_path(parsed.path);
-		if (existing) {
-			app.workspaces.activate(existing.id);
-			return;
-		}
+		// always opened, even under an open root: the path may focus another repo
 		const error = await open_and_activate(parsed.path);
 		if (error !== null) error_message = error;
 	};
@@ -75,7 +77,7 @@
 		if (!raw) return;
 
 		error_message = null;
-		const parsed = parse_workspace_path(raw);
+		const parsed = parse_project_path(raw);
 		if (!parsed.ok) {
 			error_message = parsed.message;
 			return;
@@ -94,25 +96,31 @@
 		}
 	};
 
-	const handle_close = async (path: DiskfileDirectoryPath): Promise<void> => {
+	const handle_close = async (root: DiskfileDirectoryPath): Promise<void> => {
 		error_message = null;
-		const result = await app.close_workspace(path);
-		if (!result.ok) error_message = `failed to close ${path}: ${result.error.message}`;
+		const result = await app.close_project(root);
+		if (!result.ok) error_message = `failed to close ${root}: ${result.error.message}`;
 	};
+
+	/** `dir` relative to `root` when under it, for a shorter listing. */
+	const to_relative = (dir: string, root: string): string =>
+		dir.startsWith(root) && dir !== root ? dir.slice(root.length) : dir;
 </script>
 
-<div class="workspaces_page p_xl">
+<div class="projects_page p_xl">
 	<header class="mb_xl">
-		<h1><Icon data={icon_workspace} /> Workspaces</h1>
+		<h1><Icon data={icon_project} /> Projects</h1>
 		<p class="text_50">
-			Directories the daemon is watching. Open a workspace to access its files and receive change
-			events.
+			Open a file or directory to open its project: a trusted <code>repos.toml</code> found above
+			it, else its git repo, else the directory. The repo holding the path is focused — its files
+			are indexed and watched. A registry's own folder shows only its loose files and its focused
+			repos.
 		</p>
 	</header>
 
-	<!-- open a workspace -->
+	<!-- open a project -->
 	<section class="mb_xl">
-		<h2 class="mt_0"><Icon data={icon_add} /> Open Workspace</h2>
+		<h2 class="mt_0"><Icon data={icon_add} /> Open Project</h2>
 		<form
 			class="row gap_sm"
 			onsubmit={(e) => {
@@ -123,7 +131,7 @@
 			<input
 				type="text"
 				bind:value={new_path}
-				placeholder="/home/user/project"
+				placeholder="/home/user/dev/project"
 				class="flex:1"
 				disabled={opening}
 			/>
@@ -136,40 +144,69 @@
 		{/if}
 	</section>
 
-	<!-- list open workspaces -->
+	<!-- list open projects -->
 	<section>
-		<h2 class="mt_0"><Icon data={icon_directory} /> Open Workspaces</h2>
-		{#if app.workspaces.items.by_id.size === 0}
+		<h2 class="mt_0"><Icon data={icon_directory} /> Open Projects</h2>
+		{#if app.projects.items.by_id.size === 0}
 			<p class="text_50">
-				No workspaces open. Use the form above or run <code>zzz &lt;dir&gt;</code> to open one.
+				No projects open. Use the form above or run <code>zzz &lt;path&gt;</code> to open one.
 			</p>
 		{:else}
 			<ul class="unstyled">
-				{#each app.workspaces.items.values as workspace (workspace.id)}
-					<li class="row gap_sm p_sm">
-						<button
-							type="button"
-							class="flex:1 text-align:left gap_sm"
-							class:selected={workspace.id === app.workspaces.active_id}
-							onclick={() => app.workspaces.activate(workspace.id)}
-						>
-							<Icon data={icon_workspace} />
-							<span class="flex:1">
-								<strong>{workspace.name}</strong>
-								<span class="text_50 font_size_sm font_family_mono ml_sm">{workspace.path}</span>
-								{#if workspace.watch_status === 'degraded'}
-									<small class="text_50 block">{WORKSPACE_DEGRADED_NOTICE}</small>
+				{#each app.projects.items.values as project (project.id)}
+					<li class="p_sm">
+						<div class="row gap_sm">
+							<button
+								type="button"
+								class="flex:1 text-align:left gap_sm"
+								class:selected={project.id === app.projects.active_id}
+								onclick={() => app.projects.activate(project.id)}
+							>
+								<Icon data={icon_project} />
+								<span class="flex:1">
+									<strong>{project.name}</strong>
+									<span class="text_50 font_size_sm font_family_mono ml_sm">{project.root}</span>
+									<small class="text_50 ml_sm">{KIND_LABELS[project.kind]}</small>
+									{#if project.watch_status === 'degraded'}
+										<small class="text_50 block">{PROJECT_DEGRADED_NOTICE}</small>
+									{/if}
+								</span>
+							</button>
+							<button
+								type="button"
+								class="icon-button sized_sm plain"
+								title="close project"
+								onclick={() => void handle_close(project.root)}
+							>
+								<Icon data={icon_delete} />
+							</button>
+						</div>
+						{#if project.kind === 'registry'}
+							<p class="font_size_sm text_50 mb_0">
+								{project.entries.length}
+								{project.entries.length === 1 ? 'entry' : 'entries'} in
+								<span class="font_family_mono">{project.registry_path}</span>
+								{#if project.focused.length}
+									— focused:
+									{#each project.focused as dir, i (dir)}
+										<span class="font_family_mono">{to_relative(dir, project.root)}</span
+										>{#if i < project.focused.length - 1},{' '}{/if}
+									{/each}
+								{:else}
+									— none focused; open a path in one of its repos to focus it
 								{/if}
-							</span>
-						</button>
-						<button
-							type="button"
-							class="icon-button sized_sm plain"
-							title="close workspace"
-							onclick={() => void handle_close(workspace.path)}
-						>
-							<Icon data={icon_delete} />
-						</button>
+							</p>
+							{#if project.refused_entries.length}
+								<ul class="font_size_sm">
+									{#each project.refused_entries as entry (`${entry.kind}:${entry.key}`)}
+										<li>
+											<span class="font_family_mono">{entry.key}</span> refused:
+											<span class="text_50">{entry.reason}</span>
+										</li>
+									{/each}
+								</ul>
+							{/if}
+						{/if}
 					</li>
 				{/each}
 			</ul>

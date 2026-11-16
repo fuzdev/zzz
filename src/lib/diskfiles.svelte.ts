@@ -242,7 +242,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * selected and revealed in the tree when it does. Not reactive. Dropped
 	 * when it's selected, when the user selects anything else (`select`, or a
 	 * tab change through `DiskfilesEditor` — `follow_selected_tab`), when its
-	 * workspace is removed (`handle_workspace_removed`), or by the next
+	 * project is removed (`handle_project_removed`), or by the next
 	 * `create_file` — so a file the filer never reports (say under
 	 * `node_modules/`) can't take the selection
 	 * later.
@@ -582,7 +582,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Seed diskfiles from an initial file tree (e.g. session load or workspace open).
+	 * Seed diskfiles from an initial file tree (e.g. session load or project open).
 	 * Upserts by path, so overlapping seeds don't duplicate.
 	 *
 	 * @param files - the snapshot's file tree
@@ -613,7 +613,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 *   was in flight (see `track_changes`): a reported path is neither
 	 *   upserted nor removed
 	 * @param options.skip_dirs - directories (trailing `/`) whose files aren't
-	 *   removed, e.g. workspaces opened while the snapshot was in flight
+	 *   removed, e.g. projects opened while the snapshot was in flight
 	 */
 	reconcile(
 		files: Array<SerializableDisknode>,
@@ -757,21 +757,67 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 	/**
 	 * The directory new files and folders are created in: the active
-	 * workspace's, `null` when no workspace is open.
+	 * project's (`Project.new_files_dir` — the last open's focus, else its
+	 * root), `null` when no project is open.
 	 */
 	readonly new_files_dir: DiskfileDirectoryPath | null = $derived(
-		this.app.workspaces.active?.path ?? null
+		this.app.projects.active?.new_files_dir ?? null
 	);
 
 	/**
-	 * The directories the file index covers, each with a trailing `/`: the app
-	 * directory, the scoped dirs, and the open workspaces.
+	 * What the file index covers: the directories whose whole trees it holds
+	 * (`trees` — the app directory, the scoped dirs, a checkout's or plain
+	 * directory's root, a registry's focused repos) and those it holds at
+	 * their top level alone (`top_levels` — a registry's root).
+	 */
+	readonly index_coverage: {
+		trees: ReadonlyArray<DiskfileDirectoryPath>;
+		top_levels: ReadonlyArray<DiskfileDirectoryPath>;
+		/** A registry's entry dirs that aren't focused — named, but not indexed. */
+		unfocused_dirs: ReadonlyArray<DiskfileDirectoryPath>;
+	} = $derived.by(() => {
+		const { zzz_dir, scoped_dirs, projects } = this.app;
+		const trees: Array<DiskfileDirectoryPath> = zzz_dir ? [zzz_dir] : [];
+		trees.push(...scoped_dirs);
+		const top_levels: Array<DiskfileDirectoryPath> = [];
+		const unfocused_dirs: Array<DiskfileDirectoryPath> = [];
+		for (const project of projects.items.values) {
+			if (project.kind === 'registry') {
+				top_levels.push(project.root);
+				trees.push(...project.focused);
+				for (const entry of project.entries) {
+					if (!project.focused.includes(entry.dir)) unfocused_dirs.push(entry.dir);
+				}
+			} else {
+				trees.push(project.root);
+			}
+		}
+		return { trees, top_levels, unfocused_dirs };
+	});
+
+	/**
+	 * Whether `path` is under a registry project's root where the index doesn't
+	 * look — below its top level and in no focused repo — so a file there
+	 * never arrives.
+	 */
+	is_unfocused_path(path: string): boolean {
+		const { trees, top_levels } = this.index_coverage;
+		if (is_under_any(path, trees)) return false;
+		const top = top_levels.find((root) => path.startsWith(root));
+		return top !== undefined && path.slice(top.length).includes('/');
+	}
+
+	/**
+	 * The directories the file tree shows as roots, each with a trailing `/`:
+	 * the app directory, the scoped dirs, and the open projects' roots. A
+	 * project's index covers its focused directories and, for a registry, the
+	 * root's loose files — an unfocused repo has no files, so it isn't shown.
 	 */
 	readonly indexed_roots: ReadonlyArray<DiskfileDirectoryPath> = $derived.by(() => {
-		const { zzz_dir, scoped_dirs, workspaces } = this.app;
+		const { zzz_dir, scoped_dirs, projects } = this.app;
 		const roots: Array<DiskfileDirectoryPath> = zzz_dir ? [zzz_dir] : [];
 		roots.push(...scoped_dirs);
-		for (const workspace of workspaces.items.values) roots.push(workspace.path);
+		for (const project of projects.items.values) roots.push(project.root);
 		return roots;
 	});
 
@@ -884,7 +930,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly link_index: MarkdownLinkIndex = this.#create_link_index();
 
 	#create_link_index(): MarkdownLinkIndex {
-		const get_roots = () => this.indexed_roots;
+		const get_coverage = () => this.index_coverage;
 		return {
 			has_file: (path) => {
 				const diskfile = this.get_by_path(path as DiskfilePath);
@@ -892,7 +938,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			},
 			has_directory: (path) => this.#directory_paths.has(path),
 			get roots() {
-				return get_roots();
+				return get_coverage().trees;
+			},
+			get top_level_roots() {
+				return get_coverage().top_levels;
+			},
+			get unfocused_dirs() {
+				return get_coverage().unfocused_dirs;
 			}
 		};
 	}
@@ -931,13 +983,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * when blank, naming the directory itself, with a whitespace-only segment,
 	 * climbing out with `..`, or ending in an empty, `.`, or `..` segment
 	 * @param content - the new file's content
-	 * @throws Error when no workspace is open, the name is refused, the file
+	 * @throws Error when no project is open, the name is refused, the file
 	 * already exists, or the write fails
 	 */
 	async create_file(filename: string, content: string = ''): Promise<void> {
 		const dir = this.new_files_dir;
 		if (!dir) {
-			throw new Error('cannot create file: no workspace is open');
+			throw new Error('cannot create file: no project is open');
 		}
 		const parsed = parse_new_diskfile_name(filename, 'file');
 		if (!parsed.ok) throw new Error(parsed.message);
@@ -955,12 +1007,18 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * shows, now or on a later switch to it — so a copy made by "edit a copy"
 	 * in the audio and transcript views is revealed as well.
 	 *
+	 * A path in a registry project where the index doesn't look — a repo
+	 * that isn't focused, a directory no entry names — is refused before
+	 * anything is written (`is_unfocused_path`): the file would never arrive.
+	 *
 	 * @param path - the new file's absolute path
 	 * @param content - the new file's content
-	 * @throws Error when the file already exists or the write fails
+	 * @throws Error when the path is in an unfocused repo, the file already
+	 * exists, or the write fails
 	 */
 	async create_file_at(path: DiskfilePath, content: string = ''): Promise<void> {
 		this.#select_on_arrival = null;
+		if (this.is_unfocused_path(normalize_path(path))) throw unindexed_location_error(path);
 
 		const result = await this.app.api.diskfile_create({ path, content });
 		if (!result.ok) {
@@ -995,11 +1053,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Called when the workspace at `path` is removed: a file created there that
+	 * Called when the project at `root` is removed: a file created there that
 	 * hasn't arrived won't be selected if it arrives later.
 	 */
-	handle_workspace_removed(path: DiskfileDirectoryPath): void {
-		if (this.#select_on_arrival?.startsWith(path)) this.#select_on_arrival = null;
+	handle_project_removed(root: DiskfileDirectoryPath): void {
+		if (this.#select_on_arrival?.startsWith(root)) this.#select_on_arrival = null;
 	}
 
 	/**
@@ -1008,13 +1066,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * @param dirname - the directory's path relative to `new_files_dir`, parsed
 	 * by `parse_new_diskfile_name` as for `create_file`, except that its last
 	 * segment may be empty, `.`, or `..` (`src/`, `a/b/..`)
-	 * @throws Error when no workspace is open, the name is refused or already
+	 * @throws Error when no project is open, the name is refused or already
 	 * taken, or the backend refuses
 	 */
 	async create_directory(dirname: string): Promise<void> {
 		const dir = this.new_files_dir;
 		if (!dir) {
-			throw new Error('cannot create folder: no workspace is open');
+			throw new Error('cannot create folder: no project is open');
 		}
 
 		const parsed = parse_new_diskfile_name(dirname, 'folder');
@@ -1029,10 +1087,18 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * files only, so an empty directory never arrives in it; the file tree
 	 * keeps one it created itself (`DiskfileTreeState.created_dirs`).
 	 *
+	 * A folder whose files would be refused (`create_file_at`) is refused
+	 * too: in a registry project, anywhere but inside a focused repo.
+	 *
 	 * @param path - the new directory's absolute path
-	 * @throws Error when the path is taken, or the backend refuses
+	 * @throws Error when the folder's files wouldn't be indexed, the path is
+	 * taken, or the backend refuses
 	 */
 	async create_directory_at(path: DiskfilePath): Promise<void> {
+		// as a folder, it holds files below it — refused where they would be
+		if (this.is_unfocused_path(`${normalize_path(path).replace(/\/$/, '')}/`)) {
+			throw unindexed_location_error(path);
+		}
 		const result = await this.app.api.directory_create({ path });
 		if (!result.ok) {
 			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
@@ -1079,6 +1145,15 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.select(this.on_disk[0]?.id ?? null);
 	}
 }
+
+/**
+ * The refusal of a new file or folder where the file index doesn't look — in
+ * a registry project, below its root's top level and in no focused repo.
+ */
+const unindexed_location_error = (path: string): Error =>
+	new Error(
+		`not created: ${path} isn't in a focused repo, so it would never show — create it inside a focused repo, or register and open the repo first`
+	);
 
 /** Whether `path` is inside one of `dirs` (each with a trailing `/`). */
 const is_under_any = (path: string, dirs: ReadonlyArray<string>): boolean =>

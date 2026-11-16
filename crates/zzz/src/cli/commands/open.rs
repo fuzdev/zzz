@@ -8,10 +8,10 @@
 //!   2. Resolve the opener, if one is configured (`crate::opener`): a bad
 //!      one is a config error here, before any daemon work.
 //!   3. Resolve the path argument, if any: `~` expanded, joined onto the
-//!      current directory, canonicalized (so it matches the canonical path
-//!      the daemon stores for the workspace). A directory is the workspace;
-//!      a file opens its parent directory. A path that doesn't exist is an
-//!      error, before any daemon work.
+//!      current directory, canonicalized (so it names what the daemon
+//!      resolves, symlinks and all). A directory or a file — the daemon opens
+//!      the project holding it (a file, its parent's). A path that doesn't
+//!      exist is an error, before any daemon work.
 //!   4. Daemon discovery — read `~/.zzz/run/daemon.json`, verify the process
 //!      is still the recorded one and `/health` responds; a stale record is
 //!      removed, an unresponsive daemon is stopped, and a record this zzz
@@ -20,14 +20,14 @@
 //!      group, log-file stdio), wait until it serves, record `daemon.json`.
 //!      This differs from `daemon start`, which runs the server in the
 //!      foreground and forwards signals to it.
-//!   6. Open the daemon's URL, with a `?workspace=<dir>` param when a path
+//!   6. Open the daemon's URL, with a `?project=<path>` param when a path
 //!      was given: the configured opener (the URL as its final argument),
 //!      else the browser (`xdg-open` / `open` / `start`). Whatever opens it
-//!      authenticates and opens the workspace (the CLI holds no credential
-//!      for `workspace_open`).
+//!      authenticates and opens the project (the CLI holds no credential
+//!      for `project_open`).
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Stdio;
 
 use argh::FromArgs;
@@ -43,7 +43,7 @@ use crate::opener::Opener;
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "open")]
 pub struct Open {
-    /// path to open — a directory, or a file (opens its directory)
+    /// path to open — a directory or a file, in the project holding it
     #[argh(positional)]
     pub path: Option<String>,
 }
@@ -59,23 +59,13 @@ pub async fn cmd_open(args: &Open) -> Result<(), CliError> {
         Some(raw) => Some(resolve_target(raw, &std::env::current_dir()?)?),
         None => None,
     };
-    if let Some(OpenTarget {
-        file: Some(file),
-        workspace,
-    }) = &target
-    {
-        println!(
-            "{} is a file; opening its directory {workspace}",
-            file.display()
-        );
-    }
 
     let info = match discover_running_daemon().await? {
         Some(info) => info,
         None => start_daemon_detached(config.as_ref()).await?,
     };
 
-    let url = build_url(info.port, target.as_ref().map(|t| t.workspace.as_str()));
+    let url = build_url(info.port, target.as_deref());
     println!("opening {url}");
     match opener {
         Some(opener) => opener.launch(&url, &zzz_dir)?,
@@ -84,18 +74,9 @@ pub async fn cmd_open(args: &Open) -> Result<(), CliError> {
     Ok(())
 }
 
-/// A resolved `zzz open` argument.
-#[derive(Debug, PartialEq, Eq)]
-struct OpenTarget {
-    /// Canonical workspace directory, with a trailing `/`.
-    workspace: String,
-    /// The canonical file, when the argument named one.
-    file: Option<PathBuf>,
-}
-
-/// Resolve a path argument: expand `~`, join onto `cwd`, canonicalize, and
-/// take a file's parent directory as the workspace.
-fn resolve_target(raw: &str, cwd: &Path) -> Result<OpenTarget, CliError> {
+/// Resolve a path argument: expand `~`, join onto `cwd`, and canonicalize —
+/// a directory with a trailing `/`, a file without.
+fn resolve_target(raw: &str, cwd: &Path) -> Result<String, CliError> {
     let absolute = cwd.join(fuz_sys::expand_tilde(raw));
     let bad_path = |reason: String| CliError::BadPath {
         path: absolute.display().to_string(),
@@ -108,31 +89,22 @@ fn resolve_target(raw: &str, cwd: &Path) -> Result<OpenTarget, CliError> {
             e.to_string()
         })
     })?;
-    let (dir, file) = if canonical.is_dir() {
-        (canonical, None)
-    } else {
-        let parent = canonical
-            .parent()
-            .ok_or_else(|| bad_path("has no parent directory".to_owned()))?
-            .to_path_buf();
-        (parent, Some(canonical))
-    };
-    let mut workspace = dir
+    let mut path = canonical
         .to_str()
         .ok_or_else(|| bad_path("path is not valid UTF-8".to_owned()))?
         .to_owned();
-    if !workspace.ends_with('/') {
-        workspace.push('/');
+    if canonical.is_dir() && !path.ends_with('/') {
+        path.push('/');
     }
-    Ok(OpenTarget { workspace, file })
+    Ok(path)
 }
 
-/// The daemon's URL, with the workspace param when a path was given.
-fn build_url(port: u16, workspace: Option<&str>) -> String {
+/// The daemon's URL, with the project param when a path was given.
+fn build_url(port: u16, path: Option<&str>) -> String {
     let mut url = format!("http://localhost:{port}");
-    if let Some(workspace) = workspace {
-        url.push_str("/workspaces?workspace=");
-        url.push_str(&encode_uri_component(workspace));
+    if let Some(path) = path {
+        url.push_str("/workspaces?project=");
+        url.push_str(&encode_uri_component(path));
     }
     url
 }
@@ -315,6 +287,8 @@ async fn open_browser(url: &str) {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     fn temp_dir(tag: &str) -> PathBuf {
@@ -335,10 +309,7 @@ mod tests {
     fn resolves_relative_and_absolute_directories() {
         let root = temp_dir("dirs");
         fs::create_dir_all(root.join("a/b")).unwrap();
-        let expected = OpenTarget {
-            workspace: dir_string(&root.join("a/b")),
-            file: None,
-        };
+        let expected = dir_string(&root.join("a/b"));
         assert_eq!(resolve_target("a/b", &root).unwrap(), expected);
         assert_eq!(resolve_target("a/b/", &root).unwrap(), expected);
         assert_eq!(resolve_target("./a/./b/../b", &root).unwrap(), expected);
@@ -356,24 +327,25 @@ mod tests {
         fs::create_dir_all(root.join("real")).unwrap();
         std::os::unix::fs::symlink(root.join("real"), root.join("link")).unwrap();
         assert_eq!(
-            resolve_target("link", &root).unwrap().workspace,
+            resolve_target("link", &root).unwrap(),
             dir_string(&root.join("real"))
         );
         let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn a_file_opens_its_parent_directory() {
+    fn a_file_is_passed_as_the_file() {
         let root = temp_dir("file");
         fs::create_dir_all(root.join("src")).unwrap();
         fs::write(root.join("src/main.ts"), "").unwrap();
-        assert_eq!(
-            resolve_target("src/main.ts", &root).unwrap(),
-            OpenTarget {
-                workspace: dir_string(&root.join("src")),
-                file: Some(root.join("src/main.ts")),
-            }
-        );
+        std::os::unix::fs::symlink(root.join("src/main.ts"), root.join("link.ts")).unwrap();
+        for raw in ["src/main.ts", "link.ts"] {
+            assert_eq!(
+                resolve_target(raw, &root).unwrap(),
+                root.join("src/main.ts").display().to_string(),
+                "{raw}"
+            );
+        }
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -393,15 +365,15 @@ mod tests {
 
     #[test]
     fn root_keeps_a_single_slash() {
-        assert_eq!(resolve_target("/", Path::new("/")).unwrap().workspace, "/");
+        assert_eq!(resolve_target("/", Path::new("/")).unwrap(), "/");
     }
 
     #[test]
-    fn build_url_encodes_the_workspace() {
+    fn build_url_encodes_the_path() {
         assert_eq!(build_url(4460, None), "http://localhost:4460");
         assert_eq!(
             build_url(4460, Some("/home/a b/")),
-            "http://localhost:4460/workspaces?workspace=%2Fhome%2Fa%20b%2F"
+            "http://localhost:4460/workspaces?project=%2Fhome%2Fa%20b%2F"
         );
     }
 

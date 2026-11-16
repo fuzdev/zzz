@@ -421,13 +421,13 @@ describe('Socket', () => {
 			mock_socket.connect();
 			assert.isNull(socket.last_send_time);
 
-			const pending = socket.request('workspace_list', {}, { id: 'req-1' });
+			const pending = socket.request('project_list', {}, { id: 'req-1' });
 			assert.strictEqual(socket.last_send_time, 1_000);
 			assert.isNull(socket.last_receive_time);
 
 			vi.setSystemTime(2_000);
 			mock_socket.dispatchEvent('message', {
-				data: JSON.stringify({ jsonrpc: '2.0', id: 'req-1', result: { workspaces: [] } })
+				data: JSON.stringify({ jsonrpc: '2.0', id: 'req-1', result: { projects: [] } })
 			});
 			await pending;
 			assert.strictEqual(socket.last_receive_time, 2_000);
@@ -460,7 +460,7 @@ describe('Socket', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
 			mock_socket.connect();
-			const pending = socket.request('workspace_list', {}, { id: 'req-err' });
+			const pending = socket.request('project_list', {}, { id: 'req-err' });
 
 			vi.setSystemTime(3_000);
 			mock_socket.dispatchEvent('message', {
@@ -477,7 +477,7 @@ describe('Socket', () => {
 		test('a request queued while disconnected does not stamp last send', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			void socket.request('workspace_list', {}, { id: 'req-2' }).catch(() => {});
+			void socket.request('project_list', {}, { id: 'req-2' }).catch(() => {});
 			assert.isNull(socket.last_send_time);
 		});
 	});

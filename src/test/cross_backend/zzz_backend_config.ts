@@ -33,14 +33,17 @@
  * - Rust dev-origins test binary → `4464`
  *   (`rust_dev_origins_backend_config`, spawned by its one suite
  *   inside the `cross_backend_rust` project)
+ * - Rust projects test binary → `4465` (`rust_projects_backend_config`,
+ *   its fixture home for registries)
  *
  * Vitest projects spawn one backend each, so ports only need to not
  * collide cross-project, not cross-test.
  *
  * **Per-project Postgres DBs** — each Rust project points at its own
  * database (`zzz_test_rust` for `cross_backend_rust`, `zzz_test_rust_proxy`
- * for `cross_backend_rust_proxy`). Decouples the two projects so vitest
- * can run them in parallel without trashing the other's `bootstrap_lock`
+ * for `cross_backend_rust_proxy`, `zzz_test_rust_projects` for
+ * `cross_backend_rust_projects`). Decouples the projects so vitest
+ * can run them in parallel without trashing another's `bootstrap_lock`
  * state, and removes the shared-DB race condition that forced a manual
  * `DROP TABLE` between project switches.
  *
@@ -60,7 +63,7 @@
  * @module
  */
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -215,7 +218,7 @@ const make_zzz_rust_backend_config = ({
 		extra_env: {
 			PUBLIC_ZZZ_SCOPED_DIRS: paths.scoped_dir,
 			// the backend inherits the runner's `HOME`, and every root the
-			// suites use — the scoped dir and each test's workspaces — sits
+			// suites use — the scoped dir and each test's projects — sits
 			// under `os.tmpdir()`, outside it when that's `/tmp`; allowlisted
 			// here rather than loosening the root rule. The suites that pin
 			// the rule open directories outside both.
@@ -307,6 +310,37 @@ export const rust_proxy_backend_config = (): BackendConfig =>
 		port: 4463,
 		extra_env: { ZZZ_TRUSTED_PROXIES: '127.0.0.1' }
 	});
+
+/**
+ * The home directory `rust_projects_backend_config`'s backend runs with — a
+ * fresh directory under its tmpdir root, `0755`, so the registries a suite
+ * writes under it are trusted (`file_trust.rs`: every directory from a
+ * registry up to the home directory the user's alone to write).
+ */
+export const projects_backend_home = (): string =>
+	join(build_zzz_paths('rust_projects').root, 'home');
+
+/**
+ * Rust backend for `project_registry.cross.test.ts`: `HOME` is a fixture
+ * directory (`projects_backend_home`), so a registry can be opened the way
+ * `zzz ~/dev` opens one — the walk for a registry stops below the home
+ * directory, and trusts nothing under the temp root, which any user can
+ * write. No roots outside it; its scoped dir is inside it. Its own project
+ * and database, since `HOME` is read once at boot.
+ */
+export const rust_projects_backend_config = (): BackendConfig => {
+	const home = projects_backend_home();
+	rmSync(home, { recursive: true, force: true });
+	const scoped_dir = join(home, 'scoped');
+	mkdirSync(scoped_dir, { recursive: true });
+	chmodSync(home, 0o755);
+	chmodSync(scoped_dir, 0o755);
+	return make_zzz_rust_backend_config({
+		name: 'rust_projects',
+		port: 4465,
+		extra_env: { HOME: home, PUBLIC_ZZZ_SCOPED_DIRS: scoped_dir, ZZZ_ROOTS_OUTSIDE_HOME: '' }
+	});
+};
 
 /**
  * A second Rust backend for `dev_origins.cross.test.ts`, started with the dev

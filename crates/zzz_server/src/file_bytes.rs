@@ -40,7 +40,7 @@
 //!
 //! ## Serving bytes never executes them
 //!
-//! A file in a workspace is untrusted content, and a document rendered on
+//! A file in a project is untrusted content, and a document rendered on
 //! zzz's own origin could script the whole app. So a response is typed from a
 //! fixed extension allowlist ([`media_content_type`]) — raster images, audio,
 //! and video, never anything a browser renders as a document (no HTML, SVG, or

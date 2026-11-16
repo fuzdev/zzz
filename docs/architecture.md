@@ -1,6 +1,6 @@
 # Architecture
 
-Core systems: actions, cells, content model, data flow, terminals and fuz_terminal, recording, indexed collections, the app directory, filesystem, file editing, spaces and workspaces, the auth gate, security posture, capabilities, and known limitations.
+Core systems: actions, cells, content model, data flow, terminals and fuz_terminal, recording, indexed collections, the app directory, filesystem, file editing, spaces and projects, the auth gate, security posture, capabilities, and known limitations.
 
 ## Action System
 
@@ -45,7 +45,7 @@ export const completion_create_action_spec = {
   (`job_changed`, `transcription_progress`).
 - **Broadcast** (`App::broadcast` in the Rust backend) — fanned out to all
   connected sockets. Used for server-wide events that every client needs
-  (`filer_change`, `workspace_changed`).
+  (`filer_change`, `project_changed`).
 
 ### Action Spec Fields
 
@@ -151,7 +151,7 @@ MCP-compatible subset, no batching:
 
 ### Actions
 
-Defined in `src/lib/action_specs.ts`. A representative subset below — the `terminal_*` and `workspace_*` families are omitted here; see [reference.md](./reference.md) (generated from the specs) for the full list:
+Defined in `src/lib/action_specs.ts`. A representative subset below — the `terminal_*` and `project_*` families are omitted here; see [reference.md](./reference.md) (generated from the specs) for the full list:
 
 - `ping` — Health check. Kind: `request_response`. Initiator: `both`
 - `session_load` — Load the session snapshot, at boot and after each reconnect. Kind: `request_response`. Initiator: `frontend`
@@ -354,7 +354,7 @@ is not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 - `Turn` (`turn.svelte.ts`) — Single conversation message
 - `Thread` (`thread.svelte.ts`) — Linear conversation with one model
 - `Threads` (`threads.svelte.ts`) — Collection of threads
-- `Space` (`space.svelte.ts`) — Named grouping of workspace dirs
+- `Space` (`space.svelte.ts`) — Named grouping of project roots
 - `Spaces` (`spaces.svelte.ts`) — Collection of spaces
 - `Terminal` (`terminal.svelte.ts`) — PTY terminal run: status, buffered output, ordered input
 - `Terminals` (`terminals.svelte.ts`) — App-level terminal runs; routes output/exit notifications
@@ -362,8 +362,8 @@ is not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 - `TerminalPresets` (`terminal_presets.svelte.ts`) — Collection of terminal presets
 - `Time` (`time.svelte.ts`) — Reactive time state
 - `Ui` (`ui.svelte.ts`) — UI state (menus, layout)
-- `Workspace` (`workspace.svelte.ts`) — Open workspace directory
-- `Workspaces` (`workspaces.svelte.ts`) — Collection of workspaces
+- `Project` (`project.svelte.ts`) — Open project: its root, kind, registry entries, and focused directories
+- `Projects` (`projects.svelte.ts`) — Collection of open projects, keyed by root
 
 ## Content Model
 
@@ -507,7 +507,7 @@ Streaming progress (`completion_progress`) is
 **socket-scoped** — it routes only to the client that initiated the request,
 never broadcast. Over HTTP there's no socket, so the provider runs without
 streaming and the caller gets only the final response. `App::broadcast` is
-reserved for genuine broadcasts (`filer_change`, `workspace_changed`).
+reserved for genuine broadcasts (`filer_change`, `project_changed`).
 
 A chunk updates only its own turn: `Turn.length` / `token_count` and
 `Thread.length` / `token_count` are summed from the parts' and turns' lengths
@@ -829,13 +829,13 @@ job runs:    hash the audio (blake3)
 
 **Editing a copy.** "Edit a copy" (`transcript_to_text`) creates `<name>.md` beside the audio — a link to it, then the speech as paragraphs split at pauses — and opens it in the editor. That file is yours; the sidecar stays as the tool wrote it.
 
-**Transcribe on stop.** The recorder queues a transcription for a recording once it's saved, when its `transcribe_on_stop` toggle is on (the default). That's the person's choice, made by leaving the toggle on — nothing else starts one, and a file that merely appears in a workspace is never decoded or transcribed.
+**Transcribe on stop.** The recorder queues a transcription for a recording once it's saved, when its `transcribe_on_stop` toggle is on (the default). That's the person's choice, made by leaving the toggle on — nothing else starts one, and a file that merely appears in a project is never decoded or transcribed.
 
 A transcript's text is whatever was said near the microphone. It's rendered as text, and nothing places it in a chat, a prompt, or a terminal on its own.
 
 ### The recordings page
 
-`/recordings` is the purpose-built view over the same pieces: a record button with a level meter (`Recorder.level`, read from a Web Audio analyser on the live stream), and the recordings with their transcripts' first lines. It records to `recordings/` in the app directory, so it works with no workspace open. Recordings, transcripts, and jobs are all ordinary files and cells — the files page and the jobs page show the same things raw.
+`/recordings` is the purpose-built view over the same pieces: a record button with a level meter (`Recorder.level`, read from a Web Audio analyser on the live stream), and the recordings with their transcripts' first lines. It records to `recordings/` in the app directory, so it works with no project open. Recordings, transcripts, and jobs are all ordinary files and cells — the files page and the jobs page show the same things raw.
 
 ## IndexedCollection
 
@@ -886,7 +886,7 @@ An index is maintained one of two ways:
   correct only while an item's indexed values never change. Single and multi
   indexes opt in with `immutable_key: true`; use it for identity-like keys on
   large or busy collections (`Diskfiles.by_path` — seeded with every file,
-  upserting by path in a loop — plus `Workspaces.by_path`). Derived-array
+  upserting by path in a loop — plus `Projects.by_root`). Derived-array
   indexes (`create_derived_index`) are incremental and can be replaced by
   assignment (e.g. `items.indexes.manual_order = reordered`).
 
@@ -968,7 +968,7 @@ is the daemon home `~/.zzz/` (see ./development.md § The `zzz` CLI).
 - `run/` — Runtime ephemeral (the test binary's `daemon_token`)
 
 It's a permanent `ScopedFs` root with its own filer, so the frontend can
-read and write files there. A workspace or scoped-dir filer whose root contains the
+read and write files there. A project or scoped-dir filer whose root contains the
 app directory skips it by its full path (its own filer covers it), so a
 custom-named app dir (say `data`) doesn't hide other `data/` folders.
 
@@ -981,9 +981,9 @@ writes, creates, appends, deletes, through the file actions, the media
 actions, and the byte routes alike — with `forbidden` /
 `protected_dir_not_allowed` (403 on the byte routes; the message names the
 directory), whether or not the path exists. Every filer skips them, and
-`workspace_open` refuses one as a workspace (same error), so `zzz
-~/.zzz/.env` (which opens `~/.zzz/`) can't index and broadcast those
-secrets. The app dir and the paths inside it stay openable, readable, and
+`project_open` refuses one (same error), whether it's the opened directory
+or the project's root, so `zzz ~/.zzz/.env` (which opens `~/.zzz/`) can't
+index and broadcast those secrets. The app dir and the paths inside it stay openable, readable, and
 writable (the boot refuses an app dir inside a credential directory).
 `.env` files elsewhere are ordinary files.
 
@@ -1014,16 +1014,20 @@ files are written — a directory, FIFO, socket, or device node target is
 refused. A crash mid-save can orphan a staging file; the filer's walk deletes
 exact `.zzz-tmp-<uuid>` regular files older than an hour (ones inside ignored
 directories stay). The files page's header buttons for a new file and a new
-folder create in the active workspace (`Diskfiles.new_files_dir`) and are
-disabled while no workspace is open; the file tree's folder menu creates in
+folder create in the active project (`Project.new_files_dir`: the
+directory this client's last open of it focused, while still focused, else
+its root) and are disabled while no project is open; a new file or
+folder in a registry project where the index doesn't look — an unfocused repo, a
+directory no entry names — is refused before anything is written
+(`Diskfiles.is_unfocused_path`: it would never show); the file tree's folder menu creates in
 that folder (see § File Editing, creating in the tree). In the list the
 name is asked for with a prompt, and a failure (say a non-writable
 directory) is reported in an alert, never silent, as is a failed delete (each
 alert leads with the name or path); in the tree it's typed inline, and a
 failure shows there. The entered name is trimmed, leading slashes dropped;
 refused (`parse_new_diskfile_name`):
-a blank name, one naming the workspace itself, a whitespace-only path
-segment, a `..` climbing out of the workspace, and a file name whose last
+a blank name, one naming the root itself, a whitespace-only path
+segment, a `..` climbing out of the root, and a file name whose last
 segment is empty, `.`, or `..`. "New
 file" uses `diskfile_create`, which creates the final name exclusively
 (`O_EXCL`) and fails with `conflict` / `already_exists` instead of
@@ -1042,9 +1046,9 @@ Two separate concerns:
 - App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files: `cache/` holds scratch for tool runs, `recordings/` what the recordings page records, and `state/` and `run/` are reserved
 - Scoped dirs (`PUBLIC_ZZZ_SCOPED_DIRS`) — User file access (comma-separated paths)
 
-### Workspace scope
+### Root scope
 
-Which directories can be roots at all — an open workspace or a scoped dir —
+Which directories can be roots at all — an open project's root or a scoped dir —
 is one rule (Rust: `crates/zzz_server/src/root_policy.rs`), checked on the
 canonical path, so no symlink or `..` spelling changes the answer:
 
@@ -1054,7 +1058,8 @@ canonical path, so no symlink or `..` spelling changes the answer:
   `ZZZ_ROOTS_OUTSIDE_HOME` names (comma-separated; an entry the first rule
   refuses fails the boot).
 
-`workspace_open` (and so `zzz <path>`) answers a refused directory with
+`project_open` (and so `zzz <path>`) answers a refused directory — the
+opened one, or the project root it resolves to — with
 `forbidden` / `root_outside_home` when the allowlist would admit it and
 `root_not_allowed` when nothing would; a scoped dir it refuses fails the
 boot. A scoped dir that doesn't exist at boot is checked as spelled — a `..`
@@ -1063,7 +1068,7 @@ filer starts, which skips it (with a warning) if that path is refused or
 isn't the one the boot checked. A `$HOME` that can't be resolved, isn't a
 directory, or is `/` admits nothing but the allowlist (with a boot warning). The app dir is the
 operator's own and exempt from the `$HOME` rule, not from the first. So a
-workspace can't take in the whole home directory with its dotfiles, the
+project can't take in the whole home directory with its dotfiles, the
 whole filesystem, or `/proc/<pid>/environ`; credential directories inside
 an admitted root stay refused by `ScopedFs` (§ Zzz App Directory).
 
@@ -1071,7 +1076,7 @@ an admitted root stay refused by `ScopedFs` (§ Zzz App Directory).
 
 All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, protected directories (credential directories, and `.zzz` directories other than the app dir) refused under every root (see § Zzz App Directory), symlinks rejected, absolute paths required, parent directories checked recursively.
 
-The allowed roots are the permanent boot-time set (the app directory + scoped dirs) plus one runtime root per open workspace. A path is allowed when any root covers it, and removing a workspace's root never touches a permanent root — so closing a workspace opened on, nested in, or containing the app directory or a scoped dir leaves the access those roots grant intact.
+The allowed roots are the permanent boot-time set (the app directory + scoped dirs) plus one runtime root per open project — its whole root, focused or not (a registry's root is `~/dev`, every repo under it in scope). A path is allowed when any root covers it, and removing a project's root never touches a permanent root — so closing a project rooted at, nested in, or containing the app directory or a scoped dir leaves the access those roots grant intact.
 
 ### Reading Files
 
@@ -1087,17 +1092,17 @@ The file actions carry contents as UTF-8 strings inside one JSON-RPC message (`d
 
 Paths go through `ScopedFs`, and errors carry the same reasons as the file actions' (`path_not_allowed`, `protected_dir_not_allowed`, `already_exists`, …) in a flat `{error}` body. The routes need a session or a full-scope API token.
 
-A file in a workspace is untrusted content, so a read never hands the browser something to run: only allowlisted raster image, audio, and video extensions are served with their media type, and everything else — HTML, SVG, XML, scripts, text — is an `application/octet-stream` download. Every response that serves or describes a file — a read, a write's reply, a file error — carries `X-Content-Type-Options: nosniff`, a sandboxing `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`, and is never cached (`no-store`); a refusal at a gate (a bad query, no credential, an oversized body, a foreign origin) is a plain JSON error without them.
+A file in a project is untrusted content, so a read never hands the browser something to run: only allowlisted raster image, audio, and video extensions are served with their media type, and everything else — HTML, SVG, XML, scripts, text — is an `application/octet-stream` download. Every response that serves or describes a file — a read, a write's reply, a file error — carries `X-Content-Type-Options: nosniff`, a sandboxing `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`, and is never cached (`no-store`); a refusal at a gate (a bad query, no credential, an oversized body, a foreign origin) is a plain JSON error without them.
 
 These routes are outside the action system — they don't appear in the actions log or in ./reference.md.
 
 ### Filer
 
-`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open workspace dir. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, size, ctime, mtime}` — metadata only: `id` is its path and `size` its bytes from the filer's `lstat`, `null` only on a `delete`'s node. No disknode carries contents; a client reads them with `diskfile_read` (see [File Editing](#file-editing)). Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. The index is stat-only — the filer reads no file — and a file is unchanged only when its `lstat` stamp (device, inode, size, mtime, ctime) matches the indexed one; any other is a `change` carrying the new metadata, a `touch` and a rewrite of the same bytes included. The stamp's `ctime` is the inode change time (`st_ctime`), which every write, chmod, and `utimes` moves and userspace can't set on a kernel-managed filesystem; the wire `ctime` is the birth time. So a chmod, chown, or new hard link is a `change` too, with the same wire metadata as before. A stamp is trusted only when its inode change time lay more than three seconds before it was taken (git's "racily clean" rule: same-size writes within one timestamp tick look identical), so a file indexed while it might still have been written is a `change` the next time an event or a rescan looks at it, even with its stamp unmoved. An `mtime` in the future (`touch -d`, `cp -p`) doesn't matter. A client holding the file's content reads it again if it holds it eagerly and otherwise drops it, to load on next access (`Diskfiles.upsert`), and a re-read of the same text changes nothing. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
+`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open project's root and focused directories (§ Projects). A registry's root is watched at its top level alone (`FilerDepth::TopLevel`): its loose files are indexed, its subdirectories never listed or watched — a directory appearing there isn't indexed — so a focused repo's own filer is the only one under it. Every other filer indexes its whole tree. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, size, ctime, mtime}` — metadata only: `id` is its path and `size` its bytes from the filer's `lstat`, `null` only on a `delete`'s node. No disknode carries contents; a client reads them with `diskfile_read` (see [File Editing](#file-editing)). Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. The index is stat-only — the filer reads no file — and a file is unchanged only when its `lstat` stamp (device, inode, size, mtime, ctime) matches the indexed one; any other is a `change` carrying the new metadata, a `touch` and a rewrite of the same bytes included. The stamp's `ctime` is the inode change time (`st_ctime`), which every write, chmod, and `utimes` moves and userspace can't set on a kernel-managed filesystem; the wire `ctime` is the birth time. So a chmod, chown, or new hard link is a `change` too, with the same wire metadata as before. A stamp is trusted only when its inode change time lay more than three seconds before it was taken (git's "racily clean" rule: same-size writes within one timestamp tick look identical), so a file indexed while it might still have been written is a `change` the next time an event or a rescan looks at it, even with its stamp unmoved. An `mtime` in the future (`touch -d`, `cp -p`) doesn't matter. A client holding the file's content reads it again if it holds it eagerly and otherwise drops it, to load on next access (`Diskfiles.upsert`), and a re-read of the same text changes nothing. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored directories (`.git`, `node_modules`, `target`, …) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
 
 Watches are per directory: the filer's own walk (on a blocking thread) adds one non-recursive watch to each directory it indexes — never inside ignored, symlinked, or non-UTF-8 directories — watching each before listing it, so nothing created in between is missed. A directory that appears gets watches for its subtree when it's synced; one that's removed or renamed away has them dropped (two paths sharing one inode, like a renamed directory's old and new path or a bind mount, share one kernel watch, removed only with its last path). An unreadable subdirectory is skipped and logged once, and picked up once it's readable again; one made unreadable later drops out of the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's indexed under it and retries. A walk or a rescan (`session_load`, overflow recovery) costs one `lstat` per file and reads none, and broadcasts only the files whose stamps moved or weren't trusted yet.
 
-When the OS runs out of watches (inotify's `max_user_watches`), or no watcher can be created at all (`max_user_instances`), the filer runs **degraded**: the index still comes from the scan, and the directories without a watch are rescanned every 5 seconds or more (retrying their watches each time), so changes there show up late. `workspace_open` returns this as `watch_status` (`'full'` or `'degraded'`), which the tab that opened it keeps on its `Workspace` cell and shows on the workspaces page and in the desk menu. It's reported at open time only (another tab or a reload shows `'full'`) — a filer that degrades or recovers later is just logged. A workspace root that can't be listed fails `workspace_open` (`forbidden` / `permission_denied`, or `not_found`); a running filer whose root disappears polls it until it's back.
+When the OS runs out of watches (inotify's `max_user_watches`), or no watcher can be created at all (`max_user_instances`), the filer runs **degraded**: the index still comes from the scan, and the directories without a watch are rescanned every 5 seconds or more (retrying their watches each time), so changes there show up late. `project_open` returns this as `watch_status` (`'full'` or `'degraded'`, degraded when any of the project's filers is), which the tab that opened it keeps on its `Project` cell and shows on the projects page and in the desk menu. It's reported at open time only (another tab or a reload shows `'full'`) — a filer that degrades or recovers later is just logged. A project root or focused directory that can't be listed fails `project_open` (`forbidden` / `permission_denied`, or `not_found`); a running filer whose root disappears polls it until it's back.
 
 ### Daemon Info
 
@@ -1209,8 +1214,9 @@ marks the paragraph above.
 them; the preview only acts). An external link opens in a new tab; a
 `#fragment` scrolls the preview; and with the file's `path`, a relative link
 resolves against the file's directory, a root-relative `/docs/x.md` against
-the open root holding the file (a workspace, usually the repository — the way
-a repository host reads it), with any query dropped and the fragment kept. A
+the innermost indexed directory holding the file (a focused repo, or a
+checkout's or directory's root — usually the repository, the way a
+repository host reads it), with any query dropped and the fragment kept. A
 link to an indexed file opens it in the preview tab — a middle- or
 Ctrl/Cmd-click in a kept tab instead — and a fragment on a markdown file
 reveals that heading once its view shows (`markdown_pending_fragment` on the
@@ -1218,12 +1224,16 @@ target's `DiskfileEditorState`). A link to a folder opens the folder's README
 if the index has one. A link the file index says is missing — inside a root
 it covers and outside the folders it skips (`FILE_INDEX_IGNORED_DIR_NAMES`,
 mirroring the filer) — is marked broken, and one outside every root, in a
-skipped folder, or root-relative and not found is marked unknown, never
-broken, since the index can't see there; each mark has a title saying why,
+registry project's unfocused repo (the index covers a registry's root at
+its top level and its focused repos only; a link to an entry's dir counts
+with or without its trailing slash, while an unregistered directory
+linked without one reads as a missing loose file), in a skipped folder, or
+root-relative and not found is marked unknown, never broken, since the
+index can't see there; each mark has a title saying why,
 and follows the index and the content as they change. Everything else —
 protocol-relative, other schemes, same-origin absolute URLs, a root-relative
 `..` past its root, or any `..` past `/`, and any relative link in a preview
-without a `path` — is inert (a relative `..` climbing out of the workspace
+without a `path` — is inert (a relative `..` climbing out of the root
 reads as outside it, so unknown). The index lists only files, so what it never
 indexes reads as missing — an empty folder, a symlink, a file in an
 unreadable subdirectory, or a path that isn't UTF-8 is marked broken. A test
@@ -1255,7 +1265,7 @@ The frontend file pipeline is six Cells plus a per-file editing-state class:
   created from zzz (`Diskfiles.create_file`) is selected and opened in a
   permanent tab — at once if its `filer_change` already arrived, else when
   it arrives (under the path as the backend normalizes it), unless the user
-  selects another file or tab or closes its workspace first
+  selects another file or tab or closes its project first
 - `DiskfileHistory` — one file's edit history (disk changes, the draft,
   saved and discarded edits), newest first; capped at 100 entries and 16M
   characters of content, trimming the oldest but never the draft, the
@@ -1345,7 +1355,7 @@ the selected tab's file first, then the other tabs'. A read never touches
 
 A file is held eagerly while it has an editing state or a `DiskfilePart`
 references it. Every disknode that arrives for a file already held — an
-`add` or `change`, a `workspace_open` tree, a reconnect's snapshot entries
+`add` or `change`, a `project_open` index, a reconnect's snapshot entries
 — re-reads an eagerly held file, keeping its content until the new
 one lands so its editor never turns read-only meanwhile, and drops any
 other file's content back to `unrequested`, to load again on next access. A
@@ -1483,11 +1493,11 @@ runs inside an effect too). Such state is created with `create_detached`
 
 The initial file listing comes from `session_load` (the backend rescans and
 flattens every active filer's index, and lists the filers' roots as
-`file_roots`), and `workspace_open` returns the opened workspace's index so
-the new tree appears immediately. `Frontend.load_session` runs `session_load`
+`file_roots`), and `project_open` returns the index of every filer of the
+opened project so the new tree appears immediately. `Frontend.load_session` runs `session_load`
 and retries a failure with backoff (1s doubling to 30s) until it succeeds,
-tracking progress in `session_status` / `session_error`; `Workspaces.open`
-does the same snapshot handling for `workspace_open`. Both record what
+tracking progress in `session_status` / `session_error`; `Projects.open`
+does the same snapshot handling for `project_open`. Both record what
 `filer_change` reports while their request is in flight
 (`Diskfiles.track_changes`) and apply the snapshot around it: a path with an
 `add`, `change`, or `delete` keeps what the notification left — its snapshot
@@ -1496,7 +1506,7 @@ metadata isn't reverted; the change itself re-read or dropped the file's
 content.
 
 **Reconnect resync.** Notifications sent while the socket is down —
-`filer_change`, `workspace_changed`, `terminal_data`, `terminal_exited`,
+`filer_change`, `project_changed`, `terminal_data`, `terminal_exited`,
 `completion_progress` — are lost, and reconnects are routine (heartbeat
 timeouts, sleep/wake, daemon restarts). So the app root feeds the socket's
 `last_connect_time` to `Frontend.handle_socket_connect`, and any connect
@@ -1508,21 +1518,33 @@ opened within 2s it loads over HTTP, and the first connect then resyncs —
 as it does after a failed first load, instead of waiting out the retry
 backoff. `receive_session` reconciles rather than adds:
 
-- **Workspaces** are replaced (`Workspaces.reconcile`): listed ones added,
-  the rest removed — another client closed them. After a zzzd restart (a
-  new `server_instance_id`), the runtime workspaces it lost are reopened
-  instead (`Workspaces.open` with the same path, reconciling their files),
-  so their files, tabs, and unsaved edits stay. A reopen the backend
-  refuses because the directory is gone, forbidden, or not a directory
-  drops the workspace and the files only it covered (logged); any other
-  failure keeps it, and the next snapshot retries once — there's no retry
-  loop. Closing a workspace (`Frontend.close_workspace`) cancels a pending
-  reopen, and a `workspace_not_open` reply removes it here too, so a
-  workspace the backend forgot can still be closed. A close while a reopen
-  is in flight sticks: the backend's open scans before registering, so the
-  close finds nothing open and the open lands anyway — the reopen then
-  closes it again.
-- **Files** under a snapshot root, or under a workspace the reconcile just
+- **Projects** are replaced (`Projects.reconcile`): listed ones added or
+  updated, the rest removed — another client closed them. After a zzzd
+  restart (a new `server_instance_id`), the projects it lost are reopened
+  instead (`Project.reopen_paths`: `Projects.open` of each directory the
+  project had focused, one after another, or of its root when none was —
+  each reconciling only the focused directories' files, the complete trees
+  so far), so their files, tabs, and unsaved edits stay. The project is
+  reopened once an open lands on its root; a focus refused then is
+  dropped, and one that failed otherwise is kept for the next snapshot to
+  retry (a snapshot listing the project without it retries it too). When
+  nothing lands on its root and every open is refused (the path gone or
+  forbidden, the registry unusable) or lands on another root (the registry
+  was removed, so each repo opens as its own checkout), the project and the
+  files only it covered are dropped (logged) — files another open root
+  covers stay; when some open failed otherwise, it's kept and the next
+  snapshot retries those once — there's no retry loop. Closing a project
+  (`Frontend.close_project`, or another client's close, which arrives as
+  `project_changed`) cancels a pending reopen and stops one in flight
+  before its next path, and a `project_not_open` reply removes it here
+  too, so a project the backend forgot can still be closed. A close while
+  a reopen is in flight sticks: the backend's open scans before
+  registering, so the close finds nothing open and the open lands anyway —
+  the reopen then closes it again. Another restart while a reopen is in
+  flight queues the project's whole focus again once that reopen settles
+  (what it opened was on the instance that's gone), and after a restart a
+  project another client already reopened gets the rest of its focus.
+- **Files** under a snapshot root, or under a project the reconcile just
   removed, that the snapshot lacks are removed through the same path as a
   `delete` (`Diskfiles.reconcile`), so a file open with unsaved edits stays,
   flagged `deleted_on_disk`. Files outside those directories are left
@@ -1538,8 +1560,8 @@ backoff. `receive_session` reconciles rather than adds:
   a reload shows the job without them until more arrive.
 
 Changes made while the request is in flight win: paths a `filer_change`
-added, changed, or deleted are skipped as above, workspaces opened or closed
-meanwhile (`Workspaces.track_changes`) keep their state and their files
+added, changed, or deleted are skipped as above, projects opened or closed
+meanwhile (`Projects.track_changes`) keep their state and their files
 aren't pruned, and terminals started meanwhile aren't judged. A completion
 whose `completion_create` was in flight when the socket closed is rejected
 by the WebSocket client (`service_unavailable` — it can't be correlated
@@ -1573,8 +1595,8 @@ shows the same files as a flat, sortable list (`DiskfileList`) or as a folder
 tree (`DiskfileTree`), switched by the folder toggle in its header
 (`DiskfilesEditor.explorer_mode`); the sort controls belong to the list, and
 "collapse all" to the tree. The tree has one top row per indexed root — the app
-directory, each scoped directory, each open workspace — labeled with the root's
-path, and under it folders before files, each sorted by name (case-insensitive,
+directory, each scoped directory, each open project's root — labeled with the
+root's path, and under it folders before files, each sorted by name (case-insensitive,
 numbers by value), with names relative to their folder. A chain of folders that
 each hold only the next shows as one row, `a/b/c`, expanded or collapsed as one,
 and expanded only while every folder in it is, so a row that joins a folder
@@ -1620,8 +1642,8 @@ Rename, move, and deleting a folder wait on backend actions.
 
 **Creating in the tree** names the new file or folder inline, VS Code style: an
 input (`DiskfileTreeCreateInput`) shows as the folder's first child, expanded
-first; in tree mode the header's create buttons open it at the workspace's root
-row. Enter creates and Escape cancels, both returning focus to the tree unless
+first; in tree mode the header's create buttons open it at the active
+project's root row. Enter creates and Escape cancels, both returning focus to the tree unless
 the user has moved it elsewhere meanwhile; the tree leaves every key typed in
 the input to it, and its own arrows pass over the input's row. Leaving the
 input creates a valid name and drops a blank or refused one (a name the backend
@@ -1646,56 +1668,110 @@ would shift the rows under a double click — and a file there isn't waited for.
 (`Diskfiles.create_file_at`) is revealed the same way, an audio or transcript
 view's "edit a copy" included.
 
-## Spaces and Workspaces
+## Spaces and Projects
 
 Two layers of directory scoping on top of the Filesystem section's "two
 separate concerns":
 
-- **Workspace** (backend-tracked) — an open directory the server watches and
-  serves. `workspace_open` validates and canonicalizes the path — refusing
-  (`forbidden`) a directory the root rules refuse (`root_not_allowed`,
-  `root_outside_home`; § Workspace scope) and one in a protected directory
-  (`protected_dir_not_allowed`): a credential directory, or a `.zzz`
-  directory other than the app directory, like the CLI's daemon home, whose
-  `.env` and `bootstrap_token` must never be indexed and broadcast — starts (or
-  finds) its workspace-lifetime `Filer` — the initial scan runs before the
-  workspace lifecycle lock is taken, and concurrent opens of one path share
-  it; a root that can't be listed fails the open here, with nothing
-  registered — then, under the lock, records the workspace, re-ensures the
-  filer, adds the path to `ScopedFs`, broadcasts `workspace_changed`, and
-  returns the files with the `watch_status`;
-  `workspace_close` reverses that — except that the boot-time app directory
-  and `PUBLIC_ZZZ_SCOPED_DIRS` keep their permanent filers and `ScopedFs`
-  roots, so closing a workspace that overlaps one never revokes its access.
-  Backend state is an in-memory map — a restart forgets all workspaces, and
+- **Project** (backend-tracked) — the root a path opens, which the server
+  serves and indexes in part. `project_open` takes a file or directory and
+  resolves its project on a blocking thread (`crates/zzz_server/src/project.rs`,
+  `resolve_project` — a file opens its parent):
+  1. **A registry** — a `repos.toml` found walking up by `fuz_repos`'s
+     discovery, rooted where a link above a checkout names it (so
+     `~/dev/repos.toml`, a link to a copy in one of its repos, roots at `~/dev`),
+     else at its own directory. The walk stops below `$HOME` (or within
+     the allowlisted root holding the path), and a candidate must be
+     trusted — the file and every directory from it up to `$HOME`, that one
+     included, owned by the daemon's user or root, never `o+w`, and `g+w`
+     only by the user's private group (Debian sshd's rule,
+     `file_trust.rs`; the owner is read once at boot) — and, when a
+     symlink, confined to the root it would make. Any candidate that fails
+     refuses the open with its reason (`registry_untrusted`,
+     `registry_not_confined`, `registry_changed`, `registry_unreadable`,
+     `registry_invalid`) rather than being skipped, since a skip would widen
+     the root to a registry further up. Each entry is canonicalized and
+     confined to the root: one that escapes it, is protected, can't be
+     resolved, or isn't a directory is refused alone (`entry_not_confined`,
+     …), and one not yet cloned is `missing`. A root inside a checkout of
+     one of its own entries falls through to rule 2.
+  2. **A git checkout** — the nearest directory at or above the path, inside
+     the same bound, holding a `.git`.
+  3. **The directory itself.**
+
+  The opened directory and the root must both pass the root rules (§ Root
+  scope) and lie outside every protected directory. The open **focuses**
+  the repo holding the path — the deepest present registry entry containing
+  it, or a checkout's or directory's root; opening a registry's root itself,
+  an unregistered directory under it, or a linked worktree outside it
+  focuses nothing. Focus is daemon-wide and lasts until the project closes;
+  each open of a path in another repo adds its focus (`project_changed`
+  `update`). A focused directory gets a whole-tree filer; a registry's root
+  gets one at its top level alone (its loose files) — an unfocused repo
+  and an unregistered directory under it aren't indexed, so a root of
+  hundreds of thousands of files costs only what's focused. Filers are
+  keyed by canonical path, so two entries resolving to one directory share
+  one. The root is one `ScopedFs` root, writable whole.
+
+  The filers start before the project lifecycle lock is taken (a root or
+  focused directory that can't be listed fails the open, with nothing
+  registered, and concurrent opens of one path share a scan), then, under
+  the lock, the project is recorded — merged into an open one with the
+  same root: the fresh kind and entries, the union of the focus that the
+  fresh resolve still supports (a present entry's dir, or the root of a
+  checkout or plain directory; a whole-tree filer on a root now indexed
+  at its top level is replaced by a top-level one) — the
+  filers re-ensured, the root added to `ScopedFs`, and `project_changed`
+  broadcast (`open`, or `update` when an open project changed); the reply
+  carries the project, the open's `focus`, every filer's files, and the
+  `watch_status`. `project_close` reverses that, stopping the filers no
+  other open project keeps — except that the boot-time app directory and
+  `PUBLIC_ZZZ_SCOPED_DIRS` keep their permanent filers and `ScopedFs`
+  roots, so closing a project that overlaps one never revokes its access.
+  Backend state is an in-memory map — a restart forgets all projects, and
   clients reopen the ones they had when they resync after reconnecting (see
-  **Reconnect resync** under File Editing).
-  Scoped dirs aren't listed as workspaces automatically: they're the
-  operator-configured always-on layer; workspaces are the user-opened runtime
-  layer. A scoped dir (or the app directory) can still be opened as a
-  workspace, and closing it leaves its permanent access in place.
+  **Reconnect resync** under File Editing). Scoped dirs aren't listed as
+  projects: they're the operator-configured always-on layer; projects are
+  the user-opened runtime layer. A scoped dir (or the app directory) can
+  still be opened, and closing it leaves its permanent access in place.
 - **Space** (frontend-only) — a named grouping of directory paths
   (`Space.directory_paths`) with no backend counterpart (no `space_*`
-  actions). `active_directory_paths` derives to only the paths that resolve
-  to a currently open workspace. `Spaces` auto-creates and protects a
+  actions). `active_directory_paths` derives to only the paths that are a
+  currently open project's root. `Spaces` auto-creates and protects a
   `scratchpad` space, identified by `Spaces.scratchpad_id` so renaming it
   keeps it the protected default. Space state is in-memory (DB persistence
   is planned).
 
-The two meet in `DeskMenu.svelte`, which lists the open workspaces to toggle
-into the active Space. Opening brand-new directories happens on
-`/workspaces` (path input → `workspace_open`; the `?workspace=<path>` query
-param auto-opens — this is how the CLI's `zzz <dir>` lands the browser on a
-workspace). Both paths require an absolute path (a leading `~` isn't
-expanded), activate the workspace by the canonical path `workspace_open`
-returns, and the query param is handled once and then stripped from the URL,
-so a reload doesn't reopen a workspace the user has since closed.
-`workspace_changed` broadcasts keep every connected client's `Workspaces`
-collection in sync. A workspace opened elsewhere arrives without its files
-(the initial scan broadcasts nothing), so the client adds it — without
+The two meet in `DeskMenu.svelte`, which lists the open projects to toggle
+into the active Space. Opening happens on `/workspaces`, the projects page
+(path input → `project_open`; the `?project=<path>` query param
+auto-opens — this is how the CLI's `zzz <path>` lands the browser on a
+project). It lists each open project with its kind, and a registry's
+registry file, focused repos, and refused entries with their reasons. Both
+paths require an absolute path (a leading `~` isn't expanded) and activate
+the project `project_open` returns, and the query param is handled once and
+then stripped from the URL, so a reload doesn't reopen a project the user
+has since closed. `project_changed` broadcasts keep every connected client's
+`Projects` collection in sync. A project opened elsewhere, or one an open
+elsewhere gave a new focus, arrives without its files (a filer's initial
+scan broadcasts nothing), so the client adds or updates it — without
 activating it — and resyncs the session to fetch them
-(`Workspaces.receive_remote_open`); the notification for the client's own
-open, which can land before the reply, is recognized and skips the resync.
+(`Projects.receive_remote_change`). While this client's own opens are in
+flight the resync waits for them, and is skipped only when their replies
+carried every directory the notification brought in: a reply built
+before another client's focus doesn't carry it. A reply never shrinks the
+focus this client already has that its resolve still supports (a reply
+may predate another client's focus); a notification or a snapshot is the
+daemon's word on it. A change that drops a focus or the project's kind —
+in a notification or this client's own reply — resyncs too, once no open
+is in flight: the daemon stopped indexing there, and stopping a filer
+deletes nothing on clients, so the snapshot prunes those files. A change
+that lands while a snapshot is in flight asks for another after it, since
+that snapshot leaves the changed project's files alone.
+
+The file tree shows one root row per open project's root. Since only the
+root's loose files and the focused repos are indexed, an unfocused repo
+doesn't show at all.
 
 ## Auth gate
 
@@ -1716,11 +1792,11 @@ accounts from each other.
 
 - Every session and every full-scope API token effectively has the daemon OS
   user's powers (a method-scoped token is limited to its listed methods):
-  terminals (a shell as that user), `workspace_open` of any directory the
+  terminals (a shell as that user), `project_open` of any directory the
   root rules admit — strictly inside `$HOME`, or allowlisted in
   `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, `$HOME` or an ancestor of it, or
-  `/proc`, `/sys`, `/dev` (see § Workspace scope) — which makes it writable
-  and scans it, and file reads and writes anywhere in scope but the
+  `/proc`, `/sys`, `/dev` (see § Root scope) — which makes the root it
+  resolves to writable and scans what it focuses, and file reads and writes anywhere in scope but the
   protected directories (credential directories and `.zzz` directories other
   than the app dir; the file actions, and the byte routes at
   `/api/files/bytes`, which a method-scoped token can't use at all). So the
@@ -1733,7 +1809,7 @@ accounts from each other.
   created them, and a deleted or purged account's terminals are closed and
   its jobs cancelled — but that
   isn't a security boundary: any account can open its own shell.
-- Revisit — role-gating the `terminal_*`, `workspace_*`, and file actions —
+- Revisit — role-gating the `terminal_*`, `project_*`, and file actions —
   if multi-account use ever matters.
 
 Only zzz's own UI can drive the daemon from a browser. The session cookie is
@@ -1866,12 +1942,13 @@ Population, per capability:
   message: "unauthenticated"}` JSON-RPC errors. Public actions are not blocked
   by bad bearer credentials.
 - **Domain state is in-memory** — auth/accounts are in the PostgreSQL DB, but
-  zzz domain state (files, terminals, workspaces, jobs) is in-memory, lost on
+  zzz domain state (files, terminals, projects, jobs) is in-memory, lost on
   restart — a running transcription included, though the transcripts already
   written are files and stay. The frontend resyncs after every reconnect (a
-  restart included): it reloads `session_load` and reconciles — workspaces the
+  restart included): it reloads `session_load` and reconciles — projects the
   daemon no longer has are dropped (after a restart they're reopened instead,
-  and dropped only if the directory is gone or forbidden), files it no longer
+  focus and all, and dropped only if every reopen is refused or lands on
+  another root), files it no longer
   indexes are pruned (a file with unsaved edits stays, flagged deleted on
   disk), and running terminals it doesn't list become `lost`. Notifications
   sent while the socket was down aren't replayed, so terminal output from that
@@ -1976,14 +2053,15 @@ Population, per capability:
   `target/`), and those watches come out of the user's `max_user_watches`
   budget, shared with every other process. An unreadable subdirectory is
   skipped (logged once) and picked up if it becomes readable; an unreadable
-  root fails `workspace_open` with `forbidden` (`permission_denied`). When the
-  watch limit is reached (or no watcher can be created), the workspace still
-  opens with every file the scan found, but in **degraded mode**:
-  `workspace_open` returns `watch_status: 'degraded'` (kept on the opening
-  tab's `Workspace` cell; the workspaces page and the desk menu show it —
+  root or focused directory fails `project_open` with `forbidden`
+  (`permission_denied`). When the watch limit is reached (or no watcher can
+  be created), the project still opens with every file the scans found, but
+  in **degraded mode**: `project_open` returns `watch_status: 'degraded'`
+  (kept on the opening tab's `Project` cell; the projects page and the desk
+  menu show it —
   another tab or a reload shows `'full'`), and the directories without a watch
   are rescanned every 5 seconds or more (retrying their watches each time), so
-  changes there show up late. A workspace that degrades or recovers after it
+  changes there show up late. A project that degrades or recovers after it
   opened isn't re-announced — only the daemon log says so. A file is
   re-announced as changed when its `lstat` stamp moves (a `touch` or a
   chmod included, so clients holding it read it again), and once more at
@@ -2000,15 +2078,25 @@ Population, per capability:
   in the future (a clock stepped back, a remote server's clock ahead) is
   never trusted, so the file is a `change` on every look until the clock
   passes it
-- **Workspace scope** — opening a workspace makes its directory a writable
-  `ScopedFs` root with its own filer until it's closed; closing never revokes
+- **Project scope** — opening a project makes its root a writable
+  `ScopedFs` root, with filers on what's focused, until it's closed; closing
+  never revokes
   the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). A
   directory strictly inside `$HOME`, or in `ZZZ_ROOTS_OUTSIDE_HOME`, can be
   opened — never `/`, `$HOME` or an ancestor of it, or a pseudo-filesystem
-  (§ Workspace scope) — and no root makes a credential directory or a `.zzz`
-  directory other than the app dir readable or writable. A workspace opened
-  in another tab (or by `zzz <dir>`) appears here unactivated, and its files
+  (§ Root scope) — and no root makes a credential directory or a `.zzz`
+  directory other than the app dir readable or writable. A project opened
+  in another tab (or by `zzz <path>`) appears here unactivated, and its files
   arrive with a session resync
+- **Projects and focus** — no unfocusing: a focus lasts until its project
+  closes, or until a later open finds its entry missing or the root's kind
+  changed (clients then resync to prune the files no longer indexed), and the file tree hides an unfocused repo rather
+  than listing it. Under a registry's root only its loose files and its
+  focused repos are indexed — an unregistered directory never is, and a
+  new file there is refused, since it would never show; a
+  file another tool creates there doesn't appear. A registry's entries are
+  resolved when it's opened, again on each later open, never in between.
+  Focusing indexes by a walk (the filer's ignore list, not `.gitignore`)
 - **Terminals** — any authenticated account can create a terminal, which runs
   a command as the daemon's OS user (see § Security posture). Each terminal
   belongs to the account that created it: its output (`terminal_data`,
@@ -2102,10 +2190,10 @@ Population, per capability:
   checked out alongside this repo (path dep).
 - **Recording** — two places record, over the same `Recorder`: the files
   page's record button (beside new file and new folder; disabled without an
-  open workspace) records to the active workspace, and the recordings page
+  open project) records to the active project's root, and the recordings page
   (`/recordings`: a record button, a level meter, and the recordings with
   their transcripts) records to `recordings/` in the app directory, which
-  needs no workspace and keeps voice notes out of a repository. Deleting on
+  needs no project and keeps voice notes out of a repository. Deleting on
   the recordings page removes a recording with its transcripts; on the files
   page, exactly the file selected. A recording is a new file named for the
   local time (`2026-01-31_09-05-07.webm`) — Opus in WebM where the browser

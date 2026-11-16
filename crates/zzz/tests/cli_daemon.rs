@@ -1001,9 +1001,9 @@ fn open_auto_starts_a_detached_daemon() {
         return;
     };
     let path = fake_browser_path(&home);
-    let workspace = home.join("project");
-    fs::create_dir_all(&workspace).unwrap();
-    fs::write(workspace.join("file.txt"), "").unwrap();
+    let project = home.join("project");
+    fs::create_dir_all(&project).unwrap();
+    fs::write(project.join("file.txt"), "").unwrap();
 
     let mut attempt = 0;
     let out = loop {
@@ -1021,10 +1021,10 @@ fn open_auto_starts_a_detached_daemon() {
     };
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let text = stdout(&out);
-    assert!(text.contains("is a file; opening its directory"), "{text}");
-    let encoded = format!("{}/", workspace.display()).replace('/', "%2F");
+    // a file is passed as itself — the daemon opens the project holding it
+    let encoded = format!("{}/file.txt", project.display()).replace('/', "%2F");
     assert!(
-        text.contains(&format!("/workspaces?workspace={encoded}")),
+        text.contains(&format!("/workspaces?project={encoded}")),
         "{text}"
     );
     assert!(record.exists(), "daemon spawned");
@@ -1067,7 +1067,7 @@ fn take_record(record: &Path) -> Vec<String> {
     lines
 }
 
-/// `encodeURIComponent`, as the CLI encodes the workspace param.
+/// `encodeURIComponent`, as the CLI encodes the project param.
 fn encode_uri_component(input: &str) -> String {
     input
         .bytes()
@@ -1106,10 +1106,10 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
         }
     };
 
-    // a workspace whose URL a shell would mangle, reached through a symlink
-    let workspace = home.join("a b's (x) *!$HOME;&");
-    fs::create_dir_all(&workspace).unwrap();
-    std::os::unix::fs::symlink(&workspace, home.join("link")).unwrap();
+    // a project whose URL a shell would mangle, reached through a symlink
+    let project = home.join("a b's (x) *!$HOME;&");
+    fs::create_dir_all(&project).unwrap();
+    std::os::unix::fs::symlink(&project, home.join("link")).unwrap();
 
     // `ZZZ_OPENER` (relative to where zzz runs): the URL is its one argument
     let mut attempt = 0;
@@ -1131,16 +1131,16 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
     };
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     // the canonical directory, not the symlink
-    let workspace_url = format!(
-        "http://localhost:{port}/workspaces?workspace={}",
-        encode_uri_component(&format!("{}/", workspace.display()))
+    let project_url = format!(
+        "http://localhost:{port}/workspaces?project={}",
+        encode_uri_component(&format!("{}/", project.display()))
     );
-    assert!(workspace_url.contains("a%20b's%20(x)%20*!%24HOME%3B%26"));
+    assert!(project_url.contains("a%20b's%20(x)%20*!%24HOME%3B%26"));
     assert_eq!(
         take_record(&env_record),
         [
             "argc=1".to_owned(),
-            format!("arg={workspace_url}"),
+            format!("arg={project_url}"),
             "test_actions=unset".to_owned()
         ]
     );

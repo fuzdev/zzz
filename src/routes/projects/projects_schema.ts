@@ -63,7 +63,7 @@ export const ProjectJson = cell_json_schema(
 		domains: with_default_fn(array(DomainJson), () => []),
 		repos: with_default_fn(array(RepoJson), () => [])
 	},
-	'Project'
+	'MockProject'
 );
 export type ProjectJson = Infer<typeof ProjectJson>;
 export type ProjectJsonInput = InferInput<typeof ProjectJson>;
@@ -77,7 +77,7 @@ export const ProjectsJson = cell_json_schema(
 		expanded_projects: with_default_fn(record(boolean), () => ({})),
 		previewing: with_default(boolean, false)
 	},
-	'Projects'
+	'MockProjects'
 );
 export type ProjectsJson = Infer<typeof ProjectsJson>;
 export type ProjectsJsonInput = InferInput<typeof ProjectsJson>;

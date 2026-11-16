@@ -43,9 +43,9 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   audit writes — a real one because this binary passes
   `audit_inflight_tracking: true`). zzz's reset closure ignores the in-tx
   `ActionDb` handle (its domain state is in-memory, not in PG) — it closes
-  every zzz workspace through the production close path
-  (`handlers::workspace::workspace_close_all` — filers stopped, `ScopedFs`
-  roots removed, `workspace_changed` broadcast, restoring the boot-time
+  every zzz project through the production close path
+  (`handlers::project::project_close_all` — filers stopped, `ScopedFs`
+  roots removed, `project_changed` broadcast, restoring the boot-time
   scope), calls `pty_manager.kill_all()` (non-destructive — manager stays
   usable across tests), stops and forgets every job
   (`job_manager.cancel_all()`), and wipes the optional
@@ -170,7 +170,7 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   env-override notes, `ZZZ_ENABLE_TEST_ACTIONS` stripped, never a `zzzd` from
   the current directory), early child exit, `init` file modes, the opener (a
   stand-in script recording its arguments: the URL as the single final
-  argument for a workspace path a shell would mangle, array arguments passed
+  argument for a project path a shell would mangle, array arguments passed
   through, config over env, blank values unset, the browser stub as the
   fallback, no `ZZZ_ENABLE_TEST_ACTIONS`; a missing or non-executable program,
   a bare name from either source, and a malformed `opener` exit 2 with nothing
@@ -240,7 +240,7 @@ orientation; the spine crates are authoritative:
    and the generated `docs/reference.md`):
    - `public` — `{account: 'none', actor: 'none'}`; no auth required (`ping`)
    - `authenticated` — `{account: 'required', actor: 'none'}`; valid session
-     or bearer token required (workspace_*, session_load, etc.)
+     or bearer token required (project_*, session_load, etc.)
    - `keeper` — `{account: 'required', actor: 'required', roles: ['keeper'],
      credential_types: ['daemon_token']}`; requires `DaemonToken` credential
      type AND keeper role grant. No zzz action uses this shape today — the
@@ -375,26 +375,40 @@ commands):
   fresh socket works (what the frontend's recheck-and-reconnect relies on);
   an RPC `account_session_revoke_all` already committed when the socket
   closes.
-- **`workspace.cross.test.ts`** — workspace open / list / close, idempotency,
-  scope on close (closing a workspace on `zzz_dir`, on a scoped dir via a
-  non-canonical spelling, or nested in a scoped dir keeps write access; closing
-  a plain workspace revokes it), `_testing_reset` closing every workspace and
-  restoring the boot-time scope,
-  `workspace_open` returning the workspace's files (metadata, no contents)
-  and `watch_status` (first
-  and idempotent open; symlinks and link loops skipped; an unreadable
-  subdirectory skipped while its siblings are indexed; an unreadable root
-  refused with `forbidden` and nothing registered),
-  not-a-directory (`invalid_params`) + nonexistent (`not_found`) errors, a
+- **`project.cross.test.ts`** — project open / list / close on plain
+  directories and git checkouts under the temp root, idempotency, scope on
+  close (closing a project on `zzz_dir`, on a scoped dir via a
+  non-canonical spelling, or nested in a scoped dir keeps write access;
+  closing a plain one revokes it), `_testing_reset` closing every project
+  and restoring the boot-time scope, `project_open` returning the project
+  (`plain_dir` or `git_repo`, focused on its root), the open's `focus`, its
+  files (metadata, no contents), and `watch_status` (first, concurrent, and
+  idempotent open; a file opening its directory; a subdirectory of a
+  checkout rooting at the checkout, `.git` unindexed; symlinks and link
+  loops skipped; an unreadable subdirectory skipped while its siblings are
+  indexed; an unreadable root refused with `forbidden` and nothing
+  registered), an untrusted registry (its directory `o+w`) refused with
+  `forbidden` / `registry_untrusted`, nonexistent (`not_found`) errors, a
   symlink loop / over-long name (`invalid_params` / `invalid_path`), a NUL
-  byte (`params_nul`, refused by the dispatcher before the handler), `.zzz` and credential directories refused
-  (`protected_dir_not_allowed` — the directory, a subdirectory, and a
-  symlink to it, while its parent opens with it skipped and its `.env`
-  indexed), the root rules (`$HOME`, a symlink to it, its parent, `/`, and
-  `/proc`, `/sys`, `/dev` → `root_not_allowed`; a directory outside `$HOME`
-  and the harness's allowlisted `os.tmpdir()` → `root_outside_home`), and
-  `workspace_changed` broadcast on
-  open/close (no broadcast on an idempotent open).
+  byte (`params_nul`, refused by the dispatcher before the handler), `.zzz`
+  and credential directories refused (`protected_dir_not_allowed` — the
+  directory, a subdirectory, a file in it, and a symlink to it, while its
+  parent opens with it skipped and its `.env` indexed), the root rules
+  (`$HOME`, a symlink to it, its parent, `/`, and `/proc`, `/sys`, `/dev` →
+  `root_not_allowed`; a directory outside `$HOME` and the harness's
+  allowlisted `os.tmpdir()` → `root_outside_home`), and `project_changed`
+  broadcast on open/close (no broadcast on an idempotent open).
+- **`project_registry.cross.test.ts`** — runs only in the
+  `cross_backend_rust_projects` project, whose backend's `HOME` is a fixture
+  directory (`rust_projects_backend_config`), since a registry is trusted
+  only below the home directory: a path in a repo opens the registry's root
+  with every entry's state (present, missing, and one linking out of the
+  root refused `entry_not_confined`), focused on that repo, indexing the
+  root's loose files and the focused repo alone (not an unregistered
+  directory); the root alone focuses nothing, and a later open of a repo
+  adds its focus with a `project_changed` `update`; the whole root is in
+  scope while open and out of it once closed; a registry its other users
+  can write refuses the open (`registry_untrusted`).
 - **`filesystem.cross.test.ts`** — `diskfile_read` (a text file whole with
   its size and `mtime`, read through to the disk — a same-length rewrite read
   at once, a file in an ignored directory the filer never indexes — a file
@@ -426,11 +440,11 @@ commands):
   the frontend's `RPC_MESSAGE_MAX_BYTES`, pinning it to the backend's
   `RPC_MESSAGE_MAX_BYTES`: under it is written, over it is a 413 on HTTP and
   closes the socket on WS), and `filer_change`
-  broadcasts in an open workspace (file create; rename → `delete` of the old
+  broadcasts in an open project (file create; rename → `delete` of the old
   path + `add` of the new; an mtime-only change, a rewrite of the same
   bytes (with and without a `utimes`), and new contents each → a `change`
   with the new metadata, each
-  parsed against the TS spec, no disknode — broadcast, `workspace_open`, or
+  parsed against the TS spec, no disknode — broadcast, `project_open`, or
   `session_load` — carrying a `contents` key, each disknode's `size` the
   file's bytes, and the contents read back with `diskfile_read`).
 - **`file_bytes.cross.test.ts`** — the byte routes (`/api/files/bytes`),
@@ -523,7 +537,7 @@ commands):
   build (`STATIC_FIXTURE_FILES` in `zzz_backend_config.ts`, via
   `ZZZ_STATIC_DIR`); covers root / prerendered pages (incl. `docs.html` beside
   a `docs/` dir), the `200.html` fallback for dynamic routes and
-  `?workspace=` queries, HEAD, cache headers, and the 404s for missing
+  `?project=` queries, HEAD, cache headers, and the 404s for missing
   `_app/` assets and backend paths. `static_files.rs` unit tests cover the
   same resolution plus path traversal.
 - **`proxy.cross.test.ts`** — runs only in the `cross_backend_rust_proxy`
@@ -557,7 +571,7 @@ commands):
   `ScopedFs`'s no-symlink rule.
   This keeps link loops (`up -> ..`, a Wine prefix's `dosdevices/z: -> /`)
   from hanging the scan and keeps files outside the watched root out of the
-  index. A symlinked file or directory inside a workspace is invisible in
+  index. A symlinked file or directory inside a project is invisible in
   the file tree.
 - **text read cap** — the filer reads no file: its index is metadata only
   (identity, size, timestamps, the `lstat` stamp), so its memory scales with
@@ -592,7 +606,7 @@ commands):
   whose listing fails transiently (`EMFILE`, `ENOMEM`, `EIO` — anything but
   `EACCES` / `ENOENT` / `ENOTDIR`) keeps what's indexed under it and is
   polled until it lists; only a root that can't be listed fails
-  `start_filer` (`workspace_open` → `forbidden` / `not_found`). A running
+  `start_filer` (`project_open` → `forbidden` / `not_found`). A running
   filer whose root goes missing polls it until it's back. An overflow
   (dropped events, or inotify's queue overflow) replaces the watcher with a
   fresh one and re-adds every watch during the rescan, since neither the
@@ -605,11 +619,12 @@ commands):
   unwatched and the index still comes from the scan; the topmost unwatched
   directories are rescanned every `DEGRADED_RESCAN_INTERVAL` (5s, or 10x the
   last rescan's duration if longer), retrying their watches, and
-  `Filer::watch_status` reports `Degraded` (returned by `workspace_open` as
-  `watch_status`, kept on the opening tab's `Workspace` cell and shown on
-  the workspaces page and in the desk menu). A limit hit stops watch attempts
+  `Filer::watch_status` reports `Degraded` (returned by `project_open` as
+  `watch_status` — degraded when any of the project's filers is — kept on
+  the opening tab's `Project` cell and shown on the projects page and in
+  the desk menu). A limit hit stops watch attempts
   until the next rescan. A filer that degrades or recovers after
-  `workspace_open` returns is only logged — no notification carries the
+  `project_open` returns is only logged — no notification carries the
   change. **Change by stamp**: watch events and rescans (`session_load`,
   overflow, degraded polling) alike decide from a file's `lstat` stamp
   (`filer::FileStat`: dev, inode, size, mtime, and `st_ctime`, the inode
@@ -654,7 +669,7 @@ commands):
   `null`s are `invalid_params`; nested `optional` fields refuse `null`
   through a `present` deserializer; UUID fields use
   `fuz_http::deserialize_wire_uuid`), and the `z.void()` methods (`ping`,
-  `session_load`, `workspace_list`) declare `InputShape::Void`, so the
+  `session_load`, `project_list`) declare `InputShape::Void`, so the
   dispatcher refuses any declared key before the handler runs — an absent
   `params` and a `{}` are both the no-arg call, since fuz_app's WebSocket
   client sends `{}` for a parameterless request. Every other spec declares
@@ -674,16 +689,24 @@ commands):
   `conflict` (-32004; `already_exists`, `replaced_during_save`,
   `disk_changed`, and the byte routes' `offset_mismatch`); any other
   I/O failure → `internal_error` (-32603, no
-  reason). Messages keep the `failed to … : …` prefix. `workspace_open` maps
-  the same way (missing → `not_found`; not a directory → `invalid_params` /
-  `not_a_directory`; a NUL byte, a symlink loop, or an over-long name →
-  `invalid_params` / `invalid_path`; a directory whose listing is refused →
-  `forbidden` / `permission_denied`). On the canonical path, so no symlink
-  or `..` spelling gets around either, it then holds the directory to the
-  root rules (`root_policy::RootPolicy::admit`: strictly inside `$HOME` or
+  reason). Messages keep the `failed to … : …` prefix. `project_open`
+  carries the resolver's `ProjectError::reason` (`handlers::project::open_error`):
+  missing → `not_found` / `path_not_found`; a relative path, a symlink loop,
+  or an over-long name → `invalid_params` / `invalid_path` (a NUL byte never
+  reaches it — `params_nul`); a path the OS refuses → `forbidden` /
+  `permission_denied`; a registry that can't be read or doesn't parse →
+  `invalid_params` / `registry_unreadable`, `registry_invalid`; an
+  untrusted or unconfined one → `forbidden` / `registry_untrusted`,
+  `registry_not_confined`; one replaced while it was checked → `conflict`
+  / `registry_changed`; an unusable walk bound → `internal_error` /
+  `bound_unusable`; a root or focused directory whose listing is refused →
+  `forbidden` / `permission_denied`. A refused registry entry fails
+  nothing: its `entry_*` reason is on the entry. On canonical paths, so no
+  symlink or `..` spelling gets around either, it holds the opened
+  directory and the project root to the root rules (`root_policy::RootPolicy::admit`: strictly inside `$HOME` or
   in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor of it, or
   under `/proc`, `/sys`, `/dev`) — `forbidden` / `root_outside_home`
-  (`handlers::workspace::ERROR_ROOT_OUTSIDE_HOME`) where the allowlist would
+  (`handlers::project::ERROR_ROOT_OUTSIDE_HOME`) where the allowlist would
   admit it, else `root_not_allowed` (`ERROR_ROOT_NOT_ALLOWED`) — and refuses
   a path that is, or is inside, a protected directory
   (`scoped_fs::protected_dir`): a credential directory (`.ssh`, `.gnupg`,
@@ -705,8 +728,8 @@ commands):
   (`FilerConfig::root_protected`); a scoped dir there, or one the root rules
   refuse, fails boot before any filer starts (`PUBLIC_ZZZ_SCOPED_DIRS`
   below).
-  `workspace_close` of a path that isn't open → `invalid_params` /
-  `workspace_not_open` (`handlers::workspace::ERROR_WORKSPACE_NOT_OPEN`).
+  `project_close` of a root that isn't open → `invalid_params` /
+  `project_not_open` (`handlers::project::ERROR_PROJECT_NOT_OPEN`).
 - **Atomic writes**: `ScopedFs::write_file` stages content in a hidden
   `.zzz-tmp-<uuid>` file beside the target (`O_EXCL | O_NOFOLLOW`), gives it
   the replaced file's mode minus setuid/setgid (zzz always drops them — the
@@ -817,7 +840,7 @@ commands):
     served. The body streams from the open handle in 64 KiB reads — a file
     that shrinks underneath ends the body early, one that grows is cut at the
     length promised.
-  - **Serving bytes never executes them.** A workspace file is untrusted
+  - **Serving bytes never executes them.** A project's file is untrusted
     content, and a document rendered on zzz's origin could script the app. The
     `Content-Type` comes from a fixed extension allowlist
     (`file_bytes::media_content_type` — raster images, audio, video; never
@@ -977,15 +1000,26 @@ commands):
     happens because a file appeared. Each is a caller's explicit action.
 - **Dispatch is async**: filesystem handlers (`diskfile_update`, etc.) use
   `tokio::fs` async I/O (the atomic write's blocking I/O, and
-  `diskfile_read`'s open and read, run on `spawn_blocking`). `workspace_open` / `workspace_close` canonicalize
-  asynchronously and serialize on `App::workspace_lifecycle` (a
-  `tokio::sync::Mutex`), since each spans the workspaces map, `ScopedFs`, and
-  the workspace filer across await points. `workspace_open` runs in its own
-  task (a dropped caller can't abandon it halfway) and starts the filer —
-  the initial walk, watches, and reads — before taking the lock, then
-  re-ensures it under the lock (a dedup hit, unless a racing close stopped
-  it), so a large tree's scan doesn't hold up other opens and closes.
-- **`parking_lot::RwLock`** for short synchronous sections (the workspaces
+  `diskfile_read`'s open and read, run on `spawn_blocking`). `project_open`
+  resolves its project on `spawn_blocking` (stats, a registry read, at most
+  a few git calls through the `App::git` runner, built over the terminal
+  environment and version-checked once at boot), and it and `project_close`
+  serialize on `App::project_lifecycle` (a `tokio::sync::Mutex`), since each
+  spans the projects map, `ScopedFs`, and the project's filers across await
+  points. `project_open` runs in its own task (a dropped caller can't
+  abandon it halfway) and starts the filers — the initial walks and
+  watches — before taking the lock, then re-ensures them under the lock (a
+  dedup hit, unless a racing close stopped one), so a large tree's scan
+  doesn't hold up other opens and closes. A filer is stopped only when no
+  open project keeps it; one an open project no longer needs whole — a
+  root that turned into a registry's, indexed at its top level — is
+  replaced by a top-level one (`FilerManager::replace_filer`, the old one
+  running until the new one has scanned), once nothing can fail the open,
+  so a rollback finds every filer the project had kept; a start never
+  narrows a filer. Every `project_changed` is broadcast under the lock (the
+  broadcast takes the guard), so one root's notifications go out in the
+  order its opens and closes took effect.
+- **`parking_lot::RwLock`** for short synchronous sections (the projects
   map, `ScopedFs` roots); no poisoning. The async managers (filer index,
   PTY terminals, providers) use `tokio::sync::RwLock` — scope sync guards
   before await points.

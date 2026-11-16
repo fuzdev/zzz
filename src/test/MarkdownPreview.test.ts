@@ -290,7 +290,7 @@ describe('MarkdownPreview in-zzz links', () => {
 			content: '[far](../../far.md) [nm](../node_modules/x/README.md) [root](/nope.md)'
 		});
 		assert.strictEqual(status_of(target, 'far'), 'unknown');
-		assert.strictEqual(find_link(target, 'far').title, 'outside the open workspaces: /far.md');
+		assert.strictEqual(find_link(target, 'far').title, 'outside the open projects: /far.md');
 		assert.strictEqual(status_of(target, 'nm'), 'unknown');
 		assert.strictEqual(status_of(target, 'root'), 'unknown');
 	});

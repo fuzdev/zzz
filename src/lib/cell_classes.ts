@@ -15,6 +15,8 @@ import { Job } from './job.svelte.ts';
 import { Jobs } from './jobs.svelte.ts';
 import { Action } from './action.svelte.ts';
 import { Actions } from './actions.svelte.ts';
+import { Project } from './project.svelte.ts';
+import { Projects } from './projects.svelte.ts';
 import { Prompt } from './prompt.svelte.ts';
 import { Prompts } from './prompts.svelte.ts';
 import { Provider } from './provider.svelte.ts';
@@ -31,8 +33,6 @@ import { TerminalPreset } from './terminal_preset.svelte.ts';
 import { TerminalPresets } from './terminal_presets.svelte.ts';
 import { Terminals } from './terminals.svelte.ts';
 import { Ui } from './ui.svelte.ts';
-import { Workspace } from './workspace.svelte.ts';
-import { Workspaces } from './workspaces.svelte.ts';
 import type { Cell } from './cell.svelte.ts';
 
 /**
@@ -58,6 +58,8 @@ export const cell_classes = {
 	Models,
 	Action,
 	Actions,
+	Project,
+	Projects,
 	Prompt,
 	Prompts,
 	Provider,
@@ -74,9 +76,7 @@ export const cell_classes = {
 	Threads,
 	Time,
 	TextPart,
-	Ui,
-	Workspace,
-	Workspaces
+	Ui
 } satisfies Record<string, typeof Cell<any>>;
 
 export type CellClasses = typeof cell_classes;

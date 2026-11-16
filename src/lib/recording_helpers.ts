@@ -38,8 +38,8 @@ export const RECORDINGS_DIRNAME = 'recordings';
 
 /**
  * The directory the recordings page records to: `recordings/` in the app
- * directory. It needs no open workspace, and keeps voice notes out of whatever
- * repository a workspace is.
+ * directory. It needs no open project, and keeps voice notes out of whatever
+ * repository a project is.
  *
  * @param zzz_dir - the app directory, with its trailing slash
  */

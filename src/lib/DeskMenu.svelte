@@ -14,7 +14,7 @@
 	import { icon_add, icon_delete, icon_pin, icon_space } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
 	import { click_outside } from './click_outside.svelte.ts';
-	import { WORKSPACE_DEGRADED_NOTICE } from './workspace_helpers.ts';
+	import { PROJECT_DEGRADED_NOTICE } from './project_helpers.ts';
 
 	const app = frontend_context.get();
 
@@ -118,36 +118,36 @@
 						<EditableText bind:value={app.spaces.active.name} />
 						<span class="text_50 font_size_sm">directories</span>
 					</h3>
-					{#if app.workspaces.items.by_id.size > 0}
+					{#if app.projects.items.by_id.size > 0}
 						<ul class="unstyled">
-							{#each app.workspaces.items.values as workspace (workspace.id)}
-								{@const included = app.spaces.active.directory_paths.includes(workspace.path)}
+							{#each app.projects.items.values as project (project.id)}
+								{@const included = app.spaces.active.directory_paths.includes(project.root)}
 								<li>
 									<button
 										type="button"
 										class="width:100% gap_sm"
 										class:selected={included}
 										onclick={() => {
-											// the list is open workspaces, so each is already open on the backend
+											// the list is open projects, so each is already open on the backend
 											if (included) {
-												app.spaces.active!.remove_directory(workspace.path);
+												app.spaces.active!.remove_directory(project.root);
 											} else {
-												app.spaces.active!.add_directory(workspace.path);
+												app.spaces.active!.add_directory(project.root);
 											}
 										}}
 									>
 										<span class="flex:1 font_size_sm text-align:left font_family_mono">
-											{workspace.path}
+											{project.root}
 										</span>
-										{#if workspace.watch_status === 'degraded'}
-											<small class="text_50" title={WORKSPACE_DEGRADED_NOTICE}>polled</small>
+										{#if project.watch_status === 'degraded'}
+											<small class="text_50" title={PROJECT_DEGRADED_NOTICE}>polled</small>
 										{/if}
 									</button>
 								</li>
 							{/each}
 						</ul>
 					{:else}
-						<p class="text_50">no workspaces open</p>
+						<p class="text_50">no projects open</p>
 					{/if}
 				</section>
 			{/if}

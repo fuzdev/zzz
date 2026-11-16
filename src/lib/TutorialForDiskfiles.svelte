@@ -14,8 +14,8 @@
 				<p>
 					⚠️ This filesystem interface is an early proof of concept and lacks most features you'd
 					expect. Some basics work, and there will be more soon: you can create files in the active
-					workspace, edit and save files in open workspaces, scoped directories, and the app
-					directory, and see the edit history.
+					project, edit and save files in open projects, scoped directories, and the app directory,
+					and see the edit history.
 				</p>
 				<button
 					type="button"

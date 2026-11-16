@@ -6,9 +6,9 @@
  *
  * A link in a file resolves against the file's path, the way a repository
  * host reads it: `./x.md`, `../y/z.md`, and `x.md` against the file's
- * directory, and a root-relative `/docs/x.md` against the root of the open
- * directory holding the file (the workspace, which is usually the
- * repository). Whether the result exists is the file index's call
+ * directory, and a root-relative `/docs/x.md` against the innermost indexed
+ * directory holding the file (a focused repo, or a checkout's or directory's
+ * root — usually the repository). Whether the result exists is the file index's call
  * (`MarkdownLinkIndex`), and what the index can't see is `unknown`, never
  * `broken`.
  *
@@ -170,8 +170,25 @@ export interface MarkdownLinkIndex {
 	has_file: (path: string) => boolean;
 	/** Whether an indexed file sits somewhere under `path`, a directory with a trailing `/`. */
 	has_directory: (path: string) => boolean;
-	/** The directories the index covers, each with a trailing `/`. */
+	/**
+	 * The directories whose whole trees the index covers, each with a trailing
+	 * `/`: the app directory, the scoped dirs, a checkout's or plain
+	 * directory's root, and a registry project's focused repos.
+	 */
 	readonly roots: ReadonlyArray<string>;
+	/**
+	 * The directories the index covers at their top level alone, each with a
+	 * trailing `/` — a registry project's root, whose loose files are indexed
+	 * and whose unfocused repos aren't.
+	 */
+	readonly top_level_roots: ReadonlyArray<string>;
+	/**
+	 * A registry project's entry dirs that aren't focused, each with a
+	 * trailing `/` — named by the registry, so a link to one reads as out of
+	 * sight even without a trailing slash, where it would otherwise look like
+	 * a missing loose file.
+	 */
+	readonly unfocused_dirs: ReadonlyArray<string>;
 }
 
 /**
@@ -182,13 +199,15 @@ export interface MarkdownLinkIndex {
  *   list it, yet nothing is there
  * - the index can't say (see `MarkdownLinkMark`'s `unknown`):
  *   - `outside` — outside every root the index covers
+ *   - `unfocused` — under a registry project's root, below its top level and
+ *     in no focused repo, where the index doesn't look
  *   - `skipped` — a path part the index never enters or lists
  *     (`is_file_index_ignored_name`)
- *   - `root_relative` — written `/…` and not found from the workspace's
+ *   - `root_relative` — written `/…` and not found from the project's
  *     root, which may not be the repository's
  */
 export type MarkdownLinkStatus =
-	'file' | 'directory' | 'broken' | 'outside' | 'skipped' | 'root_relative';
+	'file' | 'directory' | 'broken' | 'outside' | 'unfocused' | 'skipped' | 'root_relative';
 
 /**
  * Checks a path link's target against the file index (see
@@ -207,8 +226,21 @@ export const to_markdown_link_status = (
 	const dir_path = path.endsWith('/') ? path : path + '/';
 	if (index.has_directory(dir_path)) return 'directory';
 	if (target.root_relative) return 'root_relative';
-	const root = to_root_dir(dir_path, index.roots);
-	if (root === null) return 'outside';
+	const tree_root = to_root_dir(dir_path, index.roots);
+	let root = tree_root;
+	if (root === null) {
+		const top = to_root_dir(dir_path, index.top_level_roots);
+		if (top === null) return 'outside';
+		if (index.unfocused_dirs.some((dir) => dir_path.startsWith(dir))) return 'unfocused';
+		// only a file directly in a top-level root is where the index looks
+		// TODO an unregistered directory linked without a trailing slash
+		// (`./scratch`) reads as a missing loose file, so broken: the honest fix
+		// is for the top-level filer to report the root's child directory names,
+		// a wire change
+		const name = path.slice(top.length);
+		if (target.directory || name.includes('/')) return 'unfocused';
+		root = top;
+	}
 	for (const segment of dir_path.slice(root.length).split('/')) {
 		if (is_file_index_ignored_name(segment)) return 'skipped';
 	}
@@ -233,6 +265,7 @@ export const to_markdown_link_mark = (
 		case 'broken':
 			return 'broken';
 		case 'outside':
+		case 'unfocused':
 		case 'skipped':
 		case 'root_relative':
 			return 'unknown';
@@ -357,7 +390,8 @@ export interface ToMarkdownLinksOptions {
  * The document's links that render as `<a>` elements (mdz renders an unsafe
  * reference as plain text), in rendered order, each resolved against
  * `file_path` and checked against `index`. A root-relative link resolves
- * against the innermost of the index's roots holding the file.
+ * against the innermost of the index's roots holding the file, a top-level
+ * root included.
  *
  * @param nodes - the document, parsed by `mdz_parse`
  * @param options - the document's file and the file index
@@ -367,10 +401,11 @@ export const to_markdown_links = (
 	options: ToMarkdownLinksOptions = {}
 ): Array<MarkdownLink> => {
 	const { file_path, index } = options;
-	// TODO root-relative links resolve against the repository's root, from the repo registry when
-	// one is known, rather than the workspace's - a workspace opened above the repository
-	// (`zzz ~/dev/`) reads them `unknown`
-	const root_dir = file_path && index ? to_root_dir(file_path, index.roots) : null;
+	// TODO root-relative links resolve against the innermost indexed tree — a registry project's
+	// focused repo, a checkout's root — not the repository's root as such: a plain directory
+	// opened inside a repository reads them from there
+	const root_dir =
+		file_path && index ? to_root_dir(file_path, [...index.roots, ...index.top_level_roots]) : null;
 	const links: Array<MarkdownLink> = [];
 	walk_rendered(nodes, (node) => {
 		if (node.type !== 'Link' || !mdz_is_safe_reference(node.reference)) return;
@@ -454,11 +489,13 @@ export const to_markdown_link_title = (
 		case 'broken':
 			return `not found: ${target.path}`;
 		case 'outside':
-			return `outside the open workspaces: ${target.path}`;
+			return `outside the open projects: ${target.path}`;
+		case 'unfocused':
+			return `in a repo that isn't focused, which the file index doesn't cover: ${target.path}`;
 		case 'skipped':
 			return `in a folder the file index skips: ${target.path}`;
 		case 'root_relative':
-			return `not found from the workspace root: ${target.path}`;
+			return `not found from the project root: ${target.path}`;
 		case 'directory':
 			return readme_path === null
 				? `a folder, which zzz has no view for: ${target.path}`

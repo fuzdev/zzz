@@ -61,7 +61,7 @@ pub const ERROR_NOT_A_DIRECTORY: &str = "not_a_directory";
 pub const ERROR_NOT_A_REGULAR_FILE: &str = "not_a_regular_file";
 /// A protected directory, or a path inside one (`forbidden`): every
 /// `ScopedFs` operation on one ([`ScopedFsError::ProtectedDirNotAllowed`]),
-/// and `workspace_open` of one.
+/// and `project_open` of one.
 ///
 /// That's a credential directory (`.ssh`, `.gnupg`, `.aws`, `.kube`,
 /// `.docker`, `.password-store` — `scoped_fs::CREDENTIAL_DIR_NAMES`) or a

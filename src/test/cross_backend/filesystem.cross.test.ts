@@ -496,7 +496,7 @@ describe('filesystem cross-backend', () => {
 	});
 
 	// `ScopedFs` refuses a credential directory under every root, so no file
-	// action reaches keys a workspace or scoped dir covers
+	// action reaches keys a project or scoped dir covers
 	test('file_actions_refuse_credential_dirs', async () => {
 		const fixture = await setup_test();
 		const dir = join(scoped_dir, `credentials_${randomUUID()}`);
@@ -544,7 +544,7 @@ describe('filesystem cross-backend', () => {
 
 	// `ScopedFs` refuses a `.zzz` directory other than the app dir under every
 	// root, so no file action reaches the CLI daemon home's `.env` and
-	// `bootstrap_token` through a workspace or scoped dir that covers it
+	// `bootstrap_token` through a project or scoped dir that covers it
 	test('file_actions_refuse_zzz_homes', async () => {
 		const fixture = await setup_test();
 		const dir = join(scoped_dir, `zzz_home_${randomUUID()}`);
@@ -898,7 +898,7 @@ describe('filesystem cross-backend', () => {
 			const open = await rpc_call({
 				app: fixture.transport,
 				path: handle.config.rpc_path,
-				method: 'workspace_open',
+				method: 'project_open',
 				params: { path: tmp_dir },
 				headers: fixture.create_session_headers()
 			});
@@ -931,8 +931,8 @@ describe('filesystem cross-backend', () => {
 			await rpc_call({
 				app: fixture.transport,
 				path: handle.config.rpc_path,
-				method: 'workspace_close',
-				params: { path: tmp_dir },
+				method: 'project_close',
+				params: { root: `${tmp_dir}/` },
 				headers: fixture.create_session_headers()
 			}).catch(() => undefined);
 		} finally {
@@ -951,7 +951,7 @@ describe('filesystem cross-backend', () => {
 			const open = await rpc_call({
 				app: fixture.transport,
 				path: handle.config.rpc_path,
-				method: 'workspace_open',
+				method: 'project_open',
 				params: { path: tmp_dir },
 				headers: fixture.create_session_headers()
 			});
@@ -995,8 +995,8 @@ describe('filesystem cross-backend', () => {
 			await rpc_call({
 				app: fixture.transport,
 				path: handle.config.rpc_path,
-				method: 'workspace_close',
-				params: { path: tmp_dir },
+				method: 'project_close',
+				params: { root: `${tmp_dir}/` },
 				headers: fixture.create_session_headers()
 			}).catch(() => undefined);
 		} finally {
@@ -1014,12 +1014,12 @@ describe('filesystem cross-backend', () => {
 			const open = await rpc_call({
 				app: fixture.transport,
 				path: handle.config.rpc_path,
-				method: 'workspace_open',
+				method: 'project_open',
 				params: { path: tmp_dir },
 				headers: fixture.create_session_headers()
 			});
 			assert.ok(open.ok);
-			// the workspace's files: metadata, and no contents key
+			// the project's files: metadata, and no contents key
 			const opened_files = (open.result as Record<string, unknown>).files as Array<
 				Record<string, unknown>
 			>;
@@ -1121,8 +1121,8 @@ describe('filesystem cross-backend', () => {
 			await rpc_call({
 				app: fixture.transport,
 				path: handle.config.rpc_path,
-				method: 'workspace_close',
-				params: { path: tmp_dir },
+				method: 'project_close',
+				params: { root: `${tmp_dir}/` },
 				headers: fixture.create_session_headers()
 			}).catch(() => undefined);
 		} finally {

@@ -57,7 +57,7 @@ import { ProviderStatus, ProviderName } from './provider_types.ts';
 import { JobSnapshot } from './job_types.ts';
 import { TranscriptSegment } from './transcript_types.ts';
 import { CompletionMessage, CompletionRequest, CompletionResponse } from './completion_types.ts';
-import { WorkspaceInfoJson, WorkspaceWatchStatus } from './workspace.svelte.ts';
+import { ProjectInfoJson, ProjectWatchStatus } from './project.svelte.ts';
 
 // -- Shared sub-schemas -----------------------------------------------------
 
@@ -85,7 +85,7 @@ export type PingOutput = Infer<typeof PingOutput>;
 /**
  * Inner payload of `session_load`. The fields here are the actual session
  * snapshot — files and the roots they cover, scoped dirs, provider status,
- * workspaces, the caller's terminals, and the server instance. The frontend
+ * projects, the caller's terminals, and the server instance. The frontend
  * loads it at boot and again after every reconnect, reconciling its state to
  * it (see `Frontend.load_session`).
  *
@@ -104,14 +104,14 @@ export const SessionLoadData = object({
 	 */
 	file_roots: array(DiskfileDirectoryPath),
 	provider_status: array(ProviderStatus),
-	workspaces: array(WorkspaceInfoJson),
+	projects: array(ProjectInfoJson),
 	/** Backend ids of the caller's live terminals. */
 	terminal_ids: array(Uuid),
 	/** The caller's jobs, oldest first — running, queued, and recent finished ones. */
 	jobs: array(JobSnapshot),
 	/**
 	 * Minted each time the backend starts — a different id than the last
-	 * snapshot's means it restarted, losing its terminals and runtime workspaces.
+	 * snapshot's means it restarted, losing its terminals and open projects.
 	 */
 	server_instance_id: Uuid
 });
@@ -399,38 +399,45 @@ export const TerminalExitedInput = object({
 });
 export type TerminalExitedInput = Infer<typeof TerminalExitedInput>;
 
-/** Input for `workspace_open`. */
-export const WorkspaceOpenInput = object({
-	path: DiskfileDirectoryPath
+/** Input for `project_open`: a file or directory, in the project to open. */
+export const ProjectOpenInput = object({
+	path: DiskfilePath
 });
-export type WorkspaceOpenInput = Infer<typeof WorkspaceOpenInput>;
+export type ProjectOpenInput = Infer<typeof ProjectOpenInput>;
 
-/** Output for `workspace_open`. */
-export const WorkspaceOpenOutput = object({
-	workspace: WorkspaceInfoJson,
+/** Output for `project_open`. */
+export const ProjectOpenOutput = object({
+	project: ProjectInfoJson,
+	/** The directory the open focused, or `null` — a registry's root, or a directory in no entry. */
+	focus: nullable(DiskfileDirectoryPath),
+	/** The index of every filer of the project: the root's and each focused directory's. */
 	files: array(SerializableDisknode),
-	watch_status: WorkspaceWatchStatus
+	watch_status: ProjectWatchStatus
 });
-export type WorkspaceOpenOutput = Infer<typeof WorkspaceOpenOutput>;
+export type ProjectOpenOutput = Infer<typeof ProjectOpenOutput>;
 
-/** Input for `workspace_close`. */
-export const WorkspaceCloseInput = object({
-	path: DiskfileDirectoryPath
+/** Input for `project_close`. */
+export const ProjectCloseInput = object({
+	root: DiskfileDirectoryPath
 });
-export type WorkspaceCloseInput = Infer<typeof WorkspaceCloseInput>;
+export type ProjectCloseInput = Infer<typeof ProjectCloseInput>;
 
-/** Output for `workspace_list`. */
-export const WorkspaceListOutput = object({
-	workspaces: array(WorkspaceInfoJson)
+/** Output for `project_list`. */
+export const ProjectListOutput = object({
+	projects: array(ProjectInfoJson)
 });
-export type WorkspaceListOutput = Infer<typeof WorkspaceListOutput>;
+export type ProjectListOutput = Infer<typeof ProjectListOutput>;
 
-/** Input for `workspace_changed`. */
-export const WorkspaceChangedInput = object({
-	type: one_of(['open', 'close']),
-	workspace: WorkspaceInfoJson
+/**
+ * Input for `project_changed`: a project newly `open`, `close`d, or an
+ * `update` to an open one — a new focus, or its registry's entries resolved
+ * again.
+ */
+export const ProjectChangedInput = object({
+	type: one_of(['open', 'update', 'close']),
+	project: ProjectInfoJson
 });
-export type WorkspaceChangedInput = Infer<typeof WorkspaceChangedInput>;
+export type ProjectChangedInput = Infer<typeof ProjectChangedInput>;
 
 // -- Action specs -----------------------------------------------------------
 
@@ -458,7 +465,7 @@ export const session_load_action_spec = {
 	output: SessionLoadOutput,
 	async: true,
 	description:
-		'Load the session snapshot (files, workspaces, terminals, jobs, provider status) — at boot and after each reconnect, to resync.'
+		'Load the session snapshot (files, projects, terminals, jobs, provider status) — at boot and after each reconnect, to resync.'
 } satisfies RequestResponseActionSpec;
 
 export const filer_change_action_spec = {
@@ -741,53 +748,54 @@ export const terminal_exited_action_spec = {
 	description: 'Notify the frontend that a terminal process exited naturally.'
 } satisfies RemoteNotificationActionSpec;
 
-export const workspace_open_action_spec = {
-	method: 'workspace_open',
+export const project_open_action_spec = {
+	method: 'project_open',
 	kind: 'request_response',
 	initiator: 'frontend',
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
-	input: WorkspaceOpenInput,
-	output: WorkspaceOpenOutput,
+	input: ProjectOpenInput,
+	output: ProjectOpenOutput,
 	async: true,
 	description:
-		"Open a workspace directory — registers with ScopedFs and starts file watching. The directory must be strictly inside the daemon's home directory or named by `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, the home directory or an ancestor of it, a pseudo-filesystem, or a protected directory (`forbidden` / `root_not_allowed`, `root_outside_home`, `protected_dir_not_allowed`)."
+		"Open the project holding a file or directory — a trusted `repos.toml`'s root found above it, else its git checkout, else the directory — adding the root to ScopedFs and focusing the repo holding the path, whose files are then indexed and watched (a registry's root alone is indexed at its top level). The root must be strictly inside the daemon's home directory or named by `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, the home directory or an ancestor of it, a pseudo-filesystem, or a protected directory (`forbidden` / `root_not_allowed`, `root_outside_home`, `protected_dir_not_allowed`); an untrusted or unconfined registry refuses the open (`forbidden` / `registry_untrusted`, `registry_not_confined`), as does one that can't be read or doesn't parse (`invalid_params` / `registry_unreadable`, `registry_invalid`) or was replaced while it was checked (`conflict` / `registry_changed`, opening again reads the new one), or a walk that can't be bounded (`internal_error` / `bound_unusable`); a registry entry that escapes the root is refused alone, its reason on the entry."
 } satisfies RequestResponseActionSpec;
 
-export const workspace_close_action_spec = {
-	method: 'workspace_close',
+export const project_close_action_spec = {
+	method: 'project_close',
 	kind: 'request_response',
 	initiator: 'frontend',
 	auth: { account: 'required', actor: 'none' },
 	side_effects: true,
-	input: WorkspaceCloseInput,
+	input: ProjectCloseInput,
 	output: literal(null),
 	async: true,
-	description: 'Close a workspace directory — stops file watching and removes from ScopedFs.'
+	description:
+		'Close a project — stops the file watching no other open project keeps and removes its root from ScopedFs.'
 } satisfies RequestResponseActionSpec;
 
-export const workspace_list_action_spec = {
-	method: 'workspace_list',
+export const project_list_action_spec = {
+	method: 'project_list',
 	kind: 'request_response',
 	initiator: 'frontend',
 	auth: { account: 'required', actor: 'none' },
 	side_effects: false,
 	input: fuz_void,
-	output: WorkspaceListOutput,
+	output: ProjectListOutput,
 	async: true,
-	description: 'List all open workspaces.'
+	description: 'List all open projects.'
 } satisfies RequestResponseActionSpec;
 
-export const workspace_changed_action_spec = {
-	method: 'workspace_changed',
+export const project_changed_action_spec = {
+	method: 'project_changed',
 	kind: 'remote_notification',
 	initiator: 'backend',
 	auth: null,
 	side_effects: true,
-	input: WorkspaceChangedInput,
+	input: ProjectChangedInput,
 	output: fuz_void,
 	async: true,
-	description: 'Notifies frontends when a workspace is opened or closed.'
+	description: 'Notifies frontends when a project is opened, changed (a new focus), or closed.'
 } satisfies RemoteNotificationActionSpec;
 
 /**
@@ -829,8 +837,8 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	terminal_resize_action_spec,
 	terminal_close_action_spec,
 	terminal_exited_action_spec,
-	workspace_open_action_spec,
-	workspace_close_action_spec,
-	workspace_list_action_spec,
-	workspace_changed_action_spec
+	project_open_action_spec,
+	project_close_action_spec,
+	project_list_action_spec,
+	project_changed_action_spec
 ];

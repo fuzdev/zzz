@@ -1,38 +1,39 @@
 import { parse } from '@fuzdev/fuz_schema/schema.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 
-import { DiskfileDirectoryPath } from './diskfile_types.ts';
+import { DiskfilePath } from './diskfile_types.ts';
 
 /**
- * `data.reason` of the `invalid_params` error `workspace_close` returns for a
- * path that isn't an open workspace — e.g. one a daemon restart forgot.
+ * `data.reason` of the `invalid_params` error `project_close` returns for a
+ * root that isn't an open project — e.g. one a daemon restart forgot.
  */
-export const ERROR_WORKSPACE_NOT_OPEN = 'workspace_not_open';
+export const ERROR_PROJECT_NOT_OPEN = 'project_not_open';
 
 /**
- * What to tell the user about a workspace whose `watch_status` is
+ * What to tell the user about a project whose `watch_status` is
  * `degraded`: some of its directories have no file watch, so the daemon
  * rescans them every few seconds instead.
  */
-export const WORKSPACE_DEGRADED_NOTICE =
+export const PROJECT_DEGRADED_NOTICE =
 	"Not every directory has a file watch (likely the system's watch limit) — changes in some show up after a few seconds.";
 
 /**
- * Parse user input (the open-workspace form or the `?workspace=` URL param)
- * into a workspace directory path, without throwing.
+ * Parse user input (the open-project form or the `?project=` URL param) into
+ * a path to open, without throwing — a directory or a file, which opens the
+ * project holding it.
  *
  * The input is trimmed and must be absolute. A leading `~` is rejected rather
  * than expanded — the frontend can't know the daemon's home directory. The
  * result is not canonical (`/a/./b/` and symlinked paths pass through as
- * given); the daemon canonicalizes on `workspace_open`, so callers should
- * activate by the path in its output, not by this one.
+ * given); the daemon resolves it on `project_open`, so callers should use the
+ * root in its output, not this path.
  *
  * @param raw - the path as typed or passed in the URL
- * @returns the path with a trailing slash, or a user-facing error message
+ * @returns the path, or a user-facing error message
  */
-export const parse_workspace_path = (
+export const parse_project_path = (
 	raw: string
-): Result<{ path: DiskfileDirectoryPath }, { message: string }> => {
+): Result<{ path: DiskfilePath }, { message: string }> => {
 	const trimmed = raw.trim();
 	if (!trimmed) return { ok: false, message: 'path is required' };
 	if (trimmed.startsWith('~')) {
@@ -41,7 +42,7 @@ export const parse_workspace_path = (
 			message: `path must be absolute — "~" is not expanded, use the full path: ${trimmed}`
 		};
 	}
-	const parsed = parse(DiskfileDirectoryPath, trimmed);
+	const parsed = parse(DiskfilePath, trimmed);
 	if (!parsed.ok) {
 		return {
 			ok: false,

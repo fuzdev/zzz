@@ -28,13 +28,13 @@ boot-compiled `ActionRegistry` dispatch path. A single canonical
 `/api/rpc` + `/api/ws` (mounted via `fuz_actions::create_rpc_router` /
 `register_action_ws`) serves all dispatch; admin + account specs come
 from fuz_actions' `auth_adapter::build_auth_spec_set`, the zzz-specific
-workspace / filesystem / media / job / terminal / provider specs from
+project / filesystem / media / job / terminal / provider specs from
 `zzz_action_specs/` (handlers in `handlers/`), the admin audit-log
 SSE stream from `fuz_realtime::audit_stream_router`, and zzz's own
 hand-written file byte routes (`file_bytes.rs`, outside the registry). Besides the handlers,
 `handlers/` holds `App` state and a `broadcast` shim over `App.realtime` (connection revocation
 lives on the spine's `ConnectionRegistry` — see Auth below). RPC methods:
-`ping`, `session_load`, `workspace_*`, `diskfile_*`, `directory_create`,
+`ping`, `session_load`, `project_*`, `diskfile_*`, `directory_create`,
 `media_finalize`, `transcription_create`, `job_cancel`, `terminal_*`,
 `provider_load_status`, `completion_create`,
 `account_verify`, `account_session_list`,
@@ -56,7 +56,7 @@ leaves it unset, dispatch returns `method_not_found`). Full auth stack (cookie
 sessions, bearer tokens, daemon
 tokens), account management routes, filesystem actions with `ScopedFs`,
 terminal actions via `fuz_pty`, `session_load` returns real provider status
-from all registered providers, `workspace_changed`/`filer_change`/
+from all registered providers, `project_changed`/`filer_change`/
 `terminal_data`/`terminal_exited`/`job_changed`/`transcription_progress`
 notifications, local tools (`ffmpeg`, whisper.cpp) run as subprocesses with an
 in-memory job queue, file watching via `notify`
@@ -83,7 +83,8 @@ If a path dep is missing, `cargo build` will fail with
 `failed to read .../crates/{crate}/Cargo.toml`.
 
 **PostgreSQL** is required. Create the development and manual-test databases
-(the cross-backend projects' `zzz_test_rust` / `zzz_test_rust_proxy` are
+(the cross-backend projects' `zzz_test_rust` / `zzz_test_rust_proxy` /
+`zzz_test_rust_projects` are
 created by their global setup when missing):
 
 ```bash
@@ -287,7 +288,7 @@ crates (`fuz_auth`, `fuz_http`).
   the prerendered page (`{path}.html`, or `{path}index.html` for a trailing
   `/`), then the `200.html` SPA shell (`static_files::SPA_FALLBACK_FILE`,
   matching the adapter's `fallback` in `vite.config.ts`) — so
-  `/workspaces?workspace=…`, reloads, deep links, and dynamic routes
+  `/workspaces?project=…`, reloads, deep links, and dynamic routes
   (`/chats/<id>`) all load. `/api`, `/health`, and paths below them never get
   the shell (an unknown `/api/foo` is an empty 404), nor does a missing asset
   under `/_app/` or `/fuz_terminal/` (404 — a stale tab's chunk load fails
@@ -338,9 +339,10 @@ creates each project's database when missing), `zzz_backend_config.ts`
 fuz_app's `raw_http_send_head`, so the cap must refuse on the declared length.
 
 ```bash
-npm run test:cross                                                        # Both rust projects (rust + rust_proxy) — flag baked in
+npm run test:cross                                                        # Every rust project (rust, rust_proxy, rust_projects) — flag baked in
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; postgres://localhost/zzz_test_rust)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Single project (proxy variant; ZZZ_TRUSTED_PROXIES=127.0.0.1, proxy.cross.test.ts only)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_projects # Single project (a fixture HOME for registries; project_registry.cross.test.ts only)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run -t ping                            # Substring match on test name (vitest -t flag)
 ```
 
@@ -356,7 +358,7 @@ bootstraps an admin account via `POST /api/account/bootstrap`, then
 provides the bootstrapped handle to test files, which read it with
 `inject_backend_handle`. SIGTERM on globalSetup teardown leaves no
 stranded ports. Each project targets its own real PostgreSQL DB
-(`zzz_test_rust` / `zzz_test_rust_proxy`), with its auth-namespace schema
+(`zzz_test_rust` / `zzz_test_rust_proxy` / `zzz_test_rust_projects`), with its auth-namespace schema
 wiped on backend startup (`FUZ_TESTING_RESET_DB_ON_STARTUP`) and
 `_testing_reset` clearing it between tests (preserving the keeper row).
 
@@ -370,24 +372,24 @@ into zzz's cross-backend projects.
 crates/zzz_server/src/
 ├── lib.rs            # `run_app(RunAppOptions)` — full lifecycle over `fuz_actions::server`: config (command line + env), the spine core (`create_app_backend`: keyring, READ COMMITTED guard, migrations, audit emitter, connection + SSE registries, rate limiters), `ActionRegistry` compile, file watchers, route composition, `serve_until_shutdown` (the auth cleanup beside the server, the 1001 close of every live WebSocket and the end of every audit stream before the drain), then jobs and PTYs torn down
 ├── main.rs           # Thin production entry — parses the command line, constructs `Argon2idHasher`, calls `run_app`
-├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `workspace_open`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
-│   ├── mod.rs        # `App` long-lived state (workspaces, `workspace_lifecycle`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
+├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `project_open`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
+│   ├── mod.rs        # `App` long-lived state (projects, `project_lifecycle`, `trusted_owner`, `git`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
 │   ├── core.rs       # ping, session_load, _testing_emit_notifications
 │   ├── filesystem.rs # diskfile_read (+ its bounded text read, `read_text_contents`, and the bytes' `hash`), diskfile_update (+ its `expected_hash` compare-and-swap), diskfile_create, diskfile_delete, directory_create
 │   ├── job.rs        # job_cancel
 │   ├── media.rs      # media_finalize, transcription_create (+ `tool_error`, the `ToolError` → JSON-RPC mapping)
+│   ├── project.rs    # project_list, project_open, project_close (+ project_changed broadcast): the resolve, focus, the filers a project keeps (`filers_of`), and their release
 │   ├── provider.rs   # provider_load_status, completion_create
-│   ├── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_ack, terminal_close
-│   └── workspace.rs  # workspace_list, workspace_open, workspace_close (+ workspace_changed broadcast)
+│   └── terminal.rs   # terminal_create, terminal_data_send, terminal_resize, terminal_ack, terminal_close
 ├── zzz_action_specs/ # Per-domain `ActionSpec` builders consumed by `run_app`'s `ActionRegistry::compile`; each captures `Arc<App>` and calls the matching `handlers::*` fn
 │   ├── mod.rs
 │   ├── core.rs
 │   ├── filesystem.rs
 │   ├── job.rs
 │   ├── media.rs
+│   ├── project.rs
 │   ├── provider.rs
-│   ├── terminal.rs
-│   └── workspace.rs
+│   └── terminal.rs
 ├── job_manager.rs    # Jobs: long-running tool work that outlives its request — in memory, one at a time with a queue, owned by an account, cancellable (dropping the work kills its tool), bounded history; `job_changed` notifications
 ├── origin_allowlist.rs # `FUZ_ALLOWED_ORIGINS` at boot: parsed by `fuz_http` (a malformed entry refuses the boot), the warning for each wildcard entry
 ├── media.rs          # Media containers (by extension) and the `ffmpeg` runs over them — confined to file handles zzz opened (`fd:` protocol only, named input format); `remux`, `decode_speech` (16 kHz mono PCM), unnamed scratch files
@@ -400,11 +402,11 @@ crates/zzz_server/src/
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
 ├── file_bytes.rs     # Byte routes for files (`/api/files/bytes`): ranged read with a response-header lockdown, exclusive create, offset-checked append — hand-written axum handlers with their own auth + scope gates
 ├── file_trust.rs     # Whether discovered config is the daemon user's alone to write — Debian sshd's rule: owned by the user or root, never `o+w`, `g+w` only by the user's private group (`TrustedOwner`, NSS read once by `current`)
-├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered, stat-only file index (events are hints, `lstat` decides; no file is read), change by `lstat` stamp with git's racily-clean rule, per-directory watches from the filer's own walk (degraded polling past the watch limit), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped
+├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered, stat-only file index (events are hints, `lstat` decides; no file is read), change by `lstat` stamp with git's racily-clean rule, per-directory watches from the filer's own walk (degraded polling past the watch limit), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped; a whole tree, or a registry root's top level alone (`FilerDepth`)
 ├── project.rs        # Resolving an opened path to its project: a registry (`repos.toml`, found by `fuz_repos`'s bounded discovery — strictly below `$HOME` or within an allowlisted root — each candidate trusted, confined, and outside protected directories, or the open is refused), else the nearest `.git`, else the directory; entries canonicalized and confined to the root, refused one by one (`resolve_project`, `ProjectError` / `EntryRefusal` reasons)
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── root_policy.rs    # Which directories can be roots: strictly inside `$HOME` or in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor, or under `/proc` / `/sys` / `/dev` (`RootPolicy`, held by `App` and the boot checks)
-├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-workspace roots, path validation, protected directories (credential directories, `.zzz` directories other than the app dir) refused under every root (`protected_dir`), symlink rejection, atomic writes (temp file + fsync + rename) with an optional compare-and-swap on the file's BLAKE3 (`ExpectedContent`, `disk_changed`), exclusive create, offset-checked append, open-for-read
+├── scoped_fs.rs      # Scoped filesystem — permanent (`zzz_dir` + `scoped_dirs`) + per-project roots, path validation, protected directories (credential directories, `.zzz` directories other than the app dir) refused under every root (`protected_dir`), symlink rejection, atomic writes (temp file + fsync + rename) with an optional compare-and-swap on the file's BLAKE3 (`ExpectedContent`, `disk_changed`), exclusive create, offset-checked append, open-for-read
 ├── router.rs         # The served router: the surface routers composed by `fuz_http::compose_stack` into capped route groups (rpc, file_bytes, account, health_and_audit, the static fallback), every group behind the host, origin, and simple-request gates; its tests pin each gate on every group
 ├── static_files.rs   # Built-frontend fallback router: exact file → prerendered `{path}.html` → `200.html` SPA shell; backend paths + missing `_app/` assets 404; cache headers
 ├── tool.rs           # Local tools run as subprocesses: `resolve_tool` (override env var, else absolute `$PATH` entries — never the working directory), `resolve_model_file`, `Tools` (found at boot), `run_tool` (argument array, handles for stdin/stdout, scrubbed env, cwd `/`, timeout, bounded stderr tail), `run_tool_lines` (the same, handing over output lines as they're written)
@@ -422,7 +424,7 @@ and `perform_action`), and DB pool / migrations all live in the spine crates
 revocation is the spine `RealtimeCloser` over the WS and SSE registries
 (../docs/backend.md § Auth, item 10).
 
-**Large responses**: `session_load` and `workspace_open` carry every
+**Large responses**: `session_load` and `project_open` carry every
 indexed file's metadata (never its contents — those come by `diskfile_read`),
 so a large tree is a large response, and they skip the `serde_json::Value`
 round trip: a snapshot clones the index's nodes (metadata only — the index
@@ -434,19 +436,24 @@ HTTP response costs about its own size in memory, and a WebSocket one about
 twice that (tungstenite copies each outgoing frame into its write buffer).
 Keys come out in struct declaration order rather than the sorted order of a
 `Value` rendering — the same JSON, which no client may depend on the key
-order of. Responses aren't capped: a workspace of many files is a large
+order of. Responses aren't capped: a project of many indexed files is a large
 response. `diskfile_read` returns its one file's contents (≤ 4 MiB) the same
 way, moved into its typed output rather than copied into a `Value`.
 
 **App + dispatch**: `App` (in `handlers/mod.rs`) holds zzz's long-lived,
 non-spine state — `instance_id` (a UUID minted at boot, returned by
 `session_load` as `server_instance_id` so clients can tell a restart),
-`workspaces` (`RwLock<HashMap>`), `workspace_lifecycle`
-(the `tokio::sync::Mutex` serializing `workspace_open` / `workspace_close`),
+`projects` (`RwLock<HashMap>`, keyed by root), `project_lifecycle`
+(the `tokio::sync::Mutex` serializing `project_open` / `project_close`),
+`trusted_owner` (whose registries are trusted — `TrustedOwner::current`,
+read once at boot), `git` (the resolver's git runner over the terminal
+environment, version-checked once at boot),
 `db_pool`, `ScopedFs`,
 `zzz_dir`, `scoped_dirs`, `FilerManager` (per-watcher ignore config, event
 debouncing, in-memory file index, lifetime tracking — permanent for
-`zzz_dir`/`scoped_dirs`, workspace-scoped for `workspace_open`),
+`zzz_dir`/`scoped_dirs`, project-scoped for `project_open`, stopped once no
+open project keeps them, and a depth — a whole tree, or a registry root's
+top level alone),
 `PtyManager`, `JobManager`, `ProviderManager`, `tools` (the local tools
 found at boot), `completion_options`, `enable_test_actions`,
 the spine `realtime: Arc<fuz_realtime::ConnectionRegistry>`, and the
@@ -519,7 +526,7 @@ joined after the drain, before PTY teardown.
 
 ## Known Limitations
 
-- RPC methods: `ping`, `session_load`, `workspace_*`, `diskfile_read`,
+- RPC methods: `ping`, `session_load`, `project_*`, `diskfile_read`,
   `diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`,
   `media_finalize`,
   `transcription_create`, `job_cancel`, `terminal_*`, `provider_load_status`,
@@ -532,7 +539,7 @@ joined after the drain, before PTY teardown.
 - zzz-domain `remote_notification` actions: `job_changed` (a job's full state
   on every change) and `transcription_progress` (segments a running
   transcription just decoded), both sent only to the owning account's sockets,
-  `workspace_changed` (broadcast on open/close), `filer_change`
+  `project_changed` (broadcast on open, update, and close), `filer_change`
   (`FilerManager` with `notify` crate — per-directory watches (see
   ../docs/backend.md § Known Issues → Filer watches), per-path debounced
   broadcasts (80ms quiet, capped at 500ms) with immediate index updates
@@ -547,15 +554,15 @@ joined after the drain, before PTY teardown.
   `touch` included), ignored paths filtered before the bounded
   event channel with a coalesced root rescan on overflow, per-watcher ignore
   config, in-memory file index returned (as metadata) by `session_load` and
-  `workspace_open`, symlinks skipped; ignores
+  `project_open`, symlinks skipped; ignores
   `.git`/`node_modules`/`.svelte-kit`/`target`/`dist`/`.zzz` and the
   credential directories (`.ssh`/`.gnupg`/`.aws`/`.kube`/`.docker`/
   `.password-store`) by name globally (`.zzz` keeps the CLI daemon home's
   `.env` / `bootstrap_token` out of a root that covers it), `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes
   orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files over an hour
   old), and every non-UTF-8 path, plus `zzz_dir` by its full path for a
-  workspace/scoped_dir watcher whose root contains it; startup filers on
-  `zzz_dir` and `scoped_dirs`, per-workspace filers with dedup and lifetime
+  project/scoped_dir watcher whose root contains it; startup filers on
+  `zzz_dir` and `scoped_dirs`, per-project filers with dedup and lifetime
   tracking), `terminal_data` (PTY output) and `terminal_exited` (process
   exit), both sent only to the owning account's sockets, `completion_progress`
   (streaming completion chunks to requesting WS connection); the spine's

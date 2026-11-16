@@ -108,12 +108,19 @@ describe('to_root_dir', () => {
 	});
 });
 
-const create_index = (files: Array<string>, roots: Array<string> = ['/w/']): MarkdownLinkIndex => {
+const create_index = (
+	files: Array<string>,
+	roots: Array<string> = ['/w/'],
+	top_level_roots: Array<string> = [],
+	unfocused_dirs: Array<string> = []
+): MarkdownLinkIndex => {
 	const file_set = new Set(files);
 	return {
 		has_file: (path) => file_set.has(path),
 		has_directory: (path) => files.some((f) => f.startsWith(path)),
-		roots
+		roots,
+		top_level_roots,
+		unfocused_dirs
 	};
 };
 
@@ -168,12 +175,69 @@ describe('to_markdown_link_status', () => {
 		assert.strictEqual(status('/nope.md'), 'root_relative');
 		assert.strictEqual(status('/docs/x.md'), 'file');
 	});
+
+	describe('under a registry root indexed at its top level', () => {
+		// `/dev/` is the registry root, `/dev/app/` its one focused repo
+		const registry = create_index(
+			['/dev/README.md', '/dev/app/a.md'],
+			['/dev/app/'],
+			['/dev/'],
+			['/dev/site/']
+		);
+		const status_from = (href: string, file_path: string): string => {
+			const target = resolve_markdown_link(href, { file_path });
+			assert.strictEqual(target.kind, 'path');
+			return to_markdown_link_status(
+				target as Extract<MarkdownLinkTarget, { kind: 'path' }>,
+				registry
+			);
+		};
+
+		test('an unfocused repo is out of sight, never broken', () => {
+			assert.strictEqual(status_from('../site/x.md', '/dev/app/a.md'), 'unfocused');
+			assert.strictEqual(status_from('../site/', '/dev/app/a.md'), 'unfocused');
+			assert.strictEqual(status_from('./site/x.md', '/dev/README.md'), 'unfocused');
+		});
+
+		test('a registry entry linked without a trailing slash is out of sight too', () => {
+			assert.strictEqual(status_from('./site', '/dev/README.md'), 'unfocused');
+			assert.strictEqual(status_from('../site', '/dev/app/README.md'), 'unfocused');
+			assert.strictEqual(status_from('../site/deep/x.md', '/dev/app/README.md'), 'unfocused');
+		});
+
+		test('an unregistered dir linked without a slash reads as a missing loose file', () => {
+			// the index can't tell `./scratch` from a file, and lists no unregistered dir
+			assert.strictEqual(status_from('./scratch', '/dev/README.md'), 'broken');
+		});
+
+		test('a loose file at the root is indexed, so a missing one is broken', () => {
+			assert.strictEqual(status_from('../README.md', '/dev/app/a.md'), 'file');
+			assert.strictEqual(status_from('../GONE.md', '/dev/app/a.md'), 'broken');
+		});
+
+		test('a focused repo is covered whole', () => {
+			assert.strictEqual(status_from('./gone.md', '/dev/app/a.md'), 'broken');
+		});
+
+		test('root-relative links resolve against the focused repo, or the root for its loose files', () => {
+			const links = to_markdown_links(mdz_parse('[a](/a.md)'), {
+				file_path: '/dev/app/docs/x.md',
+				index: registry
+			});
+			assert.strictEqual(links[0]!.status, 'file');
+			const loose = to_markdown_links(mdz_parse('[r](/README.md)'), {
+				file_path: '/dev/notes.md',
+				index: registry
+			});
+			assert.strictEqual(loose[0]!.status, 'file');
+		});
+	});
 });
 
 describe('to_markdown_link_mark', () => {
 	test('broken is marked broken, what the index can not see unknown, the rest unmarked', () => {
 		assert.strictEqual(to_markdown_link_mark('broken'), 'broken');
-		for (const status of ['outside', 'skipped', 'root_relative'] as const) {
+		for (const status of ['outside', 'unfocused', 'skipped', 'root_relative'] as const) {
 			assert.strictEqual(to_markdown_link_mark(status), 'unknown');
 		}
 		for (const status of ['file', 'directory', null] as const) {
@@ -274,13 +338,27 @@ describe('to_markdown_link_title', () => {
 			),
 			[
 				'not found: /w/docs/gone.md',
-				'outside the open workspaces: /far.md',
+				'outside the open projects: /far.md',
 				'in a folder the file index skips: /w/docs/node_modules/x',
-				'not found from the workspace root: /w/nope.md',
+				'not found from the project root: /w/nope.md',
 				"opens the folder's readme: /w/docs/sub/README.md",
 				'a folder, which zzz has no view for: /w/docs/empty/',
 				null
 			]
+		);
+	});
+});
+
+describe('to_markdown_link_title for an unfocused repo', () => {
+	test('says the index does not cover it', () => {
+		const index = create_index([], ['/dev/app/'], ['/dev/']);
+		const links = to_markdown_links(mdz_parse('[s](../site/x.md)'), {
+			file_path: '/dev/app/a.md',
+			index
+		});
+		assert.strictEqual(
+			to_markdown_link_title(links[0]!),
+			"in a repo that isn't focused, which the file index doesn't cover: /dev/site/x.md"
 		);
 	});
 });

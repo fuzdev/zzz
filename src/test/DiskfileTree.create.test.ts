@@ -258,8 +258,8 @@ describe('the inline create', () => {
 		assert.strictEqual(app.diskfiles.editor.tree.active_row?.path, '/w/a/p/q/');
 	});
 
-	test('in the tree, the header’s create buttons name the file inline in the workspace', async () => {
-		app.workspaces.add({ path: parse_or_throw(SerializableDisknode.def.source_dir, '/ws/') });
+	test('in the tree, the header’s create buttons name the file inline in the project', async () => {
+		app.projects.add({ root: parse_or_throw(SerializableDisknode.def.source_dir, '/ws/') });
 		write('/ws/a.md', '/ws/');
 		const create_file_at = spy_create_file();
 		const target = render_tree();
@@ -275,6 +275,29 @@ describe('the inline create', () => {
 		assert.deepEqual(
 			create_file_at.mock.calls.map((call) => call[0]),
 			['/ws/b.md']
+		);
+	});
+
+	test('in a registry project, the header’s create buttons name the file in the focused repo', async () => {
+		const dev = parse_or_throw(SerializableDisknode.def.source_dir, '/dev/');
+		const repo = parse_or_throw(SerializableDisknode.def.source_dir, '/dev/app/');
+		const project = app.projects.add({ root: dev, kind: 'registry', focused: [repo] });
+		project.last_focus = repo;
+		write('/dev/README.md', '/dev/');
+		write('/dev/app/a.md', '/dev/app/');
+		write('/dev/app/src/b.md', '/dev/app/');
+		const create_file_at = spy_create_file();
+		const target = render_tree();
+		target.querySelector<HTMLButtonElement>('button[title="create file in /dev/app/"]')!.click();
+		flushSync();
+		const input = create_input(target);
+		assert.strictEqual(input.getAttribute('aria-label'), 'new file name in /dev/app/');
+		type(input, 'c.md');
+		press(target, 'Enter', input);
+		await tick();
+		assert.deepEqual(
+			create_file_at.mock.calls.map((call) => call[0]),
+			['/dev/app/c.md']
 		);
 	});
 
@@ -433,7 +456,7 @@ describe('the inline create', () => {
 	});
 
 	test('a second create in the same folder gets a fresh, focused input', async () => {
-		app.workspaces.add({ path: parse_or_throw(SerializableDisknode.def.source_dir, '/ws/') });
+		app.projects.add({ root: parse_or_throw(SerializableDisknode.def.source_dir, '/ws/') });
 		write('/ws/a.md', '/ws/');
 		const target = render_tree();
 		target.querySelector<HTMLButtonElement>('button[title="create file in /ws/"]')!.click();

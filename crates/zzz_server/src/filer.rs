@@ -21,7 +21,7 @@
 //! - **Per-directory watches.** The filer adds one non-recursive watch per
 //!   directory from its own walk ([`DirWatches`]), so ignored directories
 //!   (`node_modules/`, `target/`, …), symlinks, non-UTF-8 directories, and the
-//!   app dir are never watched — a workspace needs a watch per directory it
+//!   app dir are never watched — a root needs a watch per directory it
 //!   indexes, not per directory on disk. Each directory is watched before it
 //!   is listed, so an entry created in between is either listed or reported.
 //!   A directory that appears gets watches for its subtree as part of its
@@ -39,7 +39,7 @@
 //!   and `lstat` stamp ([`FileStat`]) — never its contents. A scan or an
 //!   event costs an `lstat` per file and reads nothing; a client reads a
 //!   file's contents from the disk with `diskfile_read`, and `filer_change`,
-//!   `session_load`, and `workspace_open` send the metadata alone.
+//!   `session_load`, and `project_open` send the metadata alone.
 //! - **Change by stamp.** A file whose fresh stamp matches its indexed one is
 //!   unchanged, and nothing is broadcast; any other is a `change` with the
 //!   new metadata — a `touch` and a rewrite of the same bytes included — and
@@ -180,7 +180,7 @@ pub struct SerializableDisknode {
 /// An estimate of the serialized size in bytes of `nodes` as a JSON array.
 ///
 /// Counts every node's paths plus its keys, for sizing a response buffer up
-/// front (`session_load`, `workspace_open`). A path JSON escapes (quotes,
+/// front (`session_load`, `project_open`). A path JSON escapes (quotes,
 /// backslashes, control characters) renders longer, and the buffer grows past
 /// the estimate as needed.
 pub fn disknodes_json_size_hint(nodes: &[SerializableDisknode]) -> usize {
@@ -205,7 +205,7 @@ impl SerializableDisknode {
 type FileIndex = BTreeMap<String, SerializableDisknode>;
 
 /// Whether every directory a filer indexes has a watch — returned by
-/// `workspace_open` as `watch_status`.
+/// `project_open` as `watch_status`.
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WatchStatus {
@@ -535,7 +535,7 @@ fn debounce_deadline(now: Instant, first_queued: Instant) -> Instant {
 ///
 /// `add`+`change` → `add`; `delete`+`add` → `change` (replaced in place, e.g.
 /// an atomic save — clients still hold the path). `add`+`delete` → `delete`,
-/// not nothing: `session_load` / `workspace_open` read the index directly, so
+/// not nothing: `session_load` / `project_open` read the index directly, so
 /// a client may already hold a path whose `add` broadcast is still pending,
 /// and a `delete` for a path a client never saw is a no-op for it. A file
 /// changed and changed back inside one window still broadcasts its `change`
@@ -609,7 +609,7 @@ fn apply_subtree(
 #[derive(Debug)]
 pub struct FilerConfig {
     /// Absolute directories to ignore beyond the default names. For a
-    /// workspace watcher whose root contains `zzz_dir`, this is `zzz_dir`
+    /// tree watcher whose root contains `zzz_dir`, this is `zzz_dir`
     /// (which has its own watcher); otherwise empty.
     pub ignored_dirs: Vec<PathBuf>,
     /// Most directory watches this filer adds. `None` leaves only the OS
@@ -624,6 +624,8 @@ pub struct FilerConfig {
     /// — [`start_filer`] refuses it rather than index credentials or the
     /// daemon home's secrets.
     pub root_protected: Option<ProtectedDir>,
+    /// How much of the root the filer indexes.
+    pub depth: FilerDepth,
     /// Test seam: run as if no watcher could be created.
     #[cfg(test)]
     pub no_watcher: bool,
@@ -639,24 +641,26 @@ impl FilerConfig {
             watch_limit: None,
             degraded_rescan_interval: DEGRADED_RESCAN_INTERVAL,
             root_protected: None,
+            depth: FilerDepth::Tree,
             #[cfg(test)]
             no_watcher: false,
         }
     }
 
-    /// Config for a workspace or `scoped_dir` watcher on `root` — ignores
+    /// Config for a watcher on the whole tree of `root` — a project's focused
+    /// directory, or a `scoped_dir` — that ignores
     /// `zzz_dir` by its full path when it sits strictly inside `root`, so its
     /// files aren't indexed and broadcast twice. A custom-named app dir is
     /// matched by path, not name, so same-named directories elsewhere (an app
-    /// dir named `data` vs a workspace's own `data/`) stay visible; `.zzz`
+    /// dir named `data` vs a project's own `data/`) stay visible; `.zzz`
     /// directories are ignored everywhere by `DEFAULT_IGNORED_DIRS`.
     ///
     /// A root in a protected directory is marked [`Self::root_protected`], so
     /// the filer refuses to start on it.
     ///
     /// Both paths are expected in their canonical form (as `resolve_dir` and
-    /// `workspace_open` produce); a trailing `/` is ignored.
-    pub fn workspace(root: &str, zzz_dir: &str) -> Self {
+    /// `project_open` produce); a trailing `/` is ignored.
+    pub fn tree(root: &str, zzz_dir: &str) -> Self {
         let root = Path::new(root);
         let zzz_dir = Path::new(zzz_dir);
         let nested = zzz_dir.starts_with(root) && zzz_dir != root;
@@ -670,6 +674,27 @@ impl FilerConfig {
             ..Self::zzz_dir()
         }
     }
+
+    /// Config for a watcher on the files directly in `root` alone
+    /// ([`FilerDepth::TopLevel`]) — a registry root's loose files, whose
+    /// subdirectories are its repos, indexed by filers of their own when
+    /// focused. Otherwise as [`Self::tree`].
+    pub fn top_level(root: &str, zzz_dir: &str) -> Self {
+        Self {
+            depth: FilerDepth::TopLevel,
+            ..Self::tree(root, zzz_dir)
+        }
+    }
+}
+
+/// How much of its root a filer indexes ([`FilerConfig::depth`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilerDepth {
+    /// Every file under the root, at any depth — ignored directories aside.
+    Tree,
+    /// Only the files directly in the root: its subdirectories are never
+    /// listed or watched, and one appearing is not indexed.
+    TopLevel,
 }
 
 // -- Directory watches --------------------------------------------------------
@@ -1032,6 +1057,7 @@ impl DirWatches {
 fn walk_blocking(
     prefix: &str,
     ignored_dirs: &[PathBuf],
+    depth: FilerDepth,
     watches: &mut DirWatches,
     reset_watches: bool,
     clock: Clock,
@@ -1098,7 +1124,9 @@ fn walk_blocking(
                 continue;
             };
             if file_type.is_dir() {
-                stack.push(dir_prefix(&path_str));
+                if depth == FilerDepth::Tree {
+                    stack.push(dir_prefix(&path_str));
+                }
                 continue;
             }
             if !file_type.is_file() {
@@ -1199,7 +1227,7 @@ pub struct Filer {
     /// Background task processing watcher events.
     task: tokio::task::JoinHandle<()>,
     /// In-memory file index. Written only by the event-loop task (initial
-    /// scan aside); read by `session_load` / `workspace_open`.
+    /// scan aside); read by `session_load` / `project_open`.
     files: Arc<RwLock<FileIndex>>,
     /// Requests a full rescan on the event loop; the reply fires once the
     /// index matches the disk.
@@ -1351,6 +1379,7 @@ pub async fn start_filer(
         &source_dir,
         &source_dir,
         &config.ignored_dirs,
+        config.depth,
         &watches,
         false,
         SystemTime::now,
@@ -1366,6 +1395,7 @@ pub async fn start_filer(
     let state = FilerState {
         source_dir,
         ignored_dirs: config.ignored_dirs,
+        depth: config.depth,
         files: Arc::clone(&files),
         pending: HashMap::new(),
         watches: Arc::clone(&watches),
@@ -1433,10 +1463,15 @@ fn file_job(
 /// # Errors
 ///
 /// The error of listing `prefix` itself (see [`walk_blocking`]).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk's inputs, each from the filer's state or its caller"
+)]
 async fn scan_directory(
     prefix: &str,
     source_dir: &str,
     ignored_dirs: &[PathBuf],
+    depth: FilerDepth,
     watches: &Arc<Mutex<DirWatches>>,
     reset_watches: bool,
     clock: Clock,
@@ -1451,6 +1486,7 @@ async fn scan_directory(
             walk_blocking(
                 &prefix,
                 &ignored_dirs,
+                depth,
                 &mut watches.lock(),
                 reset_watches,
                 clock,
@@ -1501,6 +1537,7 @@ fn scan_file(job: FileJob, source_dir: &str, known: Option<&FileIndex>) -> (Stri
 struct FilerState {
     source_dir: String,
     ignored_dirs: Vec<PathBuf>,
+    depth: FilerDepth,
     files: Arc<RwLock<FileIndex>>,
     /// Keyed by index path.
     pending: HashMap<String, PendingNotification>,
@@ -1546,6 +1583,14 @@ impl FilerState {
             Ok(meta) if meta.is_file() => {
                 self.remove_children(&path_str).await;
                 self.upsert(path_str, &meta, observed_at).await;
+            }
+            // a top-level filer indexes nothing below its root
+            Ok(meta)
+                if meta.is_dir()
+                    && self.depth == FilerDepth::TopLevel
+                    && dir_prefix(&path_str) != self.source_dir =>
+            {
+                self.remove_tree(&path_str).await;
             }
             Ok(meta) if meta.is_dir() => {
                 self.remove_entry(&path_str).await;
@@ -1636,6 +1681,7 @@ impl FilerState {
             &prefix,
             &self.source_dir,
             &self.ignored_dirs,
+            self.depth,
             &self.watches,
             reset_watches,
             self.clock,
@@ -1833,13 +1879,13 @@ fn filer_change_notification(pending: &PendingNotification) -> String {
 // -- FilerManager -------------------------------------------------------------
 
 /// Whether a filer was started at server startup (permanent) or via
-/// `workspace_open` (can be stopped on `workspace_close`).
+/// `project_open` (can be stopped on `project_close`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilerLifetime {
     /// Started at server startup for `zzz_dir` or `scoped_dirs` — never stopped.
     Permanent,
-    /// Started via `workspace_open` — stopped on `workspace_close`.
-    Workspace,
+    /// Started via `project_open` — stopped when no open project uses it.
+    Project,
 }
 
 /// Entry in the filer manager.
@@ -1847,12 +1893,14 @@ pub enum FilerLifetime {
 pub struct FilerEntry {
     pub filer: Filer,
     pub lifetime: FilerLifetime,
+    /// What the filer indexes of its root ([`FilerConfig::depth`]).
+    pub depth: FilerDepth,
 }
 
 /// Manages all active filers with deduplication and lifetime tracking.
 ///
 /// One filer per unique directory path. Permanent filers (`zzz_dir`, `scoped_dirs`)
-/// survive `workspace_close`. Workspace filers are stopped on close.
+/// survive `project_close`. Project filers are stopped on close.
 pub struct FilerManager {
     filers: RwLock<HashMap<String, FilerEntry>>,
     /// A gate per path whose filer is being started, so concurrent starts
@@ -1903,7 +1951,10 @@ impl FilerManager {
     /// initial scan).
     ///
     /// If a filer already exists, its lifetime is upgraded to `Permanent` if
-    /// the new request is `Permanent` (but never downgraded).
+    /// the new request is `Permanent` (but never downgraded). One that
+    /// indexes only its root's top level is replaced by a new one when the
+    /// request is for the whole tree; a whole-tree filer serves a top-level
+    /// request as it is.
     ///
     /// # Errors
     ///
@@ -1931,7 +1982,8 @@ impl FilerManager {
             path.ends_with('/'),
             "FilerManager paths must have trailing slash: {path}"
         );
-        if self.adopt(path, lifetime).await {
+        let depth = config.depth;
+        if self.adopt(path, lifetime, depth).await {
             return Ok(false);
         }
 
@@ -1939,17 +1991,32 @@ impl FilerManager {
         let started = async {
             let _gate = gate.lock().await;
             // another start of this path finished while this one waited
-            if self.adopt(path, lifetime).await {
+            if self.adopt(path, lifetime, depth).await {
                 return Ok(false);
             }
             #[cfg(test)]
             self.scans.fetch_add(1, Ordering::Relaxed);
             let filer = start_filer(path, broadcast, config).await?;
             let mut filers = self.filers.write().await;
-            if filers.contains_key(path) {
-                return Ok(false);
-            }
-            filers.insert(path.to_owned(), FilerEntry { filer, lifetime });
+            let lifetime = match filers.get(path) {
+                Some(existing) if !serves(existing.depth, depth) => {
+                    max_lifetime(existing.lifetime, lifetime)
+                }
+                Some(_) => return Ok(false),
+                None => lifetime,
+            };
+            // replacing a top-level filer drops it, which stops it. Depth
+            // only ever grows here: a tree filer serves a later top-level
+            // request as it is, so a caller that wants it narrowed replaces
+            // it (`Self::replace_filer`)
+            filers.insert(
+                path.to_owned(),
+                FilerEntry {
+                    filer,
+                    lifetime,
+                    depth,
+                },
+            );
             Ok(true)
         }
         .await;
@@ -1963,14 +2030,18 @@ impl FilerManager {
         started
     }
 
-    /// Whether a filer already watches `path` — upgrading its lifetime to
-    /// `Permanent` if `lifetime` is (never downgrading it).
-    async fn adopt(&self, path: &str, lifetime: FilerLifetime) -> bool {
+    /// Whether a filer already watches `path` and indexes what `depth` asks
+    /// for — upgrading its lifetime to `Permanent` if `lifetime` is (never
+    /// downgrading it).
+    async fn adopt(&self, path: &str, lifetime: FilerLifetime, depth: FilerDepth) -> bool {
         let filers = self.filers.read().await;
         let Some(entry) = filers.get(path) else {
             return false;
         };
-        if lifetime == FilerLifetime::Permanent && entry.lifetime == FilerLifetime::Workspace {
+        if !serves(entry.depth, depth) {
+            return false;
+        }
+        if lifetime == FilerLifetime::Permanent && entry.lifetime == FilerLifetime::Project {
             drop(filers);
             if let Some(entry) = self.filers.write().await.get_mut(path) {
                 entry.lifetime = FilerLifetime::Permanent;
@@ -1979,7 +2050,61 @@ impl FilerManager {
         true
     }
 
-    /// Stop and remove a filer for the given path. Only stops workspace-scoped
+    /// Start a new filer for `path` with `config` and swap it in for the one
+    /// running there, if that one is project-scoped — for narrowing a filer,
+    /// which [`Self::start_filer`] never does. A permanent filer is kept as
+    /// it is (the new one is dropped); with none running, the new one is
+    /// added, project-scoped. The old filer runs until the new one has
+    /// finished its scan, so the path is never unwatched.
+    ///
+    /// # Errors
+    ///
+    /// The root can't be listed (see [`start_filer`]); the old filer stays.
+    pub async fn replace_filer(
+        &self,
+        path: &str,
+        app: Arc<App>,
+        config: FilerConfig,
+    ) -> io::Result<()> {
+        self.replace_with(path, app_broadcast(&app), config).await
+    }
+
+    /// [`Self::replace_filer`] with an explicit broadcast sink.
+    async fn replace_with(
+        &self,
+        path: &str,
+        broadcast: FilerBroadcast,
+        config: FilerConfig,
+    ) -> io::Result<()> {
+        debug_assert!(
+            path.ends_with('/'),
+            "FilerManager paths must have trailing slash: {path}"
+        );
+        let depth = config.depth;
+        let filer = start_filer(path, broadcast, config).await?;
+        let mut filers = self.filers.write().await;
+        match filers.get_mut(path) {
+            Some(entry) if entry.lifetime == FilerLifetime::Permanent => {}
+            // dropping the old filer stops it
+            Some(entry) => {
+                entry.filer = filer;
+                entry.depth = depth;
+            }
+            None => {
+                filers.insert(
+                    path.to_owned(),
+                    FilerEntry {
+                        filer,
+                        lifetime: FilerLifetime::Project,
+                        depth,
+                    },
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Stop and remove a filer for the given path. Only stops project-scoped
     /// filers — permanent filers are preserved.
     ///
     /// Returns `true` if the filer was actually stopped.
@@ -2074,6 +2199,21 @@ impl FilerManager {
             files.extend(index.read().await.values().cloned());
         }
         FilerSnapshot { roots, files }
+    }
+}
+
+/// Whether a filer indexing `existing` of its root serves a request for
+/// `wanted`: anything does for a top-level request, only a tree for a tree.
+fn serves(existing: FilerDepth, wanted: FilerDepth) -> bool {
+    existing == FilerDepth::Tree || wanted == FilerDepth::TopLevel
+}
+
+/// The longer of two lifetimes — `Permanent` wins.
+fn max_lifetime(a: FilerLifetime, b: FilerLifetime) -> FilerLifetime {
+    if a == FilerLifetime::Permanent || b == FilerLifetime::Permanent {
+        FilerLifetime::Permanent
+    } else {
+        FilerLifetime::Project
     }
 }
 
@@ -2381,7 +2521,16 @@ mod tests {
     ) -> FileIndex {
         let fresh = tokio::time::timeout(
             Duration::from_secs(10),
-            scan_directory(root, root, ignored_dirs, watches, false, clock, None),
+            scan_directory(
+                root,
+                root,
+                ignored_dirs,
+                FilerDepth::Tree,
+                watches,
+                false,
+                clock,
+                None,
+            ),
         )
         .await
         .expect("scan must terminate")
@@ -2415,6 +2564,7 @@ mod tests {
         FilerState {
             source_dir: root,
             ignored_dirs,
+            depth: FilerDepth::Tree,
             files: Arc::new(RwLock::new(files)),
             pending: HashMap::new(),
             watches,
@@ -2636,7 +2786,7 @@ mod tests {
         std::fs::write(tmp.path("bytes.bin"), [0xff, 0xfe, 0x00]).unwrap();
         let mut state = state_for(&tmp).await;
 
-        // the walk's nodes, as `session_load` and `workspace_open` send them:
+        // the walk's nodes, as `session_load` and `project_open` send them:
         // the size, and no contents
         {
             let index = state.files.read().await;
@@ -3016,8 +3166,8 @@ mod tests {
     }
 
     #[test]
-    fn workspace_config_ignores_zzz_dir_only_when_nested() {
-        let nested = FilerConfig::workspace("/w/", "/w/sub/data/");
+    fn tree_config_ignores_zzz_dir_only_when_nested() {
+        let nested = FilerConfig::tree("/w/", "/w/sub/data/");
         assert_eq!(nested.ignored_dirs, vec![PathBuf::from("/w/sub/data")]);
         // the root itself, a sibling, an ancestor, and a name-prefix sibling
         for (root, zzz_dir) in [
@@ -3027,9 +3177,7 @@ mod tests {
             ("/w/data2/", "/w/data/"),
         ] {
             assert!(
-                FilerConfig::workspace(root, zzz_dir)
-                    .ignored_dirs
-                    .is_empty(),
+                FilerConfig::tree(root, zzz_dir).ignored_dirs.is_empty(),
                 "{root} {zzz_dir}"
             );
         }
@@ -3048,9 +3196,9 @@ mod tests {
     }
 
     #[test]
-    fn the_cli_daemon_home_is_ignored_in_a_home_workspace() {
+    fn the_cli_daemon_home_is_ignored_in_a_home_root() {
         let home = Path::new("/home/u");
-        let config = FilerConfig::workspace("/home/u/", "/home/u/.zzz/.zzz/");
+        let config = FilerConfig::tree("/home/u/", "/home/u/.zzz/.zzz/");
         assert_eq!(
             config.ignored_dirs,
             vec![PathBuf::from("/home/u/.zzz/.zzz")]
@@ -3088,14 +3236,14 @@ mod tests {
             std::fs::write(tmp.path(rel), "x").unwrap();
         }
         let root = tmp.root();
-        let config = FilerConfig::workspace(&root, &dir_prefix(&tmp.key(".zzz/.zzz")));
+        let config = FilerConfig::tree(&root, &dir_prefix(&tmp.key(".zzz/.zzz")));
         let files = scan_with(&root, &config.ignored_dirs).await;
         let keys: Vec<String> = files.keys().cloned().collect();
         assert_eq!(keys, vec![tmp.key("notes.txt")]);
     }
 
     #[test]
-    fn workspace_config_marks_a_root_in_a_protected_dir() {
+    fn tree_config_marks_a_root_in_a_protected_dir() {
         let zzz_home = Some(ProtectedDir::ZzzHome);
         for (root, zzz_dir, marked) in [
             ("/home/u/.zzz/", "/home/u/.zzz/.zzz/", zzz_home),
@@ -3115,7 +3263,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                FilerConfig::workspace(root, zzz_dir).root_protected,
+                FilerConfig::tree(root, zzz_dir).root_protected,
                 marked,
                 "{root} {zzz_dir}"
             );
@@ -3163,7 +3311,7 @@ mod tests {
         let error = start_filer(
             &home,
             Arc::new(|_: &str| {}),
-            FilerConfig::workspace(&home, &app_dir),
+            FilerConfig::tree(&home, &app_dir),
         )
         .await
         .expect_err("the daemon home is refused");
@@ -3172,7 +3320,7 @@ mod tests {
         start_filer(
             &app_dir,
             Arc::new(|_: &str| {}),
-            FilerConfig::workspace(&app_dir, &app_dir),
+            FilerConfig::tree(&app_dir, &app_dir),
         )
         .await
         .expect("the app dir starts");
@@ -3186,7 +3334,7 @@ mod tests {
             std::fs::write(tmp.path(&format!("{dir}/f.txt")), "x").unwrap();
         }
         let root = tmp.root();
-        let config = FilerConfig::workspace(&root, &dir_prefix(&tmp.key("app/data")));
+        let config = FilerConfig::tree(&root, &dir_prefix(&tmp.key("app/data")));
 
         let mut state = state_with(&tmp, config.ignored_dirs).await;
         assert_eq!(
@@ -3800,7 +3948,7 @@ mod tests {
         }
         std::fs::create_dir_all(tmp.0.join(OsStr::from_bytes(b"bad\xff/inner"))).unwrap();
         symlink(tmp.path("src"), tmp.path("linked")).unwrap();
-        let config = FilerConfig::workspace(&tmp.root(), &dir_prefix(&tmp.key("app/data")));
+        let config = FilerConfig::tree(&tmp.root(), &dir_prefix(&tmp.key("app/data")));
         let filer = start(&tmp, config).await;
 
         assert_eq!(
@@ -4114,6 +4262,7 @@ mod tests {
         let mut state = FilerState {
             source_dir: root.clone(),
             ignored_dirs: vec![],
+            depth: FilerDepth::Tree,
             files: Arc::default(),
             pending: HashMap::new(),
             watches: Arc::clone(&watches),
@@ -4223,6 +4372,142 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_top_level_filer_indexes_and_watches_its_root_alone() {
+        let tmp = TempDir::new();
+        std::fs::create_dir_all(tmp.path("repo/src")).unwrap();
+        std::fs::write(tmp.path("README.md"), "r").unwrap();
+        std::fs::write(tmp.path("repo/a.txt"), "a").unwrap();
+        std::fs::write(tmp.path("repo/src/b.txt"), "b").unwrap();
+
+        let filer = start(&tmp, FilerConfig::top_level(&tmp.root(), "/nowhere/")).await;
+        assert_eq!(keys_of(&filer).await, [tmp.key("README.md")]);
+        assert_eq!(watched_dirs(&filer), [tmp.root()]);
+
+        // a new loose file arrives; a new directory, and files in one, don't
+        std::fs::create_dir_all(tmp.path("other")).unwrap();
+        std::fs::write(tmp.path("other/c.txt"), "c").unwrap();
+        std::fs::write(tmp.path("repo/d.txt"), "d").unwrap();
+        std::fs::write(tmp.path("notes.txt"), "n").unwrap();
+        wait_for_keys(&filer, &[tmp.key("README.md"), tmp.key("notes.txt")]).await;
+        // a file replaced by a directory leaves the index, and its contents
+        // stay out
+        std::fs::remove_file(tmp.path("notes.txt")).unwrap();
+        std::fs::create_dir(tmp.path("notes.txt")).unwrap();
+        std::fs::write(tmp.path("notes.txt/e.txt"), "e").unwrap();
+        wait_for_keys(&filer, &[tmp.key("README.md")]).await;
+        // a rescan sees the same
+        let (reply_tx, reply_rx) = oneshot::channel();
+        filer.rescan_tx.send(reply_tx).await.unwrap();
+        reply_rx.await.unwrap();
+        assert_eq!(keys_of(&filer).await, [tmp.key("README.md")]);
+        assert_eq!(watched_dirs(&filer), [tmp.root()]);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_tree_request_replaces_a_top_level_filer_and_not_the_reverse() {
+        let tmp = TempDir::new();
+        std::fs::create_dir_all(tmp.path("sub")).unwrap();
+        std::fs::write(tmp.path("a.txt"), "a").unwrap();
+        std::fs::write(tmp.path("sub/b.txt"), "b").unwrap();
+        let manager = FilerManager::new();
+        let root = tmp.root();
+        let start = |config| {
+            manager.start_with(
+                &root,
+                Arc::new(|_: &str| {}),
+                config,
+                FilerLifetime::Project,
+            )
+        };
+        let top = || FilerConfig::top_level(&root, "/nowhere/");
+        let tree = || FilerConfig::tree(&root, "/nowhere/");
+
+        assert!(start(top()).await.unwrap());
+        assert!(!start(top()).await.unwrap(), "a top-level filer serves one");
+        assert_eq!(manager.files_for(&root).await.len(), 1);
+        assert!(start(tree()).await.unwrap(), "replaced by a tree");
+        assert_eq!(manager.files_for(&root).await.len(), 2);
+        assert!(
+            !start(top()).await.unwrap(),
+            "a tree serves a top-level request"
+        );
+        assert!(!start(tree()).await.unwrap());
+        assert_eq!(manager.files_for(&root).await.len(), 2);
+        assert_eq!(manager.scans.load(Ordering::Relaxed), 2);
+        // a permanent top-level filer replaced stays permanent
+        let other = TempDir::new();
+        let other_root = other.root();
+        for (config, lifetime) in [
+            (
+                FilerConfig::top_level(&other_root, "/nowhere/"),
+                FilerLifetime::Permanent,
+            ),
+            (
+                FilerConfig::tree(&other_root, "/nowhere/"),
+                FilerLifetime::Project,
+            ),
+        ] {
+            assert!(
+                manager
+                    .start_with(&other_root, Arc::new(|_: &str| {}), config, lifetime)
+                    .await
+                    .unwrap()
+            );
+        }
+        assert!(!manager.stop_filer(&other_root).await);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_replacement_narrows_a_project_filer_and_keeps_a_permanent_one() {
+        let tmp = TempDir::new();
+        std::fs::create_dir_all(tmp.path("sub")).unwrap();
+        std::fs::write(tmp.path("a.txt"), "a").unwrap();
+        std::fs::write(tmp.path("sub/b.txt"), "b").unwrap();
+        let manager = FilerManager::new();
+        let root = tmp.root();
+        let sink = || -> FilerBroadcast { Arc::new(|_: &str| {}) };
+        let top = || FilerConfig::top_level(&root, "/nowhere/");
+        let tree = || FilerConfig::tree(&root, "/nowhere/");
+
+        manager
+            .start_with(&root, sink(), tree(), FilerLifetime::Project)
+            .await
+            .unwrap();
+        assert_eq!(manager.files_for(&root).await.len(), 2);
+        manager.replace_with(&root, sink(), top()).await.unwrap();
+        assert_eq!(manager.files_for(&root).await.len(), 1, "narrowed");
+        assert!(
+            !manager
+                .start_with(&root, sink(), top(), FilerLifetime::Project)
+                .await
+                .unwrap()
+        );
+        // a root that can't be listed leaves the filer as it was
+        let gone = format!("{root}gone/");
+        assert!(manager.replace_with(&gone, sink(), top()).await.is_err());
+
+        let other = TempDir::new();
+        let other_root = other.root();
+        std::fs::create_dir_all(other.path("sub")).unwrap();
+        std::fs::write(other.path("sub/c.txt"), "c").unwrap();
+        let other_tree = FilerConfig::tree(&other_root, "/nowhere/");
+        manager
+            .start_with(&other_root, sink(), other_tree, FilerLifetime::Permanent)
+            .await
+            .unwrap();
+        let other_top = FilerConfig::top_level(&other_root, "/nowhere/");
+        manager
+            .replace_with(&other_root, sink(), other_top)
+            .await
+            .unwrap();
+        assert_eq!(
+            manager.files_for(&other_root).await.len(),
+            1,
+            "a permanent filer stays whole"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn concurrent_starts_of_one_path_share_one_scan() {
         let tmp = TempDir::new();
         for i in 0..50 {
@@ -4235,7 +4520,7 @@ mod tests {
                 &root,
                 Arc::new(|_: &str| {}),
                 FilerConfig::zzz_dir(),
-                FilerLifetime::Workspace,
+                FilerLifetime::Project,
             )
         };
         let (first, second) = tokio::join!(start(), start());
@@ -4257,10 +4542,7 @@ mod tests {
         let snapshot = manager.snapshot().await;
         assert!(snapshot.roots.is_empty() && snapshot.files.is_empty());
 
-        for (tmp, lifetime) in [
-            (&a, FilerLifetime::Permanent),
-            (&b, FilerLifetime::Workspace),
-        ] {
+        for (tmp, lifetime) in [(&a, FilerLifetime::Permanent), (&b, FilerLifetime::Project)] {
             manager
                 .start_with(
                     &tmp.root(),

@@ -86,8 +86,8 @@ describe('to_auth_gate_state', () => {
 describe('to_auth_redirect', () => {
 	test('keeps the path, query, and hash of the page the gate replaced', () => {
 		assert.strictEqual(
-			to_auth_redirect(new URL('http://localhost:4460/workspaces?workspace=%2Fhome%2Fa#x')),
-			'/workspaces?workspace=%2Fhome%2Fa#x'
+			to_auth_redirect(new URL('http://localhost:4460/workspaces?project=%2Fhome%2Fa#x')),
+			'/workspaces?project=%2Fhome%2Fa#x'
 		);
 		assert.strictEqual(to_auth_redirect(new URL('http://localhost:4460/')), '/');
 	});

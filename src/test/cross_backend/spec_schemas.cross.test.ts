@@ -6,7 +6,7 @@
  * The frontend validates both at runtime (a response or notification that
  * doesn't match its strict schema is rejected), so drift between the Rust
  * handlers and `action_specs.ts` breaks the app — this pins the parity.
- * Covers the session, provider-status, workspace, filesystem, and terminal
+ * Covers the session, provider-status, project, filesystem, and terminal
  * actions; `completion_create` / `completion_progress` need a live provider
  * and aren't exercised. fuz_app's standard specs are covered by its own
  * conformance suite.
@@ -47,6 +47,10 @@ import {
 	filer_change_action_spec,
 	heartbeat_action_spec,
 	ping_action_spec,
+	project_changed_action_spec,
+	project_close_action_spec,
+	project_list_action_spec,
+	project_open_action_spec,
 	provider_load_status_action_spec,
 	session_load_action_spec,
 	terminal_ack_action_spec,
@@ -56,10 +60,6 @@ import {
 	terminal_data_send_action_spec,
 	terminal_exited_action_spec,
 	terminal_resize_action_spec,
-	workspace_changed_action_spec,
-	workspace_close_action_spec,
-	workspace_list_action_spec,
-	workspace_open_action_spec,
 	all_action_specs
 } from '#lib/action_specs.ts';
 import type { FrontendActionsApi } from '#lib/action_metatypes.ts';
@@ -155,7 +155,7 @@ describe('zzz spec schemas cross-backend', () => {
 			[
 				'ping',
 				'session_load',
-				'workspace_list',
+				'project_list',
 				'account_verify',
 				'account_session_list',
 				'account_token_list'
@@ -201,7 +201,7 @@ describe('zzz spec schemas cross-backend', () => {
 		}
 	});
 
-	test('workspace and filesystem responses and notifications match their schemas', async () => {
+	test('project and filesystem responses and notifications match their schemas', async () => {
 		const fixture = await setup_test();
 		const ws = await open_ws(fixture);
 		const dir = join(tmpdir(), `zzz_cross_schemas_${randomUUID()}`);
@@ -210,9 +210,9 @@ describe('zzz spec schemas cross-backend', () => {
 		try {
 			await ws.request('_warmup', 'ping', undefined);
 
-			await call_and_check(fixture, workspace_open_action_spec, { path: dir });
-			await wait_for_checked_notification(ws, workspace_changed_action_spec);
-			await call_and_check(fixture, workspace_list_action_spec);
+			await call_and_check(fixture, project_open_action_spec, { path: dir });
+			await wait_for_checked_notification(ws, project_changed_action_spec);
+			await call_and_check(fixture, project_list_action_spec);
 			await call_and_check(fixture, session_load_action_spec);
 
 			const file_path = join(dir, 'written.txt');
@@ -235,7 +235,7 @@ describe('zzz spec schemas cross-backend', () => {
 				content: 'new'
 			});
 
-			await call_and_check(fixture, workspace_close_action_spec, { path: dir });
+			await call_and_check(fixture, project_close_action_spec, { root: `${dir}/` });
 		} finally {
 			await ws.close();
 			await rm(dir, { recursive: true, force: true });
@@ -383,8 +383,8 @@ describe('zzz spec schemas cross-backend', () => {
 				assert.ok(ping.ok, `ping over ws: ${JSON.stringify(ping)}`);
 				const session = await api_result.session_load();
 				assert.ok(session.ok, `session_load over ws: ${JSON.stringify(session)}`);
-				const list = await api_result.workspace_list();
-				assert.ok(list.ok, `workspace_list over ws: ${JSON.stringify(list)}`);
+				const list = await api_result.project_list();
+				assert.ok(list.ok, `project_list over ws: ${JSON.stringify(list)}`);
 			} finally {
 				client.disconnect();
 			}
@@ -396,7 +396,7 @@ describe('zzz spec schemas cross-backend', () => {
 			const dir = join(tmpdir(), `zzz_cross_schemas_ws_${randomUUID()}`);
 			await mkdir(dir, { recursive: true });
 			try {
-				await call_and_check(fixture, workspace_open_action_spec, { path: dir });
+				await call_and_check(fixture, project_open_action_spec, { path: dir });
 
 				const file_path = join(dir, 'via_ws.txt');
 				const update = await api_result.diskfile_update({
@@ -407,8 +407,8 @@ describe('zzz spec schemas cross-backend', () => {
 				assert.deepEqual(update.value, { hash: hash_blake3('over ws') });
 				assert.strictEqual(await readFile(file_path, 'utf-8'), 'over ws');
 
-				const close = await api_result.workspace_close({ path: `${dir}/` as never });
-				assert.ok(close.ok, `workspace_close over ws: ${JSON.stringify(close)}`);
+				const close = await api_result.project_close({ root: `${dir}/` as never });
+				assert.ok(close.ok, `project_close over ws: ${JSON.stringify(close)}`);
 			} finally {
 				client.disconnect();
 				await rm(dir, { recursive: true, force: true });

@@ -183,7 +183,7 @@ FUZ_BOOTSTRAP_TOKEN_PATH=bootstrap_token
 # Comma-separated directories zzz may read and write
 # PUBLIC_ZZZ_SCOPED_DIRS=
 
-# Comma-separated directories outside your home directory that workspaces
+# Comma-separated directories outside your home directory that projects
 # and scoped dirs may be in (`~` expands). Never /, your home directory or
 # above it, or anything under /proc, /sys, or /dev
 # ZZZ_ROOTS_OUTSIDE_HOME=

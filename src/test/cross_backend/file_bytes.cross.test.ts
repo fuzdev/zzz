@@ -373,7 +373,7 @@ describe('file bytes cross-backend', () => {
 
 	// `ScopedFs` refuses a `.zzz` directory other than the app dir under every
 	// root, so the CLI daemon home's `.env` and `bootstrap_token` are out of
-	// reach of a workspace or scoped dir that covers them
+	// reach of a project or scoped dir that covers them
 	describe('.zzz directories', () => {
 		test('refuses a .zzz home on every method, whether or not the file exists', async () => {
 			const fixture = await setup_test();

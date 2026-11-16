@@ -75,7 +75,7 @@
 			</li>
 			<li>
 				<!-- TODO @db -->
-				persisting your domain data (chats, workspaces, prompts) --
+				persisting your domain data (chats, projects, prompts) --
 				<ExternalLink href="https://www.postgresql.org/">Postgres</ExternalLink> is already
 				integrated for auth (the Rust backend requires it), and your other data is in-memory until
 				this lands, see
@@ -227,11 +227,11 @@
 						read and write to the Zzz app directory (<code>PUBLIC_ZZZ_DIR</code>, defaults to
 						<code>.zzz</code> in the daemon's working directory) for Zzz's own files, plus any
 						additional paths configured in <code>PUBLIC_ZZZ_SCOPED_DIRS</code> and any directories
-						you open as workspaces for user files -- all filesystem operations are securely scoped
-						via <code>ScopedFs</code> (symlinks rejected, paths validated) -- this opens a
-						significant surface area for both you and attackers to use, and writing untrusted data
-						could lead to arbitrary code execution if, for example, you're running a hot reloading
-						dev server in a scoped directory (configure with care!)
+						you open as projects for user files -- all filesystem operations are securely scoped via
+						<code>ScopedFs</code> (symlinks rejected, paths validated) -- this opens a significant
+						surface area for both you and attackers to use, and writing untrusted data could lead to
+						arbitrary code execution if, for example, you're running a hot reloading dev server in a
+						scoped directory (configure with care!)
 					</li>
 					<li>
 						use your API keys for calls to Claude, ChatGPT, and Gemini -- read from the backend's
@@ -266,7 +266,7 @@
 			</li>
 			<li>
 				Zzz is a single-operator app for your own machine. Every session and every full-scope API
-				token effectively has your OS user's powers: terminals, opening any directory as a workspace
+				token effectively has your OS user's powers: terminals, opening any directory as a project
 				(even <code>/</code>), and writing files there -- don't give an account to anyone you
 				wouldn't give a shell.
 			</li>

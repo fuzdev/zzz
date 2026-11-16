@@ -30,11 +30,11 @@ export class Space extends Cell<typeof SpaceJson> {
 	readonly directory_count: number = $derived(this.directory_paths.length);
 
 	/**
-	 * Directory paths filtered to only include those backed by an open workspace.
-	 * Stale entries (from closed workspaces) are excluded.
+	 * Directory paths filtered to only include those backed by an open project's root.
+	 * Stale entries (from closed projects) are excluded.
 	 */
 	readonly active_directory_paths: Array<DiskfileDirectoryPath> = $derived(
-		this.directory_paths.filter((p) => this.app.workspaces.get_by_path(p) !== undefined)
+		this.directory_paths.filter((p) => this.app.projects.get_by_root(p) !== undefined)
 	);
 
 	constructor(options: SpaceOptions) {
@@ -42,8 +42,8 @@ export class Space extends Cell<typeof SpaceJson> {
 		this.init();
 	}
 
-	// TODO: callers should ensure the path is an open workspace (call workspace_open first) — this method is sync so it can't do it itself
-	// TODO: space state is in-memory only — directory_paths lost on refresh, needs DB persistence to converge with workspace JSON persistence
+	// TODO: callers should ensure the path is an open project's root (call project_open first) — this method is sync so it can't do it itself
+	// TODO: space state is in-memory only — directory_paths lost on refresh, needs DB persistence to converge with project JSON persistence
 	add_directory(path: DiskfileDirectoryPath): void {
 		if (!this.directory_paths.includes(path)) {
 			this.directory_paths.push(path);

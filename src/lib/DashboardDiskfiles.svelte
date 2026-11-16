@@ -224,7 +224,7 @@
 									create a new file
 								</button>?
 							{:else}
-								<a href={resolve('/workspaces')}>open a workspace</a> to create one
+								<a href={resolve('/workspaces')}>open a project</a> to create one
 							{/if}
 						</p>
 					</div>

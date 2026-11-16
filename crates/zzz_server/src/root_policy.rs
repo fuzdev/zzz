@@ -1,7 +1,7 @@
 //! Which directories can be roots of zzz's scoped filesystem.
 //!
-//! A root is a directory `ScopedFs` grants access beneath: an open workspace
-//! (`workspace_open`, and so `zzz <path>`), a `PUBLIC_ZZZ_SCOPED_DIRS` entry,
+//! A root is a directory `ScopedFs` grants access beneath: an open project's
+//! (`project_open`, and so `zzz <path>`), a `PUBLIC_ZZZ_SCOPED_DIRS` entry,
 //! or the app dir. [`RootPolicy`] decides which directories qualify:
 //!
 //! - **Never** `/`, the home directory itself or any ancestor of it, or
@@ -10,7 +10,7 @@
 //! - **Strictly inside the home directory** otherwise, or at or inside a
 //!   directory named in [`ROOTS_OUTSIDE_HOME_VAR`].
 //!
-//! So a workspace can't take in the whole home directory (`~/.ssh` and every
+//! So a project can't take in the whole home directory (`~/.ssh` and every
 //! other dotfile with it), the whole filesystem, or `/proc/<pid>/environ` (the
 //! daemon's own environment, with its secrets); a directory outside the home
 //! directory needs the operator to name it.
@@ -21,7 +21,7 @@
 //!
 //! The rule is lexical, so it holds for the canonical paths (symlinks
 //! resolved) it's given: the home directory is canonicalized at boot, and
-//! `workspace_open` passes the canonical path. A boot entry — an allowlist
+//! `project_open` passes the canonical path. A boot entry — an allowlist
 //! entry or scoped dir — is canonicalized too, unless it doesn't exist yet:
 //! then it's checked as spelled, and a `..` in it refuses the boot, since
 //! the OS would read that through whatever the directory before it becomes.

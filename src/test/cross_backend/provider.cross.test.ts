@@ -76,7 +76,7 @@ describe('provider + session cross-backend', () => {
 
 		assert.ok(Array.isArray(data.files), 'files is array');
 		assert.ok(Array.isArray(data.provider_status), 'provider_status is array');
-		assert.ok(Array.isArray(data.workspaces), 'workspaces is array');
+		assert.ok(Array.isArray(data.projects), 'projects is array');
 
 		// the file roots are the watched dirs, so they cover zzz_dir and the scoped dirs
 		const file_roots = data.file_roots as Array<string>;

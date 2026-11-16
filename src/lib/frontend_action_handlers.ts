@@ -27,10 +27,10 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		receive_response: ({ data: { output } }) => {
 			// counts only — the full snapshot (every indexed file) would be
 			// retained by devtools on every load
-			const { files, workspaces, terminal_ids } = output.data;
+			const { files, projects, terminal_ids } = output.data;
 			console.log('[frontend_action_handlers] session loaded:', {
 				files: files.length,
-				workspaces: workspaces.length,
+				projects: projects.length,
 				terminals: terminal_ids.length
 			});
 		},
@@ -248,39 +248,39 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
-	// `Workspaces.open` adds the workspace and its file tree
-	workspace_open: {
+	// `Projects.open` adds the project and its files
+	project_open: {
 		receive_error: ({ data: { error } }) => {
-			console.error('[frontend_action_handlers] workspace_open failed:', error);
+			console.error('[frontend_action_handlers] project_open failed:', error);
 		}
 	},
 
-	workspace_close: {
+	project_close: {
 		receive_response: ({ data: { input } }) => {
-			frontend.workspaces.remove_by_path(input.path);
+			frontend.projects.remove_by_root(input.root);
 		},
 		receive_error: ({ data: { error } }) => {
-			console.error('[frontend_action_handlers] workspace_close failed:', error);
+			console.error('[frontend_action_handlers] project_close failed:', error);
 		}
 	},
 
-	workspace_list: {
+	project_list: {
 		receive_response: ({ data: { output } }) => {
-			for (const workspace_data of output.workspaces) {
-				frontend.workspaces.add(workspace_data);
+			for (const project_data of output.projects) {
+				frontend.projects.add(project_data);
 			}
 		},
 		receive_error: ({ data: { error } }) => {
-			console.error('[frontend_action_handlers] workspace_list failed:', error);
+			console.error('[frontend_action_handlers] project_list failed:', error);
 		}
 	},
 
-	workspace_changed: {
+	project_changed: {
 		receive: ({ data: { input } }) => {
-			if (input.type === 'open') {
-				frontend.workspaces.receive_remote_open(input.workspace);
+			if (input.type === 'close') {
+				frontend.receive_project_closed(input.project.root);
 			} else {
-				frontend.workspaces.remove_by_path(input.workspace.path);
+				frontend.projects.receive_remote_change(input.project);
 			}
 		}
 	}

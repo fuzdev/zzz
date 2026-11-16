@@ -13,7 +13,7 @@
 		icon_create_file,
 		icon_directory,
 		icon_sort,
-		icon_workspace
+		icon_project
 	} from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
 	import { prompt_create_diskfile } from './diskfile_helpers.ts';
@@ -38,14 +38,18 @@
 	const TODO_create_file_pending = false;
 	const TODO_create_folder_pending = false;
 
-	// the tree names it inline in the workspace's root row; the list asks with a prompt
+	// the tree names it inline in the row of the folder new files go in — the
+	// project's root, or its last open's focused repo, revealed first; the list
+	// (or a folder inside a compact row) asks with a prompt
 	const create = (kind: DiskfileCreateKind): void => {
-		if (tree_mode) {
-			const root_row = editor.tree.rows.find(
-				(row): row is DiskfileTreeDirRow => row.kind === 'root' && row.path === new_files_dir
+		if (tree_mode && new_files_dir) {
+			editor.tree.reveal(new_files_dir);
+			const row = editor.tree.rows.find(
+				(row): row is DiskfileTreeDirRow =>
+					(row.kind === 'root' || row.kind === 'dir') && row.path === new_files_dir
 			);
-			if (root_row) {
-				editor.tree.start_create(root_row, kind);
+			if (row) {
+				editor.tree.start_create(row, kind);
 				return;
 			}
 		}
@@ -65,13 +69,13 @@
 	{:else}
 		<div class="row height-input-height justify-content:space-between px_xs">
 			{#if new_files_dir}
-				<small class="ellipsis" title="new files and folders go in the active workspace">
-					<Icon data={icon_workspace} />
+				<small class="ellipsis" title="new files and folders go in the active project's root">
+					<Icon data={icon_project} />
 					{new_files_dir}
 				</small>
 			{:else}
 				<small class="ellipsis">
-					<a href={resolve('/workspaces')}>open a workspace</a> to create files
+					<a href={resolve('/workspaces')}>open a project</a> to create files
 				</small>
 			{/if}
 			<div class="flex gap_xs2">
@@ -80,7 +84,7 @@
 					class="plain sized_sm"
 					title={new_files_dir
 						? `create file in ${new_files_dir}`
-						: 'open a workspace to create files'}
+						: 'open a project to create files'}
 					disabled={!new_files_dir}
 					onclick={() => create('file')}
 				>
@@ -90,7 +94,7 @@
 					pending={recorder.status === 'starting'}
 					class="plain sized_sm"
 					title={!new_files_dir
-						? 'open a workspace to record'
+						? 'open a project to record'
 						: recorder.active
 							? 'a recording is under way'
 							: `record audio to a new file in ${new_files_dir}`}
@@ -108,7 +112,7 @@
 					class="plain sized_sm"
 					title={new_files_dir
 						? `create folder in ${new_files_dir}`
-						: 'open a workspace to create folders'}
+						: 'open a project to create folders'}
 					disabled={!new_files_dir}
 					onclick={() => create('folder')}
 				>

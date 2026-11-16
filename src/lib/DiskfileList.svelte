@@ -19,7 +19,7 @@
 	const { diskfiles } = frontend_context.get();
 </script>
 
-<!-- windowed: only the rows near the viewport render, so a workspace of thousands of files stays cheap -->
+<!-- windowed: only the rows near the viewport render, so a project of thousands of files stays cheap -->
 <SortableList
 	items={diskfiles.listed}
 	windowed

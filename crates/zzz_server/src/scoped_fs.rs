@@ -253,23 +253,23 @@ impl ScopedFsError {
 /// directory, which the boot refuses).
 ///
 /// The allowed set is a fixed set of permanent roots (`zzz_dir` +
-/// `scoped_dirs`, from [`Self::new`]) plus runtime roots for open workspaces
+/// `scoped_dirs`, from [`Self::new`]) plus runtime roots for open projects
 /// ([`Self::add_path`] / [`Self::remove_path`]). A path is allowed when any
 /// root covers it, so overlapping roots compose: removing a runtime root never
 /// revokes access a permanent root or another runtime root still grants.
 /// Which directories can be roots at all is [`crate::root_policy`]'s rule,
-/// checked by the boot and by `workspace_open` before a root is added.
+/// checked by the boot and by `project_open` before a root is added.
 ///
 /// **Not a confinement boundary against an authenticated caller.** The allowed
-/// set is *mutable at runtime* via [`Self::add_path`], and `workspace_open`
-/// (gated only at `AuthSpec::authenticated(CredentialGate::Any)` — any
-/// credential, no role) calls it with a caller-supplied
-/// directory, checked only against the root rules
+/// set is *mutable at runtime* via [`Self::add_path`], and `project_open`
+/// (gated only at `AuthSpec::account_grain(CredentialGate::Any)` — any
+/// credential, no role) calls it with the root of a caller-supplied
+/// path's project, checked only against the root rules
 /// ([`crate::root_policy::RootPolicy`]), not the existing allowlist. So any
 /// authenticated caller can widen the scope to any existing directory those
 /// rules admit (strictly inside `$HOME`, or in `ZZZ_ROOTS_OUTSIDE_HOME`) and
 /// then write beneath it. Read this type as a guard against accidental or buggy writes
-/// outside the open workspaces — not as a sandbox. That is consistent with zzz's
+/// outside the open projects — not as a sandbox. That is consistent with zzz's
 /// posture (an authenticated zzz credential carries local-user authority
 /// regardless — see the `terminal_*` actions), but don't mistake the type for a
 /// stronger guarantee than it makes.
@@ -285,16 +285,16 @@ pub struct ScopedFs {
     /// Roots fixed at construction (`zzz_dir` + `scoped_dirs`), each
     /// normalized with a trailing `/`. Never removed —
     /// [`Self::remove_path`] only touches [`Self::dynamic_paths`], so
-    /// closing a workspace opened on (or containing, or nested in) a
+    /// closing a project rooted at (or containing, or nested in) a
     /// permanent root can't revoke access that root grants.
     ///
     /// Stored as `String` (not `PathBuf`) so `is_path_allowed` doesn't
     /// re-run `to_string_lossy()` on every allowed entry on every fs
     /// operation — the lossy conversion happens once at insert time.
     permanent_paths: Vec<String>,
-    /// Roots added at runtime (open workspaces), same normalization. One
-    /// entry per root: the caller (`workspace_open` / `workspace_close`,
-    /// serialized by `App::workspace_lifecycle`) keeps these in lockstep
+    /// Roots added at runtime (open projects), same normalization. One
+    /// entry per root: the caller (`project_open` / `project_close`,
+    /// serialized by `App::project_lifecycle`) keeps these in lockstep
     /// with its own one-entry-per-path map, so no refcount is needed —
     /// overlapping roots are separate entries, and removing one leaves any
     /// other root that covers the same paths in place.
@@ -1202,7 +1202,7 @@ mod tests {
     #[test]
     fn permanent_root_survives_remove_path() {
         let fs = scoped(&["/z/zzz/", "/z/scoped"]);
-        // a workspace opened on a permanent root is a no-op add, and its close
+        // a project rooted at a permanent root is a no-op add, and its close
         // must not revoke the root
         assert!(!fs.add_path(Path::new("/z/zzz")));
         assert!(!fs.remove_path(Path::new("/z/zzz")));
@@ -1225,7 +1225,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_nested_in_permanent_root() {
+    fn runtime_root_nested_in_permanent_root() {
         let fs = scoped(&["/z/scoped"]);
         assert!(fs.add_path(Path::new("/z/scoped/project")));
         assert!(fs.remove_path(Path::new("/z/scoped/project")));
@@ -1236,7 +1236,7 @@ mod tests {
     }
 
     #[test]
-    fn permanent_root_nested_in_workspace() {
+    fn permanent_root_nested_in_runtime_root() {
         let fs = scoped(&["/z/parent/zzz"]);
         assert!(fs.add_path(Path::new("/z/parent")));
         assert!(allowed(&fs, "/z/parent/other.txt"));
@@ -1252,17 +1252,11 @@ mod tests {
         assert!(fs.add_path(Path::new("/w/inner")));
 
         assert!(fs.remove_path(Path::new("/w/inner")));
-        assert!(
-            allowed(&fs, "/w/inner/a.txt"),
-            "outer workspace still covers it"
-        );
+        assert!(allowed(&fs, "/w/inner/a.txt"), "outer root still covers it");
 
         assert!(fs.add_path(Path::new("/w/inner")));
         assert!(fs.remove_path(Path::new("/w")));
-        assert!(
-            allowed(&fs, "/w/inner/a.txt"),
-            "inner workspace still covers it"
-        );
+        assert!(allowed(&fs, "/w/inner/a.txt"), "inner root still covers it");
         assert!(!allowed(&fs, "/w/a.txt"));
     }
 
@@ -2548,7 +2542,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn write_file_after_closing_workspace_on_permanent_root() {
+    async fn write_file_after_closing_a_project_on_permanent_root() {
         let dir = std::env::temp_dir().join(format!("zzz_scoped_fs_test_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let dir = dir.canonicalize().unwrap();

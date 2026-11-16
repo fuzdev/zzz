@@ -5,7 +5,7 @@
 //! Result<Value, JsonrpcError>` — `Result<ActionOutput, JsonrpcError>` for
 //! `session_load`, whose large output is serialized once by the transport.
 //! `ping` is public (no auth); `session_load` is authenticated and returns the
-//! session snapshot (open workspaces, the file trees and their roots,
+//! session snapshot (open projects, the file trees and their roots,
 //! `scoped_dirs`, provider status, the caller's terminals and jobs, and the
 //! server instance id) — loaded at boot and again after every reconnect to resync.
 
@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::filer::{FilerSnapshot, SerializableDisknode, disknodes_json_size_hint};
-use crate::handlers::{App, WorkspaceInfo, caller_account_id};
+use crate::handlers::{App, ProjectInfo, caller_account_id};
 use crate::job_manager::JobSnapshot;
 
 #[derive(Serialize)]
@@ -49,7 +49,7 @@ struct SessionLoadData {
     zzz_dir: String,
     scoped_dirs: Vec<String>,
     provider_status: Vec<Value>,
-    workspaces: Vec<WorkspaceInfo>,
+    projects: Vec<ProjectInfo>,
     /// The caller's live terminals.
     terminal_ids: Vec<String>,
     /// The caller's jobs, oldest first.
@@ -58,7 +58,7 @@ struct SessionLoadData {
 }
 
 /// The non-file part of a `session_load` response, budgeted on top of the
-/// files' size hint (roots, dirs, workspaces, provider status, terminal ids).
+/// files' size hint (roots, dirs, projects, provider status, terminal ids).
 const SESSION_LOAD_OVERHEAD: usize = 4096;
 
 #[derive(Serialize)]
@@ -95,7 +95,7 @@ pub async fn ping(
 /// refuses any declared key before this runs.
 ///
 /// Returns the cross-domain snapshot the frontend loads at boot and reloads
-/// after a reconnect: open workspaces, every filer's file tree (rescanned for
+/// after a reconnect: open projects, every filer's file tree (rescanned for
 /// consistency) with its roots, `scoped_dirs`, provider status, the caller's
 /// live terminal ids, and `App::instance_id`.
 ///
@@ -113,10 +113,7 @@ pub async fn session_load(
     app: Arc<App>,
 ) -> Result<ActionOutput, JsonrpcError> {
     let owner = caller_account_id(&ctx)?;
-    let workspaces: Vec<WorkspaceInfo> = {
-        let ws = app.workspaces.read();
-        ws.values().cloned().collect()
-    };
+    let projects: Vec<ProjectInfo> = app.projects.read().values().cloned().collect();
 
     // Rescan each watched directory before reading the index — notify events
     // are eventually consistent, so a file written immediately before
@@ -148,7 +145,7 @@ pub async fn session_load(
             zzz_dir: app.zzz_dir.clone(),
             scoped_dirs: app.scoped_dirs.clone(),
             provider_status,
-            workspaces,
+            projects,
             terminal_ids,
             jobs,
             server_instance_id: app.instance_id.to_string(),
@@ -210,10 +207,14 @@ mod tests {
                 zzz_dir: "/z".to_owned(),
                 scoped_dirs: vec!["/s".to_owned()],
                 provider_status: vec![json!({"name": "claude", "available": false})],
-                workspaces: vec![WorkspaceInfo {
-                    path: "/w/".to_owned(),
+                projects: vec![ProjectInfo {
+                    root: "/w/".to_owned(),
                     name: "w".to_owned(),
                     opened_at: "2026-01-01T00:00:00Z".to_owned(),
+                    kind: crate::handlers::ProjectInfoKind::PlainDir,
+                    registry_path: None,
+                    entries: vec![],
+                    focused: vec!["/w/".to_owned()],
                 }],
                 terminal_ids: vec!["t1".to_owned()],
                 jobs: vec![],
@@ -234,10 +235,14 @@ mod tests {
                 "zzz_dir": "/z",
                 "scoped_dirs": ["/s"],
                 "provider_status": [{"name": "claude", "available": false}],
-                "workspaces": [{
-                    "path": "/w/",
+                "projects": [{
+                    "root": "/w/",
                     "name": "w",
                     "opened_at": "2026-01-01T00:00:00Z",
+                    "kind": "plain_dir",
+                    "registry_path": null,
+                    "entries": [],
+                    "focused": ["/w/"],
                 }],
                 "terminal_ids": ["t1"],
                 "jobs": [],

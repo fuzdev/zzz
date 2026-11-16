@@ -106,7 +106,7 @@ async fn run() -> Result<ExitCode, CliError> {
 
 /// The arguments as UTF-8 strings. Read with `args_os` so a non-UTF-8
 /// argument is a clear error ([`CliError::NonUtf8Arg`]), never a panic: argh
-/// parses `&str`s, and the one path zzz takes becomes a UTF-8 workspace path
+/// parses `&str`s, and the one path zzz takes becomes a UTF-8 project path
 /// anyway. The program name is exempt — argh only shows it in help, so it's
 /// reduced to its file name (as `argh::from_env` does) and decoded lossily,
 /// and running zzz by a non-UTF-8 path still works.

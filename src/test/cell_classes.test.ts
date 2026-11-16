@@ -19,9 +19,9 @@ const MINIMAL_JSON: Partial<Record<CellClassNames, object>> = {
 	DiskfileTab: { diskfile_id: create_uuid() },
 	Job: { job_id: create_uuid(), kind: 'transcription', input_path: '/w/a.webm', queued_at: 1 },
 	Model: { name: 'model', provider_name: 'claude' },
+	Project: { root: '/w/' },
 	Provider: providers_default[0],
-	Turn: { role: 'user' },
-	Workspace: { path: '/w/' }
+	Turn: { role: 'user' }
 };
 
 let app: Frontend;

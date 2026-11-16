@@ -29,7 +29,7 @@ const EXIT_UNKNOWN: u8 = 4;
 /// Handle `zzz status`.
 ///
 /// Reports daemon status (the same report as `zzz daemon status`). A
-/// fuller summary (open workspaces, watcher state) is follow-on work.
+/// fuller summary (open projects, watcher state) is follow-on work.
 pub async fn cmd_status(args: &Status) -> Result<ExitCode, CliError> {
     report_status(args.json).await
 }

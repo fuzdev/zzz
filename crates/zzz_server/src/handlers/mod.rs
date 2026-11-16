@@ -2,30 +2,30 @@
 //! `App.broadcast` connection shim.
 //!
 //! The per-domain handler modules (`core`, `filesystem`, `provider`,
-//! `terminal`, `workspace`) hold the zzz-specific RPC handlers in the spine
+//! `terminal`, `project`) hold the zzz-specific RPC handlers in the spine
 //! signature `(params: Value, ctx: ActionContext<'_>, app: Arc<App>) ->
 //! Result<Value, JsonrpcError>`. They are registered into
 //! `App.action_registry` via `crate::zzz_action_specs::build_*_specs`, which
 //! own the `Arc<App>` and clone it into each per-spec handler closure — the
 //! source of the zzz-specific deps (`PtyManager`, `FilerManager`,
-//! `ProviderManager`, the workspaces map) that don't live on `ActionContext`.
+//! `ProviderManager`, the projects map) that don't live on `ActionContext`.
 //!
 //! Auth, dispatch, and the JSON-RPC / WS routes come from the spine
 //! (`fuz_actions::perform_action` plus the route states built in `main.rs`).
 //! `App.realtime` is the sole connection-tracking surface; it drives the
-//! `broadcast` shim called from `filer.rs` and `workspace.rs`, and
+//! `broadcast` shim called from `filer.rs` and `project.rs`, and
 //! `pty_manager.rs`, `job_manager.rs`, and `transcription/` send a terminal's
 //! and a job's notifications through it to the owning account only
-//! (`send_to_account`). `WorkspaceInfo` is the value type
-//! consumed by `workspace`.
+//! (`send_to_account`). `ProjectInfo` is the value type
+//! consumed by `project` and `core`.
 
 pub mod core;
 pub mod filesystem;
 pub mod job;
 pub mod media;
+pub mod project;
 pub mod provider;
 pub mod terminal;
-pub mod workspace;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -34,6 +34,7 @@ use deadpool_postgres::Pool;
 use parking_lot::RwLock;
 use serde::Serialize;
 
+use crate::file_trust::TrustedOwner;
 use crate::filer::FilerManager;
 use crate::job_manager::JobManager;
 use crate::provider::{CompletionOptions, ProviderManager};
@@ -57,16 +58,24 @@ use uuid::Uuid;
 pub struct App {
     /// Minted when the app starts — `session_load` returns it as
     /// `server_instance_id`, so a client that sees it change knows the daemon
-    /// restarted (its terminals and runtime workspaces are gone).
+    /// restarted (its terminals and open projects are gone).
     pub instance_id: Uuid,
-    pub workspaces: RwLock<HashMap<String, WorkspaceInfo>>,
-    /// Serializes `workspace_open` / `workspace_close`. Each spans the
-    /// `workspaces` map, `ScopedFs`, and the workspace filer across await
-    /// points; interleaved, an open could re-add scope and a watcher for a
-    /// workspace a concurrent close just removed. A new workspace's initial
-    /// scan runs before `workspace_open` takes it, so a large tree doesn't
-    /// hold up other opens and closes.
-    pub workspace_lifecycle: tokio::sync::Mutex<()>,
+    /// The open projects, keyed by root (trailing `/`).
+    pub projects: RwLock<HashMap<String, ProjectInfo>>,
+    /// Serializes `project_open` / `project_close`. Each spans the
+    /// `projects` map, `ScopedFs`, and the project's filers across await
+    /// points; interleaved, an open could re-add scope and watchers for a
+    /// project a concurrent close just removed. An open's initial scans run
+    /// before `project_open` takes it, so a large tree doesn't hold up other
+    /// opens and closes.
+    pub project_lifecycle: tokio::sync::Mutex<()>,
+    /// Whose registry files and directories `project_open` trusts — the
+    /// daemon's own user, read once at boot ([`TrustedOwner::current`]).
+    pub trusted_owner: TrustedOwner,
+    /// The git runner project resolution calls, over the environment a
+    /// terminal gets ([`crate::pty_manager::terminal_env`] — `HOME` kept, so
+    /// the user's git config applies; zzzd's secrets and config dropped).
+    pub git: fuz_git::Git,
     pub db_pool: Pool,
     pub scoped_fs: ScopedFs,
     pub zzz_dir: String,
@@ -105,7 +114,7 @@ pub struct App {
     /// [`Self::new`] starts with
     /// none; `run_app` sets them from the config.
     pub tools: Tools,
-    /// Which directories `workspace_open` admits as roots
+    /// Which directories `project_open` admits as roots
     /// ([`crate::root_policy`]). [`Self::new`] starts with the default, which
     /// admits nothing; `run_app` sets it from the config.
     pub root_policy: RootPolicy,
@@ -144,8 +153,12 @@ impl App {
     ) -> Self {
         Self {
             instance_id: Uuid::new_v4(),
-            workspaces: RwLock::new(HashMap::new()),
-            workspace_lifecycle: tokio::sync::Mutex::new(()),
+            projects: RwLock::new(HashMap::new()),
+            project_lifecycle: tokio::sync::Mutex::new(()),
+            trusted_owner: TrustedOwner::current(),
+            git: fuz_git::Git::with_clean_env(
+                crate::pty_manager::terminal_env(std::env::vars_os()),
+            ),
             db_pool,
             scoped_fs,
             zzz_dir,
@@ -168,7 +181,7 @@ impl App {
     ///
     /// Shim over `App.realtime`. The spine WS handler registers
     /// connections in `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`);
-    /// call sites (`filer::broadcast_filer_change`, `workspace::workspace_*`)
+    /// call sites (`filer::broadcast_filer_change`, `project::project_*`)
     /// broadcast through this shim. Terminal output and job state are
     /// per-account, so `pty_manager` and `job_manager` use
     /// `realtime.send_to_account` instead.
@@ -208,7 +221,7 @@ where
 /// `data.reason`.
 ///
 /// `fuz_http::not_found` fixes the message to `"{resource} not found"`; the
-/// filesystem and workspace handlers keep their `failed to …: …` messages
+/// filesystem and project handlers keep their `failed to …: …` messages
 /// (which name the path) across every code, so they build the error here.
 #[cold]
 pub fn not_found_error(message: &str, reason: &str) -> JsonrpcError {
@@ -221,13 +234,62 @@ pub fn not_found_error(message: &str, reason: &str) -> JsonrpcError {
 
 // -- Domain types -------------------------------------------------------------
 
-/// Metadata for an open workspace directory.
-///
-/// Matches the TypeScript `WorkspaceInfoJson` schema:
-/// `{ path: string, name: string, opened_at: string }`.
+/// An open project — twin of `ProjectInfoJson` in `project.svelte.ts`.
 #[derive(Debug, Clone, Serialize)]
-pub struct WorkspaceInfo {
-    pub path: String,
+pub struct ProjectInfo {
+    /// The root, canonical, with a trailing `/` — the project's identity.
+    pub root: String,
+    /// The root's basename.
     pub name: String,
+    /// When it was first opened (RFC 3339).
     pub opened_at: String,
+    pub kind: ProjectInfoKind,
+    /// The registry file as found at the root, for a registry project.
+    pub registry_path: Option<String>,
+    /// A registry's entries, in its order; empty for other kinds.
+    pub entries: Vec<ProjectEntryInfo>,
+    /// The focused directories (trailing `/`), sorted — each indexed whole.
+    /// A checkout's or plain directory's root is its one.
+    pub focused: Vec<String>,
+}
+
+/// Which rule rooted a project ([`crate::project::ProjectKind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectInfoKind {
+    Registry,
+    GitRepo,
+    PlainDir,
+}
+
+/// A registry entry of an open project — twin of `ProjectEntryJson`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ProjectEntryInfo {
+    /// The entry's key in its table.
+    pub key: String,
+    pub kind: EntryInfoKind,
+    /// Where its checkout is (trailing `/`): canonical when present, else
+    /// the declared dir under the root.
+    pub dir: String,
+    pub state: EntryState,
+    /// Why it's refused (`EntryRefusal::reason`), for a refused entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<&'static str>,
+}
+
+/// A registry's two tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryInfoKind {
+    Repo,
+    Reference,
+}
+
+/// Where an entry's checkout stands ([`crate::project::EntryDir`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryState {
+    Present,
+    Missing,
+    Refused,
 }

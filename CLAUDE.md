@@ -36,7 +36,7 @@ are the user's.
 ## Development Stage
 
 Early development, v0.0.1; breaking changes are expected and welcome.
-PostgreSQL holds auth only; domain state (files, terminals, workspaces, jobs)
+PostgreSQL holds auth only; domain state (files, terminals, projects, jobs)
 is in memory, lost on a daemon restart. Auth, HTTP, realtime (WS + SSE),
 dispatch, and DB come from the spine crates (`fuz_db`, `fuz_auth`,
 `fuz_http`, `fuz_realtime`, `fuz_actions`); a single `/api/rpc` + `/api/ws`
@@ -211,7 +211,7 @@ Details: ./docs/development.md § Adding a New Action.
   minification mangles).
 - Every field has a default, except identity fields a cell can't exist
   without (`Diskfile.path` / `source_dir`, `DiskfileTab.diskfile_id`,
-  `Workspace.path`, `Model.name`, `Action.method`, `Turn.role`).
+  `Project.root`, `Model.name`, `Action.method`, `Turn.role`).
 - An array or object default is `with_default_fn(schema, () => [])` —
   `with_default` shares one value across every parse.
 - Schema and class types agree: a non-null class field never defaults to `null`.
@@ -248,11 +248,25 @@ Details: ./docs/development.md § Adding a New Action.
 
 - **All filesystem access goes through `ScopedFs`** — path validation, no
   symlinks, absolute paths only. Roots: the app directory, `PUBLIC_ZZZ_SCOPED_DIRS`,
-  and each open workspace.
+  and each open project's root.
+- **Projects**: `project_open` (and so `zzz <path>`) opens the project
+  holding a file or directory (`project.rs`): a trusted `repos.toml`
+  registry found walking up (strictly below `$HOME`, or within the
+  allowlisted root; owned by you or root, never `o+w`, `g+w` only by your
+  private group — `file_trust.rs`), else the git checkout holding it,
+  else the directory. An untrusted or unconfined registry refuses the open
+  with its reason; a registry entry escaping the root is refused alone.
+  Opening a path **focuses** the repo holding it — daemon-wide, until the
+  project closes; a focused directory is indexed whole, a registry's root
+  at its top level only (its loose files), and an unfocused repo or an
+  unregistered directory under it not at all. File access is the whole
+  root regardless: opening a path in a registry puts all of it (say all
+  of `~/dev`) in scope, unfocused repos and unregistered directories
+  included.
 - **Roots are strictly inside `$HOME`** (the daemon's, canonicalized at
   boot) unless `ZZZ_ROOTS_OUTSIDE_HOME` names them, and never `/`, `$HOME`
   or an ancestor of it, or under `/proc`, `/sys`, or `/dev`, allowlisted or
-  not (`root_policy.rs`). `workspace_open` (and so `zzz <path>`) refuses
+  not (`root_policy.rs`). `project_open` (and so `zzz <path>`) refuses
   one (`root_not_allowed`, or `root_outside_home` where the allowlist would
   admit it); a `PUBLIC_ZZZ_SCOPED_DIRS` entry refuses to boot. An unusable
   `$HOME` admits only the allowlist. The app dir is exempt from the `$HOME`
@@ -266,7 +280,7 @@ Details: ./docs/development.md § Adding a New Action.
   `.password-store`) and `.zzz` directories other than the app dir.
   `ScopedFs` refuses every operation on a path in one, lexically, before
   touching the filesystem (`protected_dir_not_allowed` — the file actions
-  and the byte routes alike), every filer skips them, and `workspace_open`
+  and the byte routes alike), every filer skips them, and `project_open`
   refuses one. `.env` files are ordinary files.
 - **Saves are atomic** (staged beside the target, fsynced, renamed),
   falling back to a non-atomic in-place write only when the rename can't
@@ -315,7 +329,8 @@ PTY terminals don't get `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`,
 
 `zzz` (crate `crates/zzz`) starts or finds the daemon (`~/.zzz/` home,
 port 4460) and opens the UI — the browser, or a configured opener; `zzz
-<path>` opens a workspace; `zzz daemon start|stop|status`; `zzz init`. It
+<path>` opens the project holding a file or directory (a file isn't
+opened in a tab yet); `zzz daemon start|stop|status`; `zzz init`. It
 never searches the current directory for `zzzd` or an opener, so an
 untrusted checkout can't get its own binary run with your secrets. Full
 rules (discovery, env, port, exit codes, `daemon.json`, the opener):
@@ -335,9 +350,10 @@ rules (discovery, env, port, exit codes, `daemon.json`, the opener):
 zzz is a single-operator local app: one person, their own machine, the
 daemon running as their OS user on loopback. **Every session and every
 full-scope API token has the daemon user's powers** — terminals, opening
-a workspace on any directory the root rules admit (strictly inside `$HOME`,
+a project on any directory the root rules admit (strictly inside `$HOME`,
 or allowlisted), file reads and writes in scope outside the protected
-directories. Those rules keep the file actions and the index off `~/.ssh`,
+directories — a registry project's scope is its whole root, every repo
+in it focused or not. Those rules keep the file actions and the index off `~/.ssh`,
 the whole home or filesystem, and `/proc/<pid>/environ` — a guard against
 mistakes and a smaller reach for the file API, not a sandbox: a terminal is
 a shell as the same user. Accounts keep
@@ -356,7 +372,12 @@ zzz's own. Full posture, the gates, and the dev and prod origins:
 The main ones; detail in ./docs/architecture.md § Known Limitations:
 
 - **Domain state is in memory** — lost on a daemon restart; the frontend
-  resyncs after every reconnect.
+  resyncs after every reconnect and reopens the projects a restart lost.
+- **No unfocusing** — a focus lasts until the project closes, or until a
+  later open finds its entry missing or the root's kind changed, and an
+  unfocused repo isn't shown in the file tree; nothing under a registry's
+  root but its loose files and focused repos is indexed, and a new file
+  where nothing is indexed is refused.
 - **Chats, prompts, and terminal presets** live in page memory, lost on reload.
 - **WebSocket auth** at upgrade only, with event-driven revocation; at most
   50 sockets per account; no batch JSON-RPC.

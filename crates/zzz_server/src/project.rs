@@ -58,7 +58,7 @@ use crate::handlers::filesystem::{
     ERROR_INVALID_PATH, ERROR_NOT_A_DIRECTORY, ERROR_PATH_NOT_FOUND, ERROR_PERMISSION_DENIED,
     ERROR_PROTECTED_DIR_NOT_ALLOWED,
 };
-use crate::handlers::workspace::{ERROR_ROOT_NOT_ALLOWED, ERROR_ROOT_OUTSIDE_HOME};
+use crate::handlers::project::{ERROR_ROOT_NOT_ALLOWED, ERROR_ROOT_OUTSIDE_HOME};
 use crate::root_policy::{RootPolicy, RootRefusal};
 use crate::scoped_fs::{ProtectedDir, protected_dir};
 
@@ -292,7 +292,7 @@ pub enum ProjectError {
 
 impl ProjectError {
     /// The stable reason the frontend shows — the root refusals and path
-    /// errors share `workspace_open`'s.
+    /// errors are `project_open`'s too.
     pub fn reason(&self) -> &'static str {
         match self {
             Self::NotAbsolute { .. } => ERROR_INVALID_PATH,
@@ -1112,7 +1112,8 @@ purpose = "a reference"
 
     #[test]
     fn a_registry_in_a_checkout_roots_where_a_link_above_names_it() {
-        // the `~/dev/repos.toml` → `~/dev/grimoire/repos.toml` shape
+        // the `~/dev/repos.toml` → `~/dev/meta/repos.toml` shape: a link to a
+        // copy in one of its repos
         let f = Fixture::new();
         f.write("home/dev/meta/repos.toml", REGISTRY);
         f.mkdir("home/dev/meta/.git");

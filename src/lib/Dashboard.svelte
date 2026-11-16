@@ -60,7 +60,7 @@
 			if (main_section) {
 				main_section.items.unshift({ label: 'tabs', href: resolve('/tabs'), icon: icon_tab });
 				main_section.items.push({
-					label: 'projects',
+					label: 'projects mock',
 					href: resolve('/projects'),
 					icon: icon_project
 				});

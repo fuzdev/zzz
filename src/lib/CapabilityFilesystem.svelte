@@ -9,9 +9,9 @@
 	const zzz_dir = $derived(app.zzz_dir);
 	const scoped_dirs = $derived(app.scoped_dirs);
 
-	// workspace paths that aren't in the original scoped_dirs
-	const workspace_paths = $derived(
-		app.workspaces.items.values.map((w) => w.path).filter((p) => !scoped_dirs.includes(p))
+	// project roots that aren't in the original scoped_dirs
+	const project_roots = $derived(
+		app.projects.items.values.map((p) => p.root).filter((p) => !scoped_dirs.includes(p))
 	);
 </script>
 
@@ -68,8 +68,8 @@
 			{#each scoped_dirs as dir (dir)}
 				<small>{dir}</small>
 			{/each}
-			{#each workspace_paths as dir (dir)}
-				<small class="text_50">{dir} <span class="font_size_xs">(workspace)</span></small>
+			{#each project_roots as dir (dir)}
+				<small class="text_50">{dir} <span class="font_size_xs">(project)</span></small>
 			{/each}
 		</div>
 	</div>
@@ -79,7 +79,6 @@
 	<p>
 		The backend's filesystem is scoped for security. Symlinks are not followed. Configure with
 		<code class="font_size_sm">PUBLIC_ZZZ_DIR</code> and
-		<code class="font_size_sm">PUBLIC_ZZZ_SCOPED_DIRS</code>. Directories added via workspaces are
-		shown separately.
+		<code class="font_size_sm">PUBLIC_ZZZ_SCOPED_DIRS</code>. Project roots are shown separately.
 	</p>
 </section>
