@@ -3,6 +3,7 @@
 	import PasteFromClipboard from '@fuzdev/fuz_ui/PasteFromClipboard.svelte';
 	import { slide } from 'svelte/transition';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
+	import type { Position } from '@fuzdev/fuz_app/ui/position_helpers.ts';
 
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { Diskfile } from './diskfile.svelte.ts';
@@ -17,12 +18,18 @@
 		diskfile,
 		editor_state,
 		readonly = false,
-		auto_save = false
+		auto_save = false,
+		delete_position
 	}: {
 		diskfile: Diskfile;
 		editor_state: DiskfileEditorState;
 		readonly?: boolean | undefined;
 		auto_save?: boolean | undefined;
+		/**
+		 * Where the delete confirmation opens, `ConfirmButton`'s `left` by default - delete can be
+		 * the row's first button, so a container that clips at its left edge opens it elsewhere.
+		 */
+		delete_position?: Position | undefined;
 	} = $props();
 
 	const app = frontend_context.get();
@@ -51,6 +58,7 @@
 	<!-- Delete button is always available -->
 	<ConfirmButton
 		onconfirm={() => delete_diskfile(app.diskfiles, diskfile)}
+		position={delete_position}
 		class="plain icon-button"
 		title="delete file"
 	>

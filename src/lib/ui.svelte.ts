@@ -13,8 +13,8 @@ export const UiJson = cell_json_schema(
 		tutorial_for_diskfiles: with_default(boolean, true),
 		show_desk_menu: with_default(boolean, false),
 		desk_pinned: with_default(boolean, false),
-		/** The markdown view's details drawer, a layout preference shared by every file. */
-		show_markdown_details: with_default(boolean, true)
+		/** Every file view's details drawer, a layout preference shared by every file. */
+		show_diskfile_details: with_default(boolean, true)
 	},
 	'Ui'
 );
@@ -31,7 +31,7 @@ export class Ui extends Cell<typeof UiJson> {
 	tutorial_for_diskfiles: boolean = $state.raw()!;
 	show_desk_menu: boolean = $state.raw()!;
 	desk_pinned: boolean = $state.raw()!;
-	show_markdown_details: boolean = $state.raw()!;
+	show_diskfile_details: boolean = $state.raw()!;
 
 	// TODO revisit this API, maybe with an associated attachment?
 	/** Consumed by components like `ContentEditor` for focusing elements. */
@@ -72,6 +72,14 @@ export class Ui extends Cell<typeof UiJson> {
 	 */
 	toggle_desk_pinned(value: boolean = !this.desk_pinned): boolean {
 		this.desk_pinned = value;
+		return value;
+	}
+
+	/**
+	 * Toggle the file views' details drawer.
+	 */
+	toggle_diskfile_details(value: boolean = !this.show_diskfile_details): boolean {
+		this.show_diskfile_details = value;
 		return value;
 	}
 }

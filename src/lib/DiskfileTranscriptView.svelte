@@ -8,6 +8,7 @@
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { Diskfile } from './diskfile.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
+	import DiskfileDetailsDrawer from './DiskfileDetailsDrawer.svelte';
 	import DiskfileEditorView from './DiskfileEditorView.svelte';
 	import Icon from './Icon.svelte';
 	import TranscriptSegments from './TranscriptSegments.svelte';
@@ -84,7 +85,9 @@
 
 {#if transcript}
 	<DiskfileContextmenu {diskfile}>
-		<div class="flex height:100%">
+		<!-- a stacking context, so the details drawer's z-index (over the segments it slides across)
+		stays inside the view, under the desk menu's overlay -->
+		<div class="flex height:100% isolation:isolate">
 			<div class="flex:1 width_atleast_sm height:100% column p_md gap_md overflow:auto">
 				{#if source && source_url}
 					{#key source.mtime}
@@ -103,6 +106,10 @@
 						the audio this was made from, {transcript.source.name}, isn't beside it
 					</p>
 				{/if}
+				<!-- the drawer shows it beside "edit a copy", so here only with the drawer closed -->
+				{#if !app.ui.show_diskfile_details && copy_error !== null}
+					<p class="color_c_60">couldn't create the copy: {copy_error}</p>
+				{/if}
 				{#if transcript.segments.length > 0}
 					<TranscriptSegments
 						segments={transcript.segments}
@@ -114,7 +121,7 @@
 				{/if}
 			</div>
 
-			<div class="width_atmost_sm width_atleast_sm py_md">
+			<DiskfileDetailsDrawer>
 				<div class="px_md mb_lg flex gap_xs">
 					<button
 						type="button"
@@ -163,7 +170,7 @@
 						<div>created {diskfile.created_formatted_datetime}</div>
 					</small>
 				</div>
-			</div>
+			</DiskfileDetailsDrawer>
 		</div>
 	</DiskfileContextmenu>
 {:else}

@@ -8,6 +8,7 @@
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { Diskfile } from './diskfile.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
+	import DiskfileDetailsDrawer from './DiskfileDetailsDrawer.svelte';
 	import Icon from './Icon.svelte';
 	import JobStatusView from './JobStatusView.svelte';
 	import TranscriptSegments from './TranscriptSegments.svelte';
@@ -108,7 +109,9 @@
 </script>
 
 <DiskfileContextmenu {diskfile}>
-	<div class="flex height:100%">
+	<!-- a stacking context, so the details drawer's z-index (over the player it slides across) stays
+	inside the view, under the desk menu's overlay -->
+	<div class="flex height:100% isolation:isolate">
 		<div class="flex:1 width_atleast_sm height:100% column p_md gap_md overflow:auto">
 			{#if diskfile.deleted_on_disk}
 				<p class="color_c_60">deleted on disk</p>
@@ -230,7 +233,7 @@
 			{/if}
 		</div>
 
-		<div class="width_atmost_sm width_atleast_sm py_md">
+		<DiskfileDetailsDrawer>
 			<div class="px_md mb_lg flex gap_xs">
 				<PendingButton
 					pending={finalizing}
@@ -272,7 +275,7 @@
 				</small>
 				<small class="font_family_mono">{diskfile.id}</small>
 			</div>
-		</div>
+		</DiskfileDetailsDrawer>
 	</div>
 </DiskfileContextmenu>
 

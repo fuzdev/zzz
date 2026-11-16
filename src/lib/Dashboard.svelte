@@ -167,7 +167,8 @@
 		<Icon data={app.ui.show_sidebar ? icon_arrow_left : icon_arrow_right} />
 	</button>
 
-	<!-- desk menu button -->
+	<!-- desk menu button - the files header reserves its footprint with a copy of its classes and
+	icon (`DashboardDiskfiles`), so a change here goes there too -->
 	{#if !app.ui.show_desk_menu}
 		<button
 			type="button"

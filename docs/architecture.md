@@ -1109,23 +1109,35 @@ split, preview, or source, a mode chosen per file and kept on its
 content isn't loaded. Ctrl+Shift+1, 2, and 3 switch to split, preview, and
 source from anywhere on the page — the textarea included, since Ctrl+Shift
 types nothing — except an input or contenteditable outside the view, or while
-a modal dialog is open. The editor's sidebar is a
-drawer there, adding the document's outline and its broken links: clicking
-either scrolls the preview to it and puts the editor's caret at its source,
-in whichever panes are shown. The drawer is open by default and its state is
-app-wide (`Ui.show_markdown_details`), so it holds across files. Toggling it
-resizes the panes beside it once, at the start — its wrapper takes the
-drawer's width in the flow, or gives it up, at once — and only its content
-animates, sliding in from beyond the view's edge or back out over the
-widened panes, at the drawer's width so nothing re-wraps, clipped to the
-drawer's box. Closing, the content is inert, and gone once its slide ends
-(at once with reduced motion).
+a modal dialog is open. The markdown view's details add the document's
+outline and its broken links: clicking either scrolls the preview to it and
+puts the editor's caret at its source, in whichever panes are shown.
+
+Every file view keeps its details — the file's actions, info, and history —
+in one drawer at its right edge (`DiskfileDetailsDrawer`). The drawer is
+open by default and its state is app-wide (`Ui.show_diskfile_details`), so
+it holds across files and views; with it closed, an error from an action
+in it (a failed save, say) shows beside the view instead
+(`DiskfileSaveErrorNotice`). One icon toggle in the files header, at
+the tab strip's right end after the tabs, writes it, and the drawer
+follows. Toggling resizes the panes beside it once, at the start — its
+wrapper takes the drawer's width in the flow, or gives it up, at once — and
+only its content animates, sliding in from beyond the view's edge or back
+out over the widened panes, at the drawer's width so nothing re-wraps,
+clipped to the drawer's box. Opening mounts the content off the edge first
+and styles it there before the drawer opens, so its move transitions; a
+first render or a remount starts in place, unanimated. Closing, the content
+is inert, and gone once its slide ends (at once with reduced motion). Each
+view's root is a stacking context (`isolation:isolate`), so the drawer's
+`z-index` over the panes, and the markdown source editor's own, stay under
+the desk menu's overlay. The desk menu's button is fixed over the header's
+right end while it shows, so the header ends with an invisible copy of it
+that keeps the toggle and the tabs out from under it.
 `DiskfileView` keys the view on the file, so a switch mounts a fresh one and
 nothing a view holds for its file — a caret, the outline's lights, a playback
 position — carries over to the next, and a return to a file shows it from
-its top. The view parses the source once with
-`mdz_parse` and hands the nodes to the preview, the outline, and the link
-list.
+its top. The markdown view parses the source once with `mdz_parse` and hands
+the nodes to the preview, the outline, and the link list.
 
 The outline lights where the reader is, as a docs page's links do
 (`markdown_outline.ts`). A heading's section runs to the next heading at

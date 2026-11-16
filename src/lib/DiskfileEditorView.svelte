@@ -7,12 +7,14 @@
 	import type { Diskfile } from './diskfile.svelte.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import DiskfileActions from './DiskfileActions.svelte';
+	import DiskfileDetailsDrawer from './DiskfileDetailsDrawer.svelte';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import { format_placeholder } from './helpers.ts';
 	import DiskfilePartView from './DiskfilePartView.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';
 	import DiskfileConflictNotice from './DiskfileConflictNotice.svelte';
+	import DiskfileSaveErrorNotice from './DiskfileSaveErrorNotice.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
 	import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
 
@@ -48,7 +50,9 @@
 </script>
 
 <DiskfileContextmenu {diskfile}>
-	<div class="flex height:100%">
+	<!-- a stacking context, so the details drawer's z-index (over the editor it slides across) stays
+	inside the view, under the desk menu's overlay -->
+	<div class="flex height:100% isolation:isolate">
 		<div class="flex:1 width_atleast_sm height:100% column">
 			{#if !editor_state.content_loaded}
 				<p class="px_md py_xs color_c_60">
@@ -77,6 +81,7 @@
 				onresolve={() => content_editor?.focus()}
 				attrs={{ class: 'px_md py_xs' }}
 			/>
+			<DiskfileSaveErrorNotice {editor_state} attrs={{ class: 'px_md py_xs' }} />
 			<ContentEditor
 				bind:this={content_editor}
 				bind:content={
@@ -96,9 +101,15 @@
 			/>
 		</div>
 
-		<div class="width_atmost_sm width_atleast_sm py_md">
+		<DiskfileDetailsDrawer>
 			<div class="px_md mb_lg">
-				<DiskfileActions {diskfile} {editor_state} readonly={!editor_state.content_loaded} />
+				<!-- delete can be the row's first button, and the drawer clips at its left edge -->
+				<DiskfileActions
+					{diskfile}
+					{editor_state}
+					readonly={!editor_state.content_loaded}
+					delete_position="right"
+				/>
 			</div>
 
 			<div class="px_md mb_lg">
@@ -126,6 +137,6 @@
 			<div class="px_md">
 				<TutorialForDiskfiles />
 			</div>
-		</div>
+		</DiskfileDetailsDrawer>
 	</div>
 </DiskfileContextmenu>

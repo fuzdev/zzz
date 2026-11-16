@@ -4,11 +4,18 @@
 	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import { random_item } from '@fuzdev/fuz_util/random.ts';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
+	import {
+		icon_desk,
+		icon_double_chevron_left,
+		icon_double_chevron_right
+	} from '@fuzdev/fuz_ui/icons.ts';
 	import { onMount } from 'svelte';
 
 	import { frontend_context } from './frontend.svelte.ts';
 	import DiskfileExplorer from './DiskfileExplorer.svelte';
 	import DiskfileView from './DiskfileView.svelte';
+	import { DISKFILE_DETAILS_DRAWER_ID } from './DiskfileDetailsDrawer.svelte';
+	import Icon from './Icon.svelte';
 	import DiskfileTabListitem from './DiskfileTabListitem.svelte';
 	import { Reorderable } from './reorderable.svelte.ts';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
@@ -27,6 +34,10 @@
 	);
 
 	let show_diskfile_picker = $state.raw(false);
+
+	const details_title = $derived(
+		app.ui.show_diskfile_details ? 'hide the file details' : 'show the file details'
+	);
 
 	onMount(() => {
 		void capabilities.init_backend_check();
@@ -103,27 +114,62 @@
 		</div>
 
 		<div class="flex:1 column overflow:hidden height:100%">
-			<!-- tabs -->
-			<menu
-				class="unstyled flex overflow-x:auto scrollbar-width:thin"
-				{@attach tabs_reorderable.list({
-					onreorder: (from_index, to_index) => editor.reorder_tabs(from_index, to_index)
-				})}
-			>
-				{#each editor.tabs.ordered_tabs as tab, index (tab.id)}
-					<li class="flex py_xs3 px_xs4">
-						<div class="flex" {@attach tabs_reorderable.item({ index })}>
-							<!-- TODO notice the different APIs here, needs fixing, diskfiles is higher in the tree -->
-							<DiskfileTabListitem
-								{tab}
-								onselect={(tab) => diskfiles.select(tab.diskfile_id)}
-								onclose={(tab) => close_tab(tab.id)}
-								onopen={(tab) => editor.open_tab(tab.id)}
-							/>
-						</div>
-					</li>
-				{/each}
-			</menu>
+			<!-- the header: the tabs, scrolling and shrinking first, then the details toggle - it and the
+			desk button's placeholder sit at the top, in line with the desk button, not stretched to the
+			tabs' height -->
+			<div class="flex">
+				<menu
+					class="unstyled flex flex:1 min-width:0 overflow-x:auto scrollbar-width:thin"
+					{@attach tabs_reorderable.list({
+						onreorder: (from_index, to_index) => editor.reorder_tabs(from_index, to_index)
+					})}
+				>
+					{#each editor.tabs.ordered_tabs as tab, index (tab.id)}
+						<li class="flex py_xs3 px_xs4">
+							<div class="flex" {@attach tabs_reorderable.item({ index })}>
+								<!-- TODO notice the different APIs here, needs fixing, diskfiles is higher in the tree -->
+								<DiskfileTabListitem
+									{tab}
+									onselect={(tab) => diskfiles.select(tab.diskfile_id)}
+									onclose={(tab) => close_tab(tab.id)}
+									onopen={(tab) => editor.open_tab(tab.id)}
+								/>
+							</div>
+						</li>
+					{/each}
+				</menu>
+				{#if selected_diskfile}
+					<button
+						type="button"
+						class="icon-button plain border-radius:0 align-self:flex-start"
+						aria-label={details_title}
+						title={details_title}
+						aria-expanded={app.ui.show_diskfile_details}
+						aria-controls={DISKFILE_DETAILS_DRAWER_ID}
+						onclick={() => app.ui.toggle_diskfile_details()}
+					>
+						<Icon
+							data={app.ui.show_diskfile_details
+								? icon_double_chevron_right
+								: icon_double_chevron_left}
+						/>
+					</button>
+				{/if}
+				{#if !app.ui.show_desk_menu && editor.tabs.ordered_tabs.length > 0}
+					<!-- the desk menu button's footprint: it's fixed over the header's right end, so a copy
+					with its classes and icon, never seen or reached, keeps the header's own controls out
+					from under it (`Dashboard`) -->
+					<button
+						type="button"
+						class="icon-button plain border-radius:0 border_bottom_left_radius_md visibility:hidden align-self:flex-start"
+						disabled
+						tabindex="-1"
+						aria-hidden="true"
+					>
+						<Icon data={icon_desk} />
+					</button>
+				{/if}
+			</div>
 
 			<!-- editor content area: the space under the tabs, so a view's `height:100%` fits it and
 			     the column never overflows - else `scrollIntoView` and focus scroll the tabs away -->

@@ -1,17 +1,11 @@
 <script lang="ts">
-	import { flushSync, onDestroy } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import { inside_editable, is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
 	import { deep_equal } from '@fuzdev/fuz_util/deep_equal.ts';
 	import { mdz_parse } from '@fuzdev/mdz/mdz.ts';
 	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-	import {
-		icon_double_chevron_left,
-		icon_double_chevron_right,
-		icon_edit,
-		icon_preview,
-		icon_view
-	} from '@fuzdev/fuz_ui/icons.ts';
+	import { icon_edit, icon_preview, icon_view } from '@fuzdev/fuz_ui/icons.ts';
 	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
 
 	import { frontend_context } from './frontend.svelte.ts';
@@ -42,15 +36,16 @@
 		to_visible_source_range
 	} from './markdown_outline.ts';
 	import DiskfileActions from './DiskfileActions.svelte';
+	import DiskfileDetailsDrawer from './DiskfileDetailsDrawer.svelte';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import { format_placeholder } from './helpers.ts';
 	import DiskfilePartView from './DiskfilePartView.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';
 	import DiskfileConflictNotice from './DiskfileConflictNotice.svelte';
+	import DiskfileSaveErrorNotice from './DiskfileSaveErrorNotice.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
 	import Icon from './Icon.svelte';
-	import ErrorMessage from './ErrorMessage.svelte';
 	import { DISKFILE_CONTENT_NOT_LOADED_MESSAGE } from './diskfile_helpers.ts';
 	import { lang_for_path } from './path_lang.ts';
 	import { handle_save_shortcut_keydown } from './save_shortcut.ts';
@@ -66,8 +61,8 @@
 
 	A markdown file: its source beside a live preview, either alone (`MarkdownViewMode`), over the
 	same app-level editing state as `DiskfileEditorView` — drafts, conflicts, history, and save behave
-	the same. The editor view's sidebar is a drawer here, since three columns is too many; it adds the
-	document's outline and broken links, which reveal their place in the preview and the source.
+	the same. Its details drawer (`DiskfileDetailsDrawer`) adds the document's outline and broken
+	links, which reveal their place in the preview and the source.
 	Ctrl+Shift+1/2/3 switch the mode from anywhere on the page (`MARKDOWN_VIEW_MODE_SHORTCUTS`).
 
 	Split, the panes track each other through mdz's source offsets: the preview marks the block
@@ -103,16 +98,9 @@
 		source: icon_edit
 	};
 
-	// app-wide and open by default, so the outline and the file's actions show without asking, and
-	// a closed drawer stays closed as files switch (each file mounts a fresh view, see `DiskfileView`)
-	const drawer_open = $derived(app.ui.show_markdown_details);
-	// the drawer's content renders until its close animation ends - closing, it's inert as it slides
-	// out over the panes; closed, it's gone. The first render doesn't animate, since the content
-	// starts in place. Only `toggle_drawer` writes `show_markdown_details` - another writer would need
-	// this to follow it
-	let drawer_content_shown = $state.raw(app.ui.show_markdown_details);
-	// the part of the content that slides, whose `transform` transition is the drawer's animation
-	let drawer_panel_el: HTMLElement | undefined = $state.raw();
+	// app-wide and open by default, so the outline and the file's actions show without asking - the
+	// setting, not the drawer as drawn, so a closing drawer's outline is already still
+	const drawer_open = $derived(app.ui.show_diskfile_details);
 
 	let source_editor:
 		| {
@@ -327,43 +315,6 @@
 		followed_heading = -1;
 	};
 
-	const toggle_drawer = (): void => {
-		const open = !drawer_open;
-		if (open) {
-			// mounted closed, off the drawer's edge, and styled there before the drawer opens, so its
-			// move into place transitions - a reopen mid-close moves it back from where it is
-			if (!drawer_content_shown) {
-				drawer_content_shown = true;
-				flushSync();
-				drawer_panel_el?.getBoundingClientRect();
-			}
-			app.ui.show_markdown_details = true;
-		} else {
-			app.ui.show_markdown_details = false;
-			// closed, nothing re-reads the lights, so they clear rather than show stale for the frame
-			// before the reopened drawer's re-read
-			onscreen_sections = new Set();
-			followed_heading = -1;
-			// with no motion (`prefers-reduced-motion` unsets fuz_css's durations, so the transition
-			// computes to 0s) no transition ends it
-			if (!has_drawer_motion()) drawer_content_shown = false;
-		}
-	};
-
-	/** Whether the drawer's panel animates its slide, so a `transitionend` will follow. */
-	const has_drawer_motion = (): boolean =>
-		!!drawer_panel_el && parseFloat(getComputedStyle(drawer_panel_el).transitionDuration) > 0;
-
-	const handle_drawer_transition_end = (event: TransitionEvent): void => {
-		// the panel's own slide, not a transition inside it - and only once it's closed, so the end
-		// of a reopen mid-close changes nothing. A cancelled transition isn't listened for: closing
-		// during the open's slide cancels it, and the content stays for the close's own. A close
-		// cancelled with none after it (an ancestor hidden mid-close) leaves the content mounted,
-		// inert and clipped off the drawer's edge, until the next close
-		if (event.target !== event.currentTarget || event.propertyName !== 'transform') return;
-		if (!drawer_open) drawer_content_shown = false;
-	};
-
 	const scroll_sync = new MarkdownScrollSync({
 		get_editor: (): MarkdownScrollPane | null => {
 			const element = mode === 'split' ? source_editor?.get_scroll_element() : undefined;
@@ -408,9 +359,14 @@
 	// with the drawer open, the outline re-reads the pane being read on the next frame: when it
 	// opens, after a re-render or an edit, which moves what the pane shows, and after a mode switch,
 	// which shows another pane without resizing the panes' container - closed, it tracks and
-	// measures nothing
+	// measures nothing, and its lights clear rather than show stale for the frame before a reopen's
+	// re-read
 	$effect(() => {
-		if (!drawer_open) return;
+		if (!drawer_open) {
+			onscreen_sections = new Set();
+			followed_heading = -1;
+			return;
+		}
 		mode;
 		nodes;
 		scroll_sync.refresh();
@@ -444,18 +400,6 @@
 						<Icon data={MODE_ICONS[m]} /> <span class="ml_xs">{MARKDOWN_VIEW_MODE_LABELS[m]}</span>
 					</button>
 				{/each}
-				<div class="flex:1"></div>
-				<button
-					type="button"
-					class="plain sized_sm selectable deselectable"
-					class:selected={drawer_open}
-					aria-expanded={drawer_open}
-					title={drawer_open ? 'hide the file details' : 'show the file details'}
-					onclick={toggle_drawer}
-				>
-					<Icon data={drawer_open ? icon_double_chevron_right : icon_double_chevron_left} />
-					<span class="ml_xs">details</span>
-				</button>
 			</div>
 			{#if !editor_state.content_loaded}
 				<p class="px_md py_xs color_c_60">
@@ -484,14 +428,7 @@
 				onresolve={() => source_editor?.focus()}
 				attrs={{ class: 'px_md py_xs' }}
 			/>
-			<!-- the drawer's `DiskfileActions` shows it too, so this one shows only with the drawer closed -->
-			{#if !drawer_open && editor_state.save_error !== null}
-				<div class="px_md py_xs" transition:slide>
-					<ErrorMessage>
-						<small class="font_family_mono">save failed: {editor_state.save_error}</small>
-					</ErrorMessage>
-				</div>
-			{/if}
+			<DiskfileSaveErrorNotice {editor_state} attrs={{ class: 'px_md py_xs' }} />
 			<div class="flex flex:1 min-height:0" {@attach scroll_sync.attach}>
 				{#if mode !== 'preview'}
 					<!-- a wrapper keeps the editor its last child, so `CodeTextarea` adds no flow margin below -->
@@ -531,92 +468,53 @@
 			</div>
 		</div>
 
-		<!-- the wrapper takes its width at once, and the content's panel slides -->
-		<div class="markdown-drawer" class:open={drawer_open}>
-			{#if drawer_content_shown}
-				<div class="markdown-drawer-content" inert={!drawer_open}>
-					<div
-						class="markdown-drawer-panel shade_00 py_md"
-						bind:this={drawer_panel_el}
-						ontransitionend={handle_drawer_transition_end}
-					>
-						<div class="px_md mb_lg">
-							<DiskfileActions {diskfile} {editor_state} readonly={!editor_state.content_loaded} />
-						</div>
+		<DiskfileDetailsDrawer>
+			<div class="px_md mb_lg">
+				<!-- delete can be the row's first button, and the drawer clips at its left edge -->
+				<DiskfileActions
+					{diskfile}
+					{editor_state}
+					readonly={!editor_state.content_loaded}
+					delete_position="right"
+				/>
+			</div>
 
-						<div class="px_md mb_lg">
-							<MarkdownOutline
-								{headings}
-								onscreen={onscreen_sections}
-								current={current_section}
-								onselect={reveal_heading}
-							/>
-						</div>
+			<div class="px_md mb_lg">
+				<MarkdownOutline
+					{headings}
+					onscreen={onscreen_sections}
+					current={current_section}
+					onselect={reveal_heading}
+				/>
+			</div>
 
-						<MarkdownBrokenLinks {links} onselect={reveal_link} attrs={{ class: 'px_md mb_lg' }} />
+			<MarkdownBrokenLinks {links} onselect={reveal_link} attrs={{ class: 'px_md mb_lg' }} />
 
-						<div class="px_md mb_lg">
-							<DiskfileEditorNav {editor_state} />
-						</div>
+			<div class="px_md mb_lg">
+				<DiskfileEditorNav {editor_state} />
+			</div>
 
-						<div class="px_md mb_lg">
-							<DiskfileInfo {diskfile} {editor_state} />
-						</div>
+			<div class="px_md mb_lg">
+				<DiskfileInfo {diskfile} {editor_state} />
+			</div>
 
-						{#if editor_state.has_history}
-							<div transition:slide>
-								<DiskfileHistoryView
-									{editor_state}
-									onselectentry={(entry_id) => {
-										editor_state.set_content_from_history(entry_id);
-										source_editor?.focus();
-									}}
-								/>
-							</div>
-						{/if}
-
-						<DiskfilePartView {diskfile} />
-
-						<div class="px_md">
-							<TutorialForDiskfiles />
-						</div>
-					</div>
+			{#if editor_state.has_history}
+				<div transition:slide>
+					<DiskfileHistoryView
+						{editor_state}
+						onselectentry={(entry_id) => {
+							editor_state.set_content_from_history(entry_id);
+							source_editor?.focus();
+						}}
+					/>
 				</div>
 			{/if}
-		</div>
+
+			<DiskfilePartView {diskfile} />
+
+			<div class="px_md">
+				<TutorialForDiskfiles />
+			</div>
+		</DiskfileDetailsDrawer>
 	</div>
 </DiskfileContextmenu>
-
-<style>
-	/* the drawer's layout: the wrapper takes the drawer's width in the flow, or none, at once, so the
-	panes beside it resize once per toggle rather than reflowing every frame. The content sits out of
-	the flow at the view's right edge, the drawer's width whether open or not, so nothing in it
-	re-wraps, and clips the panel, which slides in from beyond that edge and back out over it -
-	closing, across the panes that have already widened */
-	.markdown-drawer {
-		position: relative;
-		flex-shrink: 0;
-		width: 0;
-	}
-	.markdown-drawer.open {
-		width: var(--distance_sm);
-	}
-	.markdown-drawer-content {
-		position: absolute;
-		top: 0;
-		right: 0;
-		bottom: 0;
-		z-index: 1;
-		width: var(--distance_sm);
-		overflow: clip;
-	}
-	.markdown-drawer-panel {
-		height: 100%;
-		overflow: auto;
-		transform: translate3d(100%, 0, 0);
-		transition: transform var(--duration_2) ease-in-out;
-	}
-	.markdown-drawer.open .markdown-drawer-panel {
-		transform: translate3d(0, 0, 0);
-	}
-</style>
