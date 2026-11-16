@@ -43,6 +43,7 @@ import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
+import { DiskfileTreeIndex } from './diskfile_tree_state.svelte.ts';
 import type { ActionInputs, ActionOutputs } from './action_collections.ts';
 
 export const DiskfilesJson = cell_json_schema(
@@ -554,6 +555,28 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly #directory_paths: SvelteSet<string> = new SvelteSet();
 
 	/**
+	 * Each folder's children among the files on disk, every file linked up to
+	 * `/` — not its `source_dir`, which is whichever root's filer reported it
+	 * last — so any root's folder shows it. Kept in step with
+	 * `directory_paths`; the file tree reads it (see `DiskfileTreeState`).
+	 */
+	readonly tree_index: DiskfileTreeIndex = new DiskfileTreeIndex();
+
+	/** The files in the collection that are deleted on disk, by id — see `listed_deleted`. */
+	readonly #deleted_files: SvelteMap<Uuid, Diskfile> = new SvelteMap();
+
+	/**
+	 * The files `listed` holds that are deleted on disk — kept for their drafts,
+	 * so missing from `tree_index`. Tracks only those few files, not the
+	 * whole collection.
+	 */
+	readonly listed_deleted: Array<Diskfile> = $derived(
+		Array.from(this.#deleted_files.values()).filter(
+			(diskfile) => !!this.#editor_states.get(diskfile.id)?.has_unsaved_edits
+		)
+	);
+
+	/**
 	 * The directories holding a file on disk, each with a trailing `/` —
 	 * changing only as a directory gains its first file or loses its last.
 	 */
@@ -574,23 +597,30 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Brings `#directory_counts` in step with the file `diskfile`'s id names:
-	 * it counts while it's in the collection and on disk, under its current
-	 * path and root. Called after every change to any of those. Reads the
-	 * collection's own object for the id when there is one, so a stale or
-	 * rejected object (an `add` of an id already present) can't uncount the
-	 * file that's there.
+	 * Brings `#directory_counts` and `tree_index` in step with the file
+	 * `diskfile`'s id names: it counts while it's in the collection and on
+	 * disk, under its current path and root. Called after every change to any
+	 * of those. Reads the collection's own object for the id when there is one,
+	 * so a stale or rejected object (an `add` of an id already present) can't
+	 * uncount the file that's there. Also keeps `#deleted_files`.
 	 */
 	#sync_directories(diskfile: Diskfile): void {
 		untrack(() => {
 			const counted = this.#counted_files.get(diskfile.id);
 			const live = this.items.by_id.get(diskfile.id);
 			const counts = !!live && !live.deleted_on_disk;
+			if (live?.deleted_on_disk) {
+				if (!this.#deleted_files.has(diskfile.id)) this.#deleted_files.set(diskfile.id, live);
+			} else if (this.#deleted_files.has(diskfile.id)) {
+				this.#deleted_files.delete(diskfile.id);
+			}
 			const { path, source_dir } = live ?? diskfile;
 			if (counted && counts && counted.path === path && counted.source_dir === source_dir) return;
 			if (counted) {
 				this.#counted_files.delete(diskfile.id);
-				for (const dir of to_file_directories(counted.path, counted.source_dir)) {
+				const dirs = to_file_directories(counted.path, counted.source_dir);
+				this.tree_index.remove_file(counted.path, to_file_directories(counted.path, '/'));
+				for (const dir of dirs) {
 					const count = this.#directory_counts.get(dir)! - 1;
 					if (count > 0) {
 						this.#directory_counts.set(dir, count);
@@ -602,7 +632,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			}
 			if (counts) {
 				this.#counted_files.set(diskfile.id, { path, source_dir });
-				for (const dir of to_file_directories(path, source_dir)) {
+				const dirs = to_file_directories(path, source_dir);
+				this.tree_index.add_file(path, to_file_directories(path, '/'));
+				for (const dir of dirs) {
 					const count = this.#directory_counts.get(dir) ?? 0;
 					this.#directory_counts.set(dir, count + 1);
 					if (count === 0) this.#directory_paths.add(dir);

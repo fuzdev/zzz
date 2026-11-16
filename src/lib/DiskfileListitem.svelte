@@ -6,6 +6,8 @@
 	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
+	import DiskfileStatusLabel from './DiskfileStatusLabel.svelte';
+	import { to_diskfile_status, to_diskfile_status_label } from './diskfile_helpers.ts';
 
 	const {
 		diskfile,
@@ -25,10 +27,7 @@
 
 	const app = frontend_context.get();
 
-	// only files already opened have an editing state — listing never creates one
-	const editor_state = $derived(app.diskfiles.find_editor_state(diskfile.id));
-	const dirty = $derived(editor_state?.dirty ?? false);
-	const conflict = $derived(editor_state?.has_conflict ?? false);
+	const status = $derived(to_diskfile_status(app.diskfiles, diskfile));
 
 	// TODO add a visible status when open in a tab
 </script>
@@ -54,33 +53,13 @@
 					}
 				}
 			: undefined}
-		aria-label={[
-			diskfile.path_relative,
-			diskfile.deleted_on_disk && 'deleted on disk',
-			conflict ? 'unsaved changes, changed on disk' : dirty && 'unsaved changes'
-		]
-			.filter(Boolean)
-			.join(', ') || undefined}
+		aria-label={to_diskfile_status_label(diskfile.path_relative, status)}
 		aria-pressed={selected}
 	>
 		<!-- only the path truncates, so the markers after it always show -->
 		<small class="row min-width:0">
 			<Icon data={icon_file} />
-			<span class="ml_xs ellipsis" class:deleted={diskfile.deleted_on_disk}>
-				{diskfile.path_relative}
-			</span>
-			{#if diskfile.deleted_on_disk}
-				<span class="ml_xs color_c_60" aria-hidden="true">(deleted)</span>
-			{/if}
-			{#if dirty}
-				<span class="ml_xs" class:color_c_50={conflict} aria-hidden="true">●</span>
-			{/if}
+			<DiskfileStatusLabel label={diskfile.path_relative} {status} />
 		</small>
 	</div>
 </DiskfileContextmenu>
-
-<style>
-	.deleted {
-		text-decoration: line-through;
-	}
-</style>

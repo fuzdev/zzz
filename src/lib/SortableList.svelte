@@ -1,12 +1,13 @@
 <script lang="ts" generics="T extends {id: Uuid}">
-	import { untrack, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
 	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import { slide } from 'svelte/transition';
 	import type { SvelteHTMLElements } from 'svelte/elements';
 
 	import { Sortable, sort_with_hint, type Sorter } from './sortable.svelte.ts';
-	import { compute_list_window, find_scroll_container } from './list_helpers.ts';
+	import { compute_list_window } from './list_helpers.ts';
+	import { ListViewport } from './list_viewport.svelte.ts';
 
 	const {
 		items,
@@ -87,21 +88,16 @@
 		return result;
 	});
 
-	let list_el: HTMLUListElement | undefined = $state();
-
-	// measured by `measure_window`; `0` until the first rows render
-	let row_height = $state(0);
-	// the visible area, in pixels from the top of the list
-	let viewport_start = $state(0);
-	let viewport_end = $state(0);
+	// measures the rows and the visible area when `windowed`
+	const viewport = new ListViewport();
 
 	const list_window = $derived(
 		windowed
 			? compute_list_window({
 					count: filtered_items.length,
-					row_height,
-					viewport_start,
-					viewport_end,
+					row_height: viewport.row_height,
+					viewport_start: viewport.viewport_start,
+					viewport_end: viewport.viewport_end,
 					overscan
 				})
 			: null
@@ -110,67 +106,6 @@
 	const rendered_items = $derived(
 		list_window ? filtered_items.slice(list_window.start, list_window.end) : filtered_items
 	);
-
-	/**
-	 * Measures the row height (the distance between two rows' tops, so margins
-	 * count) and where the visible area — `scroller`'s box clipped to the window,
-	 * or the window — sits relative to the list. Clipping to the window keeps a
-	 * scroller that isn't height-constrained from rendering every row.
-	 */
-	const measure_window = (list: HTMLUListElement, scroller: HTMLElement | null): void => {
-		const first = list.firstElementChild;
-		if (first) {
-			const first_rect = first.getBoundingClientRect();
-			const second = first.nextElementSibling;
-			const height = second
-				? second.getBoundingClientRect().top - first_rect.top
-				: first_rect.height;
-			if (height > 0 && height !== row_height) row_height = height;
-		}
-		const list_top = list.getBoundingClientRect().top;
-		let top = 0;
-		let bottom = window.innerHeight;
-		if (scroller) {
-			const scroller_top = scroller.getBoundingClientRect().top;
-			top = Math.max(top, scroller_top);
-			bottom = Math.min(bottom, scroller_top + scroller.clientHeight);
-		}
-		const start = top - list_top;
-		const end = bottom - list_top;
-		if (start !== viewport_start) viewport_start = start;
-		if (end !== viewport_end) viewport_end = end;
-	};
-
-	$effect(() => {
-		if (!windowed || !list_el) return;
-		const list = list_el;
-		const scroller = find_scroll_container(list);
-
-		// synchronous everywhere: scroll events fire at most once per frame and
-		// resize observations after layout, both before paint, so the new window
-		// renders in the same frame instead of painting a stale one
-		const measure = () => measure_window(list, scroller);
-
-		// the first rows are in the DOM by now — measure before they paint
-		untrack(measure);
-
-		// captured at the window, so scrolling any ancestor (not only `scroller`) re-measures
-		window.addEventListener('scroll', measure, { capture: true, passive: true });
-		window.addEventListener('resize', measure);
-		// the list resizes when its row count or row height changes, the scroller when the layout does.
-		// the list's border box (padding + rendered rows = count × row height) is observed, not the
-		// default content box, whose height changes with the number of rendered rows as the window
-		// shifts — a measure in the callback would then resize it again at the same depth, looping
-		const observer = new ResizeObserver(measure);
-		observer.observe(list, { box: 'border-box' });
-		if (scroller) observer.observe(scroller);
-
-		return () => {
-			window.removeEventListener('scroll', measure, { capture: true });
-			window.removeEventListener('resize', measure);
-			observer.disconnect();
-		};
-	});
 </script>
 
 {#if show_sort_controls && sortable.sorters.length > 1}
@@ -196,10 +131,10 @@
 	<ul
 		{...list_attrs}
 		class="unstyled {list_attrs?.class}"
-		bind:this={list_el}
-		style:padding-top={list_window ? `${list_window.start * row_height}px` : undefined}
+		{@attach windowed && viewport.measure}
+		style:padding-top={list_window ? `${list_window.start * viewport.row_height}px` : undefined}
 		style:padding-bottom={list_window
-			? `${(filtered_items.length - list_window.end) * row_height}px`
+			? `${(filtered_items.length - list_window.end) * viewport.row_height}px`
 			: undefined}
 	>
 		{#each rendered_items as item (item.id)}

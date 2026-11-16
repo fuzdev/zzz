@@ -1,12 +1,16 @@
 import { describe, test, assert } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-import { FILE_INDEX_IGNORED_DIR_NAMES, FILE_INDEX_TEMP_FILE_PREFIX } from '#lib/markdown_links.ts';
+import {
+	FILE_INDEX_IGNORED_DIR_NAMES,
+	FILE_INDEX_TEMP_FILE_PREFIX
+} from '#lib/diskfile_helpers.ts';
 
 /**
  * The TS copy of what the backend filer never indexes, held to the Rust
- * source it copies — a link into an ignored folder reads `skipped`, so a
- * drift would mark links there `broken`.
+ * source it copies — a link into an ignored folder reads `skipped` and the
+ * file tree hides one, so a drift would mark links there `broken` or show or
+ * hide the wrong folders.
  */
 
 const read_crate_source = (name: string): string =>

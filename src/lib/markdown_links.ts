@@ -18,6 +18,8 @@
 import type { MdzNode, MdzNodeHeading } from '@fuzdev/mdz/mdz.ts';
 import { mdz_is_safe_reference } from '@fuzdev/mdz/mdz_helpers.ts';
 
+import { FILE_INDEX_IGNORED_DIR_NAMES, FILE_INDEX_TEMP_FILE_PREFIX } from './diskfile_helpers.ts';
+
 /**
  * Where a link in a markdown file leads:
  *
@@ -171,35 +173,6 @@ export interface MarkdownLinkIndex {
 	/** The directories the index covers, each with a trailing `/`. */
 	readonly roots: ReadonlyArray<string>;
 }
-
-/**
- * Directory names the file index never enters, wherever they appear under a
- * root — the backend filer's default ignores (`DEFAULT_IGNORED_DIRS` in
- * `crates/zzz_server/src/filer.rs`) and the credential directories it skips
- * too (`CREDENTIAL_DIR_NAMES` in `crates/zzz_server/src/scoped_fs.rs`), which
- * a test holds this to. A link into one is `skipped`, not `broken`.
- */
-export const FILE_INDEX_IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
-	'.git',
-	'node_modules',
-	'.svelte-kit',
-	'target',
-	'dist',
-	'.zzz',
-	'.ssh',
-	'.gnupg',
-	'.aws',
-	'.kube',
-	'.docker',
-	'.password-store'
-]);
-
-/**
- * The prefix of the backend's staging files, which the index never lists
- * (`TEMP_FILE_PREFIX` in `crates/zzz_server/src/scoped_fs.rs`, which a test
- * holds this to).
- */
-export const FILE_INDEX_TEMP_FILE_PREFIX = '.zzz-tmp-';
 
 /**
  * How a path link stands against the file index:

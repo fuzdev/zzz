@@ -76,6 +76,36 @@ export const to_relative_path = (path: string, parent: string): string => {
 };
 
 /**
+ * Directory names the file index never enters, wherever they appear under a
+ * root — the backend filer's default ignores (`DEFAULT_IGNORED_DIRS` in
+ * `crates/zzz_server/src/filer.rs`) and the credential directories it skips
+ * too (`CREDENTIAL_DIR_NAMES` in `crates/zzz_server/src/scoped_fs.rs`), which
+ * a test holds this to. A link into one is `skipped`, not `broken`, and the
+ * file tree shows none as a folder (see `to_diskfile_tree_rows`).
+ */
+export const FILE_INDEX_IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
+	'.git',
+	'node_modules',
+	'.svelte-kit',
+	'target',
+	'dist',
+	'.zzz',
+	'.ssh',
+	'.gnupg',
+	'.aws',
+	'.kube',
+	'.docker',
+	'.password-store'
+]);
+
+/**
+ * The prefix of the backend's staging files, which the index never lists
+ * (`TEMP_FILE_PREFIX` in `crates/zzz_server/src/scoped_fs.rs`, which a test
+ * holds this to).
+ */
+export const FILE_INDEX_TEMP_FILE_PREFIX = '.zzz-tmp-';
+
+/**
  * The directories holding the file at `path`, each with a trailing `/`:
  * every ancestor from its parent up to its root `source_dir`, inclusive,
  * innermost first — none when `path` isn't under `source_dir`. The file
@@ -257,3 +287,42 @@ export const confirm_unload_with_unsaved_changes = (
 	// older browsers need a set `returnValue` to show the prompt
 	event.returnValue = ''; // eslint-disable-line @typescript-eslint/no-deprecated
 };
+
+/** What a file row marks beside the file's name — see `DiskfileStatusLabel`. */
+export interface DiskfileStatus {
+	/** Gone from disk, kept for its draft (`Diskfile.deleted_on_disk`). */
+	deleted: boolean;
+	/** Unsaved changes (`DiskfileEditorState.dirty`). */
+	dirty: boolean;
+	/** Unsaved changes, and the file changed on disk since (`DiskfileEditorState.has_conflict`). */
+	conflict: boolean;
+}
+
+/**
+ * The status a file row marks. Only looks the editing state up — a file never
+ * opened has none, and listing a file mustn't create one.
+ */
+export const to_diskfile_status = (diskfiles: Diskfiles, diskfile: Diskfile): DiskfileStatus => {
+	const editor_state = diskfiles.find_editor_state(diskfile.id);
+	return {
+		deleted: diskfile.deleted_on_disk,
+		dirty: editor_state?.dirty ?? false,
+		conflict: editor_state?.has_conflict ?? false
+	};
+};
+
+/**
+ * A file row's accessible name: `label`, then in words what its markers show,
+ * since they're hidden from assistive tech.
+ */
+export const to_diskfile_status_label = (
+	label: string | null | undefined,
+	status: DiskfileStatus
+): string | undefined =>
+	[
+		label,
+		status.deleted && 'deleted on disk',
+		status.conflict ? 'unsaved changes, changed on disk' : status.dirty && 'unsaved changes'
+	]
+		.filter(Boolean)
+		.join(', ') || undefined;

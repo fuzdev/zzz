@@ -1461,6 +1461,35 @@ sort among the rest, and a file of unknown size goes last in both directions.
 The picker also filters by path (case-insensitive substring). Rows scrolled
 out of range unmount, so focus on one is lost when it scrolls away.
 
+**The explorer's two modes.** The files page's explorer (`DiskfileExplorer`)
+shows the same files as a flat, sortable list (`DiskfileList`) or as a folder
+tree (`DiskfileTree`), switched by the folder toggle in its header
+(`DiskfilesEditor.explorer_mode`); the sort controls belong to the list, and
+"collapse all" to the tree. The tree has one top row per indexed root — the app
+directory, each scoped directory, each open workspace — labeled with the root's
+path, and under it folders before files, each sorted by name (case-insensitive,
+numbers by value), with names relative to their folder. A chain of folders that
+each hold only the next shows as one row, `a/b/c`, expanded or collapsed as one.
+Folders come from the files (`Diskfiles.tree_index`, kept in step as files come
+and go), so an empty folder doesn't show; a root nested in another shows under
+it as a folder holding the same files, once it holds any, and those files stay
+in the outer root after the nested one closes — unless the outer root's walk
+never enters it (the app directory, whatever its name; a `.git`, `node_modules`,
+or other ignored folder; a `.zzz-tmp-` staging name), where it shows only as its
+own root. A file deleted on disk but kept for its draft stays in its folder,
+marked like in the list. The expanded folders live on `DiskfilesEditor.tree`
+(`DiskfileTreeState`), so they survive a switch to the list and back. The tree
+is one flat, windowed list of its visible rows, and deriving them walks only the
+expanded folders, so a large index costs what is open, not what is indexed.
+Keyboard: Up and Down move, Right expands a folder or moves into it, Left
+collapses it or moves to the parent, Home and End jump, Enter opens a file in a
+permanent tab, Space previews it, and either toggles a folder; the ContextMenu
+key (or Shift+F10) opens the active file's menu. Focus stays on the tree, which
+names the active row by `aria-activedescendant`, so it survives the row
+scrolling away. A click previews a file, a double click opens it, and a click
+toggles a folder. File rows have the file contextmenu; folder and root rows have
+none yet.
+
 ## Spaces and Workspaces
 
 Two layers of directory scoping on top of the Filesystem section's "two

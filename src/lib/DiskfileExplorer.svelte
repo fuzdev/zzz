@@ -6,9 +6,12 @@
 
 	import { frontend_context } from './frontend.svelte.ts';
 	import DiskfileList from './DiskfileList.svelte';
+	import DiskfileTree from './DiskfileTree.svelte';
 	import {
+		icon_chevron_up,
 		icon_create_directory,
 		icon_create_file,
+		icon_directory,
 		icon_sort,
 		icon_workspace
 	} from '@fuzdev/fuz_ui/icons.ts';
@@ -28,6 +31,7 @@
 
 	const { zzz_dir } = $derived(app);
 	const { new_files_dir } = $derived(diskfiles);
+	const tree_mode = $derived(editor.explorer_mode === 'tree');
 
 	// TODO need awaitable websocket calls?
 	const TODO_create_file_pending = false;
@@ -95,7 +99,17 @@
 				>
 					<Icon data={icon_create_directory} />
 				</PendingButton>
-				{#if diskfiles.listed.length > 1}
+				{#if tree_mode}
+					<button
+						type="button"
+						class="plain sized_sm"
+						aria-label="collapse all folders"
+						title="collapse all folders"
+						onclick={() => editor.tree.collapse_all()}
+					>
+						<Icon data={icon_chevron_up} />
+					</button>
+				{:else if diskfiles.listed.length > 1}
 					<button
 						type="button"
 						class="plain sized_sm selectable deselectable"
@@ -106,13 +120,27 @@
 						<Icon data={icon_sort} />
 					</button>
 				{/if}
+				<button
+					type="button"
+					class="plain sized_sm"
+					aria-label="show files as a tree"
+					title="show files as a tree"
+					aria-pressed={tree_mode}
+					onclick={() => editor.toggle_explorer_mode()}
+				>
+					<Icon data={icon_directory} />
+				</button>
 			</div>
 		</div>
 
-		<DiskfileList
-			show_sort_controls={editor.show_sort_controls}
-			no_items={empty ? undefined : '[no files available]'}
-		/>
+		{#if tree_mode}
+			<DiskfileTree />
+		{:else}
+			<DiskfileList
+				show_sort_controls={editor.show_sort_controls}
+				no_items={empty ? undefined : '[no files available]'}
+			/>
+		{/if}
 
 		{#if empty && diskfiles.listed.length === 0}
 			{@render empty()}

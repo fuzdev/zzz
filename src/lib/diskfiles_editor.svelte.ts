@@ -1,11 +1,18 @@
 // @slop Claude Sonnet 3.7
 
-import { boolean, with_default, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
+import {
+	boolean,
+	one_of,
+	with_default,
+	type Infer,
+	type InferInput
+} from '@fuzdev/fuz_schema/schema.ts';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { DiskfileTabs } from './diskfile_tabs.svelte.ts';
 import type { DiskfileTab } from './diskfile_tab.svelte.ts';
+import { DiskfileTreeState } from './diskfile_tree_state.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 
 /**
@@ -20,9 +27,14 @@ export interface DiskfileTabCloseRequest {
 	cancelled: boolean;
 }
 
+/** How the file explorer shows the files: a flat, sortable list, or a folder tree. */
+export const DiskfileExplorerMode = one_of(['list', 'tree']);
+export type DiskfileExplorerMode = Infer<typeof DiskfileExplorerMode>;
+
 export const DiskfilesEditorJson = cell_json_schema(
 	{
-		show_sort_controls: with_default(boolean, false)
+		show_sort_controls: with_default(boolean, false),
+		explorer_mode: with_default(DiskfileExplorerMode, 'list')
 	},
 	'DiskfilesEditor'
 );
@@ -35,11 +47,20 @@ export type DiskfilesEditorOptions = CellOptions<typeof DiskfilesEditorJson>;
  * Editor state management for diskfiles.
  */
 export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
-	/** Controls visibility of sort controls in the file explorer. */
+	/** Controls visibility of sort controls in the file explorer's list mode. */
 	show_sort_controls: boolean = $state.raw(false);
+
+	/** Whether the file explorer shows a list or a tree. */
+	explorer_mode: DiskfileExplorerMode = $state.raw()!;
 
 	/** Tabs for managing the open diskfiles. */
 	readonly tabs: DiskfileTabs = new DiskfileTabs({ app: this.app });
+
+	/**
+	 * The explorer's tree mode: expanded folders and the active row. Held here,
+	 * not by the tree component, so they survive a switch to the list and back.
+	 */
+	readonly tree: DiskfileTreeState = new DiskfileTreeState({ app: this.app });
 
 	/** The latest tab close asked about — see `pending_close_request`. */
 	#pending_close: DiskfileTabCloseRequest | null = $state.raw(null);
@@ -194,5 +215,12 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	 */
 	toggle_sort_controls(value = !this.show_sort_controls): void {
 		this.show_sort_controls = value;
+	}
+
+	/** Switches the file explorer between its list and tree modes. */
+	toggle_explorer_mode(
+		value: DiskfileExplorerMode = this.explorer_mode === 'tree' ? 'list' : 'tree'
+	): void {
+		this.explorer_mode = value;
 	}
 }
