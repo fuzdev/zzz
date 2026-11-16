@@ -3551,9 +3551,12 @@ mod tests {
         let mut state = state_for(&tmp).await;
 
         // `rm f.txt && git checkout f.txt`, events processed after both, or
-        // FSEvents reporting the create before the remove
+        // FSEvents reporting the create before the remove. A different
+        // length, so the settled clock can't hide the rewrite: within one
+        // timestamp tick, a filesystem that hands the freed inode straight
+        // back (ext4) gives a same-length file the stamp it had
         std::fs::remove_file(tmp.path("f.txt")).unwrap();
-        std::fs::write(tmp.path("f.txt"), "two").unwrap();
+        std::fs::write(tmp.path("f.txt"), "three").unwrap();
         state
             .handle_event(event(
                 EventKind::Create(CreateKind::File),
