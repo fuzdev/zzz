@@ -4,7 +4,7 @@
 
 > nice web things for the tired 💤
 
-⚠️ early pre-release, does not persist your chats, prompts, or workspaces yet
+⚠️ early pre-release, does not persist your chats, prompts, or open projects yet
 
 Zzz, pronounced "zees" like bees,
 is a software garage for power users and devs.
