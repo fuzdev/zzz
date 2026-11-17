@@ -47,6 +47,7 @@ export const ActionSpecs: ActionSpecs = {
 	repo_focus: specs.repo_focus_action_spec,
 	repo_unfocus: specs.repo_unfocus_action_spec,
 	repo_files: specs.repo_files_action_spec,
+	project_status: specs.project_status_action_spec,
 	project_changed: specs.project_changed_action_spec
 };
 export type ActionSpecs = {
@@ -83,6 +84,7 @@ export type ActionSpecs = {
 	readonly repo_focus: typeof specs.repo_focus_action_spec;
 	readonly repo_unfocus: typeof specs.repo_unfocus_action_spec;
 	readonly repo_files: typeof specs.repo_files_action_spec;
+	readonly project_status: typeof specs.project_status_action_spec;
 	readonly project_changed: typeof specs.project_changed_action_spec;
 };
 
@@ -126,6 +128,7 @@ export interface ActionInputs {
 	repo_focus: Infer<typeof specs.repo_focus_action_spec.input>;
 	repo_unfocus: Infer<typeof specs.repo_unfocus_action_spec.input>;
 	repo_files: Infer<typeof specs.repo_files_action_spec.input>;
+	project_status: Infer<typeof specs.project_status_action_spec.input>;
 	project_changed: Infer<typeof specs.project_changed_action_spec.input>;
 }
 
@@ -167,6 +170,7 @@ export interface ActionCallInputs {
 	repo_focus: InferInput<typeof specs.repo_focus_action_spec.input>;
 	repo_unfocus: InferInput<typeof specs.repo_unfocus_action_spec.input>;
 	repo_files: InferInput<typeof specs.repo_files_action_spec.input>;
+	project_status: InferInput<typeof specs.project_status_action_spec.input>;
 	project_changed: InferInput<typeof specs.project_changed_action_spec.input>;
 }
 
@@ -208,6 +212,7 @@ export interface ActionOutputs {
 	repo_focus: Infer<typeof specs.repo_focus_action_spec.output>;
 	repo_unfocus: Infer<typeof specs.repo_unfocus_action_spec.output>;
 	repo_files: Infer<typeof specs.repo_files_action_spec.output>;
+	project_status: Infer<typeof specs.project_status_action_spec.output>;
 	project_changed: Infer<typeof specs.project_changed_action_spec.output>;
 }
 
@@ -358,6 +363,11 @@ export interface ActionEventDatas {
 		'repo_files',
 		ActionInputs['repo_files'],
 		ActionOutputs['repo_files']
+	>;
+	project_status: ActionEventRequestResponseData<
+		'project_status',
+		ActionInputs['project_status'],
+		ActionOutputs['project_status']
 	>;
 	project_changed: ActionEventRemoteNotificationData<
 		'project_changed',

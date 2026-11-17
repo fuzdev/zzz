@@ -58,6 +58,7 @@ use crate::filer::{
     FilerConfig, FilerDepth, FilerLifetime, IgnoredPaths, SerializableDisknode, WatchStatus,
 };
 use crate::handlers::App;
+use crate::repo_status::RegistrySource;
 
 // -- State ----------------------------------------------------------------------
 
@@ -841,6 +842,25 @@ impl ProjectManager {
         fresh: OpenProject,
         requested: &[String],
     ) -> Result<Opened, LifecycleError> {
+        self.open_with_registry(app, fresh, requested, None).await
+    }
+
+    /// [`Self::open`], also holding `registry` — the resolve's entries, for a
+    /// registry project — for its repo status
+    /// (`RepoStatusManager::set_registry`) once the open commits, under the
+    /// lock, so it follows the commit order: a close of the root that commits
+    /// first can't drop it, and one that commits after drops it.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::open`].
+    pub async fn open_with_registry(
+        &self,
+        app: &Arc<App>,
+        fresh: OpenProject,
+        requested: &[String],
+        registry: Option<RegistrySource>,
+    ) -> Result<Opened, LifecycleError> {
         let (wanted, mut refused) = check_requested(&fresh, requested);
 
         // the scans run before the lock (see the module docs); a required
@@ -897,8 +917,19 @@ impl ProjectManager {
         let mut next = projects.clone();
         next.insert(project.root.clone(), project.clone());
         let changes = change.map(|change| (change, project.clone()));
-        self.commit(app, &mut projects, next, &started, changes)
-            .await?;
+        let committed = self
+            .commit(app, &mut projects, next, &started, changes)
+            .await;
+        // whether the open committed, not the commit's result: a failed
+        // notify still committed it, and a failed filer start committed
+        // nothing (a reopen's root then holds the previous project)
+        if let Some(source) = registry
+            && !matches!(committed, Err(LifecycleError::Filer { .. }))
+            && projects.contains_key(&project.root)
+        {
+            app.repo_status.set_registry(&project.root, source);
+        }
+        committed?;
         // as committed: stamped, with the ignored paths the commit read
         let project = projects[&project.root].clone();
         // read before the lock drops: a commit after it could stop or narrow
@@ -958,10 +989,16 @@ impl ProjectManager {
         };
         let mut project = project;
         let changes = [(ProjectChange::Close, project.clone())];
-        if let Some(rev) = self
+        let committed = self
             .commit(app, &mut projects, next, &Filers::new(), changes)
-            .await?
-        {
+            .await;
+        // under the lock, so a reopen committing after this keeps its own;
+        // by the state the commit left, so a commit that failed before it
+        // closed anything keeps the open project's
+        if !projects.contains_key(&project.root) {
+            app.repo_status.forget(&project.root);
+        }
+        if let Some(rev) = committed? {
             project.rev = rev;
         }
         Ok(project)
@@ -982,10 +1019,13 @@ impl ProjectManager {
             .iter()
             .map(|project| (ProjectChange::Close, project.clone()))
             .collect();
-        if let Some(rev) = self
+        let committed = self
             .commit(app, &mut projects, Projects::new(), &Filers::new(), changes)
-            .await?
-        {
+            .await;
+        if projects.is_empty() {
+            app.repo_status.retain(&[]);
+        }
+        if let Some(rev) = committed? {
             for project in &mut closed {
                 project.rev = rev;
             }
@@ -1614,6 +1654,30 @@ mod tests {
                 ("/w/site/".to_owned(), FilerDepth::TopLevel),
             ]
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_registry_open_holds_its_status_source_until_its_close() {
+        let tmp = TempDir::new();
+        tmp.write("w/README.md");
+        let app = inert_app();
+        let root = tmp.key("w/");
+        let source = || RegistrySource::new(Path::new(&root), &[]);
+        app.projects
+            .open_with_registry(&app, registry_at(&root, &[], &[]), &[], Some(source()))
+            .await
+            .unwrap();
+        assert!(app.repo_status.poll(&app.git, &root, false).await.is_ok());
+        app.projects.close(&app, &root).await.unwrap();
+        assert!(app.repo_status.poll(&app.git, &root, false).await.is_err());
+
+        app.projects
+            .open_with_registry(&app, registry_at(&root, &[], &[]), &[], Some(source()))
+            .await
+            .unwrap();
+        app.projects.close_all(&app).await.unwrap();
+        assert!(app.repo_status.poll(&app.git, &root, false).await.is_err());
+        assert_settled(&app).await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

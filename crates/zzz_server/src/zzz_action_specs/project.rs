@@ -1,7 +1,7 @@
 //! `ActionSpec` builders for project methods.
 //!
 //! Mirrors the project specs in `src/lib/action_specs.ts`: `project_list`
-//! and `repo_files` (read-only), `project_open`, `project_close`,
+//! `repo_files`, and `project_status` (read-only), `project_open`, `project_close`,
 //! `repo_focus`, and `repo_unfocus` (side-effects) — each account-grain
 //! (`account: required, actor: none`) like its TS spec.
 //!
@@ -37,7 +37,8 @@ pub fn build_project_specs(app: Arc<App>) -> Vec<ActionSpec> {
         project_close_spec(Arc::clone(&app)),
         repo_focus_spec(Arc::clone(&app)),
         repo_unfocus_spec(Arc::clone(&app)),
-        repo_files_spec(app),
+        repo_files_spec(Arc::clone(&app)),
+        project_status_spec(app),
     ]
 }
 
@@ -118,6 +119,19 @@ fn repo_files_spec(app: Arc<App>) -> ActionSpec {
         AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         false,
+        handler,
+    )
+}
+
+fn project_status_spec(app: Arc<App>) -> ActionSpec {
+    let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
+        let app = Arc::clone(&app);
+        Box::pin(async move { project::project_status(params, ctx, app).await })
+    });
+    ActionSpec::read_only(
+        "project_status",
+        AuthSpec::account_grain(CredentialGate::Any),
+        InputShape::Object,
         handler,
     )
 }

@@ -31,6 +31,7 @@ pub mod project;
 pub mod project_manager;
 pub mod provider;
 pub mod pty_manager;
+pub mod repo_status;
 pub mod root_policy;
 mod router;
 pub mod scoped_fs;

@@ -429,7 +429,8 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
   reporting; paste is from the context menu only.
 - **Recording** is one at a time per tab; **transcription** is batch, needs
   `ffmpeg`, whisper.cpp, and a model.
-- **No git integration, no MCP/A2A** yet.
+- **No git integration** beyond read-only repo status on the projects
+  page, **no MCP/A2A** yet.
 
 ## fuz_app
 

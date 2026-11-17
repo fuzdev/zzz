@@ -19,7 +19,8 @@
  * ignores under a focused checkout (`ignored`, on the reply and refreshed by
  * a `.gitignore` edit) and the repos of their own it leaves unindexed
  * (`nested`), the client's predicate (`to_unindexed_part`) agreeing with
- * what the daemon indexes, and the scope a close releases.
+ * what the daemon indexes, each entry's git status (`project_status`)
+ * filling in and following an edit, and the scope a close releases.
  *
  * @module
  */
@@ -44,6 +45,7 @@ import {
 	ProjectChangedInput,
 	ProjectCloseOutput,
 	ProjectOpenOutput,
+	ProjectStatusOutput,
 	RepoFilesOutput,
 	RepoFocusOutput,
 	RepoUnfocusOutput,
@@ -149,6 +151,25 @@ const file_ids = (output: { files: SnapshotFiles }): Array<string> =>
 	decode_snapshot_files(output.files)
 		.map((f) => f.id as string)
 		.sort();
+
+/** Polls `project_status` until `done` holds for its entries. */
+const poll_status = async (
+	fixture: CrossFixture,
+	root: string,
+	done: (entries: ProjectStatusOutput['entries']) => boolean
+): Promise<ProjectStatusOutput['entries']> => {
+	let last: unknown;
+	for (let i = 0; i < 200; i++) {
+		const res = await call(fixture, 'project_status', { root });
+		assert.ok(res.ok, `project_status failed: ${JSON.stringify(res)}`);
+		const parsed = parse(ProjectStatusOutput, res.result);
+		assert.ok(parsed.ok, `project_status result: ${JSON.stringify(parsed)}`);
+		if (done(parsed.value.entries)) return parsed.value.entries;
+		last = parsed.value.entries;
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+	throw Error(`project_status never settled: ${JSON.stringify(last)}`);
+};
 
 describe('project registry cross-backend', () => {
 	test('opening a path in a repo opens the registry root, focused on that repo', async () => {
@@ -794,5 +815,61 @@ describe('project registry cross-backend', () => {
 			by: 'git',
 			path: `${inner}/build/`
 		});
+	});
+	test("project_status fills in each entry's git status and follows an edit", async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		const app = join(dev, 'app');
+		const commit = [
+			'-c',
+			'user.name=t',
+			'-c',
+			'user.email=t@example.com',
+			'-c',
+			'commit.gpgsign=false'
+		];
+		await git(['init', '-q', '-b', 'main'], app);
+		await git(['add', '.'], app);
+		await git([...commit, 'commit', '-q', '-m', 'one'], app);
+		const root = `${dev}/`;
+		await open_project(fixture, join(app, 'a.ts'));
+
+		const settled = await poll_status(fixture, root, (entries) =>
+			entries.every((e) => !e.probing && e.state !== 'pending')
+		);
+		assert.deepEqual(
+			settled.map((e) => [e.key, e.state]),
+			[
+				['app', 'ok'],
+				['site', 'missing']
+			],
+			'the refused entry is left out'
+		);
+		const status = settled[0]!;
+		assert.strictEqual(status.branch, 'main');
+		assert.strictEqual(status.uncommitted.unstaged, 0);
+		assert.isNotNull(status.probed_at);
+
+		// an edit in the focused checkout moves nothing under .git: its filer's
+		// hint re-probes it
+		await writeFile(join(app, 'a.ts'), 'edited', 'utf-8');
+		const edited = await poll_status(
+			fixture,
+			root,
+			(entries) => entries[0]!.uncommitted.unstaged === 1 && !entries[0]!.probing
+		);
+		assert.strictEqual(edited[0]!.state, 'ok');
+
+		// a plain directory isn't a registry, and a closed root isn't open
+		const scratch = await open_project(fixture, join(dev, 'scratch'));
+		assert.strictEqual(scratch.project.kind, 'plain_dir');
+		const plain = await call(fixture, 'project_status', { root: scratch.project.root });
+		assert.ok(!plain.ok);
+		assert.include(JSON.stringify(plain), 'project_not_registry');
+		const closed = await call(fixture, 'project_close', { root });
+		assert.ok(closed.ok, JSON.stringify(closed));
+		const gone = await call(fixture, 'project_status', { root });
+		assert.ok(!gone.ok);
+		assert.include(JSON.stringify(gone), 'project_not_open');
 	});
 });

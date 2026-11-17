@@ -40,13 +40,14 @@ use crate::project_manager::{
     EntryState, FocusRefused, FocusedFiles, LifecycleError, OpenEntry, OpenFallback, OpenKind,
     OpenProject, Opened, ProjectInfo,
 };
+use crate::repo_status::{PollRefused, RegistrySource, RepoStatusInfo};
 
 /// `project_close` of a root that isn't an open project (`invalid_params`)
 /// — e.g. one a restart forgot, which a client can then drop locally.
 pub const ERROR_PROJECT_NOT_OPEN: &str = "project_not_open";
 
-/// `repo_focus` / `repo_unfocus` on a project that isn't a registry
-/// (`invalid_params`): a checkout's or plain directory's one focus is its
+/// `repo_focus` / `repo_unfocus` / `project_status` on a project that isn't
+/// a registry (`invalid_params`): a checkout's or plain directory's one focus is its
 /// root, kept while it's open.
 pub const ERROR_PROJECT_NOT_REGISTRY: &str = "project_not_registry";
 
@@ -100,6 +101,21 @@ struct ProjectCloseInput {
 struct RepoInput {
     root: String,
     dir: String,
+}
+
+/// Input for `project_status`: an open registry project's root, and whether
+/// to re-probe every entry now.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectStatusInput {
+    root: String,
+    #[serde(default)]
+    refresh: bool,
+}
+
+#[derive(Serialize)]
+struct ProjectStatusResult {
+    entries: Vec<RepoStatusInfo>,
 }
 
 // -- Typed response structs --------------------------------------------------
@@ -540,10 +556,15 @@ pub async fn project_open(
         None => None,
     };
     let fresh = to_open_project(&project, focus.as_deref(), fuz_sys::rfc3339_now())?;
+    // held for its repo status once the open commits
+    let registry = match &project.kind {
+        ProjectKind::Registry { entries, .. } => Some(RegistrySource::new(&project.root, entries)),
+        ProjectKind::GitRepo | ProjectKind::PlainDir => None,
+    };
 
     // Run to completion in its own task, so a caller that goes away mid-open
     // can't leave filers running for a project that never opened.
-    tokio::spawn(open_project(app, fresh, focus, requested))
+    tokio::spawn(open_project(app, fresh, focus, requested, registry))
         .await
         .map_err(|e| internal_error_with_source("failed to open project", &e))?
 }
@@ -554,6 +575,7 @@ async fn open_project(
     fresh: OpenProject,
     focus: Option<String>,
     requested: Vec<String>,
+    registry: Option<RegistrySource>,
 ) -> Result<ActionOutput, JsonrpcError> {
     let Opened {
         landed,
@@ -561,7 +583,7 @@ async fn open_project(
         refused,
     } = app
         .projects
-        .open(&app, fresh, &requested)
+        .open_with_registry(&app, fresh, &requested, registry)
         .await
         .map_err(|e| lifecycle_error(OPEN_PROJECT, &e, None))?;
     for FocusRefused { dir, error } in &refused {
@@ -798,6 +820,56 @@ pub async fn repo_unfocus(
         project: project.to_info(),
     })
     .map_err(|e| internal_error_with_source("serialization failed", &e))
+}
+
+/// `project_status` — every entry's tier-1 git status for the open registry
+/// project at `root` ([`crate::repo_status`]).
+///
+/// What's known now, with the probes of the stale entries started, never
+/// awaited. Refused entries are left out; missing ones say so.
+///
+/// Read-only: `git status` runs with optional locks off, so it never writes
+/// the index.
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed input, a root that names no open project
+/// (`project_not_open`), or one that isn't a registry
+/// (`project_not_registry`).
+pub async fn project_status(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
+) -> Result<Value, JsonrpcError> {
+    let ProjectStatusInput { root, refresh } = parse_strict_params(params)?;
+    let root = with_trailing_slash(root);
+    let published = app.projects.published();
+    // refused without forgetting: an open of the root in flight may have
+    // just set what the status reads (`ProjectManager::open_with_registry`)
+    let Some(project) = published.projects.iter().find(|p| p.root == root) else {
+        return Err(invalid_params(
+            &format!("no open project at {root}"),
+            Some(ERROR_PROJECT_NOT_OPEN),
+        ));
+    };
+    if !matches!(project.kind, OpenKind::Registry { .. }) {
+        return Err(invalid_params(
+            &format!("{root} isn't a registry project"),
+            Some(ERROR_PROJECT_NOT_REGISTRY),
+        ));
+    }
+    let entries = app
+        .repo_status
+        .poll(&app.git, &root, refresh)
+        .await
+        .map_err(|PollRefused::Unknown| {
+            invalid_params(
+                &format!("no status is held for {root}"),
+                Some(ERROR_PROJECT_NOT_OPEN),
+            )
+        })?;
+    serde_json::to_value(ProjectStatusResult { entries })
+        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 /// Close every open project through the same path as `project_close` —
@@ -1216,7 +1288,7 @@ purpose = "a reference"
         focus: Option<String>,
         requested: &[String],
     ) -> Value {
-        let output = open_project(Arc::clone(app), info, focus, requested.to_vec())
+        let output = open_project(Arc::clone(app), info, focus, requested.to_vec(), None)
             .await
             .unwrap();
         let mut out = Vec::new();
@@ -1500,10 +1572,16 @@ purpose = "a reference"
         let app = inert_app();
         // `site` is gone by the time its filer starts
         let info = registry_info(&tmp, &["site"]);
-        let error = open_project(Arc::clone(&app), info, Some(tmp.key("w/site/")), vec![])
-            .await
-            .err()
-            .unwrap();
+        let error = open_project(
+            Arc::clone(&app),
+            info,
+            Some(tmp.key("w/site/")),
+            vec![],
+            None,
+        )
+        .await
+        .err()
+        .unwrap();
         assert_eq!(error.code, JsonrpcErrorCode::NotFound);
         assert!(app.projects.published().projects.is_empty());
         assert!(app.filer_manager.files_for(&tmp.key("w/")).await.is_empty());

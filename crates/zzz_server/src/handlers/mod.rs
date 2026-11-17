@@ -37,6 +37,7 @@ use crate::job_manager::JobManager;
 use crate::project_manager::ProjectManager;
 use crate::provider::{CompletionOptions, ProviderManager};
 use crate::pty_manager::PtyManager;
+use crate::repo_status::RepoStatusManager;
 use crate::root_policy::RootPolicy;
 use crate::scoped_fs::ScopedFs;
 use crate::tool::Tools;
@@ -62,6 +63,8 @@ pub struct App {
     /// them the project filers and the runtime `ScopedFs` roots
     /// ([`ProjectManager`]).
     pub projects: ProjectManager,
+    /// Tier-1 status of open registries' entries ([`RepoStatusManager`]).
+    pub repo_status: Arc<RepoStatusManager>,
     /// Whose registry files and directories `project_open` trusts — the
     /// daemon's own user, read once at boot ([`TrustedOwner::current`]).
     pub trusted_owner: TrustedOwner,
@@ -153,6 +156,7 @@ impl App {
         Self {
             instance_id: Uuid::new_v4(),
             projects: ProjectManager::new(),
+            repo_status: Arc::new(RepoStatusManager::new()),
             trusted_owner: TrustedOwner::current(),
             git: Arc::new(crate::git::daemon_git()),
             git_usability: GitUsability::unchecked(),

@@ -504,6 +504,75 @@ export const RepoUnfocusOutput = object({
 });
 export type RepoUnfocusOutput = Infer<typeof RepoUnfocusOutput>;
 
+/** Input for `project_status`: an open registry project's root. */
+export const ProjectStatusInput = object({
+	root: DiskfileDirectoryPath,
+	/** Re-probe every present entry now, not only the stale ones. */
+	refresh: optional(boolean)
+});
+export type ProjectStatusInput = Infer<typeof ProjectStatusInput>;
+
+/** Where an entry's status stands. */
+export const RepoStatusState = one_of(['pending', 'ok', 'failed', 'missing', 'not_a_repo']);
+export type RepoStatusState = Infer<typeof RepoStatusState>;
+
+/** A branch's relation to origin: the counts where they mean something. */
+export const RepoRelationJson = object({
+	kind: one_of([
+		'in_sync',
+		'ahead',
+		'behind',
+		'diverged',
+		'shallow',
+		'gone',
+		'unmapped',
+		'untracked'
+	]),
+	ahead: safe_integer,
+	behind: safe_integer
+});
+export type RepoRelationJson = Infer<typeof RepoRelationJson>;
+
+/** A registry entry's tier-1 git status, from local refs — twin of `RepoStatusInfo`. */
+export const RepoStatusJson = object({
+	/** The entry's key in its registry table. */
+	key: string,
+	state: RepoStatusState,
+	/** Whether a probe of it is in flight. */
+	probing: boolean,
+	/** When the status was read (unix ms); null while pending. */
+	probed_at: nullable(safe_integer),
+	/** The branch the checkout is on; null when detached or not read. */
+	branch: nullable(string),
+	detached: boolean,
+	/** Whether it's on the branch the entry follows; null when it follows none. */
+	on_branch: nullable(boolean),
+	uncommitted: object({
+		staged: safe_integer,
+		unstaged: safe_integer,
+		untracked: safe_integer,
+		conflicted: safe_integer
+	}),
+	/** An operation stopped mid-way (`rebase`, `cherry_pick`, …). */
+	in_progress: nullable(string),
+	/** The followed branch's relation to origin, when compared. */
+	followed: nullable(RepoRelationJson),
+	stashes: safe_integer,
+	/** The newest fetch's time (unix seconds). */
+	fetched_at: nullable(safe_integer),
+	/** Why `repos sync` would leave it to a person, by kind. */
+	needs_human: array(string),
+	/** What failed, for a failed probe. */
+	error: nullable(string)
+});
+export type RepoStatusJson = Infer<typeof RepoStatusJson>;
+
+/** Output for `project_status`: every entry but the refused, in registry order. */
+export const ProjectStatusOutput = object({
+	entries: array(RepoStatusJson)
+});
+export type ProjectStatusOutput = Infer<typeof ProjectStatusOutput>;
+
 /**
  * Input for `repo_files`: a focused directory of an open project — a
  * registry's focused entry, or a checkout's or plain directory's root.
@@ -919,6 +988,19 @@ export const repo_unfocus_action_spec = {
 		"Drop a registry entry from an open project's focus — its file watching stops unless another open project keeps it, and its files leave the index — and notify `project_changed` `update`; idempotent, and a registry may keep no focus. Refuses a root that isn't open (`invalid_params` / `project_not_open`), a project that isn't a registry, whose root stays focused while it's open (`project_not_registry`), and a directory that's none of its entries (`repo_not_in_project`)."
 } satisfies RequestResponseActionSpec;
 
+export const project_status_action_spec = {
+	method: 'project_status',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: false,
+	input: ProjectStatusInput,
+	output: ProjectStatusOutput,
+	async: true,
+	description:
+		"Each entry's git status for an open registry project, from local refs (no fetch) — what's known now, with probes of the stale entries started, never awaited: poll while showing it and the statuses fill in. An entry is stale when its git dir's refs, HEAD, index, or stash moved, its focused checkout saw edits, it was never probed, `refresh` is set, or (one per poll) its status is a minute old. Refuses a root that isn't open (`invalid_params` / `project_not_open`) and a project that isn't a registry (`project_not_registry`)."
+} satisfies RequestResponseActionSpec;
+
 export const repo_files_action_spec = {
 	method: 'repo_files',
 	kind: 'request_response',
@@ -990,5 +1072,6 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	repo_focus_action_spec,
 	repo_unfocus_action_spec,
 	repo_files_action_spec,
+	project_status_action_spec,
 	project_changed_action_spec
 ];

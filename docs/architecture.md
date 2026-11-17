@@ -2100,6 +2100,23 @@ folder menu unfocuses it. A restart's reopen restores every focus however
 it was made, in one `project_open` of the root with each focused directory
 in its `focus`.
 
+**Repo status.** The projects page shows each present registry entry's git
+state from local refs — the branch when it isn't the followed one, an
+operation in progress, uncommitted counts, distance from origin, stashes —
+read as `repos status` reads it, no fetch (`project_status`,
+`crates/zzz_server/src/repo_status.rs`). A poll never waits on git: it
+answers with what the daemon knows and starts probes of the stale entries,
+so the page (`RepoStatusPoll`) polls while it's shown and the tab is
+visible, faster while a probe runs. An entry is stale when something under
+its `.git` moved (refs, HEAD, an index, the stash, the config — a stat
+stamp, no git run), when its focused checkout's filer broadcast a change
+(editing a tracked file moves nothing under `.git`; at most every few
+seconds), when it was never probed, on a refresh, or — one per poll — when
+its status is past the sweep age, which is how an unfocused repo edited by
+another program catches up. Only registry projects have status; the daemon
+holds each registry's resolved entries while it's open, set and dropped
+under the projects lock with the open and close.
+
 ## Auth gate
 
 The about and docs routes are public: they render (and prerender) without
@@ -2132,6 +2149,13 @@ accounts from each other.
   filesystem unless the operator allowlists a directory for it — a smaller
   reach and a guard against mistakes, not a boundary: a terminal is still a
   shell that can read all of them.
+- The daemon's own git calls (resolving a project, the ignore rule,
+  `project_status`) never run hooks, an fsmonitor, or background
+  maintenance, but `project_status` runs `git status` in each present
+  registry entry, which runs the clean filters a repo's config defines on
+  files whose stat changed — the same exposure as `repos status` or a
+  git-aware shell prompt. Only the registry's resolved, confined entries
+  are probed, never an unregistered directory.
 - Terminal output and control — and jobs — are scoped to the account that
   created them, and a deleted or purged account's terminals are closed and
   its jobs cancelled — but that
@@ -2631,7 +2655,7 @@ Population, per capability:
   (`Diskfile.mtime`, from the index's disk node), and the file being recorded
   shows as recording, with no player, until it's saved. Images and video have
   no viewer yet
-- **No git integration** — no commit/push/pull from the UI
+- **No git integration** beyond read-only repo status — no commit/push/pull from the UI
 - **No MCP/A2A** — protocol support planned but not implemented
 - **Backend** — `zzz_server` serves the full RPC surface with the full auth
   stack. `cargo xtask dev` runs it with the Vite frontend. Anthropic, OpenAI,

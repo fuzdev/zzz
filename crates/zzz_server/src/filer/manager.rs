@@ -56,12 +56,17 @@ impl std::fmt::Debug for FilerManager {
     }
 }
 
-/// A [`FilerBroadcast`] through `App::broadcast`. Holds the app weakly — the
-/// filers live in the app, so a strong reference would be a cycle.
-fn app_broadcast(app: &Arc<App>) -> FilerBroadcast {
+/// A [`FilerBroadcast`] through `App::broadcast` for the filer on `path`,
+/// each broadcast also hinting the repo status that `path`'s checkout was
+/// edited (`RepoStatusManager::hint`) — editing a tracked file moves nothing
+/// under `.git`. Holds the app weakly — the filers live in the app, so a
+/// strong reference would be a cycle.
+fn app_broadcast(app: &Arc<App>, path: &str) -> FilerBroadcast {
     let app: Weak<App> = Arc::downgrade(app);
+    let path = path.to_owned();
     Arc::new(move |message: &str| {
         if let Some(app) = app.upgrade() {
+            app.repo_status.hint(&path);
             app.broadcast(message);
         }
     })
@@ -138,7 +143,7 @@ impl FilerManager {
         lifetime: FilerLifetime,
     ) -> io::Result<bool> {
         let config = with_app(config, &app);
-        self.start_with(path, app_broadcast(&app), config, lifetime)
+        self.start_with(path, app_broadcast(&app, path), config, lifetime)
             .await
     }
 
@@ -239,7 +244,8 @@ impl FilerManager {
         config: FilerConfig,
     ) -> io::Result<()> {
         let config = with_app(config, &app);
-        self.replace_with(path, app_broadcast(&app), config).await
+        self.replace_with(path, app_broadcast(&app, path), config)
+            .await
     }
 
     /// [`Self::replace_filer`] with an explicit broadcast sink.

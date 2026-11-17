@@ -935,7 +935,9 @@ commands):
   entry not cloned, or gone since the registry was resolved → `not_found`,
   or refused → `forbidden`, all `repo_not_present`; a repo whose listing
   fails otherwise → as for `project_open`'s focused directory, the message
-  `failed to focus repo: …`. `repo_files` of a root that isn't open →
+  `failed to focus repo: …`. `project_status` of a root that isn't open →
+  `invalid_params` / `project_not_open`, of a checkout or plain directory →
+  `invalid_params` / `project_not_registry`. `repo_files` of a root that isn't open →
   `invalid_params` / `project_not_open`, of a directory the project doesn't
   focus → `invalid_params` / `repo_not_focused`
   (`handlers::project::ERROR_REPO_NOT_FOCUSED`) — never an empty answer,
