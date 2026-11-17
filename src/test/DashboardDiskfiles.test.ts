@@ -12,7 +12,7 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
-import { install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import { install_fake_disk, type FakeDisk, seed_diskfile } from './diskfile_test_helpers.ts';
 
 /**
  * The files page's header: the tabs, then the details toggle for the file
@@ -103,7 +103,7 @@ describe('DashboardDiskfiles header', () => {
 		const target = render();
 		assert.isNull(details_button(target), 'no tab, no toggle');
 
-		const a = app.diskfiles.peek(parse_or_throw(DiskfilePath, '/w/a.txt'));
+		const a = seed_diskfile(app, parse_or_throw(DiskfilePath, '/w/a.txt'));
 		assert.ok(a);
 		app.diskfiles.select(a.path, true);
 		flushSync();
@@ -182,9 +182,8 @@ describe('DashboardDiskfiles header', () => {
 		assert.isNull(details_button(target), 'no file view, no toggle');
 		assert.ok(desk_placeholder(target), 'the tabs still run under the desk menu button');
 
-		// a selected tab whose file is gone
-		app.diskfiles.editor.tabs.select_tab(app.diskfiles.editor.tabs.ordered_tabs[0]!.id);
-		app.diskfiles.items.remove(a.id);
+		// a selected tab whose file is gone — one opened for a path nothing is known at
+		app.diskfiles.select(parse_or_throw(DiskfilePath, '/gone/x.ts'));
 		flushSync();
 		assert.include(target.textContent, 'this tab has no diskfile');
 		assert.isNull(details_button(target));

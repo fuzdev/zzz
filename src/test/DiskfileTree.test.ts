@@ -26,6 +26,7 @@ import {
 	row_texts,
 	tree_el
 } from './diskfile_tree_test_helpers.ts';
+import { seed_diskfile } from './diskfile_test_helpers.ts';
 
 /**
  * The file explorer's tree mode, driven as a user would: the mode switch in
@@ -167,7 +168,7 @@ describe('the tree’s keyboard', () => {
 	test('arrows move and expand, enter opens a file for good, space previews', () => {
 		write('/w/a/x.md');
 		const b = write('/w/b.md');
-		const x = app.diskfiles.peek(parse_or_throw(DiskfilePath, '/w/a/x.md'))!;
+		const x = seed_diskfile(app, parse_or_throw(DiskfilePath, '/w/a/x.md'))!;
 		const { target } = render_tree();
 		const { tabs } = app.diskfiles.editor;
 

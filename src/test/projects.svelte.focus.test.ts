@@ -17,7 +17,7 @@ import type {
 import type { ProjectInfoJson } from '#lib/project.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { content_hash, encode_snapshot_files } from './diskfile_test_helpers.ts';
+import { content_hash, encode_snapshot_files, seed_diskfile } from './diskfile_test_helpers.ts';
 
 const DEV = parse_or_throw(DiskfileDirectoryPath, '/dev/');
 const APP = parse_or_throw(DiskfileDirectoryPath, '/dev/app/');
@@ -144,7 +144,7 @@ const setup = (focused: Array<DiskfileDirectoryPath>, files: Array<DiskfilePath>
 
 /** Opens the file at `path` in a tab with a draft. */
 const edit = async (path: DiskfilePath): Promise<void> => {
-	const diskfile = app.diskfiles.peek(path);
+	const diskfile = seed_diskfile(app, path);
 	assert.ok(diskfile);
 	await app.diskfiles.ensure_content(diskfile);
 	app.diskfiles.select(diskfile.path, true);
@@ -206,7 +206,7 @@ describe('Projects.focus_repo', () => {
 		assert.deepEqual(result.value?.focused, [SITE]);
 		assert.strictEqual(result.value?.rev, 2);
 		assert.strictEqual(result.value?.watch_status, 'degraded');
-		assert.ok(app.diskfiles.peek(SITE_A));
+		assert.ok(seed_diskfile(app, SITE_A));
 		assert.isFalse(app.projects.pending_repos.has(SITE));
 		assert.strictEqual(session_loads, 0, 'the reply carries the files');
 	});
@@ -226,7 +226,7 @@ describe('Projects.focus_repo', () => {
 		});
 		assert.ok((await focused).ok);
 		await flush();
-		assert.ok(app.diskfiles.peek(SITE_A), 'the reply at the same rev carries the files');
+		assert.ok(seed_diskfile(app, SITE_A), 'the reply at the same rev carries the files');
 		assert.strictEqual(files_calls.length, 0);
 		assert.strictEqual(session_loads, 0);
 	});
@@ -247,7 +247,7 @@ describe('Projects.focus_repo', () => {
 		const result = await focused;
 		assert.ok(result.ok);
 		assert.deepEqual(result.value?.focused, [APP, SITE], 'the newer state stands');
-		assert.ok(!app.diskfiles.peek(SITE_A), "the older reply's files aren't applied");
+		assert.ok(!seed_diskfile(app, SITE_A), "the older reply's files aren't applied");
 		assert.deepEqual(
 			files_calls.map((c) => c.input).sort((a, b) => a.dir!.localeCompare(b.dir!)),
 			[
@@ -263,7 +263,7 @@ describe('Projects.focus_repo', () => {
 		setup([SITE], [SITE_A, SITE_B]);
 		await edit(SITE_B);
 		receive_update(registry_info([], 2));
-		const b = app.diskfiles.peek(SITE_B);
+		const b = seed_diskfile(app, SITE_B);
 		assert.ok(b);
 		assert.isFalse(b.deleted_on_disk);
 
@@ -277,7 +277,7 @@ describe('Projects.focus_repo', () => {
 			}
 		});
 		assert.ok((await focused).ok);
-		assert.strictEqual(app.diskfiles.peek(SITE_B), b);
+		assert.strictEqual(seed_diskfile(app, SITE_B), b);
 		assert.isTrue(b.deleted_on_disk, 'gone from disk meanwhile');
 	});
 
@@ -301,7 +301,7 @@ describe('Projects.unfocus_repo', () => {
 		setup([APP, SITE], [README, APP_A, SITE_A, SITE_B, SITE_C]);
 		await edit(SITE_B);
 		// a tab with no draft
-		const a = app.diskfiles.peek(SITE_A)!;
+		const a = seed_diskfile(app, SITE_A)!;
 		app.diskfiles.select(a.path, true);
 		assert.ok(app.diskfiles.editor.tabs.by_path.get(a.path));
 
@@ -312,25 +312,25 @@ describe('Projects.unfocus_repo', () => {
 		const result = await unfocused;
 		assert.ok(result.ok);
 		assert.deepEqual(result.value?.focused, [APP]);
-		assert.ok(!app.diskfiles.peek(SITE_C), 'nothing holds it, so forgotten');
-		assert.strictEqual(app.diskfiles.peek(SITE_A), a, 'kept for its tab');
+		assert.ok(!seed_diskfile(app, SITE_C), 'nothing holds it, so forgotten');
+		assert.strictEqual(seed_diskfile(app, SITE_A), a, 'kept for its tab');
 		assert.isFalse(a.deleted_on_disk);
 		assert.ok(app.diskfiles.editor.tabs.by_path.get(a.path), 'its tab stays open');
-		const b = app.diskfiles.peek(SITE_B);
+		const b = seed_diskfile(app, SITE_B);
 		assert.ok(b, 'kept for its draft');
 		assert.isFalse(b.deleted_on_disk, 'still on disk, only unindexed');
-		assert.ok(app.diskfiles.peek(APP_A), 'the other repo keeps its files');
-		assert.ok(app.diskfiles.peek(README), 'and the root its loose files');
+		assert.ok(seed_diskfile(app, APP_A), 'the other repo keeps its files');
+		assert.ok(seed_diskfile(app, README), 'and the root its loose files');
 		assert.strictEqual(session_loads, 0);
 
 		// its tab closed, nothing holds it
 		app.diskfiles.editor.close_tab(app.diskfiles.editor.tabs.by_path.get(a.path)!.id);
-		assert.ok(!app.diskfiles.peek(SITE_A), 'released');
+		assert.ok(!seed_diskfile(app, SITE_A), 'released');
 		// discarded and closed, nothing holds it
 		app.diskfiles.get_editor_state(b).discard_draft();
-		assert.ok(app.diskfiles.peek(SITE_B), 'its tab still holds it');
+		assert.ok(seed_diskfile(app, SITE_B), 'its tab still holds it');
 		app.diskfiles.editor.close_tab(app.diskfiles.editor.tabs.by_path.get(b.path)!.id);
-		assert.ok(!app.diskfiles.peek(SITE_B), 'released');
+		assert.ok(!seed_diskfile(app, SITE_B), 'released');
 	});
 
 	test("a nested registry's loose files stay, indexed at its top level", async () => {
@@ -345,9 +345,9 @@ describe('Projects.unfocus_repo', () => {
 		const unfocused = app.projects.unfocus_repo(DEV, SITE);
 		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([], 2) } });
 		assert.ok((await unfocused).ok);
-		assert.ok(app.diskfiles.peek(SITE_A), 'a loose file of the nested registry');
+		assert.ok(seed_diskfile(app, SITE_A), 'a loose file of the nested registry');
 		assert.ok(
-			!app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/site/sub/x.txt')),
+			!seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/site/sub/x.txt')),
 			'below its top level, nothing indexes it'
 		);
 	});
@@ -365,7 +365,7 @@ describe('Projects.unfocus_repo', () => {
 		assert.deepEqual(result.value?.focused, [APP, SITE]);
 		receive_update(registry_info([APP], 2));
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
-		assert.ok(app.diskfiles.peek(SITE_A), 'not released by the older state');
+		assert.ok(seed_diskfile(app, SITE_A), 'not released by the older state');
 		assert.strictEqual(session_loads, 0);
 	});
 
@@ -384,8 +384,8 @@ describe('Projects.unfocus_repo', () => {
 			value: { files: encode_snapshot_files([node(APP_A)]), watch_status: 'full', rev: 3 }
 		});
 		await flush();
-		assert.ok(app.diskfiles.peek(APP_A));
-		assert.ok(!app.diskfiles.peek(SITE_A), 'the unfocused repo released');
+		assert.ok(seed_diskfile(app, APP_A));
+		assert.ok(!seed_diskfile(app, SITE_A), 'the unfocused repo released');
 		assert.strictEqual(session_loads, 0);
 	});
 
@@ -396,7 +396,7 @@ describe('Projects.unfocus_repo', () => {
 		const unfocused = app.projects.unfocus_repo(DEV, SITE);
 		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([], 2) } });
 		assert.ok((await unfocused).ok);
-		assert.ok(app.diskfiles.peek(SITE_A));
+		assert.ok(seed_diskfile(app, SITE_A));
 	});
 });
 
@@ -407,19 +407,19 @@ describe('a remote unfocus', () => {
 		receive_update(registry_info([APP], 2));
 		await flush();
 		assert.strictEqual(session_loads, 0);
-		assert.ok(!app.diskfiles.peek(SITE_A));
-		assert.isFalse(app.diskfiles.peek(SITE_B)?.deleted_on_disk);
-		assert.ok(app.diskfiles.peek(APP_A));
+		assert.ok(!seed_diskfile(app, SITE_A));
+		assert.isFalse(seed_diskfile(app, SITE_B)?.deleted_on_disk);
+		assert.ok(seed_diskfile(app, APP_A));
 	});
 
 	test("during an own open, releases at once, and the open's older reply brings nothing back", async () => {
 		setup([APP, SITE], [APP_A, SITE_A, SITE_B, SITE_C]);
-		const c = app.diskfiles.peek(SITE_C)!;
+		const c = seed_diskfile(app, SITE_C)!;
 		app.diskfiles.select(c.path, true);
 		await edit(SITE_B);
 		const opened = app.projects.open(APP);
 		receive_update(registry_info([APP], 2));
-		assert.ok(!app.diskfiles.peek(SITE_A), 'released by the newer state');
+		assert.ok(!seed_diskfile(app, SITE_A), 'released by the newer state');
 		// the open changed nothing, so its reply is the state before the unfocus
 		open_calls[0]!.resolve({
 			ok: true,
@@ -436,9 +436,9 @@ describe('a remote unfocus', () => {
 		await flush();
 		assert.strictEqual(session_loads, 0, 'no resync');
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP]);
-		assert.ok(!app.diskfiles.peek(SITE_A), "the older reply's files aren't applied");
-		assert.isFalse(app.diskfiles.peek(SITE_B)?.deleted_on_disk);
-		assert.isFalse(app.diskfiles.peek(SITE_C)?.deleted_on_disk, 'kept for its tab');
+		assert.ok(!seed_diskfile(app, SITE_A), "the older reply's files aren't applied");
+		assert.isFalse(seed_diskfile(app, SITE_B)?.deleted_on_disk);
+		assert.isFalse(seed_diskfile(app, SITE_C)?.deleted_on_disk, 'kept for its tab');
 	});
 
 	test('a focus dropped because its entry went missing is released, flagging drafts uncovered', async () => {
@@ -449,12 +449,12 @@ describe('a remote unfocus', () => {
 		receive_update(missing);
 		await flush();
 		assert.strictEqual(session_loads, 0);
-		assert.ok(!app.diskfiles.peek(SITE_A));
-		const kept = app.diskfiles.peek(SITE_B);
+		assert.ok(!seed_diskfile(app, SITE_A));
+		const kept = seed_diskfile(app, SITE_B);
 		assert.ok(kept, 'its draft keeps it');
 		assert.isTrue(kept.uncovered, 'out of the index, not seen deleted');
 		assert.isFalse(kept.deleted_on_disk);
-		assert.ok(app.diskfiles.peek(APP_A));
+		assert.ok(seed_diskfile(app, APP_A));
 	});
 
 	test.each(['left the registry', 'went missing'] as const)(
@@ -464,7 +464,7 @@ describe('a remote unfocus', () => {
 			await edit(SITE_B);
 			receive_update(registry_info([APP], 2));
 			await flush();
-			const b = app.diskfiles.peek(SITE_B);
+			const b = seed_diskfile(app, SITE_B);
 			assert.ok(b, 'unfocused, kept for its draft');
 			assert.isFalse(b.uncovered, 'kept as it is while its repo is listed');
 
@@ -476,7 +476,7 @@ describe('a remote unfocus', () => {
 			}
 			receive_update(next);
 			await flush();
-			assert.strictEqual(app.diskfiles.peek(SITE_B), b);
+			assert.strictEqual(seed_diskfile(app, SITE_B), b);
 			assert.isTrue(b.uncovered, 'no longer an unfocused repo of an open project');
 			assert.notInclude(
 				app.diskfiles.on_disk.map((r) => r.id),
@@ -487,7 +487,7 @@ describe('a remote unfocus', () => {
 
 			app.diskfiles.get_editor_state(b).discard_draft();
 			app.diskfiles.editor.tabs.close_all_tabs();
-			assert.isUndefined(app.diskfiles.peek(SITE_B), 'forgotten once nothing holds it');
+			assert.isUndefined(seed_diskfile(app, SITE_B), 'forgotten once nothing holds it');
 		}
 	);
 });
@@ -515,10 +515,10 @@ describe('a remote focus', () => {
 			}
 		});
 		await flush();
-		assert.ok(app.diskfiles.peek(SITE_A));
-		assert.ok(!app.diskfiles.peek(SITE_B), 'the notification wins over the older reply');
-		assert.ok(!app.diskfiles.peek(SITE_C), 'known under the repo, absent from it: gone');
-		assert.ok(app.diskfiles.peek(README), 'outside the repo, left alone');
+		assert.ok(seed_diskfile(app, SITE_A));
+		assert.ok(!seed_diskfile(app, SITE_B), 'the notification wins over the older reply');
+		assert.ok(!seed_diskfile(app, SITE_C), 'known under the repo, absent from it: gone');
+		assert.ok(seed_diskfile(app, README), 'outside the repo, left alone');
 		assert.strictEqual(app.projects.get_by_root(DEV)?.watch_status, 'degraded');
 		assert.strictEqual(session_loads, 0);
 	});
@@ -555,7 +555,7 @@ describe('a remote focus', () => {
 			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 2 }
 		});
 		await flush();
-		assert.ok(!app.diskfiles.peek(SITE_A));
+		assert.ok(!seed_diskfile(app, SITE_A));
 		assert.strictEqual(session_loads, 0);
 	});
 
@@ -576,13 +576,13 @@ describe('a remote focus', () => {
 			}
 		});
 		await flush();
-		assert.ok(app.diskfiles.peek(created));
+		assert.ok(seed_diskfile(app, created));
 		files_calls[0]!.resolve({
 			ok: true,
 			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 2 }
 		});
 		await flush();
-		assert.ok(app.diskfiles.peek(created), 'not pruned by the read of the earlier focus');
+		assert.ok(seed_diskfile(app, created), 'not pruned by the read of the earlier focus');
 	});
 
 	test("a later focus of another repo leaves an earlier one's pull in flight to apply", async () => {
@@ -602,7 +602,7 @@ describe('a remote focus', () => {
 			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 2 }
 		});
 		await flush();
-		assert.ok(app.diskfiles.peek(SITE_A), 'the focus it read is the one held');
+		assert.ok(seed_diskfile(app, SITE_A), 'the focus it read is the one held');
 	});
 
 	test('a pull that fails otherwise resyncs', async () => {
@@ -639,7 +639,7 @@ describe('a remote focus', () => {
 			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 3 }
 		});
 		await flush();
-		assert.ok(app.diskfiles.peek(SITE_A));
+		assert.ok(seed_diskfile(app, SITE_A));
 		// the notifications landing late fetch nothing more
 		receive_update(registry_info([SITE], 2));
 		receive_update(registry_info([APP, SITE], 3));
@@ -673,8 +673,8 @@ describe('a remote focus', () => {
 			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 3 }
 		});
 		await flush();
-		assert.ok(app.diskfiles.peek(APP_A));
-		assert.ok(app.diskfiles.peek(SITE_A));
+		assert.ok(seed_diskfile(app, APP_A));
+		assert.ok(seed_diskfile(app, SITE_A));
 		assert.strictEqual(session_loads, 0);
 	});
 });
@@ -711,10 +711,10 @@ describe('a resync of a focused repo', () => {
 			}
 		});
 		await flush();
-		assert.ok(app.diskfiles.peek(SITE_A));
-		assert.ok(!app.diskfiles.peek(SITE_B), 'now ignored: pruned');
-		assert.ok(app.diskfiles.peek(SITE_C), 'no longer ignored: added');
-		assert.ok(app.diskfiles.peek(README), 'outside the repo, left alone');
+		assert.ok(seed_diskfile(app, SITE_A));
+		assert.ok(!seed_diskfile(app, SITE_B), 'now ignored: pruned');
+		assert.ok(seed_diskfile(app, SITE_C), 'no longer ignored: added');
+		assert.ok(seed_diskfile(app, README), 'outside the repo, left alone');
 		assert.strictEqual(session_loads, 0);
 	});
 
@@ -764,8 +764,8 @@ describe('a resync of a focused repo', () => {
 			}
 		});
 		await flush();
-		assert.ok(app.diskfiles.peek(SITE_A));
-		assert.ok(!app.diskfiles.peek(SITE_B), "the older pull's files aren't applied");
+		assert.ok(seed_diskfile(app, SITE_A));
+		assert.ok(!seed_diskfile(app, SITE_B), "the older pull's files aren't applied");
 	});
 
 	test('during an own focus, pulls once it settles — unless the reply covers the repo', async () => {
@@ -826,7 +826,7 @@ describe('a resync of a focused repo', () => {
 		app.projects.add(with_ignored(registry_info([SITE]), [], 0));
 		app.diskfiles.add_initial([README, SITE_A].map(node));
 		await open_with_reply(with_ignored(registry_info([SITE], 2), [], 1));
-		assert.ok(app.diskfiles.peek(SITE_B), 'the reply carried the files');
+		assert.ok(seed_diskfile(app, SITE_B), 'the reply carried the files');
 		assert.strictEqual(files_calls.length, 0);
 		assert.strictEqual(session_loads, 0);
 	});
@@ -835,7 +835,7 @@ describe('a resync of a focused repo', () => {
 		app.projects.add(with_ignored(registry_info([SITE]), [], 0));
 		app.diskfiles.add_initial([README, SITE_A].map(node));
 		await open_with_reply(with_ignored(registry_info([SITE], 1), [], 0));
-		assert.ok(!app.diskfiles.peek(SITE_B), "the older reply's files aren't applied");
+		assert.ok(!seed_diskfile(app, SITE_B), "the older reply's files aren't applied");
 		assert.deepEqual(
 			files_calls.map((c) => c.input),
 			[{ root: DEV, dir: SITE }]

@@ -10,6 +10,7 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import { estimate_token_count } from '#lib/helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { seed_diskfile } from './diskfile_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 const LOADED_PATH = parse_or_throw(DiskfilePath, '/w/loaded.ts');
@@ -72,7 +73,7 @@ describe('Turn and Thread lengths', () => {
 		assert_lengths_match();
 
 		// a file that can't load contributes its marker
-		const unloaded = app.diskfiles.peek(UNLOADED_PATH)!;
+		const unloaded = seed_diskfile(app, UNLOADED_PATH)!;
 		unloaded.unloaded_status = 'unloadable';
 		unloaded.unloaded_reason = 'too_large';
 		assert.include(with_files.content, 'content not loaded — the file is over 4 MiB]');

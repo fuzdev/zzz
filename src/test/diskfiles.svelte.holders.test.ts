@@ -1,12 +1,21 @@
+// @vitest-environment jsdom
+
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, assert } from 'vitest';
+import { flushSync } from 'svelte';
 
-import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
+import {
+	DiskfileDirectoryPath,
+	DiskfilePath,
+	type SerializableDisknode
+} from '#lib/diskfile_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { Part } from '#lib/part.svelte.ts';
+import { to_diskfile_index_mismatches } from '#lib/diskfiles.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import { read_in_derived, run_in_effect } from './reactive_test_helpers.svelte.ts';
 
 /**
  * What holds a file's cell (`Diskfiles.acquire`): tabs, parts, views, and
@@ -157,4 +166,139 @@ test('get_editor_state_at creates the editing state, which keeps the cell', () =
 	assert.strictEqual(diskfiles.find_editor_state(x.path), es);
 	assert.isFalse(diskfiles.is_acquired(x.path), 'its hold was only for the lookup');
 	assert.isUndefined(diskfiles.get_editor_state_at(at('/dev/r/none.ts')));
+});
+
+// cells on demand: a file is its index record until something needs a cell
+
+const record = (path: string): SerializableDisknode => ({
+	id: at(path),
+	source_dir: DEV,
+	size: 1,
+	ctime: 1,
+	mtime: 1
+});
+
+test('a snapshot makes records, not cells', () => {
+	const { diskfiles } = app;
+	diskfiles.add_initial([record('/dev/r/a.ts'), record('/dev/r/b.ts')]);
+	assert.strictEqual(diskfiles.index.size, 2);
+	assert.strictEqual(diskfiles.cells.size, 0);
+	assert.isUndefined(diskfiles.peek(at('/dev/r/a.ts')));
+	assert.isTrue(diskfiles.has_path('/dev/r/a.ts'));
+});
+
+test('acquire makes a cell from the record, and the last release drops it, keeping the record', async () => {
+	const { diskfiles } = app;
+	diskfiles.add_initial([record('/dev/r/a.ts')]);
+	const holder = {};
+	const a = diskfiles.acquire(at('/dev/r/a.ts'), holder);
+	assert.ok(a);
+	assert.strictEqual(a.size, 1);
+	assert.strictEqual(diskfiles.peek(a.path), a);
+	diskfiles.release(a.path, holder);
+	assert.strictEqual(diskfiles.peek(a.path), a, 'dropped in a microtask, not at once');
+	await microtask();
+	assert.isUndefined(diskfiles.peek(a.path));
+	assert.isTrue(diskfiles.index.has(a.path), 'its record stays');
+	assert.deepEqual(to_diskfile_index_mismatches(diskfiles), []);
+	const again = diskfiles.acquire(a.path, holder);
+	assert.ok(again && again !== a, 'a fresh cell next time');
+});
+
+test('an editing state keeps its cell after the last release', async () => {
+	const { diskfiles } = app;
+	diskfiles.add_initial([record('/dev/r/a.ts')]);
+	const es = diskfiles.get_editor_state_at(at('/dev/r/a.ts'));
+	assert.ok(es);
+	await microtask();
+	assert.strictEqual(diskfiles.peek(at('/dev/r/a.ts')), es.diskfile);
+});
+
+test('a file arriving at a held path gets a cell and is read; any other stays a record', async () => {
+	const { diskfiles } = app;
+	diskfiles.hold(at('/dev/r/a.ts'));
+	diskfiles.upsert(record('/dev/r/a.ts'));
+	diskfiles.upsert(record('/dev/r/b.ts'));
+	assert.strictEqual(diskfiles.peek(at('/dev/r/a.ts'))?.content_status, 'loading');
+	assert.isUndefined(diskfiles.peek(at('/dev/r/b.ts')));
+	await flush_reads();
+	assert.deepEqual(disk.reads, ['/dev/r/a.ts']);
+});
+
+test('a tab makes its file a cell, and closing it drops the cell', async () => {
+	const { diskfiles } = app;
+	diskfiles.add_initial([record('/dev/r/a.ts')]);
+	diskfiles.select(at('/dev/r/a.ts'), true);
+	const a = diskfiles.selected_file;
+	assert.ok(a);
+	assert.strictEqual(diskfiles.editor.tabs.selected_tab?.diskfile, a);
+	diskfiles.editor.tabs.close_all_tabs();
+	await microtask();
+	assert.isUndefined(diskfiles.peek(a.path));
+});
+
+test('a reader of peek sees the cell an effect’s hold makes', () => {
+	const { diskfiles } = app;
+	diskfiles.add_initial([record('/dev/r/a.ts')]);
+	const path = at('/dev/r/a.ts');
+	const seen: Array<boolean> = [];
+	const stop_reader = run_in_effect(() => {
+		seen.push(!!diskfiles.peek(path));
+	});
+	const stop_holder = run_in_effect(() => diskfiles.hold(path));
+	flushSync();
+	assert.deepEqual(seen, [false, true]);
+	stop_holder();
+	stop_reader();
+});
+
+test('a part constructed in a derived makes its cell without an unsafe mutation', () => {
+	const { diskfiles } = app;
+	diskfiles.add_initial([record('/dev/r/a.ts')]);
+	const read = read_in_derived(() =>
+		Part.create(app, { type: 'diskfile', path: at('/dev/r/a.ts') })
+	);
+	flushSync();
+	const part = read.value;
+	assert.ok(part?.type === 'diskfile' && part.diskfile);
+	assert.strictEqual(diskfiles.peek(at('/dev/r/a.ts')), part.diskfile);
+	read.stop();
+});
+
+test('a resync drops the records it lacks and forgets the cells nothing keeps', () => {
+	const { diskfiles } = app;
+	registry(true);
+	diskfiles.add_initial([record('/dev/r/a.ts'), record('/dev/r/b.ts'), record('/dev/r/c.ts')]);
+	const part = Part.create(app, { type: 'diskfile', path: at('/dev/r/b.ts') });
+	diskfiles.select(at('/dev/r/c.ts'), true);
+	diskfiles.reconcile([], [dir('/dev/r/')]);
+	assert.strictEqual(diskfiles.index.size, 0);
+	assert.isUndefined(diskfiles.peek(at('/dev/r/b.ts')), 'a part keeps no deleted file');
+	assert.isTrue(diskfiles.peek(at('/dev/r/c.ts'))?.deleted_on_disk, 'a tab does');
+	assert.deepEqual(to_diskfile_index_mismatches(diskfiles), []);
+	part.dispose();
+});
+
+test('releasing an uncovered repo drops its records, cell or not', () => {
+	const { diskfiles } = app;
+	registry(true);
+	diskfiles.add_initial([record('/dev/r/a.ts'), record('/dev/r/b.ts')]);
+	diskfiles.select(at('/dev/r/b.ts'), true);
+	app.projects.add({ root: DEV, kind: 'registry', entries: [], focused: [] });
+	diskfiles.release_uncovered([dir('/dev/r/')]);
+	assert.isFalse(diskfiles.index.has('/dev/r/a.ts'));
+	assert.isTrue(diskfiles.peek(at('/dev/r/b.ts'))?.uncovered, 'its tab keeps it');
+	assert.deepEqual(to_diskfile_index_mismatches(diskfiles), []);
+});
+
+test('creating a file at a kept deleted file’s path selects it before it arrives', async () => {
+	const { diskfiles } = app;
+	registry(true);
+	diskfiles.add_initial([record('/dev/r/a.ts'), record('/dev/r/b.ts')]);
+	diskfiles.select(at('/dev/r/a.ts'), true);
+	diskfiles.select(at('/dev/r/b.ts'), true);
+	diskfiles.remove_by_path('/dev/r/a.ts');
+	assert.isTrue(diskfiles.peek(at('/dev/r/a.ts'))?.deleted_on_disk, 'its tab keeps it');
+	await diskfiles.create_file_at(at('/dev/r/a.ts'), 'new');
+	assert.strictEqual(diskfiles.selected_path, '/dev/r/a.ts');
 });

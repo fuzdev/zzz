@@ -15,7 +15,7 @@ import type { SessionLoadData, ProjectOpenOutput } from '#lib/action_specs.ts';
 import type { ProjectInfoJson } from '#lib/project.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { content_hash, encode_snapshot_files } from './diskfile_test_helpers.ts';
+import { content_hash, encode_snapshot_files, seed_diskfile } from './diskfile_test_helpers.ts';
 
 const WS_DIR = parse_or_throw(DiskfileDirectoryPath, '/ws/');
 const PATH_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
@@ -160,7 +160,7 @@ describe('Projects.open', () => {
 		assert.strictEqual(result.value.project?.rev, 1);
 		assert.strictEqual(result.value.project?.watch_status, 'degraded');
 		assert.strictEqual(app.projects.get_by_root(WS_DIR), result.value.project);
-		assert.strictEqual(app.diskfiles.peek(PATH_A)?.mtime, 5);
+		assert.strictEqual(seed_diskfile(app, PATH_A)?.mtime, 5);
 	});
 
 	test('`filer_change` during the request wins over the older file tree', async () => {
@@ -178,9 +178,9 @@ describe('Projects.open', () => {
 		);
 		assert.ok((await opened).ok);
 
-		assert.ok(!app.diskfiles.peek(PATH_A), 'a file deleted in flight stays deleted');
-		assert.strictEqual(app.diskfiles.peek(PATH_B)?.mtime, 3);
-		assert.strictEqual(app.diskfiles.peek(PATH_C)?.mtime, 2);
+		assert.ok(!seed_diskfile(app, PATH_A), 'a file deleted in flight stays deleted');
+		assert.strictEqual(seed_diskfile(app, PATH_B)?.mtime, 3);
+		assert.strictEqual(seed_diskfile(app, PATH_C)?.mtime, 2);
 	});
 
 	test('requests a focus in the same open and returns what it refused', async () => {
@@ -240,7 +240,7 @@ describe('Projects.open', () => {
 		assert.ok(result.ok);
 		assert.isNull(result.value.project, 'closed here, so not held');
 		assert.ok(!app.projects.get_by_root(WS_DIR), 'the tombstone keeps it closed');
-		assert.ok(!app.diskfiles.peek(PATH_A), "the dropped state's files aren't applied");
+		assert.ok(!seed_diskfile(app, PATH_A), "the dropped state's files aren't applied");
 		// nor does its own late notification
 		receive_change(WS_INFO);
 		assert.ok(!app.projects.get_by_root(WS_DIR));
@@ -266,13 +266,13 @@ describe('Projects.open', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		receive_change({ ...WS_INFO, rev: 2 }, 'close');
 		assert.ok(app.projects.get_by_root(WS_DIR), 'opened again after that close');
-		assert.ok(app.diskfiles.peek(PATH_A), 'its files stay');
+		assert.ok(seed_diskfile(app, PATH_A), 'its files stay');
 	});
 
 	test("a close releases the project's files, keeping a draft flagged uncovered", async () => {
 		app.projects.add(WS_INFO);
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const b = app.diskfiles.peek(PATH_B)!;
+		const b = seed_diskfile(app, PATH_B)!;
 		(app.api as unknown as Record<string, unknown>).diskfile_read = () =>
 			Promise.resolve({
 				ok: true,
@@ -291,8 +291,8 @@ describe('Projects.open', () => {
 
 		receive_change({ ...WS_INFO, rev: 2 }, 'close');
 		assert.ok(!app.projects.get_by_root(WS_DIR));
-		assert.ok(!app.diskfiles.peek(PATH_A), 'nothing indexes it now');
-		const kept = app.diskfiles.peek(PATH_B);
+		assert.ok(!seed_diskfile(app, PATH_A), 'nothing indexes it now');
+		const kept = seed_diskfile(app, PATH_B);
 		assert.ok(kept, 'kept for its draft');
 		assert.isTrue(kept.uncovered);
 		assert.isFalse(kept.deleted_on_disk, 'not seen deleted');
@@ -304,7 +304,7 @@ describe('Projects.open', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		receive_change({ ...WS_INFO, rev: 2 }, 'close');
 		assert.ok(!app.projects.get_by_root(WS_DIR));
-		assert.ok(app.diskfiles.peek(PATH_A), 'the scoped dir still indexes it');
+		assert.ok(seed_diskfile(app, PATH_A), 'the scoped dir still indexes it');
 	});
 
 	test('a removal the daemon could not stamp leaves a tombstone at the rev held', () => {
@@ -312,7 +312,7 @@ describe('Projects.open', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		app.projects.remove_by_root(WS_DIR);
 		assert.ok(!app.projects.get_by_root(WS_DIR));
-		assert.ok(!app.diskfiles.peek(PATH_A), 'its files released');
+		assert.ok(!seed_diskfile(app, PATH_A), 'its files released');
 		// a state at or below the rev held, landing late, adds nothing back
 		receive_change({ ...WS_INFO, rev: 2 });
 		assert.ok(!app.projects.get_by_root(WS_DIR), 'the tombstone keeps it out');
@@ -334,7 +334,7 @@ describe('Projects.receive_remote_change', () => {
 		assert.strictEqual(session_loads, 1, 'resynced');
 
 		await flush();
-		assert.strictEqual(app.diskfiles.peek(PATH_A)?.mtime, 5);
+		assert.strictEqual(seed_diskfile(app, PATH_A)?.mtime, 5);
 		assert.strictEqual(app.projects.get_by_root(WS_DIR), project);
 		assert.isNull(app.projects.active_id);
 	});
@@ -356,7 +356,7 @@ describe('Projects.receive_remote_change', () => {
 		const result = await opened;
 		assert.ok(result.ok);
 		assert.strictEqual(result.value.project, app.projects.get_by_root(WS_DIR));
-		assert.strictEqual(app.diskfiles.peek(PATH_A)?.mtime, 5, 'the same rev: its files');
+		assert.strictEqual(seed_diskfile(app, PATH_A)?.mtime, 5, 'the same rev: its files');
 		assert.strictEqual(session_loads, 0);
 	});
 
@@ -442,8 +442,8 @@ describe('a registry project', () => {
 		await flush();
 		assert.strictEqual(session_loads, 0);
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP]);
-		assert.ok(app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/app/a.ts')));
-		assert.ok(!app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/site/a.ts')));
+		assert.ok(seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/app/a.ts')));
+		assert.ok(!seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/site/a.ts')));
 	});
 
 	test("this client's open narrowing a plain root to a registry releases what it doesn't index", async () => {
@@ -462,10 +462,10 @@ describe('a registry project', () => {
 		assert.deepEqual(result.value.project?.focused, [], 'the root focus the registry dropped');
 		assert.strictEqual(session_loads, 0, 'no resync');
 		assert.ok(
-			!app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/scratch/x.txt')),
+			!seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/scratch/x.txt')),
 			'the unindexed file released'
 		);
-		assert.ok(app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/README.md')));
+		assert.ok(seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/README.md')));
 	});
 
 	test('a focus dropped while an own open is in flight is released at once, no resync', async () => {
@@ -477,7 +477,7 @@ describe('a registry project', () => {
 			entries: registry_info([]).entries.slice(0, 1)
 		};
 		receive_change(without_site, 'update');
-		assert.ok(!app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/site/a.ts')));
+		assert.ok(!seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/site/a.ts')));
 		calls[0]!.resolve(reply(without_site, { focus: APP, opened: false }));
 		assert.ok((await opened).ok);
 		assert.strictEqual(session_loads, 0);
@@ -543,14 +543,14 @@ describe('a registry project', () => {
 		const result = await opened;
 		assert.ok(result.ok);
 		assert.strictEqual(result.value.focus, APP);
-		assert.ok(!app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/app/gone.ts')));
-		assert.ok(app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/app/a.ts')));
+		assert.ok(!seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/app/gone.ts')));
+		assert.ok(seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/app/a.ts')));
 		assert.ok(
-			app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/site/kept.ts')),
+			seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/site/kept.ts')),
 			'not focused yet, so not pruned'
 		);
 		assert.strictEqual(
-			app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/README.md'))?.mtime,
+			seed_diskfile(app, parse_or_throw(DiskfilePath, '/dev/README.md'))?.mtime,
 			2
 		);
 	});

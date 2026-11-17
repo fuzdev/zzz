@@ -21,7 +21,7 @@ import {
 import { HISTORY_LABEL_DISK_CHANGE } from '#lib/diskfile_editor_state.svelte.ts';
 
 import { run_in_effect } from './reactive_test_helpers.svelte.ts';
-import { content_hash } from './diskfile_test_helpers.ts';
+import { content_hash, seed_diskfile } from './diskfile_test_helpers.ts';
 
 /**
  * Contents on demand: a diskfile seeded from a disknode (metadata only) is
@@ -112,7 +112,7 @@ const answer = async (path: DiskfilePath, result: ReadResult): Promise<void> => 
 };
 
 const get = (path: DiskfilePath): Diskfile => {
-	const diskfile = app.diskfiles.peek(path);
+	const diskfile = seed_diskfile(app, path);
 	assert.ok(diskfile, `a diskfile at ${path}`);
 	return diskfile;
 };
@@ -224,6 +224,8 @@ describe('single-flight', () => {
 
 	test('concurrent load_content retries share one read', async () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
+		// held, as a copy's file is by its menu, so the cell outlives each load
+		app.diskfiles.hold(PATH_A);
 		const diskfile = get(PATH_A);
 		const failing = assert_rejects(() => app.diskfiles.load_content(diskfile), /connection lost/);
 		await flush();
@@ -341,6 +343,8 @@ describe('stale while in flight', () => {
 
 	test('load_content retries a failed read on an explicit ask', async () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
+		// held, as a copy's file is by its menu, so the cell outlives each load
+		app.diskfiles.hold(PATH_A);
 		const diskfile = get(PATH_A);
 		// the handler attached at once, so the rejection is never unhandled
 		const first = assert_rejects(() => app.diskfiles.load_content(diskfile), /connection lost/);
@@ -387,7 +391,7 @@ describe('stale while in flight', () => {
 		});
 		await answer(PATH_A, read_error('not found'));
 		await loading;
-		assert.isUndefined(app.diskfiles.peek(PATH_A));
+		assert.isUndefined(seed_diskfile(app, PATH_A));
 	});
 });
 

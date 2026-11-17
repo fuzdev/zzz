@@ -19,7 +19,7 @@ import {
 import { JSONRPC_ERROR_CODES, ThrownJsonrpcError } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { content_hash } from './diskfile_test_helpers.ts';
+import { content_hash, seed_diskfile } from './diskfile_test_helpers.ts';
 
 /** A stubbed `completion_create` call, resolved manually by the test. */
 interface StubbedCall {
@@ -112,7 +112,7 @@ describe('Thread.cancel_pending_turn', () => {
 		assert.ok(calls[0]!.signal?.aborted);
 		assert.ok(assistant_turn.cancelled);
 		assert.ok(!thread.pending);
-		assert.strictEqual(app.diskfiles.peek(FILE_PATH)?.content, 'file');
+		assert.strictEqual(seed_diskfile(app, FILE_PATH)?.content, 'file');
 		await sent;
 	});
 });
@@ -306,7 +306,7 @@ describe('a file part still loading when sent', () => {
 		const { thread, read } = setup();
 		read.resolve({ ok: false, error: { code: -32603, message: 'connection lost' } });
 		await flush();
-		assert.strictEqual(app.diskfiles.peek(FILE_PATH)?.content_error, 'connection lost');
+		assert.strictEqual(seed_diskfile(app, FILE_PATH)?.content_error, 'connection lost');
 		const assistant_turn = await thread.send_message('again');
 		assert.strictEqual(calls.length, 0);
 		assert.include(assistant_turn?.error_message, 'connection lost');
@@ -426,7 +426,7 @@ describe('a file part whose read failed when sent', () => {
 		thread.add_turn(new Turn({ app, json: { role: 'user', part_ids } }));
 		await flush();
 		for (const path of paths) {
-			assert.strictEqual(app.diskfiles.peek(path)?.content_error, 'connection lost');
+			assert.strictEqual(seed_diskfile(app, path)?.content_error, 'connection lost');
 		}
 		read_paths.length = 0;
 		return { thread, answers, read_paths };

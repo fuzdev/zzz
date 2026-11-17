@@ -19,7 +19,7 @@ import { Prompt } from '#lib/prompt.svelte.ts';
 import { Part } from '#lib/part.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { content_hash, update_ok } from './diskfile_test_helpers.ts';
+import { content_hash, update_ok, seed_diskfile } from './diskfile_test_helpers.ts';
 
 const TEST_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/test/');
 
@@ -193,7 +193,7 @@ describe('DiskfilePart content access', () => {
 
 		assert.deepEqual(update_calls, []);
 		assert.strictEqual(part.content, TEST_CONTENT.EDITABLE.INITIAL);
-		assert.strictEqual(app.diskfiles.peek(path)?.content, TEST_CONTENT.EDITABLE.INITIAL);
+		assert.strictEqual(seed_diskfile(app, path)?.content, TEST_CONTENT.EDITABLE.INITIAL);
 	});
 
 	test('content is null, never the editor text, when the file content was not loaded', () => {

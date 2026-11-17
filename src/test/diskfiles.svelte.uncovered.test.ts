@@ -7,7 +7,12 @@ import { to_diskfile_status } from '#lib/diskfile_helpers.ts';
 import { SAVE_ERROR_RECREATES } from '#lib/diskfile_editor_state.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	flush_reads,
+	install_fake_disk,
+	type FakeDisk,
+	seed_diskfile
+} from './diskfile_test_helpers.ts';
 
 /**
  * A file kept for a draft or a tab after it left the index without being
@@ -66,7 +71,7 @@ test('a repo dropped from the registry keeps its tab-only file uncovered, not de
 
 	drop_repo();
 
-	assert.strictEqual(app.diskfiles.peek(x.path), x, 'its tab keeps it');
+	assert.strictEqual(seed_diskfile(app, x.path), x, 'its tab keeps it');
 	assert.isTrue(x.uncovered);
 	assert.isFalse(x.deleted_on_disk);
 	assert.isFalse(es.can_save, 'nothing to write without an edit');
@@ -194,7 +199,7 @@ test('reopening the project reattaches the uncovered file, clearing the flag', a
 	app.diskfiles.add_initial([disk.disknode('/ws/a.txt')]);
 	await flush_reads();
 
-	assert.strictEqual(app.diskfiles.peek(at('/ws/a.txt')), a);
+	assert.strictEqual(seed_diskfile(app, at('/ws/a.txt')), a);
 	assert.isFalse(a.uncovered);
 	assert.include(
 		app.diskfiles.on_disk.map((r) => r.id),
@@ -212,7 +217,7 @@ test('closing the last tab of an uncovered file forgets it', async () => {
 
 	app.diskfiles.editor.tabs.close_all_tabs();
 
-	assert.isUndefined(app.diskfiles.peek(at('/ws/a.txt')));
+	assert.isUndefined(seed_diskfile(app, at('/ws/a.txt')));
 });
 
 test('a resync after the repo left the registry keeps the file uncovered, not deleted', async () => {
@@ -225,10 +230,10 @@ test('a resync after the repo left the registry keeps the file uncovered, not de
 	// the snapshot covers the registry root's loose files, not the dropped repo
 	app.diskfiles.reconcile([disk.disknode('/dev/README.md')], [DEV]);
 
-	assert.strictEqual(app.diskfiles.peek(x.path), x);
+	assert.strictEqual(seed_diskfile(app, x.path), x);
 	assert.isTrue(x.uncovered, "the snapshot doesn't look there, so it says nothing of it");
 	assert.isFalse(x.deleted_on_disk);
-	assert.strictEqual(app.diskfiles.peek(readme.path), readme);
+	assert.strictEqual(seed_diskfile(app, readme.path), readme);
 });
 
 test('a resync pruning a file the index covers still flags it deleted', async () => {
@@ -263,7 +268,7 @@ test('a tab-only file with no editing state, deleted then re-added, is read agai
 	assert.isUndefined(app.diskfiles.find_editor_state(a.path));
 	disk.files.delete('/ws/a.txt');
 	app.diskfiles.remove_by_path('/ws/a.txt');
-	assert.strictEqual(app.diskfiles.peek(at('/ws/a.txt')), a);
+	assert.strictEqual(seed_diskfile(app, at('/ws/a.txt')), a);
 	const reads_before = disk.reads.length;
 
 	disk.write('/ws/a.txt', 'new', 'add');
@@ -460,6 +465,6 @@ test('a link to an uncovered file resolves as missing', async () => {
 	app.projects.remove_by_root(WS);
 
 	assert.isTrue(a.uncovered);
-	assert.strictEqual(app.diskfiles.peek(at('/ws/a.txt')), a, 'kept for its tab');
+	assert.strictEqual(seed_diskfile(app, at('/ws/a.txt')), a, 'kept for its tab');
 	assert.isFalse(app.diskfiles.link_index.has_file('/ws/a.txt'));
 });

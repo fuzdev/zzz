@@ -415,9 +415,12 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
   from the disk) to show, send, or copy it; files over 4 MiB or not UTF-8
   don't load and are read-only. A moved `lstat` stamp is a change, so a
   `touch` makes clients holding the file read it again.
-- **Big repos are slow to focus** — the client builds a cell per indexed
-  file, about 50 µs each, so a big clone takes seconds, and its focus
-  reply can pass the 16 MiB message size.
+- **Big repos make big focus replies** — the client keeps a metadata
+  record per indexed file and makes a `Diskfile` cell only for a file in
+  use (a tab, a part, a view, an editing state — and a tab's view makes an
+  editing state that keeps the cell, so every file opened in a tab keeps
+  one until the file is forgotten or the page reloads), but every file
+  ships in the focus reply, which can pass the 16 MiB message size.
 - **No persistent undo**; symlinks are invisible; file watching can degrade
   to polling past `max_user_watches`.
 - **The terminal emulator** lacks scrollback scrolling, IME, and mouse

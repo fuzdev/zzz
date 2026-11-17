@@ -16,7 +16,12 @@ import {
 } from '#lib/diskfiles.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	flush_reads,
+	install_fake_disk,
+	type FakeDisk,
+	seed_diskfile
+} from './diskfile_test_helpers.ts';
 
 /**
  * `Diskfiles.index` holds exactly the cells on disk — neither
@@ -69,15 +74,20 @@ const delete_change = (path: string): void => {
 
 test('the DEV check runs after each write', () => {
 	assert.isTrue(ESM_DEV, 'tests run in DEV');
-	app.diskfiles.index.set(node('/dev/r/stray.ts'));
+	app.diskfiles.upsert(node('/dev/r/stray.ts'));
+	assert.deepEqual(to_diskfile_index_mismatches(app.diskfiles), [], 'a record needs no cell');
+	seed_diskfile(app, '/dev/r/stray.ts');
+	app.diskfiles.index.set(node('/dev/r/stray.ts', 2));
 	assert.deepEqual(to_diskfile_index_mismatches(app.diskfiles), [
-		'/dev/r/stray.ts: in the index, no cell'
+		'/dev/r/stray.ts: index has /dev/r/ 20 2, cell has /dev/r/ 10 1'
 	]);
 	assert.throws(() => app.diskfiles.upsert(node('/dev/r/a.ts')), /out of step/);
 });
 
 test('a write that throws surfaces its own error, not the DEV check', () => {
 	app.diskfiles.reconcile([node('/dev/r/a.ts')], [REPO]);
+	// a cell, so the next reconcile updates it in place
+	seed_diskfile(app, '/dev/r/a.ts');
 	let message = '';
 	try {
 		// an mtime past what a `Datetime` holds throws mid-write, the index already moved
@@ -118,7 +128,7 @@ test('reconcile: adds, changes, prunes, and keeps a held file out of the index',
 	const meta = app.diskfiles.index.meta;
 	app.diskfiles.reconcile([node('/dev/r/a.ts', 2), node('/dev/r/d.ts')], [REPO]);
 	assert.strictEqual(app.diskfiles.index.meta, meta + 1);
-	assert.isTrue(app.diskfiles.peek(at('/dev/r/b.ts'))!.deleted_on_disk, 'its tab keeps it');
+	assert.isTrue(seed_diskfile(app, at('/dev/r/b.ts'))!.deleted_on_disk, 'its tab keeps it');
 	assert_index(['/dev/r/a.ts', '/dev/r/d.ts']);
 
 	// a tracked change skips the snapshot's entry and its prune
@@ -135,7 +145,7 @@ test('reconcile: adds, changes, prunes, and keeps a held file out of the index',
 
 	// the held file back on disk is reattached
 	app.diskfiles.add_initial([node('/dev/r/b.ts', 5)]);
-	assert.isFalse(app.diskfiles.peek(at('/dev/r/b.ts'))!.deleted_on_disk);
+	assert.isFalse(seed_diskfile(app, at('/dev/r/b.ts'))!.deleted_on_disk);
 	assert_index(['/dev/r/a.ts', '/dev/r/b.ts', '/dev/r/d.ts']);
 });
 
@@ -155,7 +165,7 @@ test('upsert and filer deletes: unheld forgotten, held kept off the index', asyn
 	assert_index(['/dev/r/a.ts', '/dev/r/b.ts']);
 
 	delete_change('/dev/r/a.ts');
-	assert.isUndefined(app.diskfiles.peek(at('/dev/r/a.ts')));
+	assert.isUndefined(seed_diskfile(app, at('/dev/r/a.ts')));
 	assert_index(['/dev/r/b.ts']);
 
 	app.diskfiles.select(b.path, true);
@@ -165,7 +175,7 @@ test('upsert and filer deletes: unheld forgotten, held kept off the index', asyn
 
 	// closing its tab forgets it
 	app.diskfiles.editor.close_tab(app.diskfiles.editor.tabs.selected_tab!.id);
-	assert.isUndefined(app.diskfiles.peek(b.path));
+	assert.isUndefined(seed_diskfile(app, b.path));
 	assert_index([]);
 });
 
@@ -224,8 +234,8 @@ test('settle_recreated, the flag setters, a direct remove, and a decoded reset',
 	app.diskfiles.set_deleted_on_disk(a, false);
 	assert_index(['/dev/r/a.ts']);
 
-	const b = app.diskfiles.upsert(node('/dev/r/b.ts'));
-	app.diskfiles.items.remove(b.id);
+	app.diskfiles.upsert(node('/dev/r/b.ts'));
+	app.diskfiles.remove_by_path('/dev/r/b.ts');
 	assert_index(['/dev/r/a.ts']);
 
 	// a stale copy of a's json is refused, and can't drop the file that's there

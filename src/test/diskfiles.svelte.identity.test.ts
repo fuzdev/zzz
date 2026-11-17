@@ -12,7 +12,12 @@ import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { create_reactive_props } from './reactive_test_helpers.svelte.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	flush_reads,
+	install_fake_disk,
+	type FakeDisk,
+	seed_diskfile
+} from './diskfile_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 const PATH_A = parse_or_throw(DiskfilePath, '/w/a.txt');
@@ -42,7 +47,7 @@ const load = async (contents: string): Promise<Diskfile> => {
 const replace = async (): Promise<{ stale: Diskfile; live: Diskfile }> => {
 	const stale = await load('v1');
 	app.diskfiles.remove_by_path(PATH_A); // no draft: forgotten
-	assert.isUndefined(app.diskfiles.peek(PATH_A));
+	assert.isUndefined(seed_diskfile(app, PATH_A));
 	const live = await load('v2');
 	assert.notStrictEqual(stale, live);
 	return { stale, live };

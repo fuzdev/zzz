@@ -11,7 +11,12 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import DiskfileContextmenuHarness from './DiskfileContextmenuHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { content_hash, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	content_hash,
+	install_fake_disk,
+	type FakeDisk,
+	seed_diskfile
+} from './diskfile_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
@@ -139,7 +144,7 @@ describe('DiskfileContextmenu copy file content', () => {
 		};
 		const path = parse_or_throw(DiskfilePath, '/w/lazy.txt');
 		app.diskfiles.add_initial([{ id: path, source_dir: SOURCE_DIR, size: 9, ctime: 1, mtime: 1 }]);
-		const diskfile = app.diskfiles.peek(path)!;
+		const diskfile = seed_diskfile(app, path)!;
 		assert.strictEqual(diskfile.content_status, 'unrequested');
 
 		const target = render(diskfile);
@@ -205,7 +210,7 @@ describe('DiskfileContextmenu copy file content', () => {
 		};
 		const path = parse_or_throw(DiskfilePath, '/w/lazy.txt');
 		app.diskfiles.add_initial([{ id: path, source_dir: SOURCE_DIR, size: 9, ctime: 1, mtime: 1 }]);
-		const target = render(app.diskfiles.peek(path)!);
+		const target = render(seed_diskfile(app, path)!);
 		open_menu(target);
 		await open_submenu(target, 'file');
 
@@ -254,7 +259,7 @@ describe('DiskfileContextmenu copy file content', () => {
 		};
 		const path = parse_or_throw(DiskfilePath, '/w/lazy.txt');
 		app.diskfiles.add_initial([{ id: path, source_dir: SOURCE_DIR, size: 9, ctime: 1, mtime: 1 }]);
-		const target = render(app.diskfiles.peek(path)!);
+		const target = render(seed_diskfile(app, path)!);
 		open_menu(target);
 		await open_submenu(target, 'file');
 
@@ -294,5 +299,67 @@ describe('DiskfileContextmenu copy file content', () => {
 		await open_submenu(target, 'file');
 		const entry = find_copy_entry(target);
 		assert.isUndefined(entry);
+	});
+});
+
+describe('DiskfileContextmenu on a file nothing holds', () => {
+	test('the open menu makes the cell, copies through it, and lets it go on close', async () => {
+		const write_text = vi
+			.fn((_text: string) => Promise.resolve())
+			.mockImplementationOnce(() => Promise.reject(new Error('not allowed')));
+		Object.defineProperty(navigator, 'clipboard', {
+			value: { writeText: write_text },
+			configurable: true
+		});
+		vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const read_paths: Array<string> = [];
+		(app as unknown as { api: unknown }).api = {
+			diskfile_read: ({ path }: { path: string }) => {
+				read_paths.push(path);
+				return Promise.resolve({
+					ok: true,
+					value: {
+						contents: 'lazy text',
+						unloaded_reason: null,
+						hash: content_hash('lazy text'),
+						size: 9,
+						ctime: 1,
+						mtime: 1
+					}
+				});
+			}
+		};
+		const path = parse_or_throw(DiskfilePath, '/w/lazy.txt');
+		app.diskfiles.add_initial([{ id: path, source_dir: SOURCE_DIR, size: 9, ctime: 1, mtime: 1 }]);
+		const target = render({ path } as Diskfile);
+		assert.isUndefined(app.diskfiles.peek(path), 'rendering the target makes no cell');
+
+		open_menu(target);
+		await open_submenu(target, 'file');
+		assert.ok(app.diskfiles.peek(path), 'the open menu holds a cell');
+		assert.deepEqual(read_paths, [], 'opening the menu reads nothing');
+
+		// the first write is refused after the load, so the menu stays open
+		find_copy_entry(target)!.click();
+		for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+		flushSync();
+		const entry = find_copy_entry(target);
+		assert.ok(entry, 'the menu stays open');
+		assert.strictEqual(entry.getAttribute('title'), 'Error: loaded — copy again');
+
+		vi.useFakeTimers();
+		try {
+			entry.click();
+			vi.advanceTimersByTime(1);
+			assert.deepEqual(write_text.mock.calls, [['lazy text'], ['lazy text']], 'copied at once');
+		} finally {
+			vi.useRealTimers();
+		}
+		assert.deepEqual(read_paths, [path], 'read once');
+
+		for (const cleanup of cleanups.splice(0)) cleanup();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.isUndefined(app.diskfiles.peek(path), 'closing lets the cell go');
+		assert.isTrue(app.diskfiles.index.has(path), 'its record stays');
 	});
 });

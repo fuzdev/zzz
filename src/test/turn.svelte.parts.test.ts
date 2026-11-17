@@ -9,7 +9,12 @@ import { Turn } from '#lib/turn.svelte.ts';
 import { DiskfilePath } from '#lib/diskfile_types.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	flush_reads,
+	install_fake_disk,
+	type FakeDisk,
+	seed_diskfile
+} from './diskfile_test_helpers.ts';
 
 let app: Frontend;
 let signals: Array<AbortSignal | undefined>;
@@ -127,7 +132,7 @@ describe('Turn.content', () => {
 		disk.write('/w/denied.txt', 'x');
 		disk.fail_reads(1, 'permission denied'); // the first read, `denied.txt`'s
 		const turn = add_turn('/w/denied.txt', '/w/bin.dat', '/w/src/big.txt');
-		const big = app.diskfiles.peek(parse_or_throw(DiskfilePath, '/w/src/big.txt'))!;
+		const big = seed_diskfile(app, parse_or_throw(DiskfilePath, '/w/src/big.txt'))!;
 		await flush_reads(); // the reads as the parts attach — `load_content` would retry the failed one
 		// as a read of a file over 4 MiB answers
 		big.content = null;

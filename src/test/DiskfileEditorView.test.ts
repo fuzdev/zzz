@@ -30,7 +30,8 @@ import {
 	flush_reads,
 	install_fake_disk,
 	type FakeDisk,
-	type HeldUpdateResult
+	type HeldUpdateResult,
+	seed_diskfile
 } from './diskfile_test_helpers.ts';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 import { jsonrpc_error_messages } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
@@ -284,7 +285,7 @@ describe('DiskfileEditorView', () => {
 		app.diskfiles.editor.open_diskfile(a.path);
 		app.diskfiles.remove_by_path(PATH_A);
 		assert.isTrue(a.deleted_on_disk);
-		assert.strictEqual(app.diskfiles.peek(PATH_A), a);
+		assert.strictEqual(seed_diskfile(app, PATH_A), a);
 	});
 	test('Ctrl+S while conflicted focuses the notice, and resolving refocuses the editor', async () => {
 		const a = await disk.load(PATH_A, 'v1');
@@ -378,7 +379,7 @@ describe('a file whose content loads on view', () => {
 		app.diskfiles.add_initial([
 			{ id: PATH_A, source_dir: SOURCE_DIR, size: 4, ctime: 1, mtime: 1 }
 		]);
-		return { diskfile: app.diskfiles.peek(PATH_A)!, read, read_paths };
+		return { diskfile: seed_diskfile(app, PATH_A)!, read, read_paths };
 	};
 	const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -810,7 +811,7 @@ describe('PartEditorForDiskfile deleted on disk', () => {
 
 		click_button(view.target, 'discard them');
 
-		assert.isUndefined(app.diskfiles.peek(PATH_A));
+		assert.isUndefined(seed_diskfile(app, PATH_A));
 		assert.isUndefined(part.diskfile);
 	});
 });

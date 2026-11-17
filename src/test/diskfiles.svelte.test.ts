@@ -16,7 +16,12 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import { confirm_unload_with_unsaved_changes, to_file_directories } from '#lib/diskfile_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import {
+	flush_reads,
+	install_fake_disk,
+	type FakeDisk,
+	seed_diskfile
+} from './diskfile_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/ws/');
 const PATH_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
@@ -57,7 +62,7 @@ const filer_change = (type: DiskfileChangeType, path: DiskfilePath, contents?: s
 
 const count_by_path = (path: DiskfilePath): number => {
 	let count = 0;
-	for (const diskfile of app.diskfiles.items.by_id.values()) {
+	for (const diskfile of app.diskfiles.cells.values()) {
 		if (diskfile.path === path) count++;
 	}
 	return count;
@@ -71,18 +76,18 @@ beforeEach(() => {
 describe('upsert by path', () => {
 	test('a resync of an unchanged file keeps it and its updated time', () => {
 		filer_change('add', PATH_A, 'same');
-		const diskfile = app.diskfiles.peek(PATH_A);
+		const diskfile = seed_diskfile(app, PATH_A);
 		assert.ok(diskfile);
 		diskfile.updated = '2000-01-01T00:00:00.000Z' as typeof diskfile.updated;
 
 		app.diskfiles.add_initial([disk.disknode(PATH_A)]);
-		assert.strictEqual(app.diskfiles.peek(PATH_A), diskfile);
+		assert.strictEqual(seed_diskfile(app, PATH_A), diskfile);
 		assert.strictEqual(diskfile.updated, '2000-01-01T00:00:00.000Z', 'not bumped');
 	});
 
 	test('a change takes the size and mtime, and the updated time from the mtime', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
-		const diskfile = app.diskfiles.peek(PATH_A)!;
+		const diskfile = seed_diskfile(app, PATH_A)!;
 		assert.strictEqual(diskfile.mtime, 1);
 		diskfile.updated = '2000-01-01T00:00:00.000Z' as typeof diskfile.updated;
 
@@ -100,7 +105,7 @@ describe('upsert by path', () => {
 	test('a file whose content is not loaded still shows that its bytes changed', () => {
 		// a recording grows, or is finalized: its content is never loaded
 		app.diskfiles.add_initial([create_disknode(PATH_A, null)]);
-		const diskfile = app.diskfiles.peek(PATH_A)!;
+		const diskfile = seed_diskfile(app, PATH_A)!;
 		assert.ok(!diskfile.content_loaded);
 		assert.strictEqual(diskfile.mtime, 1);
 
@@ -108,14 +113,14 @@ describe('upsert by path', () => {
 			change: { type: 'change', path: PATH_A },
 			disknode: { ...create_disknode(PATH_A, null), mtime: 5 }
 		});
-		assert.strictEqual(app.diskfiles.peek(PATH_A), diskfile);
+		assert.strictEqual(seed_diskfile(app, PATH_A), diskfile);
 		assert.strictEqual(diskfile.mtime, 5);
 		assert.strictEqual(count_by_path(PATH_A), 1);
 	});
 
 	test('the size on disk arrives whether or not the content is loaded, and moves with changes', () => {
 		app.diskfiles.add_initial([{ ...create_disknode(PATH_A, null), size: 5_000_000 }]);
-		const diskfile = app.diskfiles.peek(PATH_A)!;
+		const diskfile = seed_diskfile(app, PATH_A)!;
 		assert.isNull(diskfile.content);
 		assert.strictEqual(diskfile.size, 5_000_000);
 
@@ -126,16 +131,16 @@ describe('upsert by path', () => {
 		assert.strictEqual(diskfile.size, 6_000_000);
 
 		app.diskfiles.add_initial([{ ...create_disknode(PATH_B, 'b'), size: null }]);
-		assert.isNull(app.diskfiles.peek(PATH_B)?.size, 'unknown stays unknown');
+		assert.isNull(seed_diskfile(app, PATH_B)?.size, 'unknown stays unknown');
 	});
 
 	test('a source_dir change alone still upserts', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'same')]);
-		const diskfile = app.diskfiles.peek(PATH_A);
+		const diskfile = seed_diskfile(app, PATH_A);
 		assert.ok(diskfile);
 		const other_dir = parse_or_throw(SerializableDisknode.def.source_dir, '/');
 		app.diskfiles.add_initial([{ ...create_disknode(PATH_A, 'same'), source_dir: other_dir }]);
-		assert.strictEqual(app.diskfiles.peek(PATH_A), diskfile, 'same diskfile');
+		assert.strictEqual(seed_diskfile(app, PATH_A), diskfile, 'same diskfile');
 		assert.strictEqual(diskfile.source_dir, other_dir);
 	});
 
@@ -146,7 +151,7 @@ describe('upsert by path', () => {
 		filer_change('add', PATH_A, 'two');
 
 		assert.strictEqual(count_by_path(PATH_A), 1);
-		assert.strictEqual(app.diskfiles.peek(PATH_A), diskfile);
+		assert.strictEqual(seed_diskfile(app, PATH_A), diskfile);
 		// held by nothing, so its old content is dropped, to be read again
 		assert.strictEqual(diskfile.content_status, 'unrequested');
 		await app.diskfiles.ensure_content(diskfile);
@@ -164,7 +169,7 @@ describe('upsert by path', () => {
 			disknode: { ...disk.disknode(PATH_A), mtime: 7 }
 		});
 
-		assert.strictEqual(app.diskfiles.peek(PATH_A), diskfile);
+		assert.strictEqual(seed_diskfile(app, PATH_A), diskfile);
 		assert.strictEqual(diskfile.content_status, 'unrequested');
 		assert.isNull(diskfile.content);
 		assert.strictEqual(diskfile.mtime, 7);
@@ -231,7 +236,7 @@ describe('upsert by path', () => {
 
 	test('change for an unknown path adds it', async () => {
 		filer_change('change', PATH_A, 'one');
-		const diskfile = app.diskfiles.peek(PATH_A);
+		const diskfile = seed_diskfile(app, PATH_A);
 		assert.ok(diskfile);
 		assert.strictEqual(diskfile.content_status, 'unrequested');
 		await app.diskfiles.ensure_content(diskfile);
@@ -244,12 +249,12 @@ describe('upsert by path', () => {
 		filer_change('delete', PATH_A);
 
 		assert.strictEqual(count_by_path(PATH_A), 0);
-		assert.isUndefined(app.diskfiles.peek(PATH_A));
+		assert.isUndefined(seed_diskfile(app, PATH_A));
 	});
 
 	test('add_initial upserts overlapping seeds', async () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'a1'), create_disknode(PATH_B, 'b1')]);
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		await app.diskfiles.ensure_content(a);
 		assert.strictEqual(a.content, 'a1');
@@ -257,8 +262,8 @@ describe('upsert by path', () => {
 		// e.g. `project_open` files overlapping `session_load`'s
 		app.diskfiles.add_initial([create_disknode(PATH_A, 'a2'), create_disknode(PATH_C, 'c1')]);
 
-		assert.strictEqual(app.diskfiles.items.size, 3);
-		assert.strictEqual(app.diskfiles.peek(PATH_A), a);
+		assert.strictEqual(app.diskfiles.index.size, 3);
+		assert.strictEqual(seed_diskfile(app, PATH_A), a);
 		// a seed carries no contents: one nothing holds drops what it had
 		assert.strictEqual(a.content_status, 'unrequested');
 		for (const [path, content] of [
@@ -266,7 +271,7 @@ describe('upsert by path', () => {
 			[PATH_B, 'b1'],
 			[PATH_C, 'c1']
 		] as const) {
-			const diskfile = app.diskfiles.peek(path);
+			const diskfile = seed_diskfile(app, path);
 			assert.ok(diskfile);
 			await app.diskfiles.ensure_content(diskfile);
 			assert.strictEqual(diskfile.content, content);
@@ -298,7 +303,7 @@ describe('a change while a snapshot is in flight', () => {
 			});
 			reconcile([snapshot_node(PATH_A, snapshot_mtime)], tracker);
 
-			assert.strictEqual(app.diskfiles.peek(PATH_A)?.mtime, 9, `${snapshot_mtime}`);
+			assert.strictEqual(seed_diskfile(app, PATH_A)?.mtime, 9, `${snapshot_mtime}`);
 			filer_change('delete', PATH_A);
 		}
 	});
@@ -313,7 +318,7 @@ describe('a change while a snapshot is in flight', () => {
 		tracker.stop();
 		app.diskfiles.add_initial([snapshot_node(PATH_A, 5)], tracker);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_A)?.mtime, 9);
+		assert.strictEqual(seed_diskfile(app, PATH_A)?.mtime, 9);
 	});
 
 	test('a delete is not undone', () => {
@@ -337,8 +342,8 @@ describe('a change while a snapshot is in flight', () => {
 describe('delete with a tab keeps the file', () => {
 	test('the diskfile, its tab, and the selection stay, flagged deleted', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
 		app.diskfiles.select(a.path, true);
@@ -350,7 +355,7 @@ describe('delete with a tab keeps the file', () => {
 
 		filer_change('delete', PATH_B);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b);
+		assert.strictEqual(seed_diskfile(app, PATH_B), b);
 		assert.isTrue(b.deleted_on_disk);
 		assert.strictEqual(tabs.by_path.get(b.path), tab);
 		assert.strictEqual(tabs.items.size, 2);
@@ -370,8 +375,8 @@ describe('delete with a tab keeps the file', () => {
 
 	test('closing its tab forgets the diskfile, its tab, and its history', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
 		app.diskfiles.select(a.path, true);
@@ -385,7 +390,7 @@ describe('delete with a tab keeps the file', () => {
 
 		app.diskfiles.editor.close_tab(tab.id);
 
-		assert.isUndefined(app.diskfiles.peek(PATH_B));
+		assert.isUndefined(seed_diskfile(app, PATH_B));
 		assert.isUndefined(app.diskfiles.find_editor_state(b.path));
 		assert.ok(!all.has(b.id));
 		assert.ok(!all.has(tab.id));
@@ -404,26 +409,26 @@ describe('delete with a tab keeps the file', () => {
 
 	test('a preview tab keeps it until it previews another file', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		const { tabs } = app.diskfiles.editor;
 		app.diskfiles.select(a.path);
 		assert.strictEqual(tabs.preview_tab?.path, a.path);
 
 		filer_change('delete', PATH_A);
-		assert.strictEqual(app.diskfiles.peek(PATH_A), a);
+		assert.strictEqual(seed_diskfile(app, PATH_A), a);
 		assert.isTrue(a.deleted_on_disk);
 
 		app.diskfiles.select(PATH_B);
 
-		assert.isUndefined(app.diskfiles.peek(PATH_A));
+		assert.isUndefined(seed_diskfile(app, PATH_A));
 		assert.strictEqual(tabs.items.size, 1);
 		assert.strictEqual(app.diskfiles.selected_path, PATH_B);
 	});
 
 	test('the file reappearing reattaches the same diskfile and clears the flag', async () => {
 		await disk.load(PATH_A, 'a');
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
@@ -433,7 +438,7 @@ describe('delete with a tab keeps the file', () => {
 		filer_change('add', PATH_A, 'a back');
 		await flush_reads();
 
-		assert.strictEqual(app.diskfiles.peek(PATH_A), a);
+		assert.strictEqual(seed_diskfile(app, PATH_A), a);
 		assert.strictEqual(count_by_path(PATH_A), 1);
 		assert.isFalse(a.deleted_on_disk);
 		assert.strictEqual(a.content, 'a back');
@@ -445,7 +450,7 @@ describe('delete with a tab keeps the file', () => {
 
 	test('a rename leaves the old tab, flagged, and adds the new file without opening it', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		const { tabs } = app.diskfiles.editor;
 		app.diskfiles.select(a.path, true);
@@ -454,9 +459,9 @@ describe('delete with a tab keeps the file', () => {
 		filer_change('delete', PATH_A);
 		filer_change('add', PATH_B);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_A), a);
+		assert.strictEqual(seed_diskfile(app, PATH_A), a);
 		assert.isTrue(a.deleted_on_disk);
-		const b = app.diskfiles.peek(PATH_B);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(b);
 		assert.isFalse(b.deleted_on_disk);
 		assert.strictEqual(tabs.items.size, 1);
@@ -467,7 +472,7 @@ describe('delete with a tab keeps the file', () => {
 
 	test("saving a deleted tab's content recreates the file", async () => {
 		await disk.load(PATH_A, 'a');
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
@@ -484,21 +489,21 @@ describe('delete with a tab keeps the file', () => {
 		assert.strictEqual(disk.files.get(PATH_A), 'a');
 		assert.isFalse(a.deleted_on_disk);
 		assert.isTrue(a.uncovered, 'no project indexes it, so no add will come');
-		assert.strictEqual(app.diskfiles.peek(PATH_A), a);
+		assert.strictEqual(seed_diskfile(app, PATH_A), a);
 	});
 
 	test('deleting an unknown path is a no-op', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		filer_change('delete', PATH_B);
-		assert.strictEqual(app.diskfiles.items.size, 1);
+		assert.strictEqual(app.diskfiles.index.size, 1);
 	});
 });
 
 describe('delete without a tab or draft forgets the file', () => {
 	test('disposes the diskfile and its history, and leaves other tabs alone', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
 		app.diskfiles.select(a.path, true);
@@ -507,7 +512,7 @@ describe('delete without a tab or draft forgets the file', () => {
 
 		filer_change('delete', PATH_B);
 
-		assert.isUndefined(app.diskfiles.peek(PATH_B));
+		assert.isUndefined(seed_diskfile(app, PATH_B));
 		assert.ok(!all.has(b.id));
 		assert.ok(!all.has(history.id));
 		assert.strictEqual(app.diskfiles.selected_path, a.path);
@@ -516,8 +521,8 @@ describe('delete without a tab or draft forgets the file', () => {
 
 	test('the deleted file cannot be reopened or navigated back to', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
 
@@ -528,7 +533,7 @@ describe('delete without a tab or draft forgets the file', () => {
 
 		filer_change('delete', PATH_B);
 
-		assert.isUndefined(app.diskfiles.peek(PATH_B));
+		assert.isUndefined(seed_diskfile(app, PATH_B));
 		tabs.reopen_last_closed_tab();
 		assert.isUndefined(tabs.by_path.get(b.path));
 		assert.isNull(tabs.navigate_to_tab(b_tab.id));
@@ -543,7 +548,7 @@ describe('has_unsaved_changes and the unload guard', () => {
 
 	test('is false with no drafts, true with one, false again once discarded', async () => {
 		await disk.load(PATH_A, 'a');
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		assert.ok(!app.diskfiles.has_unsaved_changes);
@@ -557,7 +562,7 @@ describe('has_unsaved_changes and the unload guard', () => {
 
 	test('confirm_unload_with_unsaved_changes cancels the unload only with unsaved changes', async () => {
 		await disk.load(PATH_A, 'a');
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 
 		const clean = create_unload_event();
@@ -579,8 +584,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 	const setup_dirty = async () => {
 		await disk.load(PATH_A, 'a');
 		await disk.load(PATH_B, 'b');
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		app.diskfiles.select(a.path, true);
 		app.diskfiles.select(b.path, true);
@@ -595,7 +600,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		filer_change('delete', PATH_B);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b);
+		assert.strictEqual(seed_diskfile(app, PATH_B), b);
 		assert.isTrue(b.deleted_on_disk);
 		assert.ok(tabs.by_path.get(b.path));
 		assert.strictEqual(tabs.selected_path, b.path);
@@ -616,7 +621,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		filer_change('add', PATH_B, 'b recreated');
 		await flush_reads();
 
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b);
+		assert.strictEqual(seed_diskfile(app, PATH_B), b);
 		assert.strictEqual(count_by_path(PATH_B), 1);
 		assert.isFalse(b.deleted_on_disk);
 		assert.strictEqual(b.content, 'b recreated');
@@ -646,10 +651,10 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.ok(tab);
 
 		editor_state.discard_draft();
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b, 'kept while its tab is open');
+		assert.strictEqual(seed_diskfile(app, PATH_B), b, 'kept while its tab is open');
 		app.diskfiles.editor.close_tab(tab.id);
 
-		assert.isUndefined(app.diskfiles.peek(PATH_B));
+		assert.isUndefined(seed_diskfile(app, PATH_B));
 		assert.isUndefined(app.diskfiles.find_editor_state(b.path));
 		assert.strictEqual(app.diskfiles.selected_path, a.path);
 		tabs.reopen_last_closed_tab();
@@ -664,7 +669,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		app.diskfiles.editor.close_tab(tab.id);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b);
+		assert.strictEqual(seed_diskfile(app, PATH_B), b);
 		assert.include(
 			app.diskfiles.listed.map((r) => r.id),
 			b.path
@@ -681,8 +686,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		tabs.close_all_tabs();
 
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b);
-		assert.ok(app.diskfiles.peek(PATH_A));
+		assert.strictEqual(seed_diskfile(app, PATH_B), b);
+		assert.ok(seed_diskfile(app, PATH_A));
 		assert.isTrue(app.diskfiles.find_editor_state(b.path)?.has_unsaved_edits);
 	});
 	test('closing a tab of a file still on disk keeps it', async () => {
@@ -692,7 +697,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		tabs.close_tab(tab.id);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_A), a);
+		assert.strictEqual(seed_diskfile(app, PATH_A), a);
 	});
 
 	test('unsaved edits without an open tab keep a deleted file too', async () => {
@@ -703,7 +708,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		filer_change('delete', PATH_B);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b);
+		assert.strictEqual(seed_diskfile(app, PATH_B), b);
 		assert.isTrue(b.deleted_on_disk);
 	});
 
@@ -712,7 +717,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		app.projects.add({ root: SOURCE_DIR });
 		await disk.load(PATH_A, 'a');
 		await disk.load(PATH_B, 'b');
-		const b = app.diskfiles.peek(PATH_B);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(b);
 		const part = app.cell_registry.instantiate('DiskfilePart', { type: 'diskfile', path: PATH_B });
 		app.diskfiles.get_editor_state(b).current_content = 'part draft';
@@ -720,7 +725,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		app.diskfiles.reconcile([create_disknode(PATH_A, 'a')], ['/ws/']);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b);
+		assert.strictEqual(seed_diskfile(app, PATH_B), b);
 		assert.isTrue(b.deleted_on_disk);
 		assert.strictEqual(part.diskfile, b);
 		assert.strictEqual(part.content, 'part draft');
@@ -728,19 +733,19 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		// discarding the draft lets it go
 		app.diskfiles.get_editor_state(b).discard_draft();
-		assert.isUndefined(app.diskfiles.peek(PATH_B));
+		assert.isUndefined(seed_diskfile(app, PATH_B));
 		assert.isUndefined(part.diskfile);
 	});
 
 	test('a file without a draft or a tab is not kept', async () => {
 		await disk.load(PATH_B, 'b');
-		const b = app.diskfiles.peek(PATH_B);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(b);
 		app.diskfiles.get_editor_state(b);
 
 		filer_change('delete', PATH_B);
 
-		assert.isUndefined(app.diskfiles.peek(PATH_B));
+		assert.isUndefined(seed_diskfile(app, PATH_B));
 	});
 	test('saving recreates the file even with nothing left to save', async () => {
 		const { b, editor_state } = await setup_dirty();
@@ -763,8 +768,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 	test('reusing a preview tab away from the file keeps its draft', async () => {
 		await disk.load(PATH_A, 'a');
 		await disk.load(PATH_B, 'b');
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
 		const preview = tabs.preview_diskfile(b.path);
@@ -777,7 +782,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		tabs.preview_diskfile(a.path);
 
 		assert.strictEqual(preview.path, a.path);
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b);
+		assert.strictEqual(seed_diskfile(app, PATH_B), b);
 		assert.include(
 			app.diskfiles.listed.map((r) => r.id),
 			b.path
@@ -788,7 +793,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		filer_change('delete', PATH_B);
 		filer_change('delete', PATH_B);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b);
+		assert.strictEqual(seed_diskfile(app, PATH_B), b);
 		assert.isTrue(b.deleted_on_disk);
 		assert.ok(tabs.by_path.get(b.path));
 		assert.strictEqual(count_by_path(PATH_B), 1);
@@ -847,7 +852,7 @@ describe('release_uncovered', () => {
 	const seed = async (paths: Array<DiskfilePath>, held: Array<DiskfilePath>): Promise<void> => {
 		for (const path of paths) await disk.load(path, path);
 		for (const path of held) {
-			const diskfile = app.diskfiles.peek(path)!;
+			const diskfile = seed_diskfile(app, path)!;
 			app.diskfiles.select(diskfile.path, true);
 			app.diskfiles.get_editor_state(diskfile).current_content = 'edited';
 		}
@@ -870,12 +875,12 @@ describe('release_uncovered', () => {
 
 		app.diskfiles.release_uncovered([dir('/dev/app/'), dir('/dev/gone/')]);
 
-		assert.ok(app.diskfiles.peek(at('/dev/README.md')), 'outside the dropped dirs');
-		assert.ok(!app.diskfiles.peek(at('/dev/app/a.ts')), 'unfocused, nothing holds it');
-		const b = app.diskfiles.peek(at('/dev/app/b.ts'));
+		assert.ok(seed_diskfile(app, at('/dev/README.md')), 'outside the dropped dirs');
+		assert.ok(!seed_diskfile(app, at('/dev/app/a.ts')), 'unfocused, nothing holds it');
+		const b = seed_diskfile(app, at('/dev/app/b.ts'));
 		assert.ok(b, 'unfocused, held by its draft');
 		assert.isFalse(b.deleted_on_disk, 'still on disk');
-		const x = app.diskfiles.peek(at('/dev/gone/x.ts'));
+		const x = seed_diskfile(app, at('/dev/gone/x.ts'));
 		assert.ok(x, 'its draft keeps it');
 		assert.isTrue(x.uncovered, 'its repo missing: out of the index, not seen deleted');
 		assert.isFalse(x.deleted_on_disk);
@@ -886,8 +891,8 @@ describe('release_uncovered', () => {
 		app.projects.add({ root: WS });
 		const paths = [PATH_A, PATH_B, PATH_C];
 		for (const path of paths) await disk.load(path, path);
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		app.diskfiles.select(a.path, true);
 		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
@@ -896,10 +901,10 @@ describe('release_uncovered', () => {
 
 		app.projects.remove_by_root(WS);
 
-		assert.strictEqual(app.diskfiles.peek(PATH_A), a, 'its tab keeps it');
+		assert.strictEqual(seed_diskfile(app, PATH_A), a, 'its tab keeps it');
 		assert.isTrue(a.uncovered);
 		assert.isFalse(a.deleted_on_disk, 'not seen deleted');
-		assert.strictEqual(app.diskfiles.peek(PATH_B), b, 'its draft keeps it');
+		assert.strictEqual(seed_diskfile(app, PATH_B), b, 'its draft keeps it');
 		assert.isTrue(b.uncovered);
 		assert.isFalse(b.deleted_on_disk);
 		assert.sameMembers(app.diskfiles.listed_unindexed, [a, b]);
@@ -908,10 +913,10 @@ describe('release_uncovered', () => {
 			a.path,
 			'pickers skip it'
 		);
-		assert.isUndefined(app.diskfiles.peek(PATH_C), 'nothing holds it');
+		assert.isUndefined(seed_diskfile(app, PATH_C), 'nothing holds it');
 
 		app.diskfiles.editor.close_tab(tab.id);
-		assert.isUndefined(app.diskfiles.peek(PATH_A));
+		assert.isUndefined(seed_diskfile(app, PATH_A));
 	});
 
 	test('a root turned registry keeps its loose files and what another root covers', async () => {
@@ -923,9 +928,9 @@ describe('release_uncovered', () => {
 		// it was a plain directory, focused on its root
 		app.diskfiles.release_uncovered([DEV]);
 
-		assert.ok(app.diskfiles.peek(at('/dev/README.md')), 'a loose file of its top level');
-		assert.ok(!app.diskfiles.peek(at('/dev/scratch/y.ts')), 'below it, unindexed');
-		assert.ok(app.diskfiles.peek(at('/dev/shared/z.ts')), 'a scoped dir covers it');
+		assert.ok(seed_diskfile(app, at('/dev/README.md')), 'a loose file of its top level');
+		assert.ok(!seed_diskfile(app, at('/dev/scratch/y.ts')), 'below it, unindexed');
+		assert.ok(seed_diskfile(app, at('/dev/shared/z.ts')), 'a scoped dir covers it');
 	});
 });
 
@@ -937,8 +942,8 @@ describe('path_relative', () => {
 		const inside = parse_or_throw(DiskfilePath, '/zzz/notes/a.md');
 		app.diskfiles.add_initial([create_disknode(inside), create_disknode(PATH_A)]);
 
-		assert.strictEqual(app.diskfiles.peek(inside)?.path_relative, 'notes/a.md');
-		assert.strictEqual(app.diskfiles.peek(PATH_A)?.path_relative, '/ws/a.txt');
+		assert.strictEqual(seed_diskfile(app, inside)?.path_relative, 'notes/a.md');
+		assert.strictEqual(seed_diskfile(app, PATH_A)?.path_relative, '/ws/a.txt');
 	});
 
 	test('a file part outside the zzz dir gets the absolute path as its `path` attribute', () => {
@@ -1184,7 +1189,7 @@ describe('selection on add', () => {
 
 	test('a file another tool creates leaves the selection and tabs alone', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		app.diskfiles.select(a.path);
 		const { tabs } = app.diskfiles.editor;
@@ -1227,8 +1232,8 @@ describe('selection JSON', () => {
 describe('reopening a closed tab', () => {
 	test('selects the reopened file', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { editor } = app.diskfiles;
 		app.diskfiles.select(a.path, true);
@@ -1248,8 +1253,8 @@ describe('reopening a closed tab', () => {
 describe('back/forward navigation', () => {
 	test('selects the file of the tab navigated to', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { editor } = app.diskfiles;
 		app.diskfiles.select(a.path, true);
@@ -1264,8 +1269,8 @@ describe('back/forward navigation', () => {
 
 	test('a closed tab navigated to selects its file in a new preview', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { editor } = app.diskfiles;
 		app.diskfiles.select(a.path, true);
@@ -1283,7 +1288,7 @@ describe('back/forward navigation', () => {
 
 	test('an unknown tab leaves the selection alone', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		app.diskfiles.select(a.path, true);
 
@@ -1296,8 +1301,8 @@ describe('back/forward navigation', () => {
 describe('DiskfilesEditor.handle_file_modified', () => {
 	test("promotes the modified file's preview tab and leaves others alone", () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.peek(PATH_A);
-		const b = app.diskfiles.peek(PATH_B);
+		const a = seed_diskfile(app, PATH_A);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { editor } = app.diskfiles;
 		app.diskfiles.select(a.path, true);
@@ -1324,7 +1329,7 @@ describe('create_file selects the new file', () => {
 		};
 		app.projects.add({ root: SOURCE_DIR });
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		app.diskfiles.select(a.path);
 		return a;
@@ -1340,7 +1345,7 @@ describe('create_file selects the new file', () => {
 		assert.strictEqual(app.diskfiles.selected_path, a.path, 'an unrelated file');
 
 		filer_change('add', PATH_B);
-		const b = app.diskfiles.peek(PATH_B);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(b);
 		assert.strictEqual(app.diskfiles.selected_path, b.path);
 		const { tabs } = app.diskfiles.editor;
@@ -1353,7 +1358,7 @@ describe('create_file selects the new file', () => {
 
 		await app.diskfiles.create_file('b.txt');
 
-		const b = app.diskfiles.peek(PATH_B);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(b);
 		assert.strictEqual(app.diskfiles.selected_path, b.path);
 		assert.strictEqual(app.diskfiles.editor.tabs.selected_path, b.path);
@@ -1377,7 +1382,7 @@ describe('create_file selects the new file', () => {
 			await app.diskfiles.create_file(filename);
 			filer_change('add', PATH_B);
 
-			assert.strictEqual(app.diskfiles.selected_path, app.diskfiles.peek(PATH_B)?.path);
+			assert.strictEqual(app.diskfiles.selected_path, seed_diskfile(app, PATH_B)?.path);
 		});
 	}
 
@@ -1410,7 +1415,7 @@ describe('create_file selects the new file', () => {
 			setup();
 			const a_tab = app.diskfiles.editor.tabs.selected_tab;
 			app.diskfiles.add_initial([create_disknode(PATH_C)]);
-			const c = app.diskfiles.peek(PATH_C);
+			const c = seed_diskfile(app, PATH_C);
 			assert.ok(a_tab && c);
 			app.diskfiles.select(c.path, true);
 			const c_tab = app.diskfiles.editor.tabs.selected_tab;
@@ -1422,7 +1427,7 @@ describe('create_file selects the new file', () => {
 			filer_change('add', PATH_B);
 
 			assert.strictEqual(app.diskfiles.selected_path, selected, name);
-			assert.notStrictEqual(selected, app.diskfiles.peek(PATH_B)?.path, name);
+			assert.notStrictEqual(selected, seed_diskfile(app, PATH_B)?.path, name);
 		}
 	});
 
@@ -1434,7 +1439,7 @@ describe('create_file selects the new file', () => {
 		assert.isTrue(a.uncovered, "the closed project's file is kept for its tab, flagged");
 		filer_change('add', PATH_B);
 
-		const b = app.diskfiles.peek(PATH_B);
+		const b = seed_diskfile(app, PATH_B);
 		assert.ok(b);
 		assert.notStrictEqual(app.diskfiles.selected_path, b.path);
 	});
@@ -1445,11 +1450,11 @@ describe('create_file selects the new file', () => {
 		await app.diskfiles.create_file('c.txt');
 
 		filer_change('add', PATH_B);
-		const b = app.diskfiles.peek(PATH_B);
+		const b = seed_diskfile(app, PATH_B);
 		assert.notStrictEqual(app.diskfiles.selected_path, b?.path);
 
 		filer_change('add', PATH_C);
-		assert.strictEqual(app.diskfiles.selected_path, app.diskfiles.peek(PATH_C)?.path);
+		assert.strictEqual(app.diskfiles.selected_path, seed_diskfile(app, PATH_C)?.path);
 	});
 
 	test('a failed create selects nothing', async () => {
@@ -1547,10 +1552,8 @@ describe('directory_paths', () => {
 	/** The directories a from-scratch walk of the files on disk finds. */
 	const rebuilt = (): Array<string> => {
 		const found: Set<string> = new Set();
-		for (const diskfile of app.diskfiles.items.values.filter(
-			(d) => !d.deleted_on_disk && !d.uncovered
-		)) {
-			for (const dir of to_file_directories(diskfile.path, diskfile.source_dir)) found.add(dir);
+		for (const record of app.diskfiles.index.values()) {
+			for (const dir of to_file_directories(record.id, record.source_dir)) found.add(dir);
 		}
 		return [...found].sort();
 	};
@@ -1577,11 +1580,12 @@ describe('directory_paths', () => {
 	});
 
 	test('an add of an id already present keeps the file it holds counted', () => {
-		const existing = app.diskfiles.upsert(node_at('/ws/a/x.md'));
+		app.diskfiles.upsert(node_at('/ws/a/x.md'));
+		const existing = seed_diskfile(app, '/ws/a/x.md')!;
 		const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		app.diskfiles.add(existing.to_json());
 		error.mockRestore();
-		assert.strictEqual(app.diskfiles.items.by_id.get(existing.id), existing);
+		assert.strictEqual(app.diskfiles.peek(existing.path), existing);
 		assert.deepEqual(dirs(), ['/ws/', '/ws/a/']);
 		assert.deepEqual(dirs(), rebuilt());
 	});

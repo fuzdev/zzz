@@ -23,7 +23,7 @@ import {
 } from '#lib/terminal_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { content_hash, encode_snapshot_files } from './diskfile_test_helpers.ts';
+import { content_hash, encode_snapshot_files, seed_diskfile } from './diskfile_test_helpers.ts';
 
 const ZZZ_DIR = parse_or_throw(DiskfileDirectoryPath, '/zzz/');
 const WS_DIR = parse_or_throw(DiskfileDirectoryPath, '/ws/');
@@ -172,7 +172,7 @@ const filer_change = (type: DiskfileChangeType, path: DiskfilePath, mtime?: numb
 
 /** Loads the content of the file at `path` (`diskfile_read`), as a view would. */
 const load_content = async (path: DiskfilePath): Promise<void> => {
-	const diskfile = app.diskfiles.peek(path);
+	const diskfile = seed_diskfile(app, path);
 	assert.ok(diskfile);
 	await app.diskfiles.ensure_content(diskfile);
 };
@@ -378,40 +378,40 @@ describe('reconnect detection', () => {
 describe('file reconcile', () => {
 	test('prunes files under the snapshot roots that it lacks', async () => {
 		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A), create_disknode(ZZZ_B)]) });
-		assert.ok(app.diskfiles.peek(ZZZ_B));
+		assert.ok(seed_diskfile(app, ZZZ_B));
 
 		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A, 2)]) });
-		assert.strictEqual(app.diskfiles.peek(ZZZ_A)?.mtime, 2);
-		assert.ok(!app.diskfiles.peek(ZZZ_B), 'deleted while disconnected');
+		assert.strictEqual(seed_diskfile(app, ZZZ_A)?.mtime, 2);
+		assert.ok(!seed_diskfile(app, ZZZ_B), 'deleted while disconnected');
 	});
 
 	test('never prunes files outside the snapshot roots', async () => {
 		app.diskfiles.add_initial([create_disknode(OTHER_A)]);
 		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
-		assert.ok(app.diskfiles.peek(OTHER_A));
+		assert.ok(seed_diskfile(app, OTHER_A));
 
 		// no roots at all prunes nothing
 		await load({ files: [], file_roots: [] });
-		assert.ok(app.diskfiles.peek(ZZZ_A));
+		assert.ok(seed_diskfile(app, ZZZ_A));
 	});
 
 	test('keeps a pruned file open with unsaved edits, flagged deleted on disk', async () => {
 		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
 		await load_content(ZZZ_A);
-		const a = app.diskfiles.peek(ZZZ_A);
+		const a = seed_diskfile(app, ZZZ_A);
 		assert.ok(a);
 		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		editor_state.current_content = 'a edited';
 
 		await load({ files: [] });
-		assert.strictEqual(app.diskfiles.peek(ZZZ_A), a);
+		assert.strictEqual(seed_diskfile(app, ZZZ_A), a);
 		assert.isTrue(a.deleted_on_disk);
 		assert.ok(app.diskfiles.editor.tabs.by_path.get(a.path));
 
 		// and reattaches it when a later snapshot has the file again
 		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
-		assert.strictEqual(app.diskfiles.peek(ZZZ_A), a);
+		assert.strictEqual(seed_diskfile(app, ZZZ_A), a);
 		assert.isFalse(a.deleted_on_disk);
 	});
 
@@ -424,8 +424,8 @@ describe('file reconcile', () => {
 		await succeed(1, { files: encode_snapshot_files([create_disknode(ZZZ_A, 2)]) });
 		assert.ok(await loaded);
 
-		assert.strictEqual(app.diskfiles.peek(ZZZ_B)?.mtime, 3, 'created after the snapshot');
-		assert.strictEqual(app.diskfiles.peek(ZZZ_A)?.mtime, 3);
+		assert.strictEqual(seed_diskfile(app, ZZZ_B)?.mtime, 3, 'created after the snapshot');
+		assert.strictEqual(seed_diskfile(app, ZZZ_A)?.mtime, 3);
 	});
 
 	test('a reconnect reads the files held eagerly again, the shown first, and drops the rest', async () => {
@@ -433,9 +433,9 @@ describe('file reconcile', () => {
 		const files = [create_disknode(ZZZ_A), create_disknode(ZZZ_B), create_disknode(ZZZ_C)];
 		await load({ files: encode_snapshot_files(files) });
 		for (const path of [ZZZ_A, ZZZ_B, ZZZ_C]) await load_content(path);
-		const a = app.diskfiles.peek(ZZZ_A)!;
-		const b = app.diskfiles.peek(ZZZ_B)!;
-		const c = app.diskfiles.peek(ZZZ_C)!;
+		const a = seed_diskfile(app, ZZZ_A)!;
+		const b = seed_diskfile(app, ZZZ_B)!;
+		const c = seed_diskfile(app, ZZZ_C)!;
 		// a has an editing state, b is shown in the selected tab, c is held by nothing
 		const a_state = app.diskfiles.get_editor_state(a);
 		app.diskfiles.select(b.path, true);
@@ -466,14 +466,14 @@ describe('project reconcile', () => {
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		assert.ok(app.projects.get_by_root(WS_DIR));
-		assert.ok(app.diskfiles.peek(WS_A));
+		assert.ok(seed_diskfile(app, WS_A));
 
 		// another tab closed it and opened another, while this one was disconnected
 		await load({ projects: [create_project_info(OTHER_DIR, 3)], projects_rev: 3 });
 		assert.ok(!app.projects.get_by_root(WS_DIR), 'closed on the backend');
 		assert.ok(app.projects.get_by_root(OTHER_DIR));
 		assert.strictEqual(app.projects.items.size, 1);
-		assert.ok(!app.diskfiles.peek(WS_A), "a removed project's files go with it");
+		assert.ok(!seed_diskfile(app, WS_A), "a removed project's files go with it");
 	});
 
 	test("a removed project's files another root covers follow that root", async () => {
@@ -487,8 +487,8 @@ describe('project reconcile', () => {
 		});
 
 		await load({ files: encode_snapshot_files([create_disknode(nested_a)]) });
-		assert.ok(app.diskfiles.peek(nested_a), 'still under the zzz dir root');
-		assert.ok(!app.diskfiles.peek(nested_b));
+		assert.ok(seed_diskfile(app, nested_a), 'still under the zzz dir root');
+		assert.ok(!seed_diskfile(app, nested_b));
 	});
 
 	test('a close or open applied during the request is newer than the snapshot, which loses', async () => {
@@ -509,7 +509,7 @@ describe('project reconcile', () => {
 
 		assert.ok(!app.projects.get_by_root(WS_DIR), 'the close stands');
 		assert.ok(app.projects.get_by_root(OTHER_DIR), 'the open stands');
-		assert.ok(app.diskfiles.peek(OTHER_A), "the opened project's files aren't pruned");
+		assert.ok(seed_diskfile(app, OTHER_A), "the opened project's files aren't pruned");
 
 		// the open is new here, so its files come by another snapshot, which is
 		// newer than both
@@ -521,7 +521,7 @@ describe('project reconcile', () => {
 			file_roots: [ZZZ_DIR, OTHER_DIR]
 		});
 		assert.ok(app.projects.get_by_root(OTHER_DIR));
-		assert.ok(app.diskfiles.peek(OTHER_A));
+		assert.ok(seed_diskfile(app, OTHER_A));
 
 		// a later snapshot without it closes it
 		await load({ projects: [], projects_rev: 5 });
@@ -540,7 +540,7 @@ describe('project reconcile', () => {
 		await succeed(1, { projects: [], projects_rev: 3 });
 		assert.ok(await loaded);
 		assert.ok(app.projects.get_by_root(WS_DIR), 'held at a newer rev');
-		assert.ok(app.diskfiles.peek(WS_A), 'its files left to the newer state');
+		assert.ok(seed_diskfile(app, WS_A), 'its files left to the newer state');
 		// one no newer is removed
 		await load({ projects: [], projects_rev: 5 });
 		assert.ok(!app.projects.get_by_root(WS_DIR));
@@ -552,12 +552,12 @@ describe('project reconcile', () => {
 			files: encode_snapshot_files([create_disknode(WS_A)]),
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
-		assert.ok(app.diskfiles.peek(WS_A));
+		assert.ok(seed_diskfile(app, WS_A));
 		notify('close', create_project_info(WS_DIR, 2));
 		assert.ok(!app.projects.get_by_root(WS_DIR));
-		assert.ok(!app.diskfiles.peek(WS_A), 'released with its project');
+		assert.ok(!seed_diskfile(app, WS_A), 'released with its project');
 		await load({ projects_rev: 2 });
-		assert.ok(!app.diskfiles.peek(WS_A));
+		assert.ok(!seed_diskfile(app, WS_A));
 	});
 
 	test('a snapshot listing a root closed here since it was read adds none of its files', async () => {
@@ -576,8 +576,8 @@ describe('project reconcile', () => {
 		assert.ok(await loaded);
 		await flush();
 		assert.ok(!app.projects.get_by_root(WS_DIR), 'the close stands');
-		assert.ok(!app.diskfiles.peek(WS_A), "the closed root's files aren't added");
-		assert.ok(app.diskfiles.peek(ZZZ_A), 'the rest of the snapshot is');
+		assert.ok(!seed_diskfile(app, WS_A), "the closed root's files aren't added");
+		assert.ok(seed_diskfile(app, ZZZ_A), 'the rest of the snapshot is');
 	});
 
 	test("a closed root's files another root covers are still added by the snapshot", async () => {
@@ -595,7 +595,7 @@ describe('project reconcile', () => {
 		});
 		assert.ok(await loaded);
 		assert.ok(!app.projects.get_by_root(WS_DIR));
-		assert.ok(app.diskfiles.peek(WS_A), 'the scoped dir indexes it');
+		assert.ok(seed_diskfile(app, WS_A), 'the scoped dir indexes it');
 	});
 
 	test('a root the snapshot saw closed stays closed to older state', async () => {
@@ -621,7 +621,7 @@ describe('projects after a restart', () => {
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		await load_content(WS_B);
-		const b = app.diskfiles.peek(WS_B)!;
+		const b = seed_diskfile(app, WS_B)!;
 		app.diskfiles.select(b.path, true);
 		app.diskfiles.get_editor_state(b).current_content = 'b edited';
 	};
@@ -638,7 +638,7 @@ describe('projects after a restart', () => {
 		await load_restarted();
 
 		assert.strictEqual(app.projects.get_by_root(WS_DIR), project, 'kept while reopening');
-		assert.ok(app.diskfiles.peek(WS_A), 'files kept while reopening');
+		assert.ok(seed_diskfile(app, WS_A), 'files kept while reopening');
 		assert.deepEqual(
 			open_calls.map((c) => [c.path, c.focus]),
 			[[WS_DIR, []]],
@@ -659,8 +659,8 @@ describe('projects after a restart', () => {
 		});
 		await flush();
 		assert.strictEqual(app.projects.get_by_root(WS_DIR), project);
-		assert.ok(app.diskfiles.peek(WS_A));
-		const b = app.diskfiles.peek(WS_B);
+		assert.ok(seed_diskfile(app, WS_A));
+		const b = seed_diskfile(app, WS_B);
 		assert.ok(b?.deleted_on_disk, 'the dirty tab survives, flagged deleted');
 		assert.ok(app.diskfiles.editor.tabs.by_path.get(b.path));
 
@@ -685,9 +685,9 @@ describe('projects after a restart', () => {
 		});
 		await flush();
 		assert.ok(!app.projects.get_by_root(WS_DIR));
-		assert.ok(!app.diskfiles.peek(WS_A));
-		assert.ok(app.diskfiles.peek(WS_B)?.uncovered, 'unsaved edits still kept');
-		assert.ok(app.diskfiles.peek(ZZZ_A), 'other roots untouched');
+		assert.ok(!seed_diskfile(app, WS_A));
+		assert.ok(seed_diskfile(app, WS_B)?.uncovered, 'unsaved edits still kept');
+		assert.ok(seed_diskfile(app, ZZZ_A), 'other roots untouched');
 		assert.ok(vi.mocked(console.error).mock.calls.length > 0, 'the failure is logged');
 
 		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
@@ -704,7 +704,7 @@ describe('projects after a restart', () => {
 		});
 		await flush();
 		assert.ok(app.projects.get_by_root(WS_DIR), 'kept');
-		assert.ok(app.diskfiles.peek(WS_A));
+		assert.ok(seed_diskfile(app, WS_A));
 		assert.strictEqual(open_calls.length, 1, 'no retry loop');
 
 		// the next snapshot (same instance) retries instead of closing it
@@ -730,8 +730,8 @@ describe('projects after a restart', () => {
 		});
 		await flush();
 		assert.ok(!app.projects.get_by_root(WS_DIR));
-		assert.ok(!app.diskfiles.peek(WS_A), 'only the project covered it');
-		assert.ok(app.diskfiles.peek(nested_a), 'another root still covers it');
+		assert.ok(!seed_diskfile(app, WS_A), 'only the project covered it');
+		assert.ok(seed_diskfile(app, nested_a), 'another root still covers it');
 	});
 
 	/** Stubs `project_close` with calls the test resolves. */
@@ -886,8 +886,8 @@ describe('projects after a restart', () => {
 			files: [],
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
-		assert.ok(!app.diskfiles.peek(WS_A), 'pruned');
-		assert.isTrue(app.diskfiles.peek(WS_B)?.deleted_on_disk, 'the draft kept, flagged');
+		assert.ok(!seed_diskfile(app, WS_A), 'pruned');
+		assert.isTrue(seed_diskfile(app, WS_B)?.deleted_on_disk, 'the draft kept, flagged');
 	});
 
 	test('a snapshot during the reopen leaves the project alone', async () => {
@@ -895,7 +895,7 @@ describe('projects after a restart', () => {
 		await load_restarted();
 		await load();
 		assert.ok(app.projects.get_by_root(WS_DIR));
-		assert.ok(app.diskfiles.peek(WS_A));
+		assert.ok(seed_diskfile(app, WS_A));
 		assert.strictEqual(open_calls.length, 1);
 	});
 });
@@ -968,8 +968,8 @@ describe('a registry project after a restart', () => {
 		open_calls[0]!.resolve(reply([APP, SITE]));
 		await flush();
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
-		assert.ok(app.diskfiles.peek(APP_A));
-		assert.ok(!app.diskfiles.peek(SITE_A), 'gone from its reopened repo');
+		assert.ok(seed_diskfile(app, APP_A));
+		assert.ok(!seed_diskfile(app, SITE_A), 'gone from its reopened repo');
 		await load({
 			projects: [registry_info([APP, SITE], 2)],
 			projects_rev: 2,
@@ -1050,7 +1050,7 @@ describe('a registry project after a restart', () => {
 		open_calls[0]!.resolve(transient);
 		await flush();
 		assert.ok(app.projects.get_by_root(DEV), 'kept for the retry');
-		assert.ok(app.diskfiles.peek(APP_A), 'its files kept');
+		assert.ok(seed_diskfile(app, APP_A), 'its files kept');
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP, SITE]);
 
 		// the next snapshot (same instance, the project still lost) retries it
@@ -1175,7 +1175,7 @@ describe('a registry project after a restart', () => {
 		// the snapshot is read at 2, with both focused; another client then
 		// unfocuses `site` (3), which releases its files here
 		notify('update', registry_info([APP], 3));
-		assert.ok(!app.diskfiles.peek(SITE_A));
+		assert.ok(!seed_diskfile(app, SITE_A));
 		await succeed(before - 1, {
 			projects: [registry_info([APP, SITE], 2)],
 			projects_rev: 2,
@@ -1185,8 +1185,8 @@ describe('a registry project after a restart', () => {
 		});
 		assert.ok(await loaded);
 		assert.deepEqual(app.projects.get_by_root(DEV)?.focused, [APP], 'the newer state stands');
-		assert.ok(app.diskfiles.peek(APP_B), 'what it indexes is added');
-		assert.ok(!app.diskfiles.peek(SITE_A), 'the unfocused repo stays released');
+		assert.ok(seed_diskfile(app, APP_B), 'what it indexes is added');
+		assert.ok(!seed_diskfile(app, SITE_A), 'the unfocused repo stays released');
 	});
 
 	test("a restart's snapshot is followed by another for a close the old revs dropped", async () => {
@@ -1396,7 +1396,7 @@ describe('a registry project after a restart', () => {
 		assert.ok(project);
 		assert.strictEqual(project.kind, 'plain_dir');
 		assert.deepEqual(project.focused, [DEV]);
-		assert.ok(app.diskfiles.peek(APP_A), 'its root, a tree now, covers the repos');
+		assert.ok(seed_diskfile(app, APP_A), 'its root, a tree now, covers the repos');
 		assert.strictEqual(calls.length, loads, 'a narrowing state settles here, no resync');
 		await load({
 			projects: [create_project_info(DEV, 2)],
@@ -1424,7 +1424,7 @@ describe('a registry project after a restart', () => {
 		await flush();
 		assert.ok(!app.projects.get_by_root(DEV), 'the registry project is dropped');
 		assert.ok(app.projects.get_by_root(UPPER));
-		assert.ok(app.diskfiles.peek(APP_A), "the new project's files stay");
+		assert.ok(seed_diskfile(app, APP_A), "the new project's files stay");
 	});
 });
 

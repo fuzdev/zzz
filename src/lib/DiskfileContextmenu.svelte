@@ -19,6 +19,7 @@
 	import { delete_diskfile } from './diskfile_helpers.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import DiskfileCopyPathEntries from './DiskfileCopyPathEntries.svelte';
+	import DiskfileHold from './DiskfileHold.svelte';
 	import { to_diskfile_content_kind } from './diskfile_content_kind.ts';
 	import {
 		MARKDOWN_VIEW_MODES,
@@ -45,7 +46,7 @@
 	const app = frontend_context.get();
 	const { diskfiles } = app;
 
-	// only the content entries need the cell
+	// only the content entries need the cell, held while the menu's open (`DiskfileHold`)
 	const diskfile = $derived(path ? diskfiles.peek(path) : undefined);
 
 	// the folder holding `path`, without a trailing slash, as a terminal's `cwd`
@@ -60,126 +61,129 @@
 
 {#snippet entries()}
 	{#if path}
-		{@const { tabs } = diskfiles.editor}
-		{@const tab = tabs.by_path.get(path)}
-		{@const selected = tabs.selected_path === path}
-		<ContextmenuSubmenu icon={icon_file}>
-			file
-			{#snippet menu()}
-				<!-- TODO maybe show disabled versions? changing what appears isn't great -->
-				{#if !selected || tab?.is_preview}
-					<ContextmenuEntry
-						icon={icon_file}
-						run={() => {
-							diskfiles.select(path, true);
-						}}
-					>
-						<span>select tab</span>
-					</ContextmenuEntry>
-				{/if}
-
-				{#if !tab || (!selected && tab.is_preview)}
-					<ContextmenuEntry
-						icon={icon_file}
-						run={() => {
-							diskfiles.select(path, false);
-						}}
-					>
-						<span>preview tab</span>
-					</ContextmenuEntry>
-				{/if}
-
-				{#if tab}
-					<ContextmenuEntry
-						icon={icon_remove}
-						run={() => {
-							diskfiles.editor.request_close_tab(tab.id);
-						}}
-					>
-						<span>close tab</span>
-					</ContextmenuEntry>
-				{/if}
-
-				<DiskfileCopyPathEntries {path} />
-
-				<!-- loaded on click when it isn't yet; kept after a failed read, to say why;
-				never for an empty file, by its content once loaded, else its size on disk -->
-				{#if diskfile}
-					{@const file = diskfile}
-					{#if (file.content_status !== 'unloadable' || file.content_error !== null) &&
-						(file.content === null ? file.size !== 0 : file.content !== '')
-					}
-						<ContextmenuEntryCopyToClipboard
-							content={file.content ?? undefined}
-							load_content={file.content_status === 'loaded'
-								? undefined
-								: () => diskfiles.load_content(file)}
-							label="copy file content"
-							preview={file.content_preview}
-						/>
-					{/if}
-				{/if}
-
-				{#if reveal_in_tree}
-					<ContextmenuEntry
-						icon={icon_directory}
-						run={() => {
-							diskfiles.editor.reveal_in_tree(path);
-						}}
-					>
-						<span>reveal in tree</span>
-					</ContextmenuEntry>
-				{/if}
-
-				<!-- a file deleted on disk may have taken its folder with it -->
-				{#if !diskfile?.deleted_on_disk}
-					<ContextmenuEntry
-						icon={icon_terminal}
-						run={() => {
-							void app.terminals.open_shell(to_parent_dir(path));
-						}}
-					>
-						<span>open terminal in its folder</span>
-					</ContextmenuEntry>
-				{/if}
-
-				<ContextmenuEntry
-					icon={icon_delete}
-					run={async () => {
-						// TODO @many better confirmation
-						// eslint-disable-next-line no-alert
-						if (confirm(`Are you sure you want to delete ${diskfiles.to_relative_path(path)}?`)) {
-							await delete_diskfile(diskfiles, path);
-						}
-					}}
-				>
-					<span>delete file</span>
-				</ContextmenuEntry>
-
-				<!-- TODO rename and move, once the backend has actions for them -->
-			{/snippet}
-		</ContextmenuSubmenu>
-		{#if to_diskfile_content_kind(path) === 'markdown'}
-			{@const current_mode =
-				diskfiles.find_editor_state(path)?.markdown_view_mode ??
-				to_default_markdown_view_mode(diskfile?.content_status !== 'unloadable')}
-			<!-- rendering only looks the editing state up: it's created on a choice, never by opening the menu -->
-			<ContextmenuSubmenu icon={icon_view}>
-				view
+		<!-- held while the menu's open, so its content entries have the file's cell to read -->
+		<DiskfileHold {path}>
+			{@const { tabs } = diskfiles.editor}
+			{@const tab = tabs.by_path.get(path)}
+			{@const selected = tabs.selected_path === path}
+			<ContextmenuSubmenu icon={icon_file}>
+				file
 				{#snippet menu()}
-					{#each MARKDOWN_VIEW_MODES as mode (mode)}
+					<!-- TODO maybe show disabled versions? changing what appears isn't great -->
+					{#if !selected || tab?.is_preview}
 						<ContextmenuEntry
-							icon={mode === current_mode ? icon_checkmark : icon_view}
+							icon={icon_file}
 							run={() => {
-								const editor_state = diskfiles.get_editor_state_at(path);
-								if (editor_state) editor_state.markdown_view_mode_choice = mode;
+								diskfiles.select(path, true);
 							}}
 						>
-							<span>{MARKDOWN_VIEW_MODE_LABELS[mode]}</span>
+							<span>select tab</span>
 						</ContextmenuEntry>
-					{/each}
+					{/if}
+
+					{#if !tab || (!selected && tab.is_preview)}
+						<ContextmenuEntry
+							icon={icon_file}
+							run={() => {
+								diskfiles.select(path, false);
+							}}
+						>
+							<span>preview tab</span>
+						</ContextmenuEntry>
+					{/if}
+
+					{#if tab}
+						<ContextmenuEntry
+							icon={icon_remove}
+							run={() => {
+								diskfiles.editor.request_close_tab(tab.id);
+							}}
+						>
+							<span>close tab</span>
+						</ContextmenuEntry>
+					{/if}
+
+					<DiskfileCopyPathEntries {path} />
+
+					<!-- loaded on click when it isn't yet; kept after a failed read, to say why;
+					never for an empty file, by its content once loaded, else its size on disk -->
+					{#if diskfile}
+						{@const file = diskfile}
+						{#if (file.content_status !== 'unloadable' || file.content_error !== null) &&
+							(file.content === null ? file.size !== 0 : file.content !== '')
+						}
+							<ContextmenuEntryCopyToClipboard
+								content={file.content ?? undefined}
+								load_content={file.content_status === 'loaded'
+									? undefined
+									: () => diskfiles.load_content(file)}
+								label="copy file content"
+								preview={file.content_preview}
+							/>
+						{/if}
+					{/if}
+
+					{#if reveal_in_tree}
+						<ContextmenuEntry
+							icon={icon_directory}
+							run={() => {
+								diskfiles.editor.reveal_in_tree(path);
+							}}
+						>
+							<span>reveal in tree</span>
+						</ContextmenuEntry>
+					{/if}
+
+					<!-- a file deleted on disk may have taken its folder with it -->
+					{#if !diskfile?.deleted_on_disk}
+						<ContextmenuEntry
+							icon={icon_terminal}
+							run={() => {
+								void app.terminals.open_shell(to_parent_dir(path));
+							}}
+						>
+							<span>open terminal in its folder</span>
+						</ContextmenuEntry>
+					{/if}
+
+					<ContextmenuEntry
+						icon={icon_delete}
+						run={async () => {
+							// TODO @many better confirmation
+							// eslint-disable-next-line no-alert
+							if (confirm(`Are you sure you want to delete ${diskfiles.to_relative_path(path)}?`)) {
+								await delete_diskfile(diskfiles, path);
+							}
+						}}
+					>
+						<span>delete file</span>
+					</ContextmenuEntry>
+
+					<!-- TODO rename and move, once the backend has actions for them -->
 				{/snippet}
 			</ContextmenuSubmenu>
-		{/if}
+			{#if to_diskfile_content_kind(path) === 'markdown'}
+				{@const current_mode =
+					diskfiles.find_editor_state(path)?.markdown_view_mode ??
+					to_default_markdown_view_mode(diskfile?.content_status !== 'unloadable')}
+				<!-- rendering only looks the editing state up: it's created on a choice, never by opening the menu -->
+				<ContextmenuSubmenu icon={icon_view}>
+					view
+					{#snippet menu()}
+						{#each MARKDOWN_VIEW_MODES as mode (mode)}
+							<ContextmenuEntry
+								icon={mode === current_mode ? icon_checkmark : icon_view}
+								run={() => {
+									const editor_state = diskfiles.get_editor_state_at(path);
+									if (editor_state) editor_state.markdown_view_mode_choice = mode;
+								}}
+							>
+								<span>{MARKDOWN_VIEW_MODE_LABELS[mode]}</span>
+							</ContextmenuEntry>
+						{/each}
+					{/snippet}
+				</ContextmenuSubmenu>
+			{/if}
+		</DiskfileHold>
 	{/if}
 {/snippet}

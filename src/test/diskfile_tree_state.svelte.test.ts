@@ -18,6 +18,7 @@ import {
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import { outline, write_diskfile } from './diskfile_tree_test_helpers.ts';
+import { seed_diskfile } from './diskfile_test_helpers.ts';
 
 describe('compare_natural', () => {
 	test('sorts case-insensitively, numbers by value, ties broken for a total order', () => {
@@ -386,7 +387,7 @@ describe('DiskfileTreeState', () => {
 		write('/w/src/a.ts', '/w/src/');
 		const { tree } = app.diskfiles.editor;
 		app.scoped_dirs = [];
-		assert.ok(app.diskfiles.peek(parse_or_throw(DiskfilePath, '/w/src/a.ts')));
+		assert.ok(seed_diskfile(app, parse_or_throw(DiskfilePath, '/w/src/a.ts')));
 		assert.deepEqual(outline(tree.rows), ['- /w/', '  + src']);
 	});
 
@@ -446,10 +447,8 @@ describe('DiskfileTreeState', () => {
 				write(path);
 			}
 			const expected = new DiskfileTreeIndex();
-			for (const diskfile of app.diskfiles.items.values.filter(
-				(d) => !d.deleted_on_disk && !d.uncovered
-			)) {
-				expected.add_file(diskfile.path, to_file_directories(diskfile.path, diskfile.source_dir));
+			for (const record of app.diskfiles.index.values()) {
+				expected.add_file(record.id, to_file_directories(record.id, record.source_dir));
 			}
 			for (const dir of ['/w/', '/w/a/', '/w/a/b/', '/w/e/']) {
 				assert.deepEqual(

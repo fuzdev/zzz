@@ -17,7 +17,7 @@ import {
 import type { SessionLoadData } from '#lib/action_specs.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { encode_snapshot_files } from './diskfile_test_helpers.ts';
+import { encode_snapshot_files, seed_diskfile } from './diskfile_test_helpers.ts';
 
 const ZZZ_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/zzz/');
 const PATH_A = parse_or_throw(DiskfilePath, '/zzz/a.txt');
@@ -91,7 +91,7 @@ describe('Frontend.load_session', () => {
 		assert.ok(await loaded);
 		assert.strictEqual(app.session_status, 'success');
 		assert.strictEqual(app.zzz_dir, ZZZ_DIR);
-		const a = app.diskfiles.peek(PATH_A);
+		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		assert.strictEqual(a.mtime, 5);
 		assert.strictEqual(a.content_status, 'unrequested', 'metadata only, read when needed');
@@ -242,7 +242,7 @@ describe('Frontend.load_session', () => {
 
 		assert.ok(!(await loaded));
 		assert.strictEqual(app.zzz_dir, null);
-		assert.ok(!app.diskfiles.peek(PATH_A));
+		assert.ok(!seed_diskfile(app, PATH_A));
 	});
 
 	test('`filer_change` during the request wins over the older snapshot', async () => {
@@ -257,9 +257,9 @@ describe('Frontend.load_session', () => {
 		]);
 		assert.ok(await loaded);
 
-		assert.ok(!app.diskfiles.peek(PATH_A), 'a file deleted in flight stays deleted');
-		assert.strictEqual(app.diskfiles.peek(PATH_B)?.mtime, 3);
-		assert.strictEqual(app.diskfiles.peek(PATH_C)?.mtime, 2);
+		assert.ok(!seed_diskfile(app, PATH_A), 'a file deleted in flight stays deleted');
+		assert.strictEqual(seed_diskfile(app, PATH_B)?.mtime, 3);
+		assert.strictEqual(seed_diskfile(app, PATH_C)?.mtime, 2);
 	});
 
 	test('changes before or after the request are not tracked', async () => {
@@ -267,10 +267,10 @@ describe('Frontend.load_session', () => {
 		const loaded = app.load_session();
 		succeed(0, [create_disknode(PATH_A, 4)]);
 		await loaded;
-		assert.strictEqual(app.diskfiles.peek(PATH_A)?.mtime, 4);
+		assert.strictEqual(seed_diskfile(app, PATH_A)?.mtime, 4);
 
 		// a later snapshot (e.g. a retry) isn't affected by the earlier request's window
 		app.diskfiles.add_initial([create_disknode(PATH_B, 5)]);
-		assert.strictEqual(app.diskfiles.peek(PATH_B)?.mtime, 5);
+		assert.strictEqual(seed_diskfile(app, PATH_B)?.mtime, 5);
 	});
 });

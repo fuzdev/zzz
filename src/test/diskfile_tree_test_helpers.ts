@@ -5,11 +5,13 @@ import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import type { Frontend } from '#lib/frontend.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { disknode_to_diskfile_json } from '#lib/diskfile_helpers.ts';
 import type { DiskfileTreeRow } from '#lib/diskfile_tree_state.svelte.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import DiskfileExplorerHarness from './DiskfileExplorerHarness.svelte';
 import { to_visible_text } from './test_helpers.ts';
+import { seed_diskfile } from './diskfile_test_helpers.ts';
 
 /**
  * Helpers for the file explorer's tree tests: fixtures — files written into an
@@ -47,13 +49,17 @@ export const write_diskfile = (
 	path: string,
 	source_dir: string = '/w/'
 ): Diskfile => {
-	const diskfile = app.diskfiles.upsert({
+	const disknode: SerializableDisknode = {
 		id: parse_or_throw(DiskfilePath, path),
 		source_dir: parse_or_throw(SerializableDisknode.def.source_dir, source_dir),
 		size: 1,
 		ctime: 1,
 		mtime: 1
-	});
+	};
+	// a cell for the test, as the app makes for a file something holds
+	const diskfile =
+		seed_diskfile(app, disknode.id) ?? app.diskfiles.add(disknode_to_diskfile_json(disknode));
+	app.diskfiles.upsert(disknode);
 	if (diskfile.content_status === 'unrequested') diskfile.content = 'x';
 	return diskfile;
 };

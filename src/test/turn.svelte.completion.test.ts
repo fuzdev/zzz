@@ -15,7 +15,7 @@ import { create_frontend_action_handlers } from '#lib/frontend_action_handlers.t
 import type { FrontendActionHandlers } from '#lib/frontend_action_types.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { update_ok } from './diskfile_test_helpers.ts';
+import { update_ok, seed_diskfile } from './diskfile_test_helpers.ts';
 
 type CompletionCreateHandlers = NonNullable<FrontendActionHandlers['completion_create']>;
 type CompletionProgressHandlers = NonNullable<FrontendActionHandlers['completion_progress']>;
@@ -322,7 +322,7 @@ describe('completion output with file parts', () => {
 
 		assert.strictEqual(turn.completion_part?.content, 'final');
 		assert.deepEqual(update_calls, []);
-		assert.strictEqual(app.diskfiles.peek(FILE_PATH)?.content, FILE_CONTENT);
+		assert.strictEqual(seed_diskfile(app, FILE_PATH)?.content, FILE_CONTENT);
 	});
 
 	test('a turn with only a file part rejects completion output', () => {
@@ -343,7 +343,7 @@ describe('completion output with file parts', () => {
 		}
 
 		assert.deepEqual(update_calls, []);
-		assert.strictEqual(app.diskfiles.peek(FILE_PATH)?.content, FILE_CONTENT);
+		assert.strictEqual(seed_diskfile(app, FILE_PATH)?.content, FILE_CONTENT);
 		assert.strictEqual(turn.content, FILE_CONTENT);
 		assert.ok(turn.response); // the response metadata still settles the turn
 	});

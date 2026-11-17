@@ -1358,21 +1358,28 @@ the selected tab's file first, then the other tabs'. A read never touches
 A file is held eagerly while it has an editing state or a holder
 (`Diskfiles.acquire`, released by `release`): an open tab, a
 `DiskfilePart` referencing it, a view reading it (the audio view's and
-recordings page's transcript sidecars), or a copy in flight. A hold is
-by path, so it holds the next cell at the path too. It doesn't keep a
-file the index no longer has (deleted on disk, or uncovered): only a
-draft or a tab does, so a part referencing a deleted file finds it
-missing — though a kept file whose draft is saved while it's out of the
-index stays until its last holder lets go. A path whose last holder lets
-go is released in a microtask (`release_if_unneeded`) unless held again
-first, so an effect re-running doesn't release it. `peek(path)` reads
-the cell without holding it, and `get_by_path(path)` is the index's
-record. Every disknode that arrives for a file already held — an `add`
-or `change`, a `project_open` index, a reconnect's snapshot entries —
-re-reads an eagerly held file, keeping its content until the new one
-lands so its editor never turns read-only meanwhile, and drops any other
-file's content back to `unrequested`, to load again on next access. A
-re-read of unchanged text changes nothing (`check_disk_changes` compares
+recordings page's transcript sidecars), its context menu while open
+(`DiskfileHold`), or a copy in flight. A hold is by path, so it holds
+the next cell at the path too. It doesn't keep a file the index no
+longer has (deleted on disk, or uncovered): only a draft or a tab does,
+so a part referencing a deleted file finds it missing — though a kept
+file whose draft is saved while it's out of the index stays until its
+last holder lets go. A path whose last holder lets go is released in a
+microtask (`release_if_unneeded`) unless held again first, so an effect
+re-running doesn't release it. Only then does a file have a `Diskfile`
+cell: every other file is its index record (`DiskfileIndex`,
+`get_by_path(path)`), and `acquire` makes the cell from the record. When
+a path's last holder lets go, the cell of a file on disk is dropped
+unless it has an editing state (which keeps its cell until the file is
+forgotten — every file opened in a tab has one) — its record stays, and
+the next hold makes a fresh cell, its content read again on demand.
+`peek(path)` reads the cell without holding or making one. Every
+disknode that arrives for a file already held — an `add` or `change`, a
+`project_open` index, a reconnect's snapshot entries — re-reads an
+eagerly held file, keeping its content until the new one lands so its
+editor never turns read-only meanwhile, and drops any other file's
+content back to `unrequested`, to load again on next access. A re-read
+of unchanged text changes nothing (`check_disk_changes` compares
 strings), so a resync raises no spurious conflict.
 
 **Disk changes and drafts.** `Diskfiles` records every content change
@@ -2428,10 +2435,11 @@ Population, per capability:
   off the wire until its commit marks it, so a re-prune past the threshold
   in that window sends each change
 - **Large trees cost the client** — every indexed file of a focused repo
-  ships in the focus reply and becomes a `Diskfile` cell, about 50 µs per
-  file to build, so focusing a big clone (a 50k-file repo) holds the page
-  for seconds, and a reply of roughly 180k files passes the 16 MiB message
-  size (replies aren't capped, so it still arrives). A re-prune past the
+  ships in the focus reply and is kept as a metadata record
+  (`DiskfileIndex`); a `Diskfile` cell is made only for a file in use (see
+  § File Editing), so focusing a big clone costs the reply's size and
+  parse more than the cells, and a reply of roughly 180k files passes the
+  16 MiB message size (replies aren't capped, so it still arrives). A re-prune past the
   flood guard costs each client the same pull of the whole repo
 - **Terminals** — any authenticated account can create a terminal, which runs
   a command as the daemon's OS user (see § Security posture). Each terminal

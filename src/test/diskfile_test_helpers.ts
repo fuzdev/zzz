@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 import { hash_blake3 } from '@fuzdev/fuz_util/hash_blake3.ts';
@@ -10,7 +11,7 @@ import {
 	type DiskfileDirectoryPath,
 	type SnapshotFile
 } from '#lib/diskfile_types.ts';
-import { decode_snapshot_files } from '#lib/diskfile_helpers.ts';
+import { decode_snapshot_files, disknode_to_diskfile_json } from '#lib/diskfile_helpers.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import type { Frontend } from '#lib/frontend.svelte.ts';
 
@@ -243,11 +244,11 @@ export const install_fake_disk = (
 		sizes.set(path, contents === null ? 1 : new TextEncoder().encode(contents).length);
 		mtimes.set(path, (mtimes.get(path) ?? 1) + 1);
 		const node = disknode(path);
+		const known = app.diskfiles.has_path(node.id);
+		// a cell for the test to hold on to, as the app makes for a file something holds
+		if (!app.diskfiles.peek(node.id)) app.diskfiles.add(disknode_to_diskfile_json(node));
 		app.diskfiles.handle_change({
-			change: {
-				type: type ?? (app.diskfiles.peek(node.id) ? 'change' : 'add'),
-				path: node.id
-			},
+			change: { type: type ?? (known ? 'change' : 'add'), path: node.id },
 			disknode: node
 		});
 		return app.diskfiles.peek(node.id)!;
@@ -286,3 +287,25 @@ export const install_fake_disk = (
 		}
 	};
 };
+
+/**
+ * The cell at `path` as a test reaches for it — the one there, else one
+ * made from the index's record and kept until the path is released (see
+ * `Diskfiles.add`), as every file had one before cells were made on
+ * demand; `undefined` when no file is known there. Unlike `acquire` it
+ * doesn't hold the path, so the file isn't held eagerly. Untracked, so a
+ * test can call it in an effect.
+ */
+export const seed_diskfile = (app: Frontend, path: string): Diskfile | undefined =>
+	untrack(() => {
+		const { diskfiles } = app;
+		const diskfile_path = path as DiskfilePath;
+		const existing = diskfiles.peek(diskfile_path);
+		if (existing) return existing;
+		const record = diskfiles.get_by_path(diskfile_path);
+		if (!record) return undefined;
+		const diskfile = diskfiles.add(disknode_to_diskfile_json(record));
+		// `add` makes the record from the cell, which keeps no `ctime`
+		diskfiles.upsert(record);
+		return diskfile;
+	});

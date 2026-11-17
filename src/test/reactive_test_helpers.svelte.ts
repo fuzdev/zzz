@@ -16,3 +16,18 @@ export const run_in_effect = (fn: () => void): (() => void) =>
 	$effect.root(() => {
 		$effect(fn);
 	});
+
+/**
+ * Reads `fn` through a `$derived` an effect reads, as a component's derived
+ * is — returning what it read and a stop for the root.
+ */
+export const read_in_derived = <T>(fn: () => T): { value: T | undefined; stop: () => void } => {
+	const out: { value: T | undefined; stop: () => void } = { value: undefined, stop: () => {} };
+	out.stop = $effect.root(() => {
+		const derived = $derived.by(fn);
+		$effect(() => {
+			out.value = derived;
+		});
+	});
+	return out;
+};

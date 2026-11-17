@@ -42,8 +42,6 @@ import { to_diskfile_content_kind } from './diskfile_content_kind.ts';
 import type { MarkdownLinkIndex } from './markdown_links.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
-import { IndexedCollection } from './indexed_collection.svelte.ts';
-import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';
@@ -110,30 +108,26 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly #editor_states: SvelteMap<DiskfilePath, DiskfileEditorState> = new SvelteMap();
 
 	/**
-	 * The metadata of the files on disk the index reports — every cell in
-	 * `items` but those kept after leaving it (`deleted_on_disk`,
-	 * `uncovered`). Written beside the cells by every write here.
+	 * The metadata of every file on disk the index reports — the source of
+	 * truth for what's on disk here. A file has a cell (`cells`) only while
+	 * something needs one; the cells kept after leaving the index
+	 * (`deleted_on_disk`, `uncovered`) are the only ones not in it.
 	 */
 	readonly index: DiskfileIndex = new DiskfileIndex();
 
-	readonly items: IndexedCollection<Diskfile> = new IndexedCollection({
-		dispose_item: (diskfile) => {
-			// every way out of the collection passes here - `remove`, `remove_many`, and `clear`;
-			// unchecked, since `remove_many` and `clear` dispose after removing every item
-			this.#sync_index(diskfile);
-			this.#remove_editor_state(diskfile);
-			diskfile.dispose();
-		},
-		indexes: [
-			create_single_index({
-				key: 'by_path',
-				extractor: (file) => file.path,
-				// a diskfile's path is its disk identity — `upsert` updates in place by path,
-				// and renames arrive as a delete plus an add
-				immutable_key: true
-			})
-		]
-	});
+	/**
+	 * The cells, by path — made only for a path something needs: held
+	 * (`acquire` — a tab, a part, a view, a copy), with an editing state, or
+	 * kept off the index for a draft or a tab. A path is its disk identity:
+	 * `upsert` updates its cell in place, and a rename arrives as a delete
+	 * plus an add.
+	 */
+	readonly #cells: SvelteMap<DiskfilePath, Diskfile> = new SvelteMap();
+
+	/** The cells, by path — see `#cells`. Reactive. */
+	get cells(): ReadonlyMap<DiskfilePath, Diskfile> {
+		return this.#cells;
+	}
 
 	/** The selected file's path — the selection follows the path, not a particular cell. */
 	selected_path: DiskfilePath | null = $state.raw(null);
@@ -193,7 +187,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 		this.decoders = {
 			diskfiles: create_collection_decoder(
-				() => this.#write(() => this.items.clear()),
+				() => this.#write(() => this.#clear()),
 				(json) => this.add(json)
 			)
 		};
@@ -246,27 +240,80 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Adds a diskfile. It isn't selected: a file appearing on disk — seeded by
-	 * a snapshot, or created by another tool — never moves the selection or
-	 * opens a tab. Only `create_file` selects the file it creates.
+	 * Adds a diskfile from its json — its content included — with a cell
+	 * kept until something holds its path and lets go (`release`, which
+	 * settles it), for seeding a test or decoding. A path that has a cell already
+	 * keeps it, and gets that one back. It isn't selected: a file appearing
+	 * on disk never moves the selection or opens a tab — only `create_file`
+	 * selects the file it creates.
 	 */
 	add(json: DiskfileJsonInput): Diskfile {
-		return this.#add(json);
+		const diskfile = new Diskfile({ app: this.app, json });
+		const existing = untrack(() => this.peek(diskfile.path));
+		if (existing) {
+			if (DEV) console.error(`a diskfile is already at ${diskfile.path}`);
+			diskfile.dispose();
+			return existing;
+		}
+		this.#write(() => this.#add_cell(diskfile));
+		this.#arrived(diskfile.path);
+		return diskfile;
 	}
 
-	/** Adds a diskfile — with `disknode`, the record that reported it, for the index. */
-	#add(json: DiskfileJsonInput, disknode?: SerializableDisknode): Diskfile {
-		const diskfile = new Diskfile({ app: this.app, json });
-		this.#write(() => {
-			this.items.add(diskfile);
-			this.#sync_index(diskfile, disknode);
+	/** Puts `diskfile` in `cells` and brings the index in step (`#sync_index`). */
+	#add_cell(diskfile: Diskfile, disknode?: SerializableDisknode): void {
+		this.#cells.set(diskfile.path, diskfile);
+		this.#sync_index(diskfile, disknode);
+	}
+
+	/**
+	 * Takes `diskfile` out of `cells` and disposes it with its editing state,
+	 * bringing the index in step: a file kept off the index leaves no record,
+	 * and one on disk keeps its record — dropping an idle cell
+	 * (`#settle`) forgets nothing. Only the cell at its path.
+	 */
+	#remove_cell(diskfile: Diskfile, keep_record: boolean): void {
+		const { path } = diskfile;
+		if (this.#cells.get(path) !== diskfile) return;
+		this.#cells.delete(path);
+		this.#unindexed_files.delete(diskfile.id);
+		if (!keep_record) this.index.delete(path);
+		this.#remove_editor_state(diskfile);
+		diskfile.dispose();
+	}
+
+	/** Drops every cell and record. */
+	#clear(): void {
+		for (const diskfile of Array.from(this.#cells.values())) this.#remove_cell(diskfile, false);
+		for (const record of Array.from(this.index.values())) this.index.delete(record.id);
+	}
+
+	/**
+	 * Makes the cell for `path` from its index record, when it has one and no
+	 * cell — untracked and detached, so a `$derived` or a component's init
+	 * can cause it (`acquire`) without writing what it reads or freezing the
+	 * cell's deriveds when it unmounts.
+	 */
+	#materialize(path: DiskfilePath): Diskfile | undefined {
+		return untrack(() => {
+			const existing = this.#cells.get(path);
+			if (existing) return existing;
+			const record = this.index.get(path);
+			if (!record) return undefined;
+			return create_detached(() => {
+				const diskfile = new Diskfile({ app: this.app, json: disknode_to_diskfile_json(record) });
+				this.#write(() => this.#add_cell(diskfile, record));
+				return diskfile;
+			});
 		});
-		if (diskfile.path === this.#select_on_arrival) {
-			this.#select_on_arrival = null;
-			this.select(diskfile.path, true);
-			this.editor.tree.reveal_created(diskfile.path);
-		}
-		return diskfile;
+	}
+
+	/** Selects a file `create_file` created as it arrives — see `#select_on_arrival`. */
+	#arrived(path: DiskfilePath): void {
+		if (path !== this.#select_on_arrival) return;
+		this.#select_on_arrival = null;
+		this.select(path, true);
+		this.editor.tree.reveal_created(path);
 	}
 
 	/**
@@ -286,12 +333,12 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * state), created on first use and kept until the diskfile is removed —
 	 * views read it, they don't own it. Safe to call from component init or a
 	 * `$derived`: it's created detached from the calling effect, and reading it
-	 * doesn't track the lookup. A diskfile no longer in the collection gets a
+	 * doesn't track the lookup. A diskfile no longer in `cells` gets a
 	 * throwaway state.
 	 */
 	get_editor_state(diskfile: Diskfile): DiskfileEditorState {
 		const existing = untrack(() => this.#editor_states.get(diskfile.path));
-		// a stale `diskfile` (gone from the collection) never gets the live cell's state
+		// a stale `diskfile` (gone from `cells`) never gets the live cell's state
 		if (existing?.diskfile === diskfile) return existing;
 		return create_detached(() => {
 			const editor_state = new DiskfileEditorState({ app: this.app, diskfile });
@@ -333,14 +380,21 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * next needed (`ensure_content`). A read in flight reads again instead. A
 	 * read that lands on the same text changes nothing
 	 * (`DiskfileEditorState.check_disk_changes`), so a resync that re-sends
-	 * every file, or a `touch`, raises no conflict. A new file starts
-	 * `unrequested`, and is read right away if something holds its path.
+	 * every file, or a `touch`, raises no conflict. A new file gets a cell
+	 * only if something holds its path (`acquire`), starting `unrequested`
+	 * and read right away; any other is only its record.
+	 *
+	 * @returns the cell at the path, `undefined` when there's none
 	 */
-	upsert(disknode: SerializableDisknode): Diskfile {
-		const existing = this.items.by_optional('by_path', disknode.id);
+	upsert(disknode: SerializableDisknode): Diskfile | undefined {
+		const path = disknode.id;
+		const existing = untrack(() => this.#cells.get(path));
 		if (!existing) {
-			const diskfile = this.#add(disknode_to_diskfile_json(disknode), disknode);
-			if (this.#is_held_eagerly(diskfile)) void this.#start_load(diskfile);
+			this.#write(() => this.index.set(disknode));
+			// only a path something holds gets a cell — every other file is its record
+			const diskfile = this.#holders.has(path) ? this.#materialize(path) : undefined;
+			if (diskfile && this.#is_held_eagerly(diskfile)) void this.#start_load(diskfile);
+			this.#arrived(path);
 			return diskfile;
 		}
 		existing.deleted_on_disk = false;
@@ -427,8 +481,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const status = diskfile.content_status;
 		const load = this.#loads.get(diskfile.id);
 		if (load) return load.promise;
-		// a file deleted on disk keeps what it had, and one gone from the
-		// collection has nothing to read — reading it would only loop
+		// a file deleted on disk keeps what it had, and one gone from `cells`
+		// has nothing to read — reading it would only loop
 		if (status === 'loaded' || status === 'unloadable' || !this.#is_live(diskfile)) {
 			return Promise.resolve();
 		}
@@ -453,7 +507,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * flight — for an explicit ask that can't trust what's held, such as a save
 	 * after a re-read failed (`content_error` with the old content kept). The
 	 * status doesn't change while it reads: only an `unrequested` file shows
-	 * `loading`. A file deleted on disk or gone from the collection isn't
+	 * `loading`. A file deleted on disk or gone from `cells` isn't
 	 * read. Never rejects: a failed read sets `content_error` again.
 	 */
 	read_again(diskfile: Diskfile): Promise<void> {
@@ -567,8 +621,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Takes a read's contents, with their hash. They don't touch `size` or
 	 * `mtime`: those come from the index's disknodes alone, so the two can't
-	 * disagree over which is newer. A read for a diskfile that left the
-	 * collection, or whose file was deleted meanwhile, is dropped.
+	 * disagree over which is newer. A read for a diskfile that left
+	 * `cells`, or whose file was deleted meanwhile, is dropped.
 	 */
 	#apply_read(diskfile: Diskfile, result: ContentReadResult): void {
 		if (!this.#is_live(diskfile)) {
@@ -598,11 +652,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Whether `diskfile` is in the collection and may be on disk, so reading it
+	 * Whether `diskfile` is the cell at its path (`cells`) and may be on disk, so reading it
 	 * makes sense — an uncovered one included: its read answers, or says why not.
 	 */
 	#is_live(diskfile: Diskfile): boolean {
-		return this.items.by_id.get(diskfile.id) === diskfile && !diskfile.deleted_on_disk;
+		return untrack(() => this.#cells.get(diskfile.path)) === diskfile && !diskfile.deleted_on_disk;
 	}
 
 	/** Shown files read first: the selected tab's, then any open tab's, then the rest. */
@@ -616,19 +670,23 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 	/**
 	 * Holds the cell at `path` for `holder` — a tab, a `DiskfilePart`, a view,
-	 * a copy in flight — until `release(path, holder)`, and returns it, or
-	 * `undefined` when there's none. The hold is by path, so it outlives the
-	 * cell there and holds the next one: a file that leaves and comes back
-	 * is held again. A held file's content is kept current (see `upsert`).
-	 * Holding twice with one holder holds once.
+	 * a copy in flight — until `release(path, holder)`, and returns it,
+	 * making it from the index's record when there's none yet, or
+	 * `undefined` when no file is known there. The hold is by path, so it
+	 * outlives the cell there and holds the next one: a file that leaves and
+	 * comes back gets a cell again. A held file's content is kept current
+	 * (see `upsert`). Holding twice with one holder holds once.
 	 *
 	 * A hold doesn't keep a file the index no longer has: one deleted on disk
 	 * or uncovered is kept only for a draft or a tab (`#is_held`), so a part
 	 * referencing a deleted file finds it missing. A kept file whose draft is
 	 * saved while it's out of the index stays until its last holder lets go.
 	 *
-	 * Writes nothing reactive, so it's safe anywhere — from a constructor,
-	 * an event handler, or an effect.
+	 * Safe anywhere — a constructor, an event handler, an effect, or a
+	 * `$derived`: a cell it makes is made untracked and detached
+	 * (`#materialize`), and a reader of `peek` sees it arrive — a reader in
+	 * another reaction; a `$derived` that reads `peek(path)` before causing
+	 * the `acquire` keeps what it read until something else re-runs it.
 	 *
 	 * @mutates this - adds `holder` to the path's holders
 	 */
@@ -639,16 +697,17 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			this.#holders.set(path, holders);
 		}
 		holders.add(holder);
-		return untrack(() => this.peek(path));
+		return this.#materialize(path);
 	}
 
 	/**
 	 * Lets go of `holder`'s hold on `path` (see `acquire`); releasing what
-	 * isn't held does nothing. When the path's last holder lets go, the file
-	 * is released in a microtask (`release_if_unneeded`) unless something
-	 * holds it again first — so an effect re-running, which lets go and holds
-	 * again, doesn't release it, and a holder let go of while its collection
-	 * is being written can't re-enter it.
+	 * isn't held does nothing. When the path's last holder lets go, the path
+	 * is settled in a microtask (`#settle`: a file off the index forgotten
+	 * unless kept, an idle cell dropped) unless something holds it again
+	 * first — so an effect re-running, which lets go and holds again,
+	 * doesn't release it, and a holder let go of while `cells` is being
+	 * written can't re-enter it.
 	 *
 	 * @mutates this - drops `holder` from the path's holders
 	 */
@@ -660,8 +719,30 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.#releasing.add(path);
 		queueMicrotask(() => {
 			this.#releasing.delete(path);
-			if (!this.#holders.has(path)) this.release_if_unneeded(path);
+			if (!this.#holders.has(path)) this.#settle(path);
 		});
+	}
+
+	/**
+	 * Settles `path` once nothing holds it (`release`): a file the index no
+	 * longer has is forgotten unless kept (`release_if_unneeded`), and a file
+	 * on disk drops its cell unless it has an editing state — its record
+	 * stays, and the next `acquire` makes a fresh cell, with content read
+	 * again on demand.
+	 */
+	#settle(path: DiskfilePath): void {
+		this.release_if_unneeded(path);
+		const diskfile = untrack(() => this.#cells.get(path));
+		if (
+			!diskfile ||
+			diskfile.deleted_on_disk ||
+			diskfile.uncovered ||
+			this.#holders.has(path) ||
+			untrack(() => this.#editor_states.has(path) || this.editor.tabs.by_path.has(path))
+		) {
+			return;
+		}
+		this.#write(() => this.#remove_cell(diskfile, true));
 	}
 
 	/**
@@ -753,14 +834,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	): void {
 		if (!roots.length) return;
 		const snapshot_paths: Set<string> = new Set(files.map((disknode) => disknode.id));
-		for (const diskfile of this.items.values) {
-			const { path } = diskfile;
+		for (const path of this.#known_paths()) {
 			if (snapshot_paths.has(path) || skip_paths?.has(path)) continue;
 			if (!is_under_any(path, roots) || is_under_any(path, skip_dirs)) continue;
 			if (this.is_indexed(path)) {
 				this.remove_by_path(path);
 			} else {
-				this.#release(diskfile);
+				this.#release_path(path);
 			}
 		}
 	}
@@ -777,8 +857,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Otherwise it's removed along with its editing state.
 	 */
 	remove_by_path(path: string): void {
-		const diskfile = this.items.by_optional('by_path', path);
-		if (!diskfile) return;
+		const diskfile = untrack(() => this.#cells.get(path as DiskfilePath));
+		if (!diskfile) {
+			this.#write(() => this.index.delete(path as DiskfilePath));
+			return;
+		}
 
 		this.#write(() => {
 			if (this.#is_held(diskfile)) {
@@ -812,12 +895,37 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	release_uncovered(dirs: ReadonlyArray<string>): void {
 		if (!dirs.length) return;
 		this.#write(() => {
-			for (const diskfile of this.items.values) {
-				const { path } = diskfile;
+			for (const path of this.#known_paths()) {
 				if (!is_under_any(path, dirs) || this.is_indexed(path)) continue;
-				this.#release(diskfile);
+				this.#release_path(path);
 			}
 		});
+	}
+
+	/**
+	 * Every path known here — the index's records and the cells kept off it —
+	 * as a snapshot, so the caller can change both while it walks them.
+	 */
+	#known_paths(): Array<DiskfilePath> {
+		return untrack(() => {
+			const paths: Array<DiskfilePath> = [];
+			for (const record of this.index.values()) paths.push(record.id);
+			for (const diskfile of this.#unindexed_files.values()) paths.push(diskfile.path);
+			return paths;
+		});
+	}
+
+	/**
+	 * Releases the file at `path`, which the index no longer covers: its cell
+	 * as `#release` does, else its record.
+	 */
+	#release_path(path: DiskfilePath): void {
+		const diskfile = untrack(() => this.#cells.get(path));
+		if (diskfile) {
+			this.#release(diskfile);
+		} else {
+			this.index.delete(path);
+		}
 	}
 
 	/**
@@ -884,7 +992,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	#forget(diskfile: Diskfile): void {
 		// remove first, so closing its tabs re-entering `handle_diskfile_detached` is a no-op
-		this.#write(() => this.items.remove(diskfile.id));
+		this.#write(() => this.#remove_cell(diskfile, false));
 		this.editor.remove_diskfile(diskfile.path);
 
 		if (this.selected_path === diskfile.path) {
@@ -907,7 +1015,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Refuses, without sending, to write over a known file whose content isn't
 	 * loaded (`Diskfile.content_loaded` — not yet, or not loadable): nobody has
 	 * seen what it would overwrite. Fails with `conflict` (`data.reason`
-	 * `content_not_loaded`).
+	 * `content_not_loaded`). The check reads the cell at `path`, so it holds
+	 * for a caller that keeps one — an editing state, the one caller here; a
+	 * path with no cell is sent unchecked.
 	 *
 	 * @returns the RPC result — on failure, callers surface `error` themselves
 	 */
@@ -1097,7 +1207,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	});
 
 	/**
-	 * The files in the collection that are deleted on disk or uncovered, by id
+	 * The cells kept off the index — deleted on disk or uncovered — by id
 	 * — see `listed_unindexed`.
 	 */
 	readonly #unindexed_files: SvelteMap<Uuid, Diskfile> = new SvelteMap();
@@ -1105,7 +1215,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * The files `listed` holds that are deleted on disk or uncovered — kept
 	 * for a draft or a tab, so missing from `index`. Tracks only those
-	 * few files, not the whole collection.
+	 * few files, not every cell.
 	 */
 	readonly listed_unindexed: Array<Diskfile> = $derived(
 		Array.from(this.#unindexed_files.values()).filter((diskfile) => this.#is_held(diskfile))
@@ -1142,29 +1252,26 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Brings the index's record for `diskfile`'s path in step with the cell
-	 * there: held while that cell is on disk (neither `deleted_on_disk` nor
+	 * Brings the index's record for `diskfile`'s path in step with the cell:
+	 * held while the cell is on disk (neither `deleted_on_disk` nor
 	 * `uncovered`), absent otherwise. Called after every change to any of
-	 * those, and as a cell leaves the collection. Reads the collection's own
-	 * cell for the path, so a stale or rejected object (an `add` of an id
-	 * already present) can't drop the file that's there. `disknode` is the
-	 * record that just reported the cell, kept as is; without one the record
-	 * is made from the cell. Also keeps `#unindexed_files`.
+	 * those. Does nothing unless `diskfile` is the cell at its path, so a
+	 * stale or rejected object can't drop the file that's there. `disknode`
+	 * is the record that just reported the cell, kept as is; without one the
+	 * record is made from the cell. Also keeps `#unindexed_files`.
 	 */
 	#sync_index(diskfile: Diskfile, disknode?: SerializableDisknode): void {
 		untrack(() => {
-			const live = this.items.by_id.get(diskfile.id);
-			if (live && (live.deleted_on_disk || live.uncovered)) {
-				if (!this.#unindexed_files.has(diskfile.id)) this.#unindexed_files.set(diskfile.id, live);
-			} else if (this.#unindexed_files.has(diskfile.id)) {
-				this.#unindexed_files.delete(diskfile.id);
-			}
 			const { path } = diskfile;
-			const at_path = this.items.by_optional('by_path', path);
-			if (at_path && !at_path.deleted_on_disk && !at_path.uncovered) {
-				this.index.set(disknode && at_path === diskfile ? disknode : diskfile_to_disknode(at_path));
-			} else {
+			const at_path = this.#cells.get(path);
+			if (at_path !== diskfile) return;
+			if (diskfile.deleted_on_disk || diskfile.uncovered) {
+				if (!this.#unindexed_files.has(diskfile.id))
+					this.#unindexed_files.set(diskfile.id, diskfile);
 				this.index.delete(path);
+			} else {
+				this.#unindexed_files.delete(diskfile.id);
+				this.index.set(disknode ?? diskfile_to_disknode(diskfile));
 			}
 		});
 	}
@@ -1176,7 +1283,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Runs a write of cells and the index as one batch of the index
 	 * (`DiskfileIndex.batch`). In DEV, the outermost checks that the index is
 	 * in step with the cells (`to_diskfile_index_mismatches`) while the
-	 * collection is small enough to scan on every write.
+	 * cells and records are few enough to scan on every write.
 	 */
 	#write<T>(fn: () => T): T {
 		this.#write_depth++;
@@ -1190,7 +1297,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		if (
 			DEV &&
 			this.#write_depth === 0 &&
-			untrack(() => this.items.by_id.size) <= DISKFILE_INDEX_CHECK_LIMIT
+			untrack(() => this.#cells.size + this.index.size) <= DISKFILE_INDEX_CHECK_LIMIT
 		) {
 			assert_diskfile_index_in_step(this);
 		}
@@ -1305,9 +1412,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 		// the backend normalizes the path, and the filer reports it that way
 		const created_path = parse_or_throw(DiskfilePath, normalize_path(path));
-		const created = this.peek(created_path);
-		if (created) {
-			this.select(created.path, true);
+		// on disk already, or kept here off the index (deleted or uncovered, for a draft or a tab)
+		if (untrack(() => this.index.has(created_path) || this.#cells.has(created_path))) {
+			this.select(created_path, true);
 			this.editor.tree.reveal_created(created_path);
 		} else {
 			// a path the file index skips never arrives — don't wait for it
@@ -1387,7 +1494,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * by `acquire`; reading the cell needs nothing else. Reactive.
 	 */
 	peek(path: DiskfilePath): Diskfile | undefined {
-		return this.items.by_optional('by_path', path);
+		return this.#cells.get(path);
 	}
 
 	/**
@@ -1513,10 +1620,11 @@ const diskfile_to_disknode = (diskfile: Diskfile): SerializableDisknode => ({
 
 /**
  * How `diskfiles.index` differs from its cells, each difference described —
- * empty when they agree: the index holds exactly the paths of the cells on
- * disk (neither `deleted_on_disk` nor `uncovered`), each with the cell's
+ * empty when they agree: no cell kept off disk (`deleted_on_disk` or
+ * `uncovered`) has a record, and every other cell has one with the cell's
  * root, size, and mtime. A cell keeps no `ctime`, so that isn't compared.
- * Within `DISKFILE_INDEX_CHECK_LIMIT` cells, also rebuilds the directories
+ * Records without a cell are every file nothing needs, so they're expected.
+ * Within `DISKFILE_INDEX_CHECK_LIMIT` records, also rebuilds the directories
  * and their counts from the records and compares them with
  * `DiskfileIndex.directory_paths` and `DiskfileIndex.directory_counts`.
  * Untracked. A scan of every cell and record — for tests and DEV checks.
@@ -1525,15 +1633,13 @@ export const to_diskfile_index_mismatches = (diskfiles: Diskfiles): Array<string
 	untrack(() => {
 		const mismatches: Array<string> = [];
 		const { index } = diskfiles;
-		const on_disk: Set<string> = new Set();
-		for (const diskfile of diskfiles.items.values) {
-			const { path } = diskfile;
+		for (const [path, diskfile] of diskfiles.cells) {
+			if (diskfile.path !== path) mismatches.push(`${path}: holds the cell for ${diskfile.path}`);
 			const record = index.get(path);
 			if (diskfile.deleted_on_disk || diskfile.uncovered) {
 				if (record) mismatches.push(`${path}: held off disk, but in the index`);
 				continue;
 			}
-			on_disk.add(path);
 			if (!record) {
 				mismatches.push(`${path}: on disk, but missing from the index`);
 			} else if (
@@ -1546,12 +1652,7 @@ export const to_diskfile_index_mismatches = (diskfiles: Diskfiles): Array<string
 				);
 			}
 		}
-		if (index.size !== on_disk.size) {
-			for (const record of index.values()) {
-				if (!diskfiles.peek(record.id)) mismatches.push(`${record.id}: in the index, no cell`);
-			}
-		}
-		if (diskfiles.items.by_id.size <= DISKFILE_INDEX_CHECK_LIMIT) {
+		if (index.size <= DISKFILE_INDEX_CHECK_LIMIT) {
 			const expected: Map<string, number> = new Map();
 			for (const record of index.values()) {
 				for (const dir of to_file_directories(record.id, record.source_dir)) {
