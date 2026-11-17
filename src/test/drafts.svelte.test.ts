@@ -4,8 +4,9 @@ import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 
-import { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
+import { DiskfileEditorState, SAVE_ERROR_DORMANT } from '#lib/diskfile_editor_state.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { to_diskfile_status } from '#lib/diskfile_helpers.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { Diskfile } from '#lib/diskfile.svelte.ts';
 
@@ -332,5 +333,168 @@ describe('a draft met by a new editing state', () => {
 
 		// the version shown came without a hash, so the overwrite is unchecked
 		assert.deepEqual(sent, [null]);
+	});
+});
+
+describe('a draft whose project closed', () => {
+	/** A draft of `PATH` in an open project, with another root known. */
+	const setup_dormant_open = () => {
+		app.scoped_dirs = ['/elsewhere/'];
+		app.projects.add({ root: SOURCE_DIR });
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
+		editor_state.current_content = 'mine';
+		return { editor_state };
+	};
+
+	/** A draft of `PATH` in a project that then closes, with another root still known. */
+	const setup_dormant = () => {
+		app.scoped_dirs = ['/elsewhere/'];
+		app.projects.add({ root: SOURCE_DIR });
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
+		editor_state.current_content = 'mine';
+		app.projects.remove_by_root(SOURCE_DIR);
+		const draft = app.diskfiles.drafts.get(PATH);
+		assert.ok(draft);
+		return { editor_state, draft };
+	};
+
+	test('is dormant, kept, and not saved — nothing is sent', async () => {
+		const { editor_state, draft } = setup_dormant();
+		const sent: Array<string> = [];
+		app.diskfiles.update = (_path, content) => {
+			sent.push(content);
+			return Promise.resolve(answer_update(content, { ok: true }));
+		};
+
+		assert.isTrue(diskfile.uncovered, 'kept for the draft');
+		assert.strictEqual(draft.status, 'dormant');
+		assert.isTrue(editor_state.dormant);
+		assert.isFalse(editor_state.can_save);
+		assert.isTrue(to_diskfile_status(app.diskfiles, PATH).dormant);
+
+		assert.isFalse(await editor_state.save_changes());
+		assert.strictEqual(editor_state.save_error, SAVE_ERROR_DORMANT);
+		assert.deepEqual(sent, []);
+		assert.strictEqual(draft.text, 'mine');
+	});
+
+	test('binds again when the project reopens with the disk as it was', async () => {
+		const { editor_state, draft } = setup_dormant();
+
+		app.projects.add({ root: SOURCE_DIR });
+		app.diskfiles.add_initial([disk.disknode(PATH)]);
+		await flush_reads();
+
+		assert.isFalse(diskfile.uncovered);
+		assert.strictEqual(draft.status, 'bound');
+		assert.isFalse(editor_state.dormant);
+		assert.isTrue(editor_state.can_save);
+		assert.isFalse(editor_state.has_conflict);
+	});
+
+	test('is stale when the project reopens on a disk that moved meanwhile', async () => {
+		const { editor_state, draft } = setup_dormant();
+		disk.files.set(PATH, 'changed while closed');
+
+		app.projects.add({ root: SOURCE_DIR });
+		// the reopen's snapshot reports the file changed, and the editing state reads it
+		disk.write(PATH, 'changed while closed', 'add');
+		await flush_reads();
+
+		assert.isFalse(diskfile.uncovered);
+		assert.strictEqual(draft.base_hash, content_hash('v1'));
+		assert.strictEqual(draft.status, 'stale');
+		assert.isTrue(editor_state.has_conflict);
+		assert.strictEqual(editor_state.current_content, 'mine');
+	});
+
+	test('a save queued behind one in flight is refused when the project closes meanwhile', async () => {
+		use_real_update();
+		app.scoped_dirs = ['/elsewhere/'];
+		app.projects.add({ root: SOURCE_DIR });
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
+		const release = disk.hold_updates();
+		editor_state.current_content = 'one';
+		const first = editor_state.save_changes();
+		editor_state.current_content = 'two';
+		const second = editor_state.save_changes();
+		app.projects.remove_by_root(SOURCE_DIR);
+		release();
+
+		assert.isTrue(await first, 'written before the close took it out of scope');
+		assert.isFalse(await second, 'not reported saved');
+		assert.strictEqual(editor_state.save_error, SAVE_ERROR_DORMANT);
+		assert.strictEqual(app.diskfiles.drafts.get(PATH)?.text, 'two');
+		assert.strictEqual(disk.files.get(PATH), 'one');
+	});
+
+	test('is stale when the reopen snapshot shows the disk moved meanwhile', async () => {
+		const { editor_state, draft } = setup_dormant();
+		disk.files.set(PATH, 'changed while closed, longer');
+
+		app.projects.add({ root: SOURCE_DIR });
+		app.diskfiles.add_initial([disk.disknode(PATH)]);
+		await flush_reads();
+
+		assert.isFalse(diskfile.uncovered);
+		assert.strictEqual(draft.status, 'stale');
+		assert.isTrue(editor_state.has_conflict);
+		assert.strictEqual(editor_state.current_content, 'mine');
+	});
+
+	test('a save waiting on a read says it is dormant when the project closes meanwhile', async () => {
+		const { editor_state } = setup_dormant_open();
+		const release = disk.hold_reads();
+		disk.write(PATH, 'theirs'); // reported — the save waits for its read
+		const saving = editor_state.save_changes();
+		assert.isTrue(editor_state.save_pending);
+		app.projects.remove_by_root(SOURCE_DIR);
+		disk.fail_reads(2, 'path not allowed');
+		const reads = disk.reads.length;
+		release();
+
+		assert.isFalse(await saving);
+		assert.strictEqual(disk.reads.length - reads, 1, 'no retry of a read the daemon would refuse');
+		assert.strictEqual(editor_state.save_error, SAVE_ERROR_DORMANT);
+		assert.strictEqual(app.diskfiles.drafts.get(PATH)?.text, 'mine');
+	});
+
+	test('a save retrying a failed read says it is dormant when the project closes meanwhile', async () => {
+		const { editor_state } = setup_dormant_open();
+		disk.fail_reads(1, 'read failed');
+		disk.write(PATH, 'theirs');
+		await flush_reads();
+		assert.ok(diskfile.content_error);
+		const release = disk.hold_reads();
+		const saving = editor_state.save_changes();
+		await Promise.resolve(); // the retry's read is in flight
+		app.projects.remove_by_root(SOURCE_DIR);
+		disk.fail_reads(2, 'path not allowed');
+		release();
+
+		assert.isFalse(await saving);
+		assert.strictEqual(editor_state.save_error, SAVE_ERROR_DORMANT);
+	});
+
+	test('a reconciling reopen flags a draft whose file was deleted while closed', async () => {
+		const { draft } = setup_dormant();
+		disk.files.delete(PATH);
+
+		app.projects.add({ root: SOURCE_DIR });
+		// what reopening with `reconcile_files` does with the reopened index
+		app.diskfiles.reconcile([], [SOURCE_DIR]);
+		await flush_reads();
+
+		assert.isTrue(diskfile.deleted_on_disk);
+		assert.strictEqual(draft.status, 'deleted');
+	});
+
+	test('a file the index has is never dormant, whatever roots are known', () => {
+		app.scoped_dirs = ['/elsewhere/'];
+		app.diskfiles.get_editor_state(diskfile).current_content = 'mine';
+
+		assert.isFalse(diskfile.uncovered);
+		assert.isFalse(app.diskfiles.is_dormant(PATH));
+		assert.strictEqual(app.diskfiles.drafts.get(PATH)?.status, 'bound');
 	});
 });

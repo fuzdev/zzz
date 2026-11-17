@@ -1548,6 +1548,22 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
+	 * Whether the file at `path` is kept off the index (`uncovered` or
+	 * `deleted_on_disk`, for a draft or a tab) under none of `indexed_roots`
+	 * — its project isn't open here, so the daemon refuses to read or write
+	 * it (its scope is those roots). Reopening the project (`Projects.open`
+	 * on its directory, reconciling — `DiskfileDormantNotice`) binds it
+	 * again. A file in the index is in scope by how it got there, and with
+	 * no roots known yet (the session not loaded — the app directory is
+	 * always one after) nothing is. Reactive.
+	 */
+	is_dormant(path: DiskfilePath): boolean {
+		const diskfile = this.peek(path);
+		if (!diskfile || !(diskfile.uncovered || diskfile.deleted_on_disk)) return false;
+		return this.indexed_roots.length > 0 && this.to_innermost_root(path) === null;
+	}
+
+	/**
 	 * Whether a file is known at `path`: on disk in the index, or kept off it
 	 * for a draft or a tab (deleted on disk, or uncovered). Subscribes a
 	 * reactive reader to `path` (`DiskfileIndex.has`) and, on an index miss,

@@ -66,6 +66,15 @@
 		focus_selected_editor();
 	};
 
+	// a dormant file can't be saved — closing keeps its draft for when its project is open again
+	const keep_draft = (): void => {
+		if (!tab) return;
+		const tab_id = tab.id;
+		handled = true;
+		editor.close_tab(tab_id);
+		focus_selected_editor();
+	};
+
 	// cancel and Escape leave focus to the native dialog, which restores it
 	const cancel = (): void => {
 		failure = null;
@@ -99,7 +108,11 @@
 		<DialogContent>
 			<h2 class="mt_0">save changes to {diskfile.path_relative ?? diskfile.path}?</h2>
 			<p>
-				{#if diskfile.deleted_on_disk}
+				{#if editor_state.dormant}
+					It has unsaved edits, and its project isn't open, so it can't be saved now. Keeping the
+					draft closes the tab and keeps the edits for when the project is open again; not saving
+					discards them.
+				{:else if diskfile.deleted_on_disk}
 					It has unsaved edits and was deleted on disk. Saving recreates it; not saving discards the
 					edits and forgets the file.
 				{:else if diskfile.uncovered}
@@ -113,14 +126,18 @@
 				<p class="color_c_60" role="alert">{failure_message}</p>
 			{/if}
 			<div class="flex gap_sm flex-wrap:wrap">
-				<button
-					type="button"
-					class="palette_f"
-					disabled={editor_state.saving || editor_state.save_pending}
-					onclick={() => void save()}
-				>
-					save
-				</button>
+				{#if editor_state.dormant}
+					<button type="button" class="palette_f" onclick={keep_draft}>keep draft</button>
+				{:else}
+					<button
+						type="button"
+						class="palette_f"
+						disabled={editor_state.saving || editor_state.save_pending}
+						onclick={() => void save()}
+					>
+						save
+					</button>
+				{/if}
 				<button type="button" onclick={dont_save}>don't save</button>
 				<button type="button" onclick={cancel}>cancel</button>
 			</div>

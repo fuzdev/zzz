@@ -8,6 +8,9 @@ import type { Diskfiles } from './diskfiles.svelte.ts';
  * Where a draft stands against the disk, derived — never set by a scope
  * change:
  *
+ * - `dormant`: its file is under no open root (`Diskfiles.is_dormant`) — its
+ *   project closed. It can't be saved; reopening the project binds it again,
+ *   and its `base_hash` is checked against what the disk holds then.
  * - `bound`: the disk holds the version the draft is based on, as far as
  *   anything here knows (`Draft.base_hash`).
  * - `stale`: the disk moved since — its hash isn't `base_hash`, or the
@@ -16,7 +19,7 @@ import type { Diskfiles } from './diskfiles.svelte.ts';
  * - `deleted`: the file is gone from disk (`Diskfile.deleted_on_disk`);
  *   saving recreates it, exclusively.
  */
-export type DraftStatus = 'bound' | 'stale' | 'deleted';
+export type DraftStatus = 'dormant' | 'bound' | 'stale' | 'deleted';
 
 export interface DraftOptions {
 	diskfiles: Diskfiles;
@@ -68,6 +71,7 @@ export class Draft {
 	/** See `DraftStatus`. */
 	readonly status: DraftStatus = $derived.by(() => {
 		const diskfiles = this.#diskfiles;
+		if (diskfiles.is_dormant(this.path)) return 'dormant';
 		if (diskfiles.peek(this.path)?.deleted_on_disk) return 'deleted';
 		const disk_hash = diskfiles.to_known_disk_hash(this.path);
 		if (disk_hash !== null && disk_hash !== this.base_hash) return 'stale';

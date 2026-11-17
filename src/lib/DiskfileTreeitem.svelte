@@ -57,6 +57,7 @@
 	const NO_STATUS: DiskfileStatus = {
 		deleted: false,
 		uncovered: false,
+		dormant: false,
 		dirty: false,
 		conflict: false
 	};

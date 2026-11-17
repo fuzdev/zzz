@@ -17,6 +17,9 @@ import { DiskfileHistory, type HistoryEntry } from './diskfile_history.svelte.ts
 import type { Draft } from './drafts.svelte.ts';
 import { to_default_markdown_view_mode, type MarkdownViewMode } from './markdown_view_mode.ts';
 
+/** `save_error` for a save of a file in no open project (`DiskfileEditorState.dormant`). */
+export const SAVE_ERROR_DORMANT = "not saved — its project isn't open; reopen it to save";
+
 /** `save_error` for a save that found the file gone — its delete not reported yet. */
 export const SAVE_ERROR_DELETED_ON_DISK = 'not saved — the file was deleted on disk';
 
@@ -247,6 +250,12 @@ export class DiskfileEditorState {
 		};
 	});
 	/**
+	 * Whether the file is under no open root (`Diskfiles.is_dormant`) — its
+	 * project closed with it kept for a draft or a tab. It can't be saved
+	 * (`can_save`, `SAVE_ERROR_DORMANT`) until the project is open again.
+	 */
+	readonly dormant: boolean = $derived.by(() => this.app.diskfiles.is_dormant(this.path));
+	/**
 	 * Whether the file's content is loaded (see `Diskfile.content_loaded`).
 	 * While it isn't — still loading, or not loadable — the editor is
 	 * read-only: edits are ignored and nothing can be saved, since a save
@@ -279,10 +288,12 @@ export class DiskfileEditorState {
 	 * Whether saving would write anything. Always true for a file deleted on
 	 * disk — saving recreates it even when the content matches its last state
 	 * — but not for an uncovered one (`Diskfile.uncovered`), which may still
-	 * be on disk. Never true when the content wasn't loaded.
+	 * be on disk. Never true when the content wasn't loaded, or while the
+	 * file is `dormant`.
 	 */
 	readonly can_save: boolean = $derived.by(
-		() => this.content_loaded && (this.has_changes || this.diskfile.deleted_on_disk)
+		() =>
+			this.content_loaded && !this.dormant && (this.has_changes || this.diskfile.deleted_on_disk)
 	);
 	/**
 	 * Whether the editor shows the user's content over a disk change it
@@ -712,6 +723,11 @@ export class DiskfileEditorState {
 		// choosing to overwrite shows the content being written
 		if (options?.overwrite) this.#show_disk = false;
 		if (this.#disposed) return Promise.resolve(false);
+		// the daemon would refuse it — its project isn't open
+		if (this.dormant) {
+			this.save_error = SAVE_ERROR_DORMANT;
+			return Promise.resolve(false);
+		}
 		// never write over a file whose content isn't loaded
 		// (`Diskfiles.update` refuses it too)
 		if (!this.content_loaded) {
@@ -726,7 +742,10 @@ export class DiskfileEditorState {
 				this.#queued_save = null;
 				if (!ok) return false;
 				// nothing typed since — the in-flight save already wrote it
-				if (this.current_content === in_flight.content || !this.can_save) return true;
+				if (this.current_content === in_flight.content) return true;
+				// a project closed meanwhile refuses the follow-up, saying so
+				if (this.dormant) return this.save_changes(options);
+				if (!this.can_save) return true;
 				return this.save_changes(options);
 			});
 			return this.#queued_save;
@@ -795,7 +814,8 @@ export class DiskfileEditorState {
 	 * (`save_changes`). Bounded per call, not per file: a retry that fails too
 	 * refuses rather than retrying again (a second save made during the wait
 	 * makes its own one retry), and only a newer change reported meanwhile
-	 * makes the re-run wait again.
+	 * makes the re-run wait again. A project closed during either wait skips
+	 * the retry, and the re-run refuses the save as dormant.
 	 */
 	async #save_after_read(
 		pending_read: Promise<void> | null,
@@ -805,11 +825,13 @@ export class DiskfileEditorState {
 		this.#save_waits++;
 		try {
 			if (pending_read) await pending_read;
-			if (this.#must_check_failed_read(options)) {
+			// a project closed during either wait is refused below, saying so —
+			// not as a failed read
+			if (!this.dormant && this.#must_check_failed_read(options)) {
 				// a save is an explicit ask, so the failed read gets one more try
 				await this.app.diskfiles.read_again(this.diskfile);
 				const error = this.diskfile.content_error;
-				if (error !== null) {
+				if (error !== null && !this.dormant) {
 					this.save_error = this.#is_read_missing()
 						? this.#settle_missing()
 						: `not saved — couldn't check the file on disk: ${error}`;

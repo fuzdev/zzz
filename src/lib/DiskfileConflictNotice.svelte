@@ -109,7 +109,7 @@ and both versions are in the history -->
 			<button
 				type="button"
 				class="sized_sm"
-				disabled={editor_state.saving || editor_state.save_pending}
+				disabled={editor_state.saving || editor_state.save_pending || editor_state.dormant}
 				title={editor_state.has_unsaved_edits
 					? 'show your draft and save it over the file on disk'
 					: `save ${editor_state.showing_disk ? 'your version' : 'the version shown'} over the file on disk`}

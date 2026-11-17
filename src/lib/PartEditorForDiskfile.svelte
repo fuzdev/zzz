@@ -7,6 +7,7 @@
 	import DiskfileActions from './DiskfileActions.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import DiskfileMetrics from './DiskfileMetrics.svelte';
+	import DiskfileDormantNotice from './DiskfileDormantNotice.svelte';
 	import DiskfileConflictNotice, { save_from_view } from './DiskfileConflictNotice.svelte';
 	import DiskfileHistoryView from './DiskfileHistoryView.svelte';
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
@@ -81,6 +82,8 @@
 			<p class="mb_xs color_c_60">
 				<small>{to_diskfile_unloaded_message(diskfile)} — read-only</small>
 			</p>
+		{:else if editor_state.dormant}
+			<DiskfileDormantNotice {diskfile} small />
 		{:else if diskfile.deleted_on_disk}
 			<p class="mb_xs color_c_60">
 				<small>

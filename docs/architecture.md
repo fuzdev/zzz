@@ -1277,7 +1277,8 @@ and the drafts store:
   outlive both (for now a draft still keeps its cell). Its `status` is
   derived, never set: `bound`, `stale` (the
   disk's hash isn't `base_hash`, or the editing state saw the disk move),
-  or `deleted` (the file is deleted on disk). In-memory only, lost on
+  `deleted` (the file is deleted on disk), or `dormant` (under no open
+  root — its project closed; see § File Editing). In-memory only, lost on
   reload
 - `DiskfileHistory` — one file's disk, saved, and discarded states (not
   the draft), newest first; capped at 100 entries and 16M characters of
@@ -1661,11 +1662,20 @@ draft or a tab keeps it, flagged `uncovered` ("not indexed by an open
 project" in its tab, the explorer, and the editors, apart from "deleted").
 Saving it isn't forced as a deleted file's is, and sends the hash of its
 last read as any save does, so an edit made on disk meanwhile is refused
-(`disk_changed`, then a conflict) and a root out of scope is refused
-(`path_not_allowed`); a refused save whose re-read finds the file gone
-flags it deleted, so saving again recreates it. Reopening its project
-reattaches it (same id), and it's forgotten once nothing holds it, as a
-deleted one is.
+(`disk_changed`, then a conflict); a refused save whose re-read finds the
+file gone flags it deleted, so saving again recreates it. A kept file
+under no open root at all (`Diskfiles.is_dormant` — its project closed)
+is _dormant_: the daemon would refuse it (`path_not_allowed`), so it isn't
+sent. Its tab says "(project closed)", the editors offer **reopen
+project** (`Projects.open` on the file's directory, as `zzz <file>` would —
+the file may be gone — reconciling the files known there), and the close
+dialog offers **keep draft** in place of save. Nothing is lost, and
+closing the project doesn't ask first: reopening it reattaches the file
+(same id), and its draft is checked against the disk then by its
+`base_hash` — stale if the disk moved while it was closed, deleted if the
+file is gone (under the directories the reopen focuses; a registry root's
+loose file is found gone only when it's next read or saved). It's
+forgotten once nothing holds it, as a deleted one is.
 The explorer lists either for its draft or tab
 (`Diskfiles.listed`); pickers don't (`on_disk`); a `DiskfilePart` shows and
 sends the draft, marked deleted only when it's deleted on disk. Tabs, history, and editor state are

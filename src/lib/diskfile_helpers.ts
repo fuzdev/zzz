@@ -119,6 +119,15 @@ export const normalize_path = (path: string): string => {
 };
 
 /**
+ * The path of the directory holding `path`, without a trailing `/` (`/` for
+ * a path at the top).
+ */
+export const to_parent_path = (path: DiskfilePath): DiskfilePath => {
+	const index = path.lastIndexOf('/');
+	return (index <= 0 ? '/' : path.slice(0, index)) as DiskfilePath;
+};
+
+/**
  * Formats `path` for display relative to the directory `parent`: the part
  * after `parent` when `path` is inside it, else `path` unchanged, so a path
  * outside `parent` stays absolute rather than losing its leading `/`.
@@ -592,12 +601,20 @@ export const confirm_unload_with_unsaved_changes = (
  */
 export const DISKFILE_UNCOVERED_LABEL = 'not indexed by an open project';
 
+/**
+ * How a file under no open root is described (`Diskfiles.is_dormant`) — in
+ * an accessible name, a tab's title, and the views' notices.
+ */
+export const DISKFILE_DORMANT_LABEL = "its project isn't open";
+
 /** What a file row marks beside the file's name — see `DiskfileStatusLabel`. */
 export interface DiskfileStatus {
 	/** Gone from disk, kept for its draft or tab (`Diskfile.deleted_on_disk`). */
 	deleted: boolean;
 	/** Out of the index, not seen deleted, kept for its draft or tab (`Diskfile.uncovered`). */
 	uncovered: boolean;
+	/** Under no open root, kept for its draft or tab (`Diskfiles.is_dormant`). */
+	dormant: boolean;
 	/** Unsaved changes (`DiskfileEditorState.dirty`). */
 	dirty: boolean;
 	/** Unsaved changes, and the file changed on disk since (`DiskfileEditorState.has_conflict`). */
@@ -616,6 +633,7 @@ export const to_diskfile_status = (diskfiles: Diskfiles, path: DiskfilePath): Di
 	return {
 		deleted: diskfile?.deleted_on_disk ?? false,
 		uncovered: diskfile?.uncovered ?? false,
+		dormant: diskfiles.is_dormant(path),
 		dirty: editor_state?.dirty ?? false,
 		conflict: editor_state?.has_conflict ?? false
 	};
@@ -632,7 +650,7 @@ export const to_diskfile_status_label = (
 	[
 		label,
 		status.deleted && 'deleted on disk',
-		status.uncovered && DISKFILE_UNCOVERED_LABEL,
+		status.dormant ? DISKFILE_DORMANT_LABEL : status.uncovered && DISKFILE_UNCOVERED_LABEL,
 		status.conflict ? 'unsaved changes, changed on disk' : status.dirty && 'unsaved changes'
 	]
 		.filter(Boolean)

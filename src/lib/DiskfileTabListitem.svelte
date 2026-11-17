@@ -6,7 +6,7 @@
 	import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
-	import { DISKFILE_UNCOVERED_LABEL } from './diskfile_helpers.ts';
+	import { DISKFILE_DORMANT_LABEL, DISKFILE_UNCOVERED_LABEL } from './diskfile_helpers.ts';
 
 	const {
 		tab,
@@ -30,11 +30,12 @@
 	const path = $derived(diskfile?.path_relative ?? '[no diskfile found]'); // TODO ?
 	const deleted_on_disk = $derived(diskfile?.deleted_on_disk ?? false);
 	const uncovered = $derived(diskfile?.uncovered ?? false);
+	const dormant = $derived(editor_state?.dormant ?? false);
 	// the accessible name carries the status the markers and strikethrough show
 	const status = $derived(
 		[
 			deleted_on_disk && 'deleted on disk',
-			uncovered && DISKFILE_UNCOVERED_LABEL,
+			dormant ? DISKFILE_DORMANT_LABEL : uncovered && DISKFILE_UNCOVERED_LABEL,
 			conflict ? 'unsaved changes, changed on disk' : dirty && 'unsaved changes'
 		]
 			.filter(Boolean)
@@ -57,8 +58,8 @@
 			class:deleted={deleted_on_disk}
 			title={deleted_on_disk
 				? `${path} — deleted on disk${dirty ? ', has unsaved edits' : ''}`
-				: uncovered
-					? `${path} — ${DISKFILE_UNCOVERED_LABEL}${dirty ? ', has unsaved edits' : ''}`
+				: uncovered || dormant
+					? `${path} — ${dormant ? DISKFILE_DORMANT_LABEL : DISKFILE_UNCOVERED_LABEL}${dirty ? ', has unsaved edits' : ''}`
 					: conflict
 						? `${path} — changed on disk since you edited it`
 						: dirty
@@ -89,6 +90,8 @@
 				<small class="ml_xs ellipsis">{path}</small>
 				{#if deleted_on_disk}
 					<small class="ml_xs color_c_60" aria-hidden="true">(deleted)</small>
+				{:else if dormant}
+					<small class="ml_xs text_50" aria-hidden="true">(project closed)</small>
 				{:else if uncovered}
 					<small class="ml_xs text_50" aria-hidden="true">(not indexed)</small>
 				{/if}

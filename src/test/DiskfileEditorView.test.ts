@@ -8,18 +8,21 @@ import DiskfileEditorView from '#lib/DiskfileEditorView.svelte';
 import DiskfileMarkdownView from '#lib/DiskfileMarkdownView.svelte';
 import {
 	DISKFILE_CONTENT_LOADING_MESSAGE,
-	DISKFILE_UNCOVERED_LABEL
+	DISKFILE_DORMANT_LABEL,
+	DISKFILE_UNCOVERED_LABEL,
+	to_diskfile_status
 } from '#lib/diskfile_helpers.ts';
 import { SAVE_ERROR_CHANGED_AGAIN } from '#lib/diskfile_editor_state.svelte.ts';
 import DiskfileCloseDialog from '#lib/DiskfileCloseDialog.svelte';
 import DiskfileListitem from '#lib/DiskfileListitem.svelte';
 import DiskfileTabListitem from '#lib/DiskfileTabListitem.svelte';
+import DiskfileStatusLabel from '#lib/DiskfileStatusLabel.svelte';
 import PartEditorForDiskfile from '#lib/PartEditorForDiskfile.svelte';
 import PartSummary from '#lib/PartSummary.svelte';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { DiskfilePart } from '#lib/part.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
-import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { DiskfileDirectoryPath, DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { create_reactive_props } from './reactive_test_helpers.svelte.ts';
@@ -953,9 +956,17 @@ describe('a tab deleted on disk without a draft', () => {
 	});
 });
 
-describe('a tab out of an open project', () => {
+describe('a tab out of the index, still in scope', () => {
 	test('the editor and the tab say so, not that it was deleted', async () => {
-		app.projects.add({ root: SOURCE_DIR });
+		// a registry at the root whose repo then leaves it: the root stays open
+		const repo = parse_or_throw(DiskfileDirectoryPath, '/w/');
+		const registry = parse_or_throw(DiskfileDirectoryPath, '/');
+		app.projects.add({
+			root: registry,
+			kind: 'registry',
+			entries: [{ key: 'w', kind: 'repo', dir: repo, state: 'present' }],
+			focused: [repo]
+		});
 		const a = await disk.load(PATH_A, 'v1');
 		app.diskfiles.select(a.path, true);
 		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
@@ -968,10 +979,12 @@ describe('a tab out of an open project', () => {
 			onopen: () => {}
 		});
 
-		app.projects.remove_by_root(SOURCE_DIR);
+		app.projects.add({ root: registry, kind: 'registry', entries: [], focused: [] });
+		app.diskfiles.release_uncovered([repo]);
 		flushSync();
 
 		assert.isTrue(a.uncovered);
+		assert.isFalse(app.diskfiles.is_dormant(a.path));
 		assert.include(
 			view.target.textContent,
 			`${DISKFILE_UNCOVERED_LABEL} — saving checks it hasn't changed on disk`
@@ -983,6 +996,103 @@ describe('a tab out of an open project', () => {
 		assert.include(button.getAttribute('aria-label') ?? '', DISKFILE_UNCOVERED_LABEL);
 		assert.include(button.textContent, '(not indexed)');
 		assert.notInclude(button.textContent, '(deleted)');
+	});
+});
+
+describe('a draft whose project closed', () => {
+	/** A draft of `PATH_A` in a project that then closes — the app dir stays a root elsewhere. */
+	const setup_dormant = async () => {
+		app.scoped_dirs = ['/elsewhere/'];
+		app.projects.add({ root: SOURCE_DIR });
+		const a = await disk.load(PATH_A, 'v1');
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
+		assert.ok(tab);
+		const editor_state = app.diskfiles.get_editor_state(a);
+		editor_state.current_content = 'mine';
+		app.projects.remove_by_root(SOURCE_DIR);
+		return { a, tab, editor_state };
+	};
+
+	test('the editor and the tab say its project is closed, and the notice reopens it', async () => {
+		const { a, tab, editor_state } = await setup_dormant();
+		const opened: Array<[string, boolean | undefined]> = [];
+		app.projects.open = (path, options) => {
+			opened.push([path, options?.reconcile_files]);
+			return Promise.resolve({ ok: false, error: { code: -32603, message: 'no daemon' } });
+		};
+		const view = render(DiskfileEditorView, { diskfile: a });
+		const tab_view = render(DiskfileTabListitem, {
+			tab,
+			onselect: () => {},
+			onclose: () => {},
+			onopen: () => {}
+		});
+		flushSync();
+
+		assert.isTrue(a.uncovered);
+		assert.isTrue(editor_state.dormant);
+		assert.isFalse(editor_state.can_save);
+		assert.include(view.target.textContent, DISKFILE_DORMANT_LABEL);
+		assert.notInclude(view.target.textContent, DISKFILE_UNCOVERED_LABEL);
+		const button = tab_view.target.querySelector('[aria-pressed]');
+		assert.ok(button);
+		assert.include(button.getAttribute('aria-label') ?? '', DISKFILE_DORMANT_LABEL);
+		assert.include(button.textContent, '(project closed)');
+		assert.notInclude(button.textContent, '(not indexed)');
+
+		click_button(view.target, 'reopen project');
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		flushSync();
+
+		// by the file's directory — the file may be gone — reconciling what's known there
+		assert.deepEqual(opened, [['/w', true]]);
+		assert.include(view.target.textContent, 'no daemon', 'a failed reopen says why');
+	});
+
+	test('a conflict on a dormant file offers no overwrite', async () => {
+		app.scoped_dirs = ['/elsewhere/'];
+		app.projects.add({ root: SOURCE_DIR });
+		const a = await disk.load(PATH_A, 'v1');
+		app.diskfiles.select(a.path, true);
+		const editor_state = app.diskfiles.get_editor_state(a);
+		editor_state.current_content = 'mine';
+		await write_externally(PATH_A, 'v2');
+		app.projects.remove_by_root(SOURCE_DIR);
+		const view = render(DiskfileEditorView, { diskfile: a });
+		flushSync();
+
+		assert.isTrue(editor_state.has_conflict);
+		const overwrite = Array.from(view.target.querySelectorAll('button')).find(
+			(b) => to_visible_text(b) === 'overwrite with your draft'
+		);
+		assert.ok(overwrite);
+		assert.isTrue(overwrite.disabled);
+	});
+
+	test('the markdown view, a file-part editor, and the explorer say so too', async () => {
+		const { a } = await setup_dormant();
+		const markdown_view = render(DiskfileMarkdownView, { diskfile: a });
+		const part = new DiskfilePart({ app, json: { path: PATH_A } });
+		const part_view = render(PartEditorForDiskfile, { diskfile_part: part });
+		const label_view = render(DiskfileStatusLabel, {
+			label: 'a.txt',
+			status: to_diskfile_status(app.diskfiles, a.path)
+		});
+		flushSync();
+
+		for (const view of [markdown_view, part_view]) {
+			assert.include(view.target.textContent, DISKFILE_DORMANT_LABEL);
+			assert.ok(
+				Array.from(view.target.querySelectorAll('button')).some(
+					(b) => to_visible_text(b) === 'reopen project'
+				)
+			);
+			assert.notInclude(view.target.textContent, DISKFILE_UNCOVERED_LABEL);
+		}
+		assert.include(label_view.target.textContent, '(project closed)');
+		assert.notInclude(label_view.target.textContent, '(not indexed)');
+		part.dispose();
 	});
 });
 
@@ -1043,6 +1153,27 @@ describe('DiskfileCloseDialog', () => {
 			)
 		);
 		assert.isFalse(app.diskfiles.editor.tabs.items.by_id.has(tab.id));
+	});
+
+	test('a dormant draft offers to keep it, closing the tab with the draft kept', async () => {
+		app.scoped_dirs = ['/elsewhere/'];
+		app.projects.add({ root: SOURCE_DIR });
+		const { a, tab, view } = await setup_pending();
+		app.projects.remove_by_root(SOURCE_DIR);
+		flushSync();
+
+		assert.include(view.target.textContent, "its project isn't open");
+		assert.isNull(
+			Array.from(view.target.querySelectorAll('button')).find(
+				(b) => b.textContent.trim() === 'save'
+			) ?? null
+		);
+		click_button(view.target, 'keep draft');
+
+		assert.isFalse(app.diskfiles.editor.tabs.items.by_id.has(tab.id));
+		assert.strictEqual(app.diskfiles.drafts.get(a.path)?.text, 'draft');
+		assert.isTrue(a.uncovered, 'kept for the draft');
+		assert.strictEqual(disk.updates.length, 0);
 	});
 
 	test('save writes the draft, not an older entry the editor shows', async () => {

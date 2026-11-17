@@ -87,6 +87,7 @@ test('a repo dropped from the registry keeps its tab-only file uncovered, not de
 	assert.deepEqual(to_diskfile_status(app.diskfiles, x.path), {
 		deleted: false,
 		uncovered: true,
+		dormant: false,
 		dirty: false,
 		conflict: false
 	});
@@ -154,38 +155,6 @@ test('a nested project closed under an open registry keeps its file uncovered, s
 	assert.isFalse(await es.save_changes());
 	assert.ok(disk.updates.at(-1)?.expected_hash);
 	assert.strictEqual(disk.files.get('/dev/foo/x.ts'), 'v2');
-});
-
-test('saving an uncovered file out of scope surfaces path_not_allowed', async () => {
-	app.projects.add({ root: WS });
-	const a = await disk.load('/ws/a.txt', 'a');
-	app.diskfiles.select(a.path, true);
-	const es = app.diskfiles.get_editor_state(a);
-	app.projects.remove_by_root(WS);
-	assert.isTrue(a.uncovered);
-	const sent: Array<string | null | undefined> = [];
-	(app.diskfiles as unknown as { update: unknown }).update = (
-		_path: string,
-		_content: string,
-		expected_hash?: string | null
-	) => {
-		sent.push(expected_hash);
-		return Promise.resolve({
-			ok: false,
-			error: {
-				code: -32002,
-				message: 'path not allowed: /ws/a.txt',
-				data: { reason: 'path_not_allowed' }
-			}
-		});
-	};
-	es.current_content = 'mine';
-
-	assert.isFalse(await es.save_changes());
-	assert.include(es.save_error ?? '', 'not allowed');
-	assert.ok(sent[0], 'sent its base');
-	assert.isTrue(a.uncovered);
-	assert.isFalse(a.deleted_on_disk);
 });
 
 test('reopening the project reattaches the uncovered file, clearing the flag', async () => {
@@ -331,21 +300,23 @@ describe('saving a file deleted on disk is an exclusive create', () => {
 		assert.isFalse(es.can_save);
 	});
 
-	test('a file recreated unwatched after its project closed is not overwritten', async () => {
-		app.projects.add({ root: WS });
-		const a = await disk.load('/ws/a.txt', 'a');
+	test('a file recreated unwatched after its repo left the registry is not overwritten', async () => {
+		add_registry_with_repo();
+		const a = await disk.load('/dev/r/a.txt', 'a');
 		app.diskfiles.select(a.path, true);
 		const es = app.diskfiles.get_editor_state(a);
 		es.current_content = 'mine';
-		disk.files.delete('/ws/a.txt');
-		app.diskfiles.remove_by_path('/ws/a.txt');
-		app.projects.remove_by_root(WS);
+		disk.files.delete('/dev/r/a.txt');
+		app.diskfiles.remove_by_path('/dev/r/a.txt');
+		// the registry's root stays open, so the file is in scope — but unwatched
+		drop_repo();
 		assert.isTrue(a.deleted_on_disk);
-		// recreated by another tool; no project watches it, so no add arrives
-		disk.files.set('/ws/a.txt', 'someone else');
+		assert.isFalse(es.dormant);
+		// recreated by another tool; nothing watches it, so no add arrives
+		disk.files.set('/dev/r/a.txt', 'someone else');
 
 		assert.isFalse(await es.save_changes());
-		assert.strictEqual(disk.files.get('/ws/a.txt'), 'someone else', 'not clobbered');
+		assert.strictEqual(disk.files.get('/dev/r/a.txt'), 'someone else', 'not clobbered');
 		assert.isTrue(a.uncovered);
 		assert.isTrue(es.has_conflict, 'shown as a conflict under the draft');
 		assert.isNull(es.save_error, "the conflict's notice says why");
@@ -354,7 +325,7 @@ describe('saving a file deleted on disk is an exclusive create', () => {
 		assert.isTrue(await es.save_changes({ overwrite: true }));
 		const update = disk.updates.at(-1);
 		assert.ok(update?.expected_hash, 'an update with its base');
-		assert.strictEqual(disk.files.get('/ws/a.txt'), 'mine');
+		assert.strictEqual(disk.files.get('/dev/r/a.txt'), 'mine');
 	});
 
 	test('a file truly gone is recreated', async () => {

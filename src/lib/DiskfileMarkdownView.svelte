@@ -42,6 +42,7 @@
 	import DiskfilePartView from './DiskfilePartView.svelte';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import DiskfileEditorNav from './DiskfileEditorNav.svelte';
+	import DiskfileDormantNotice from './DiskfileDormantNotice.svelte';
 	import DiskfileConflictNotice, { save_from_view } from './DiskfileConflictNotice.svelte';
 	import DiskfileSaveErrorNotice from './DiskfileSaveErrorNotice.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
@@ -415,6 +416,8 @@
 				<p class="px_md py_xs color_c_60">
 					{to_diskfile_unloaded_message(diskfile)} — read-only, it can't be edited or saved
 				</p>
+			{:else if editor_state.dormant}
+				<DiskfileDormantNotice {diskfile} />
 			{:else if diskfile.deleted_on_disk}
 				<p class="px_md py_xs color_c_60">
 					{#if editor_state.has_unsaved_edits}
