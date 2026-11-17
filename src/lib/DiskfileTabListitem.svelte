@@ -6,6 +6,7 @@
 	import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 	import DiskfileContextmenu from './DiskfileContextmenu.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
+	import { DISKFILE_UNCOVERED_LABEL } from './diskfile_helpers.ts';
 
 	const {
 		tab,
@@ -28,10 +29,12 @@
 
 	const path = $derived(diskfile?.path_relative ?? '[no diskfile found]'); // TODO ?
 	const deleted_on_disk = $derived(diskfile?.deleted_on_disk ?? false);
-	// the accessible name carries the status the ● and strikethrough show
+	const uncovered = $derived(diskfile?.uncovered ?? false);
+	// the accessible name carries the status the markers and strikethrough show
 	const status = $derived(
 		[
 			deleted_on_disk && 'deleted on disk',
+			uncovered && DISKFILE_UNCOVERED_LABEL,
 			conflict ? 'unsaved changes, changed on disk' : dirty && 'unsaved changes'
 		]
 			.filter(Boolean)
@@ -53,12 +56,14 @@
 			class:preview={tab.is_preview}
 			class:deleted={deleted_on_disk}
 			title={deleted_on_disk
-				? `${path} — deleted on disk, has unsaved edits`
-				: conflict
-					? `${path} — changed on disk since you edited it`
-					: dirty
-						? `${path} — unsaved changes`
-						: undefined}
+				? `${path} — deleted on disk${dirty ? ', has unsaved edits' : ''}`
+				: uncovered
+					? `${path} — ${DISKFILE_UNCOVERED_LABEL}${dirty ? ', has unsaved edits' : ''}`
+					: conflict
+						? `${path} — changed on disk since you edited it`
+						: dirty
+							? `${path} — unsaved changes`
+							: undefined}
 			onclick={(e) => {
 				swallow(e);
 				// If it's a preview tab and it's double-clicked, promote it to permanent
@@ -84,6 +89,8 @@
 				<small class="ml_xs ellipsis">{path}</small>
 				{#if deleted_on_disk}
 					<small class="ml_xs color_c_60" aria-hidden="true">(deleted)</small>
+				{:else if uncovered}
+					<small class="ml_xs text_50" aria-hidden="true">(not indexed)</small>
 				{/if}
 				{#if dirty}
 					<small class="ml_xs" class:color_c_50={conflict} aria-hidden="true">●</small>

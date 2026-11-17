@@ -79,6 +79,13 @@ export const ERROR_CONTENT_NOT_LOADED = 'content_not_loaded';
 export const ERROR_DISK_CHANGED = 'disk_changed';
 
 /**
+ * `data.reason` of the `conflict` a create gets for a path that's taken
+ * (`diskfile_create`, `directory_create`) — twin of `ERROR_ALREADY_EXISTS`
+ * in the backend's filesystem handlers.
+ */
+export const ERROR_ALREADY_EXISTS = 'already_exists';
+
+/**
  * Stands in for a file part's content in a formatted prompt while the file's
  * content is loading — what a preview shows until it arrives. Sending or
  * copying awaits the content instead (`load_parts_content`), so neither
@@ -578,10 +585,18 @@ export const confirm_unload_with_unsaved_changes = (
 	event.returnValue = ''; // eslint-disable-line @typescript-eslint/no-deprecated
 };
 
+/**
+ * How a file kept out of the index is described (`Diskfile.uncovered`) — in
+ * an accessible name, a tab's title, and the views' notices.
+ */
+export const DISKFILE_UNCOVERED_LABEL = 'not indexed by an open project';
+
 /** What a file row marks beside the file's name — see `DiskfileStatusLabel`. */
 export interface DiskfileStatus {
-	/** Gone from disk, kept for its draft (`Diskfile.deleted_on_disk`). */
+	/** Gone from disk, kept for its draft or tab (`Diskfile.deleted_on_disk`). */
 	deleted: boolean;
+	/** Out of the index, not seen deleted, kept for its draft or tab (`Diskfile.uncovered`). */
+	uncovered: boolean;
 	/** Unsaved changes (`DiskfileEditorState.dirty`). */
 	dirty: boolean;
 	/** Unsaved changes, and the file changed on disk since (`DiskfileEditorState.has_conflict`). */
@@ -596,6 +611,7 @@ export const to_diskfile_status = (diskfiles: Diskfiles, diskfile: Diskfile): Di
 	const editor_state = diskfiles.find_editor_state(diskfile.path);
 	return {
 		deleted: diskfile.deleted_on_disk,
+		uncovered: diskfile.uncovered,
 		dirty: editor_state?.dirty ?? false,
 		conflict: editor_state?.has_conflict ?? false
 	};
@@ -612,6 +628,7 @@ export const to_diskfile_status_label = (
 	[
 		label,
 		status.deleted && 'deleted on disk',
+		status.uncovered && DISKFILE_UNCOVERED_LABEL,
 		status.conflict ? 'unsaved changes, changed on disk' : status.dirty && 'unsaved changes'
 	]
 		.filter(Boolean)

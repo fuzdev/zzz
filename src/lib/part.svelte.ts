@@ -270,7 +270,8 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	/**
 	 * The diskfile at `path`. One deleted on disk counts as missing unless it
 	 * has a draft — then it's kept for the draft (see `Diskfiles.remove_by_path`),
-	 * which the part shows and sends.
+	 * which the part shows and sends. One uncovered (`Diskfile.uncovered`)
+	 * counts as present: it may still be on disk.
 	 */
 	readonly diskfile: Diskfile | null | undefined = $derived.by(() => {
 		if (!this.path) return null;

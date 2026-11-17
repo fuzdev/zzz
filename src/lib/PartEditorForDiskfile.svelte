@@ -15,6 +15,7 @@
 	import { format_placeholder } from './helpers.ts';
 	import {
 		DISKFILE_CONTENT_LOADING_MESSAGE,
+		DISKFILE_UNCOVERED_LABEL,
 		to_diskfile_unloaded_message
 	} from './diskfile_helpers.ts';
 
@@ -93,6 +94,10 @@
 						discard them
 					</button>
 				</small>
+			</p>
+		{:else if diskfile.uncovered}
+			<p class="mb_xs text_50">
+				<small>{DISKFILE_UNCOVERED_LABEL} — saving checks it hasn't changed on disk</small>
 			</p>
 		{/if}
 		<DiskfileConflictNotice

@@ -26,6 +26,7 @@ import {
 } from './diskfile_types.ts';
 import {
 	DISKFILE_CONTENT_NOT_LOADED_MESSAGE,
+	ERROR_ALREADY_EXISTS,
 	ERROR_CONTENT_NOT_LOADED,
 	disknode_to_diskfile_json,
 	normalize_path,
@@ -131,19 +132,23 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.selected_path ? (this.get_by_path(this.selected_path) ?? null) : null
 	);
 
-	/** Diskfiles that exist on disk — excludes ones kept only for unsaved edits. */
+	/**
+	 * Diskfiles that exist on disk, as the index reports them — excludes ones
+	 * kept for a draft or a tab after a delete (`deleted_on_disk`) or after
+	 * leaving the index (`uncovered`), so pickers offer only indexed files.
+	 */
 	readonly on_disk: Array<Diskfile> = $derived(
-		this.items.values.filter((diskfile) => !diskfile.deleted_on_disk)
+		this.items.values.filter((diskfile) => !diskfile.deleted_on_disk && !diskfile.uncovered)
 	);
 
 	/**
 	 * The diskfiles the explorer lists: those on disk, plus ones deleted on disk
-	 * but kept for a draft, so every draft stays reachable.
+	 * (`remove_by_path`) or uncovered (`release_uncovered`) but kept for a draft
+	 * or a tab, so each stays reachable.
 	 */
 	readonly listed: Array<Diskfile> = $derived(
 		this.items.values.filter(
-			(diskfile) =>
-				!diskfile.deleted_on_disk || !!this.#editor_states.get(diskfile.path)?.has_unsaved_edits
+			(diskfile) => (!diskfile.deleted_on_disk && !diskfile.uncovered) || this.#is_held(diskfile)
 		)
 	);
 
@@ -291,7 +296,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Adds a diskfile for `disknode`, or updates the existing one at the same
 	 * path in place — keeping the cell, with its content and editing state.
 	 * A diskfile kept after a delete (see `remove_by_path`) is reattached this
-	 * way when its path reappears on disk.
+	 * way when its path reappears on disk, and one kept uncovered
+	 * (`release_uncovered`) when the index reports it again.
 	 *
 	 * A disknode carries metadata only — contents come from `diskfile_read`
 	 * alone — so for a diskfile already held its content may be out of date:
@@ -312,6 +318,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			return diskfile;
 		}
 		existing.deleted_on_disk = false;
+		existing.uncovered = false;
 		if (existing.source_dir !== disknode.source_dir) existing.source_dir = disknode.source_dir;
 		if (existing.size !== disknode.size) existing.size = disknode.size;
 		if (existing.mtime !== disknode.mtime) {
@@ -354,13 +361,15 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Whether `diskfile`'s content is kept current as it changes on disk: it
 	 * has an editing state (an editor shows it, or did — conflicts are caught
-	 * against it) or a `DiskfilePart` references it (prompts and turns read
-	 * it). Other files load on demand and drop their content on a change.
+	 * against it), a tab, or a `DiskfilePart` references it (prompts and turns
+	 * read it). Other files load on demand and drop their content on a change.
+	 * Wider than `#is_held`, since a part reads a file but doesn't keep it.
 	 */
 	#is_held_eagerly(diskfile: Diskfile): boolean {
 		return (
-			untrack(() => this.#editor_states.has(diskfile.path)) ||
-			(this.#part_paths.get(diskfile.path) ?? 0) > 0
+			untrack(
+				() => this.#editor_states.has(diskfile.path) || this.editor.tabs.by_path.has(diskfile.path)
+			) || (this.#part_paths.get(diskfile.path) ?? 0) > 0
 		);
 	}
 
@@ -549,6 +558,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		untrack(() => this.#editor_states.get(diskfile.path))?.check_disk_changes();
 	}
 
+	/**
+	 * Whether `diskfile` is in the collection and may be on disk, so reading it
+	 * makes sense — an uncovered one included: its read answers, or says why not.
+	 */
 	#is_live(diskfile: Diskfile): boolean {
 		return this.items.by_id.get(diskfile.id) === diskfile && !diskfile.deleted_on_disk;
 	}
@@ -610,11 +623,14 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Replaces the file tree under `roots` with a session snapshot's: upserts
 	 * every snapshot file (like `add_initial`), and removes each known file under
-	 * a root that the snapshot lacks, via `remove_by_path` — so a file open with
-	 * unsaved edits is kept, flagged `deleted_on_disk` — except that one in an
-	 * unfocused repo (`is_in_unfocused_repo`) with a draft or a tab is kept
-	 * unflagged: it left the index, not the disk. Files outside every root are
-	 * left alone, since the snapshot says nothing about them.
+	 * a root that the snapshot lacks, via `remove_by_path` — so a file with a
+	 * draft or a tab is kept, flagged `deleted_on_disk`. A file the index held
+	 * here no longer covers (`is_indexed`) — its repo dropped from the registry
+	 * or unfocused, its project closed — is absent because the snapshot doesn't
+	 * look there, not because it's gone, so it's released as
+	 * `release_uncovered` would: kept for a draft or a tab, flagged `uncovered`
+	 * (unflagged in an unfocused repo), else forgotten. Files outside every
+	 * root are left alone, since the snapshot says nothing about them.
 	 *
 	 * @param files - the snapshot's file tree
 	 * @param roots - the directories (trailing `/`) whose complete trees `files` holds
@@ -650,25 +666,30 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			const { path } = diskfile;
 			if (snapshot_paths.has(path) || skip_paths?.has(path)) continue;
 			if (!is_under_any(path, roots) || is_under_any(path, skip_dirs)) continue;
-			if (this.#is_held(diskfile) && this.is_in_unfocused_repo(path)) continue;
-			this.remove_by_path(path);
+			if (this.is_indexed(path)) {
+				this.remove_by_path(path);
+			} else {
+				this.#release(diskfile);
+			}
 		}
 	}
 
 	/**
 	 * Handles the diskfile at `path` being gone from disk.
 	 *
-	 * If it has a draft — edited in a tab, a file part, anywhere — it's kept,
-	 * flagged `deleted_on_disk` with its tabs and editing state intact, so the
-	 * user can save it back (recreating the file) or discard the draft (see
-	 * `release_if_unneeded`). Otherwise it's removed along with its tabs and
-	 * editing state.
+	 * If it's held (`#is_held`) — it has a draft (edited in a tab, a file part,
+	 * anywhere) or a tab — it's kept, flagged `deleted_on_disk` with its tab and
+	 * editing state intact, so the user can save it back (recreating the file),
+	 * or close the tab and discard the draft (see `release_if_unneeded`). A
+	 * rename arrives as a delete plus an add, so its tab stays on the old path.
+	 * If the path comes back on disk, `upsert` reattaches the same cell.
+	 * Otherwise it's removed along with its editing state.
 	 */
 	remove_by_path(path: string): void {
 		const diskfile = this.items.by_optional('by_path', path);
 		if (!diskfile) return;
 
-		if (this.#editor_states.get(diskfile.path)?.has_unsaved_edits) {
+		if (this.#is_held(diskfile)) {
 			this.set_deleted_on_disk(diskfile, true);
 			return;
 		}
@@ -681,34 +702,49 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * the focuses a newer project state dropped (`Projects`), a kind change
 	 * included, since a checkout's or plain directory's one focus is its
 	 * root, and a closed project's root — since stopping a filer deletes
-	 * nothing here. A file still
-	 * indexed (another focus, another root, a registry root's loose files)
-	 * stays. One in a repo that's present but unfocused
-	 * (`is_in_unfocused_repo`) is still on disk: forgotten with its editing
-	 * state, unless held — with a draft or a tab — and then kept as it is,
-	 * not flagged `deleted_on_disk`, until the repo is focused again (the
-	 * focus's files then settle it) or nothing holds it
-	 * (`release_if_unneeded`); a kept file isn't watched meanwhile, and a
-	 * save still checks the disk version it was based on. Any other — its
-	 * entry gone missing or out of the registry, under a root that's become
-	 * a registry's, or under a closed project's root — goes as a snapshot
-	 * that no longer lists it would remove it (`remove_by_path`: kept,
-	 * flagged deleted, only for a draft).
+	 * nothing here. A file still indexed (another focus, another root, a
+	 * registry root's loose files) stays. Any other is still on disk as far
+	 * as anything here knows: forgotten with its editing state, unless held
+	 * — with a draft or a tab (`#release`). A held one in a repo that's
+	 * present but unfocused (`is_in_unfocused_repo`) is kept as it is,
+	 * unflagged, until the repo is focused again (the focus's files then
+	 * settle it); any other held one — its entry out of the registry or
+	 * missing, under a root that's become a registry's, or under a closed
+	 * project's root — is kept flagged `uncovered`, until the index reports
+	 * it again (`upsert`). Either way it's kept until nothing holds it
+	 * (`release_if_unneeded`) and isn't watched meanwhile. A save never
+	 * writes blind: an uncovered file's sends the disk version it was based
+	 * on (`diskfile_update`'s `expected_hash`), and a file deleted on disk's
+	 * creates it exclusively (`create_exclusive`), refused if it's there.
 	 */
 	release_uncovered(dirs: ReadonlyArray<string>): void {
 		if (!dirs.length) return;
 		for (const diskfile of this.items.values) {
 			const { path } = diskfile;
 			if (!is_under_any(path, dirs) || this.is_indexed(path)) continue;
-			if (this.is_in_unfocused_repo(path)) {
-				if (!this.#is_held(diskfile)) this.#forget(diskfile);
-			} else {
-				this.remove_by_path(path);
-			}
+			this.#release(diskfile);
 		}
 	}
 
-	/** Whether `diskfile` has a draft or an editor tab — what keeps one outside the index. */
+	/**
+	 * Releases `diskfile`, which the index no longer covers (see
+	 * `release_uncovered`): forgotten unless held, else kept — as it is when
+	 * it's deleted on disk or in an unfocused repo, and flagged `uncovered`
+	 * otherwise.
+	 */
+	#release(diskfile: Diskfile): void {
+		if (!this.#is_held(diskfile)) {
+			this.#forget(diskfile);
+		} else if (!diskfile.deleted_on_disk && !this.is_in_unfocused_repo(diskfile.path)) {
+			this.set_uncovered(diskfile, true);
+		}
+	}
+
+	/**
+	 * Whether `diskfile` has a draft or a tab — what keeps one the index no
+	 * longer has, deleted on disk (`remove_by_path`) or out of the index
+	 * (`release_uncovered`), until both are gone (`release_if_unneeded`).
+	 */
 	#is_held(diskfile: Diskfile): boolean {
 		return (
 			!!this.#editor_states.get(diskfile.path)?.has_unsaved_edits ||
@@ -718,27 +754,26 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 	/**
 	 * Forgets the diskfile at `path` if it's outside what the index covers — deleted on
-	 * disk, or kept from an unfocused repo for its draft or tab
-	 * (`release_uncovered`) — and nothing holds it anymore: no draft and no tab. Called when its
-	 * draft is discarded and when its last tab closes. The path may name a newer cell than the
-	 * caller's (one replaced at the same path); that's safe, since the check is on that cell's
-	 * own state.
+	 * disk, uncovered, or kept from an unfocused repo for its draft or tab
+	 * (`release_uncovered`) — and nothing holds it anymore (`#is_held`): no draft and no tab.
+	 * Called when its draft is discarded and when its last tab closes. The path may name a newer
+	 * cell than the caller's (one replaced at the same path); that's safe, since the check is on
+	 * that cell's own state.
 	 */
 	release_if_unneeded(path: DiskfilePath): void {
 		const diskfile = this.get_by_path(path);
 		if (
 			diskfile &&
-			(diskfile.deleted_on_disk || this.is_in_unfocused_repo(path)) &&
-			!this.#editor_states.get(path)?.has_unsaved_edits &&
-			!this.editor.tabs.by_path.has(path)
+			(diskfile.deleted_on_disk || diskfile.uncovered || this.is_in_unfocused_repo(path)) &&
+			!this.#is_held(diskfile)
 		) {
 			this.#forget(diskfile);
 		}
 	}
 
 	/**
-	 * Called when the last tab of the file at `path` closes. A diskfile deleted on disk with
-	 * no draft left is forgotten now (see `release_if_unneeded`). Otherwise its
+	 * Called when the last tab of the file at `path` closes. A diskfile deleted on disk or
+	 * uncovered with no draft is forgotten now (see `release_if_unneeded`). Otherwise its
 	 * editing state resets what it shows (`DiskfileEditorState.reset_view`), so
 	 * a reopen shows the draft if there is one, else the disk content.
 	 */
@@ -799,6 +834,42 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		return this.app.api.diskfile_update(
 			expected_hash === null ? { path, content } : { path, content, expected_hash }
 		);
+	}
+
+	/**
+	 * Creates the file at `path` with `content`, never replacing one that's
+	 * there (`diskfile_create`, `O_EXCL`) — how a save recreates a file
+	 * deleted on disk (`Diskfile.deleted_on_disk`), which may be there after
+	 * all, or there again unseen. Missing parent directories are created.
+	 * Fails with `conflict` (`data.reason` `already_exists`,
+	 * `ERROR_ALREADY_EXISTS`) when the path is taken, writing nothing. Unlike
+	 * `create_file_at`, it selects nothing and refuses no location: the file
+	 * is already known here.
+	 *
+	 * @returns the RPC result — on failure, callers surface `error` themselves
+	 */
+	create_exclusive(
+		path: DiskfilePath,
+		content: string
+	): Promise<Result<{ value: ActionOutputs['diskfile_create'] }, { error: JsonrpcErrorObject }>> {
+		return this.app.api.diskfile_create({ path, content });
+	}
+
+	/**
+	 * Settles `diskfile` after a save recreated it (`create_exclusive`): no
+	 * longer deleted on disk, and — where the index won't report it (out of
+	 * every index, or skipped by its rules) — flagged `uncovered`, so it
+	 * isn't listed as an indexed file it would never be. One the index
+	 * covers is unflagged, its `add` on the way (`upsert`), and so is one in
+	 * an unfocused repo, as `release_uncovered` keeps it.
+	 */
+	settle_recreated(diskfile: Diskfile): void {
+		this.set_deleted_on_disk(diskfile, false);
+		const { path } = diskfile;
+		if (this.is_in_unfocused_repo(path)) return;
+		if (!this.is_indexed(path) || this.to_unindexed(path) !== null) {
+			this.set_uncovered(diskfile, true);
+		}
 	}
 
 	/**
@@ -949,18 +1020,19 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	readonly tree_index: DiskfileTreeIndex = new DiskfileTreeIndex();
 
-	/** The files in the collection that are deleted on disk, by id — see `listed_deleted`. */
-	readonly #deleted_files: SvelteMap<Uuid, Diskfile> = new SvelteMap();
+	/**
+	 * The files in the collection that are deleted on disk or uncovered, by id
+	 * — see `listed_unindexed`.
+	 */
+	readonly #unindexed_files: SvelteMap<Uuid, Diskfile> = new SvelteMap();
 
 	/**
-	 * The files `listed` holds that are deleted on disk — kept for their drafts,
-	 * so missing from `tree_index`. Tracks only those few files, not the
-	 * whole collection.
+	 * The files `listed` holds that are deleted on disk or uncovered — kept
+	 * for a draft or a tab, so missing from `tree_index`. Tracks only those
+	 * few files, not the whole collection.
 	 */
-	readonly listed_deleted: Array<Diskfile> = $derived(
-		Array.from(this.#deleted_files.values()).filter(
-			(diskfile) => !!this.#editor_states.get(diskfile.path)?.has_unsaved_edits
-		)
+	readonly listed_unindexed: Array<Diskfile> = $derived(
+		Array.from(this.#unindexed_files.values()).filter((diskfile) => this.#is_held(diskfile))
 	);
 
 	/**
@@ -972,14 +1044,28 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Marks `diskfile` gone from disk, or back — the one writer of
 	 * `Diskfile.deleted_on_disk` besides `upsert`, so `directory_paths` stays
-	 * in step. A delete also ends any showing of the disk version
-	 * (`DiskfileEditorState.showing_disk`), so the file reappearing shows the
-	 * draft, not the disk.
+	 * in step. A delete clears `uncovered`, and ends any showing of the disk
+	 * version (`DiskfileEditorState.showing_disk`), so the file reappearing
+	 * shows the draft, not the disk.
 	 */
 	set_deleted_on_disk(diskfile: Diskfile, deleted_on_disk: boolean): void {
 		if (diskfile.deleted_on_disk === deleted_on_disk) return;
 		diskfile.deleted_on_disk = deleted_on_disk;
-		if (deleted_on_disk) this.#editor_states.get(diskfile.path)?.set_showing_disk(false);
+		if (deleted_on_disk) {
+			diskfile.uncovered = false;
+			this.#editor_states.get(diskfile.path)?.set_showing_disk(false);
+		}
+		this.#sync_directories(diskfile);
+	}
+
+	/**
+	 * Marks `diskfile` out of the index though not seen deleted, or back — the
+	 * one writer of `Diskfile.uncovered` besides `upsert`, so `directory_paths`
+	 * stays in step. Never set on a file deleted on disk.
+	 */
+	set_uncovered(diskfile: Diskfile, uncovered: boolean): void {
+		if (diskfile.uncovered === uncovered || (uncovered && diskfile.deleted_on_disk)) return;
+		diskfile.uncovered = uncovered;
 		this.#sync_directories(diskfile);
 	}
 
@@ -989,17 +1075,18 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * disk, under its current path and root. Called after every change to any
 	 * of those. Reads the collection's own object for the id when there is one,
 	 * so a stale or rejected object (an `add` of an id already present) can't
-	 * uncount the file that's there. Also keeps `#deleted_files`.
+	 * uncount the file that's there. Also keeps `#unindexed_files`.
 	 */
 	#sync_directories(diskfile: Diskfile): void {
 		untrack(() => {
 			const counted = this.#counted_files.get(diskfile.id);
 			const live = this.items.by_id.get(diskfile.id);
-			const counts = !!live && !live.deleted_on_disk;
-			if (live?.deleted_on_disk) {
-				if (!this.#deleted_files.has(diskfile.id)) this.#deleted_files.set(diskfile.id, live);
-			} else if (this.#deleted_files.has(diskfile.id)) {
-				this.#deleted_files.delete(diskfile.id);
+			const unindexed = !!live && (live.deleted_on_disk || live.uncovered);
+			const counts = !!live && !unindexed;
+			if (live && unindexed) {
+				if (!this.#unindexed_files.has(diskfile.id)) this.#unindexed_files.set(diskfile.id, live);
+			} else if (this.#unindexed_files.has(diskfile.id)) {
+				this.#unindexed_files.delete(diskfile.id);
 			}
 			const { path, source_dir } = live ?? diskfile;
 			if (counted && counts && counted.path === path && counted.source_dir === source_dir) return;
@@ -1042,7 +1129,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		return {
 			has_file: (path) => {
 				const diskfile = this.get_by_path(path as DiskfilePath);
-				return !!diskfile && !diskfile.deleted_on_disk;
+				return !!diskfile && !diskfile.deleted_on_disk && !diskfile.uncovered;
 			},
 			has_directory: (path) => this.#directory_paths.has(path),
 			get ignore_rules() {
@@ -1073,7 +1160,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		options?: { fragment?: string | null; open_not_preview?: boolean }
 	): boolean {
 		const diskfile = this.get_by_path(path as DiskfilePath);
-		if (!diskfile || diskfile.deleted_on_disk) return false;
+		if (!diskfile || diskfile.deleted_on_disk || diskfile.uncovered) return false;
 		const fragment = options?.fragment;
 		if (fragment && to_diskfile_content_kind(diskfile.path) === 'markdown') {
 			this.get_editor_state(diskfile).markdown_pending_fragment = fragment;
@@ -1134,7 +1221,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const result = await this.app.api.diskfile_create({ path, content });
 		if (!result.ok) {
 			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
-			throw new Error(reason === 'already_exists' ? 'already exists' : result.error.message);
+			throw new Error(reason === ERROR_ALREADY_EXISTS ? 'already exists' : result.error.message);
 		}
 
 		// the backend normalizes the path, and the filer reports it that way
@@ -1212,7 +1299,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const result = await this.app.api.directory_create({ path });
 		if (!result.ok) {
 			const { reason } = (result.error.data ?? {}) as { reason?: unknown };
-			throw new Error(reason === 'already_exists' ? 'already exists' : result.error.message);
+			throw new Error(reason === ERROR_ALREADY_EXISTS ? 'already exists' : result.error.message);
 		}
 	}
 

@@ -74,12 +74,25 @@ export class Diskfile extends Cell<typeof DiskfileJson> {
 	mtime: number | null = $state.raw()!;
 
 	/**
-	 * The file is gone from disk, but this diskfile is kept because a tab holds
-	 * unsaved edits for it. Transient client state, not serialized — cleared
-	 * when the path reappears on disk. Set it through
-	 * `Diskfiles.set_deleted_on_disk`, which keeps the index's directories in step.
+	 * The file is gone from disk, but this diskfile is kept for a draft or a
+	 * tab. Saving recreates it exclusively (`Diskfiles.create_exclusive`), so
+	 * a file that's there after all is never written over. Transient client
+	 * state, not serialized — cleared when the path reappears on disk. Set it through `Diskfiles.set_deleted_on_disk`, which
+	 * keeps the index's directories in step.
 	 */
 	deleted_on_disk: boolean = $state.raw(false);
+
+	/**
+	 * The file left the index without being seen deleted — its project closed,
+	 * or its repo left the registry or went missing — and this diskfile is
+	 * kept for a draft or a tab (`Diskfiles.release_uncovered`), or a save
+	 * found it on disk when it was deleted. It may be on disk, so a save
+	 * checks the version it was based on, and it isn't watched meanwhile.
+	 * Never set with `deleted_on_disk`. Transient client state, not serialized
+	 * — cleared when the index reports the path again. Set it through
+	 * `Diskfiles.set_uncovered`, which keeps the index's directories in step.
+	 */
+	uncovered: boolean = $state.raw(false);
 
 	readonly part: PartUnion | undefined = $derived(
 		this.app.parts.find_part_by_diskfile_path(this.path)

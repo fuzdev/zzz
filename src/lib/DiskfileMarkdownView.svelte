@@ -48,6 +48,7 @@
 	import Icon from './Icon.svelte';
 	import {
 		DISKFILE_CONTENT_LOADING_MESSAGE,
+		DISKFILE_UNCOVERED_LABEL,
 		to_diskfile_unloaded_message
 	} from './diskfile_helpers.ts';
 	import { lang_for_path } from './path_lang.ts';
@@ -429,6 +430,10 @@
 					{:else}
 						deleted on disk — save to recreate it, or close the tab
 					{/if}
+				</p>
+			{:else if diskfile.uncovered}
+				<p class="px_md py_xs text_50">
+					{DISKFILE_UNCOVERED_LABEL} — saving checks it hasn't changed on disk
 				</p>
 			{/if}
 			<DiskfileConflictNotice

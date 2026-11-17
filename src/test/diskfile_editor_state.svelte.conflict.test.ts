@@ -433,17 +433,20 @@ describe('a save after a read that failed', () => {
 		disk.fail_reads(1);
 		await broadcast('theirs');
 		assert.isNotNull(diskfile.content_error);
+		disk.files.delete(PATH);
 		app.diskfiles.remove_by_path(PATH);
 		assert.isTrue(diskfile.deleted_on_disk, 'kept for its draft');
-		const { writes, deferred } = defer_update();
 		const reads_before = disk.reads.length;
+		let reads_at_create = -1;
+		const create = app.diskfiles.create_exclusive.bind(app.diskfiles);
+		app.diskfiles.create_exclusive = (path, content) => {
+			reads_at_create = disk.reads.length;
+			return create(path, content);
+		};
 
-		const saving = editor_state.save_changes();
-		await flush_reads();
-		assert.deepEqual(writes, ['mine']);
-		assert.strictEqual(disk.reads.length, reads_before, 'nothing on disk to check');
-		deferred.resolve({ ok: true, value: null });
-		assert.isTrue(await saving);
+		assert.isTrue(await editor_state.save_changes());
+		assert.deepEqual(disk.creates, [{ path: PATH, content: 'mine' }]);
+		assert.strictEqual(reads_at_create, reads_before, 'nothing on disk to check first');
 	});
 
 	test('an overwrite writes without the retry', async () => {

@@ -269,7 +269,9 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	 * A newer state that narrows — drops a focus, a kind change included,
 	 * since a checkout's or plain directory's one focus is its root — leaves
 	 * files the daemon no longer indexes, and stopping a filer deletes
-	 * nothing here, so they're released (`Diskfiles.release_uncovered`).
+	 * nothing here, so they're released (`Diskfiles.release_uncovered`); so
+	 * are the files of a repo that left the registry or went missing, which
+	 * an unfocused repo's held files, kept as they were, otherwise outlive.
 	 * A newer state that widens needs the files of what it added, which
 	 * `covered` may carry; the rest go pending (see `#pending`). So does a
 	 * focused directory the daemon resynced (`is_resynced`): it re-pruned
@@ -303,6 +305,9 @@ export class Projects extends Cell<typeof ProjectsJson> {
 				? { kind: held.kind, focused: [...held.focused], ignored: held.ignored }
 				: null;
 		const was_focused = held ? [...held.focused] : [];
+		const was_present = held
+			? held.entries.filter((entry) => entry.state === 'present').map((entry) => entry.dir)
+			: [];
 		let project: Project;
 		if (held) {
 			held.set_json_partial({ ...json, id: undefined });
@@ -314,8 +319,15 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		}
 		this.#track_focus(project, json.rev);
 
-		const dropped = was_focused.filter((dir) => !json.focused.includes(dir));
-		if (dropped.length) this.app.diskfiles.release_uncovered(dropped);
+		// a focus dropped, and a repo that left the registry or went missing —
+		// focused or not, since an unfocused one's held files were kept as they were
+		const released = new Set(was_focused.filter((dir) => !json.focused.includes(dir)));
+		for (const dir of was_present) {
+			if (!json.entries.some((entry) => entry.dir === dir && entry.state === 'present')) {
+				released.add(dir);
+			}
+		}
+		if (released.size) this.app.diskfiles.release_uncovered([...released]);
 
 		// a pull read before a resync is of the index the resync replaced, so
 		// it's dropped as one of an earlier focus is, in whatever order it lands
@@ -405,8 +417,8 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	/**
 	 * Removes `project`, closed on the daemon, and releases its files — its
 	 * filers are stopped, and stopping a filer deletes nothing here — keeping
-	 * what another root still covers, and a file with a draft, flagged
-	 * deleted (`Diskfiles.release_uncovered`).
+	 * what another root still covers, and a file with a draft or a tab,
+	 * flagged uncovered (`Diskfiles.release_uncovered`).
 	 */
 	#remove_closed(project: Project): void {
 		this.remove(project.id);
@@ -545,7 +557,7 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	 * files, around what `filer_change` reported while the request was in
 	 * flight. The reply covers the repo whole, so a file known under it that
 	 * the reply lacks is gone from disk (`Diskfiles.reconcile` — one kept for
-	 * its draft while the repo was unfocused is flagged deleted). Its files
+	 * its draft or tab while the repo was unfocused is flagged deleted). Its files
 	 * are applied only when its state is the one held, as an open's are.
 	 *
 	 * @returns the project held, `null` when it's closed here meanwhile, or

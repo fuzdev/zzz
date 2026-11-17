@@ -403,8 +403,8 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	}
 
 	/**
-	 * Tells `Diskfiles` when a path has no tab left, so a diskfile kept only for
-	 * its tab (deleted on disk with unsaved edits) can be released.
+	 * Tells `Diskfiles` when a path has no tab left, so a diskfile kept for its
+	 * tab (deleted on disk, or uncovered) can be released.
 	 */
 	#notify_if_detached(path: DiskfilePath): void {
 		if (!this.by_path.has(path)) {
@@ -477,7 +477,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	}
 
 	/**
-	 * Removes every trace of a diskfile that no longer exists: closes its path's
+	 * Removes every trace of a diskfile that's forgotten: closes its path's
 	 * tab (selection moves as with `close_tab`) and drops the path from the
 	 * reopen and back-navigation history, so neither can resurrect a tab
 	 * pointing at it.

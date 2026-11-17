@@ -6,7 +6,10 @@ import { flushSync, mount, unmount, type Component } from 'svelte';
 
 import DiskfileEditorView from '#lib/DiskfileEditorView.svelte';
 import DiskfileMarkdownView from '#lib/DiskfileMarkdownView.svelte';
-import { DISKFILE_CONTENT_LOADING_MESSAGE } from '#lib/diskfile_helpers.ts';
+import {
+	DISKFILE_CONTENT_LOADING_MESSAGE,
+	DISKFILE_UNCOVERED_LABEL
+} from '#lib/diskfile_helpers.ts';
 import { SAVE_ERROR_CHANGED_AGAIN } from '#lib/diskfile_editor_state.svelte.ts';
 import DiskfileCloseDialog from '#lib/DiskfileCloseDialog.svelte';
 import DiskfileListitem from '#lib/DiskfileListitem.svelte';
@@ -913,6 +916,71 @@ describe('DiskfileTabListitem', () => {
 			onopen: () => {}
 		});
 		assert_markers_outside_truncation(view.target, 'a.txt');
+	});
+});
+
+describe('a tab deleted on disk without a draft', () => {
+	test('the editor says so and keeps the content editable, and the tab is marked', async () => {
+		const a = await disk.load(PATH_A, 'v1');
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
+		assert.ok(tab);
+		const view = render(DiskfileEditorView, { diskfile: a });
+		const tab_view = render(DiskfileTabListitem, {
+			tab,
+			onselect: () => {},
+			onclose: () => {},
+			onopen: () => {}
+		});
+
+		app.diskfiles.remove_by_path(PATH_A);
+		flushSync();
+
+		assert.isTrue(a.deleted_on_disk);
+		assert.include(
+			view.target.textContent,
+			'deleted on disk — save to recreate it, or close the tab'
+		);
+		assert.strictEqual(view.textarea().value, 'v1');
+		assert.isFalse(view.textarea().readOnly);
+		const button = tab_view.target.querySelector('[aria-pressed]');
+		assert.ok(button);
+		assert.include(button.getAttribute('title') ?? '', 'deleted on disk');
+		assert.notInclude(button.getAttribute('title') ?? '', 'unsaved');
+		assert.include(button.getAttribute('aria-label') ?? '', 'deleted on disk');
+	});
+});
+
+describe('a tab out of an open project', () => {
+	test('the editor and the tab say so, not that it was deleted', async () => {
+		app.projects.add({ root: SOURCE_DIR });
+		const a = await disk.load(PATH_A, 'v1');
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
+		assert.ok(tab);
+		const view = render(DiskfileEditorView, { diskfile: a });
+		const tab_view = render(DiskfileTabListitem, {
+			tab,
+			onselect: () => {},
+			onclose: () => {},
+			onopen: () => {}
+		});
+
+		app.projects.remove_by_root(SOURCE_DIR);
+		flushSync();
+
+		assert.isTrue(a.uncovered);
+		assert.include(
+			view.target.textContent,
+			`${DISKFILE_UNCOVERED_LABEL} — saving checks it hasn't changed on disk`
+		);
+		assert.notInclude(view.target.textContent, 'deleted on disk');
+		const button = tab_view.target.querySelector('[aria-pressed]');
+		assert.ok(button);
+		assert.include(button.getAttribute('title') ?? '', DISKFILE_UNCOVERED_LABEL);
+		assert.include(button.getAttribute('aria-label') ?? '', DISKFILE_UNCOVERED_LABEL);
+		assert.include(button.textContent, '(not indexed)');
+		assert.notInclude(button.textContent, '(deleted)');
 	});
 });
 

@@ -54,7 +54,12 @@
 
 	const { diskfiles, projects } = frontend_context.get();
 
-	const NO_STATUS: DiskfileStatus = { deleted: false, dirty: false, conflict: false };
+	const NO_STATUS: DiskfileStatus = {
+		deleted: false,
+		uncovered: false,
+		dirty: false,
+		conflict: false
+	};
 
 	const diskfile = $derived(
 		row.kind === 'file' ? diskfiles.get_by_path(row.path as DiskfilePath) : undefined

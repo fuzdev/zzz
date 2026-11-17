@@ -119,6 +119,13 @@ export interface FakeDisk {
 	 */
 	readonly updates: Array<{ path: string; content: string; expected_hash?: string }>;
 	/**
+	 * Every `diskfile_create` the app sent, in order. The fake answers it as
+	 * the backend does — refused with `conflict` / `already_exists` when the
+	 * path holds a file, writing nothing — and, like `updates`, reports
+	 * nothing.
+	 */
+	readonly creates: Array<{ path: string; content: string }>;
+	/**
 	 * Holds every `diskfile_update` until the returned release is called — a
 	 * save in flight, for a test to change the disk before the backend's
 	 * compare. Each answers by what the disk holds at release.
@@ -128,7 +135,7 @@ export interface FakeDisk {
 
 /**
  * Puts a `FakeDisk` behind `app`: replaces `app.api` with one answering
- * `diskfile_read` and `diskfile_update` from it — a test needing other
+ * `diskfile_read`, `diskfile_update`, and `diskfile_create` from it — a test needing other
  * methods adds them. (`monkeypatch_zzz_for_tests` replaces
  * `Diskfiles.update` itself, so a test saving through this disk deletes
  * that stub.)
@@ -146,6 +153,7 @@ export const install_fake_disk = (
 	let held: Promise<void> | null = null;
 	const failures: Array<string> = [];
 	const updates: FakeDisk['updates'] = [];
+	const creates: FakeDisk['creates'] = [];
 	let held_updates: Promise<void> | null = null;
 
 	const disknode = (path: string): SerializableDisknode => ({
@@ -209,6 +217,24 @@ export const install_fake_disk = (
 			sizes.set(path, new TextEncoder().encode(content).length);
 			mtimes.set(path, (mtimes.get(path) ?? 1) + 1);
 			return update_ok(content);
+		},
+		diskfile_create: (input: { path: string; content: string }) => {
+			creates.push(input);
+			const { path, content } = input;
+			if (files.has(path)) {
+				return Promise.resolve({
+					ok: false,
+					error: {
+						code: -32004,
+						message: `failed to create file: File already exists: ${path}`,
+						data: { reason: 'already_exists' }
+					}
+				});
+			}
+			files.set(path, content);
+			sizes.set(path, new TextEncoder().encode(content).length);
+			mtimes.set(path, (mtimes.get(path) ?? 1) + 1);
+			return Promise.resolve({ ok: true, value: null });
 		}
 	};
 
@@ -238,6 +264,7 @@ export const install_fake_disk = (
 			return diskfile;
 		},
 		updates,
+		creates,
 		hold_updates: () => {
 			const deferred = create_deferred<void>();
 			held_updates = deferred.promise;

@@ -11,7 +11,11 @@
 	import DiskfileEditorView from './DiskfileEditorView.svelte';
 	import Icon from './Icon.svelte';
 	import TranscriptSegments from './TranscriptSegments.svelte';
-	import { DISKFILE_CONTENT_LOADING_MESSAGE, delete_diskfile } from './diskfile_helpers.ts';
+	import {
+		DISKFILE_CONTENT_LOADING_MESSAGE,
+		DISKFILE_UNCOVERED_LABEL,
+		delete_diskfile
+	} from './diskfile_helpers.ts';
 	import { DiskfilePath } from './diskfile_types.ts';
 	import { to_file_bytes_url } from './file_bytes.ts';
 	import {
@@ -100,6 +104,11 @@
 		stays inside the view, under the desk menu's overlay -->
 		<div class="flex height:100% isolation:isolate">
 			<div class="flex:1 width_atleast_sm height:100% column p_md gap_md overflow:auto">
+				{#if diskfile.deleted_on_disk}
+					<p class="color_c_60">deleted on disk</p>
+				{:else if diskfile.uncovered}
+					<p class="text_50">{DISKFILE_UNCOVERED_LABEL}</p>
+				{/if}
 				{#if source && source_url}
 					{#key source.mtime}
 						<audio

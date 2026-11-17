@@ -193,15 +193,23 @@ describe('the base a save sends', () => {
 		assert.deepEqual(sent(), [], 'nothing sent');
 	});
 
-	test('a recreate is sent without one', async () => {
+	test('a recreate is an exclusive create, then read back for its base', async () => {
 		editor_state.current_content = 'mine';
 		disk.files.delete(PATH);
 		app.diskfiles.remove_by_path(PATH);
 		assert.isTrue(diskfile.deleted_on_disk);
 
 		assert.isTrue(await editor_state.save_changes());
-		assert.deepEqual(sent(), [['mine', undefined]]);
+		assert.deepEqual(sent(), [], 'no update');
+		assert.deepEqual(disk.creates, [{ path: PATH, content: 'mine' }]);
 		assert.strictEqual(disk.files.get(PATH), 'mine');
+		await flush_reads();
+		assert.strictEqual(editor_state.last_seen_disk_hash, content_hash('mine'));
+
+		// so the next save is checked against it
+		editor_state.current_content = 'mine 2';
+		assert.isTrue(await editor_state.save_changes());
+		assert.deepEqual(sent(), [['mine 2', content_hash('mine')]]);
 	});
 
 	test('content that came without a read is saved unchecked, until a read brings its hash', async () => {

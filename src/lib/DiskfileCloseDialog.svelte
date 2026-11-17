@@ -102,6 +102,9 @@
 				{#if diskfile.deleted_on_disk}
 					It has unsaved edits and was deleted on disk. Saving recreates it; not saving discards the
 					edits and forgets the file.
+				{:else if diskfile.uncovered}
+					It has unsaved edits and isn't indexed by an open project. Not saving discards the edits
+					and forgets the file.
 				{:else}
 					It has unsaved edits. Not saving keeps them in the file's history as a discarded edit.
 				{/if}

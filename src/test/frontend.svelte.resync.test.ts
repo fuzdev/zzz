@@ -686,7 +686,7 @@ describe('projects after a restart', () => {
 		await flush();
 		assert.ok(!app.projects.get_by_root(WS_DIR));
 		assert.ok(!app.diskfiles.get_by_path(WS_A));
-		assert.ok(app.diskfiles.get_by_path(WS_B)?.deleted_on_disk, 'unsaved edits still kept');
+		assert.ok(app.diskfiles.get_by_path(WS_B)?.uncovered, 'unsaved edits still kept');
 		assert.ok(app.diskfiles.get_by_path(ZZZ_A), 'other roots untouched');
 		assert.ok(vi.mocked(console.error).mock.calls.length > 0, 'the failure is logged');
 

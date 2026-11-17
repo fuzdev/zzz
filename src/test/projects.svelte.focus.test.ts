@@ -441,7 +441,7 @@ describe('a remote unfocus', () => {
 		assert.isFalse(app.diskfiles.get_by_path(SITE_C)?.deleted_on_disk, 'kept for its tab');
 	});
 
-	test('a focus dropped because its entry went missing is released, flagging drafts deleted', async () => {
+	test('a focus dropped because its entry went missing is released, flagging drafts uncovered', async () => {
 		setup([APP, SITE], [APP_A, SITE_A, SITE_B]);
 		await edit(SITE_B);
 		const missing = registry_info([APP], 2);
@@ -450,9 +450,42 @@ describe('a remote unfocus', () => {
 		await flush();
 		assert.strictEqual(session_loads, 0);
 		assert.ok(!app.diskfiles.get_by_path(SITE_A));
-		assert.isTrue(app.diskfiles.get_by_path(SITE_B)?.deleted_on_disk, 'gone with its dir');
+		const kept = app.diskfiles.get_by_path(SITE_B);
+		assert.ok(kept, 'its draft keeps it');
+		assert.isTrue(kept.uncovered, 'out of the index, not seen deleted');
+		assert.isFalse(kept.deleted_on_disk);
 		assert.ok(app.diskfiles.get_by_path(APP_A));
 	});
+
+	test.each(['left the registry', 'went missing'] as const)(
+		'an unfocused repo that %s releases its held files, flagged uncovered',
+		async (how) => {
+			setup([APP, SITE], [APP_A, SITE_A, SITE_B]);
+			await edit(SITE_B);
+			receive_update(registry_info([APP], 2));
+			await flush();
+			const b = app.diskfiles.get_by_path(SITE_B);
+			assert.ok(b, 'unfocused, kept for its draft');
+			assert.isFalse(b.uncovered, 'kept as it is while its repo is listed');
+
+			const next = registry_info([APP], 3);
+			if (how === 'left the registry') {
+				next.entries = next.entries.slice(0, 1);
+			} else {
+				next.entries[1] = { ...next.entries[1]!, state: 'missing' };
+			}
+			receive_update(next);
+			await flush();
+			assert.strictEqual(app.diskfiles.get_by_path(SITE_B), b);
+			assert.isTrue(b.uncovered, 'no longer an unfocused repo of an open project');
+			assert.notInclude(app.diskfiles.on_disk, b, 'not listed as an indexed file');
+			assert.isFalse(app.diskfiles.open_path(b.path), 'not openable as indexed');
+
+			app.diskfiles.get_editor_state(b).discard_draft();
+			app.diskfiles.editor.tabs.close_all_tabs();
+			assert.isUndefined(app.diskfiles.get_by_path(SITE_B), 'forgotten once nothing holds it');
+		}
+	);
 });
 
 describe('a remote focus', () => {

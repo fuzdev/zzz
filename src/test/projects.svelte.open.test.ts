@@ -269,7 +269,7 @@ describe('Projects.open', () => {
 		assert.ok(app.diskfiles.get_by_path(PATH_A), 'its files stay');
 	});
 
-	test("a close releases the project's files, keeping a draft flagged deleted", async () => {
+	test("a close releases the project's files, keeping a draft flagged uncovered", async () => {
 		app.projects.add(WS_INFO);
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
 		const b = app.diskfiles.get_by_path(PATH_B)!;
@@ -292,7 +292,10 @@ describe('Projects.open', () => {
 		receive_change({ ...WS_INFO, rev: 2 }, 'close');
 		assert.ok(!app.projects.get_by_root(WS_DIR));
 		assert.ok(!app.diskfiles.get_by_path(PATH_A), 'nothing indexes it now');
-		assert.isTrue(app.diskfiles.get_by_path(PATH_B)?.deleted_on_disk, 'kept for its draft');
+		const kept = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(kept, 'kept for its draft');
+		assert.isTrue(kept.uncovered);
+		assert.isFalse(kept.deleted_on_disk, 'not seen deleted');
 	});
 
 	test('a close keeps the files another root covers', () => {

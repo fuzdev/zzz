@@ -1472,10 +1472,10 @@ changed on disk again, until the disk settles on the draft. When the file's last
 (`content_error`) at the click, there's no version the user can trust as
 shown, so the overwrite sends no hash and writes over whatever is there:
 the way to force a save. An overwrite queued behind a save in flight takes
-its base when it runs, after that save. Unchecked too:
-a save recreating a file deleted on disk, which has nothing to compare — so
-a file something else recreated before the filer reported it is replaced
-unseen (an "expect absent" compare would close that) — and a save of
+its base when it runs, after that save. A save of a file deleted on disk
+compares too, expecting it absent: it's an exclusive create, refused if
+anything is at the path, so a file something else recreated before the
+filer reported it is read and shown, not replaced. Unchecked too: a save of
 content that came without a read (seeded from JSON — no app path does).
 What remains for every checked save is the gap between the backend's
 compare and its rename (or, on the in-place fallback, its truncate): a
@@ -1571,9 +1571,13 @@ backoff. `receive_session` reconciles rather than adds:
   a retry of it was pending; otherwise the snapshot's focus stands.
 - **Files** under a snapshot root, or under a project the reconcile just
   removed, that the snapshot lacks are removed through the same path as a
-  `delete` (`Diskfiles.reconcile`), so a file open with unsaved edits stays,
-  flagged `deleted_on_disk`. Files outside those directories are left
-  alone — the snapshot says nothing about them. The snapshot is metadata,
+  `delete` (`Diskfiles.reconcile`), so a file with a draft or a tab stays,
+  flagged `deleted_on_disk` — unless the index no longer covers it (its
+  repo dropped from the registry or unfocused, its project closed): the
+  snapshot doesn't look there, so it's released as a narrowing would
+  (§ Projects), kept for a draft or a tab flagged `uncovered`. Files
+  outside those directories are left alone — the snapshot says nothing
+  about them. The snapshot is metadata,
   so every file held eagerly is read again (the shown ones first) and any
   other loaded file drops its content; one that changed while disconnected
   shows the change, or a conflict under a draft.
@@ -1592,20 +1596,40 @@ whose `completion_create` was in flight when the socket closed is rejected
 by the WebSocket client (`service_unavailable` — it can't be correlated
 after the reconnect), which settles its turn as errored; the chunks it had
 streamed stay. `Diskfiles` upserts by path — for seeds and for both `add`
-and `change` — so a path never has two `Diskfile`s. A `delete` closes the
-file's tabs, moves selection, and drops its editing state and history —
-unless the file has a draft (edited in a tab, a file part, anywhere): then
-the `Diskfile` is kept, flagged `deleted_on_disk` (marked in its tab, the
-explorer, and the editors), so saving writes the path back (always allowed
-while flagged; a successful save clears the flag right away) and the `add`
-broadcast reattaches it (same id). It's forgotten once nothing holds it — no
+and `change` — so a path never has two `Diskfile`s. A `delete` drops the
+file's editing state and history — unless the file has a draft (edited in
+a tab, a file part, anywhere) or a tab: then the `Diskfile` is kept,
+flagged `deleted_on_disk` (marked in its tab, the explorer, and the
+editors), so saving writes the path back (always allowed while flagged; a
+successful save clears the flag right away) and the `add` broadcast
+reattaches it (same id). That save is an exclusive create
+(`diskfile_create`, `O_EXCL`, recreating missing parent directories),
+never a blind overwrite: a delete reported for a file still on disk (a
+re-prune) or one recreated unwatched (its project closed meanwhile) makes
+it fail (`already_exists`), and the file is flagged `uncovered` and read
+again, so the disk version shows as any refused save's does — a conflict
+under a draft. A rename arrives as a delete plus an add, so an
+open tab stays on the old path, marked deleted, and the new path isn't
+opened. It's forgotten once nothing holds it — no
 draft (discarded from the editor's notice or a "don't save") and no tab
 (`Diskfiles.release_if_unneeded`). A file that leaves the index because its
 repo was unfocused isn't deleted: it's forgotten, unless it has a draft or
-a tab, which keep it as it is, unflagged (§ Projects).
-The explorer lists it for its draft
+a tab, which keep it as it is, unflagged (§ Projects); a refused save whose
+re-read finds it gone flags it deleted, as for an uncovered one below. One that leaves the
+index otherwise — its project closed, its repo dropped from the registry —
+isn't deleted either, and may still be on disk: it's forgotten, unless a
+draft or a tab keeps it, flagged `uncovered` ("not indexed by an open
+project" in its tab, the explorer, and the editors, apart from "deleted").
+Saving it isn't forced as a deleted file's is, and sends the hash of its
+last read as any save does, so an edit made on disk meanwhile is refused
+(`disk_changed`, then a conflict) and a root out of scope is refused
+(`path_not_allowed`); a refused save whose re-read finds the file gone
+flags it deleted, so saving again recreates it. Reopening its project
+reattaches it (same id), and it's forgotten once nothing holds it, as a
+deleted one is.
+The explorer lists either for its draft or tab
 (`Diskfiles.listed`); pickers don't (`on_disk`); a `DiskfilePart` shows and
-sends the draft, marked deleted. Tabs, history, and editor state are
+sends the draft, marked deleted only when it's deleted on disk. Tabs, history, and editor state are
 UI-session-only — a reload restores only what `session_load` provides.
 
 The explorer and the file picker stay responsive with tens of thousands of
@@ -1641,7 +1665,7 @@ root's rule skips — `to_unindexed_part`: a `.git` or other always-ignored
 name, a `.zzz-tmp-` staging name, and `node_modules` and the other fixed
 names, or under a focused git root what git ignores or a repo of its own
 (`nested`)), where it shows only as
-its own root. Under a focused git root a tracked `dist/` shows. A file deleted on disk but kept for its draft stays in its folder,
+its own root. Under a focused git root a tracked `dist/` shows. A file deleted on disk or uncovered but kept for its draft or tab stays in its folder,
 marked like in the list. The expanded folders live on `DiskfilesEditor.tree`
 (`DiskfileTreeState`), so they survive a switch to the list and back. The tree
 is one flat, windowed list of its visible rows, and deriving them walks only the
@@ -1949,11 +1973,15 @@ a notification, and two clients' changes interleave:
   in a present but unfocused repo is forgotten unless a draft or a tab
   holds it, kept as it is — not flagged deleted, since it's still on disk —
   until the repo is focused again or nothing holds it; any other (its
-  entry gone missing or out of the registry, or under a root become a
-  registry's) goes as a snapshot that no longer lists it would remove it.
+  entry out of the registry or missing, under a root become a registry's,
+  or under a closed project's root) is kept flagged `uncovered` (§ File
+  Editing). A repo that leaves the registry or goes missing releases its
+  files too, focused or not.
   A kept file isn't watched meanwhile, so a change on disk shows only once
-  the repo is focused again, or as a conflict when it's saved (the save
-  checks the disk version it was based on).
+  the repo is focused again, or as a conflict when it's saved: an
+  uncovered file's save sends the disk version it was based on
+  (`expected_hash`), and a deleted file's creates it exclusively, refused
+  if it's there.
 - A newer state that widens — a project new here, opened elsewhere
   (another tab, `zzz <path>`), or a focus added elsewhere — arrives
   without its files (a filer's initial scan broadcasts nothing). What it
@@ -2173,8 +2201,8 @@ Population, per capability:
   daemon no longer has are dropped (after a restart they're reopened instead,
   focus and all, and dropped only if the reopen is refused or lands on
   another root), files it no longer
-  indexes are pruned (a file with unsaved edits stays, flagged deleted on
-  disk), and running terminals it doesn't list become `lost`. Notifications
+  indexes are pruned (a file with a draft or a tab stays, flagged deleted
+  on disk, or `uncovered` when the index no longer covers it), and running terminals it doesn't list become `lost`. Notifications
   sent while the socket was down aren't replayed, so terminal output from that
   window is missing (the terminal view says so). See § File Editing.
 - **16 MiB messages** — a JSON-RPC message is capped at 16 MiB on both
@@ -2254,17 +2282,16 @@ Population, per capability:
   unsaved changes asks first (`beforeunload`), and a session that ends
   (logout, or a recheck finding it revoked) drops the App and its drafts with
   it. A file's editing state is app-level (`Diskfiles.get_editor_state`): disk
-  changes are recorded with no editor open, a draft survives tab switches and
-  keeps a file deleted on disk, closing a draft's last tab asks save / don't
+  changes are recorded with no editor open, a draft survives tab switches and,
+  like a tab, keeps a file deleted on disk, closing a draft's last tab asks save / don't
   save / cancel, and a disk change under a draft pauses saving until you
   overwrite or keep the disk version (see § File Editing). A save carries the
   hash of the content it was based on and the backend refuses it if the file
   moved (`disk_changed`) — an overwrite too, against the version the
   conflict showed. Overwritten silently still: a write landing between that
-  compare and the rename, whatever an overwrite after a failed read replaces,
-  and a file recreated externally before its filer event when zzz recreates
-  it from a draft kept for a delete — an overwrite clicked while the file is
-  marked deleted and a read of it is pending included. A file rewritten faster than a read
+  compare and the rename, and whatever an overwrite after a failed read
+  replaces; a file kept deleted on disk is recreated exclusively, refused if
+  anything is at the path. A file rewritten faster than a read
   round trip can't be overwritten from zzz: each overwrite is refused, read
   again, and refused again. Histories of files
   you've opened stay in memory for the session (each capped by entries and

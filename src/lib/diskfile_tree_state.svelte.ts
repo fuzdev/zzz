@@ -519,8 +519,8 @@ export class DiskfileTreeState {
 
 	/**
 	 * What the tree shows that `Diskfiles.tree_index` lacks, merged into the
-	 * children it lists: files deleted on disk but kept for their drafts
-	 * (`Diskfiles.listed_deleted`), the folders in `created_dirs`, and the
+	 * children it lists: files deleted on disk or out of the index but kept for
+	 * a draft or a tab (`Diskfiles.listed_unindexed`), the folders in `created_dirs`, and the
 	 * open registries' repos (`Projects.repos` — an unfocused one has no
 	 * files, a focused one may have none yet), with their folders up to `/`
 	 * like the index's — the index holds files on disk only. A few, or a
@@ -546,7 +546,7 @@ export class DiskfileTreeState {
 				child = dir;
 			}
 		};
-		for (const diskfile of this.app.diskfiles.listed_deleted) link(diskfile.path, false);
+		for (const diskfile of this.app.diskfiles.listed_unindexed) link(diskfile.path, false);
 		for (const dir of this.created_dirs) link(dir, true);
 		for (const dir of this.app.projects.repos.keys()) link(dir, true);
 		return extra;

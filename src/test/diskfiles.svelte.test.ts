@@ -16,12 +16,7 @@ import { Frontend } from '#lib/frontend.svelte.ts';
 import { confirm_unload_with_unsaved_changes, to_file_directories } from '#lib/diskfile_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import {
-	flush_reads,
-	install_fake_disk,
-	update_ok,
-	type FakeDisk
-} from './diskfile_test_helpers.ts';
+import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/ws/');
 const PATH_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
@@ -339,61 +334,175 @@ describe('a change while a snapshot is in flight', () => {
 	});
 });
 
-describe('delete cleans up editor state', () => {
-	test('closes the tab, advances selection, and drops history', () => {
+describe('delete with a tab keeps the file', () => {
+	test('the diskfile, its tab, and the selection stay, flagged deleted', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
-
 		app.diskfiles.select(a.path, true);
 		app.diskfiles.select(b.path, true);
-		assert.strictEqual(app.diskfiles.selected_path, b.path);
+		const tab = tabs.by_path.get(b.path);
+		assert.ok(tab);
 		const b_state = app.diskfiles.get_editor_state(b);
-		b_state.history.add_entry('edited');
+		assert.isFalse(b_state.has_unsaved_edits);
 
 		filer_change('delete', PATH_B);
 
-		assert.isUndefined(tabs.by_path.get(b.path));
-		assert.strictEqual(tabs.items.size, 1);
-		assert.strictEqual(tabs.selected_path, a.path);
-		assert.strictEqual(app.diskfiles.selected_path, a.path);
-		assert.strictEqual(app.diskfiles.selected_file, a);
-		assert.isUndefined(app.diskfiles.find_editor_state(b.path));
-		assert.ok(!app.cell_registry.all.has(b_state.history.id));
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
+		assert.isTrue(b.deleted_on_disk);
+		assert.strictEqual(tabs.by_path.get(b.path), tab);
+		assert.strictEqual(tabs.items.size, 2);
+		assert.strictEqual(tabs.selected_path, b.path);
+		assert.strictEqual(app.diskfiles.selected_path, b.path);
+		assert.strictEqual(app.diskfiles.find_editor_state(b.path), b_state);
+		assert.include(app.diskfiles.listed, b);
+		assert.include(app.diskfiles.listed_unindexed, b);
+		assert.notInclude(app.diskfiles.on_disk, b);
 	});
 
-	test('disposes the diskfile, its tab, and its history', () => {
-		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+	test('closing its tab forgets the diskfile, its tab, and its history', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(a && b);
+		const { tabs } = app.diskfiles.editor;
+		app.diskfiles.select(a.path, true);
+		app.diskfiles.select(b.path, true);
+		const tab = tabs.by_path.get(b.path);
+		assert.ok(tab);
+		const { history } = app.diskfiles.get_editor_state(b);
+		const { all } = app.cell_registry;
+		filer_change('delete', PATH_B);
+		assert.ok(all.has(b.id) && all.has(tab.id) && all.has(history.id));
+
+		app.diskfiles.editor.close_tab(tab.id);
+
+		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
+		assert.isUndefined(app.diskfiles.find_editor_state(b.path));
+		assert.ok(!all.has(b.id));
+		assert.ok(!all.has(tab.id));
+		assert.ok(!all.has(history.id));
+		assert.notInclude(app.diskfiles.listed, b);
+		assert.strictEqual(tabs.selected_path, a.path);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
+		// neither the reopen stack nor back-navigation resurrects it
+		tabs.reopen_last_closed_tab();
+		assert.isUndefined(tabs.by_path.get(b.path));
+		assert.isNull(tabs.navigate_to_tab(tab.id));
+	});
+
+	test('a preview tab keeps it until it previews another file', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(a);
+		const { tabs } = app.diskfiles.editor;
+		app.diskfiles.select(a.path);
+		assert.strictEqual(tabs.preview_tab?.path, a.path);
+
+		filer_change('delete', PATH_A);
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
+		assert.isTrue(a.deleted_on_disk);
+
+		app.diskfiles.select(PATH_B);
+
+		assert.isUndefined(app.diskfiles.get_by_path(PATH_A));
+		assert.strictEqual(tabs.items.size, 1);
+		assert.strictEqual(app.diskfiles.selected_path, PATH_B);
+	});
+
+	test('the file reappearing reattaches the same diskfile and clears the flag', async () => {
+		await disk.load(PATH_A, 'a');
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
 		app.diskfiles.select(a.path, true);
+		const editor_state = app.diskfiles.get_editor_state(a);
 		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
-		assert.ok(tab);
-		const { history } = app.diskfiles.get_editor_state(a);
-		const { all } = app.cell_registry;
-		assert.ok(all.has(a.id) && all.has(tab.id) && all.has(history.id));
-
 		filer_change('delete', PATH_A);
 
-		assert.ok(!all.has(a.id));
-		assert.ok(!all.has(tab.id));
-		assert.ok(!all.has(history.id));
+		filer_change('add', PATH_A, 'a back');
+		await flush_reads();
+
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
+		assert.strictEqual(count_by_path(PATH_A), 1);
+		assert.isFalse(a.deleted_on_disk);
+		assert.strictEqual(a.content, 'a back');
+		assert.strictEqual(app.diskfiles.editor.tabs.by_path.get(a.path), tab);
+		assert.strictEqual(app.diskfiles.find_editor_state(a.path), editor_state);
+		assert.strictEqual(editor_state.current_content, 'a back');
+		assert.notInclude(app.diskfiles.listed_unindexed, a);
 	});
 
-	test('clears selection when no tab remains', () => {
+	test('a rename leaves the old tab, flagged, and adds the new file without opening it', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
-		app.diskfiles.select(a.path);
-		assert.strictEqual(app.diskfiles.selected_path, a.path);
+		const { tabs } = app.diskfiles.editor;
+		app.diskfiles.select(a.path, true);
 
+		// a rename reaches zzz as a delete of the old path plus an add of the new
 		filer_change('delete', PATH_A);
+		filer_change('add', PATH_B);
 
-		assert.isNull(app.diskfiles.selected_path);
-		assert.isNull(app.diskfiles.selected_file);
-		assert.strictEqual(app.diskfiles.editor.tabs.items.size, 0);
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
+		assert.isTrue(a.deleted_on_disk);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(b);
+		assert.isFalse(b.deleted_on_disk);
+		assert.strictEqual(tabs.items.size, 1);
+		assert.ok(tabs.by_path.has(PATH_A));
+		assert.ok(!tabs.by_path.has(PATH_B));
+		assert.strictEqual(app.diskfiles.selected_path, PATH_A);
+	});
+
+	test("saving a deleted tab's content recreates the file", async () => {
+		await disk.load(PATH_A, 'a');
+		const a = app.diskfiles.get_by_path(PATH_A);
+		assert.ok(a);
+		app.diskfiles.select(a.path, true);
+		const editor_state = app.diskfiles.get_editor_state(a);
+		delete (app.diskfiles as { update?: unknown }).update;
+		filer_change('delete', PATH_A);
+		assert.isFalse(editor_state.has_unsaved_edits);
+		assert.isTrue(editor_state.can_save);
+
+		assert.isTrue(await editor_state.save_changes());
+
+		// an exclusive create — there's no disk version to compare against
+		assert.deepEqual(disk.creates, [{ path: PATH_A, content: 'a' }]);
+		assert.deepEqual(disk.updates, []);
+		assert.strictEqual(disk.files.get(PATH_A), 'a');
+		assert.isFalse(a.deleted_on_disk);
+		assert.isTrue(a.uncovered, 'no project indexes it, so no add will come');
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
+	});
+
+	test('deleting an unknown path is a no-op', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A)]);
+		filer_change('delete', PATH_B);
+		assert.strictEqual(app.diskfiles.items.size, 1);
+	});
+});
+
+describe('delete without a tab or draft forgets the file', () => {
+	test('disposes the diskfile and its history, and leaves other tabs alone', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(a && b);
+		const { tabs } = app.diskfiles.editor;
+		app.diskfiles.select(a.path, true);
+		const { history } = app.diskfiles.get_editor_state(b);
+		const { all } = app.cell_registry;
+
+		filer_change('delete', PATH_B);
+
+		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
+		assert.ok(!all.has(b.id));
+		assert.ok(!all.has(history.id));
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
+		assert.strictEqual(tabs.items.size, 1);
 	});
 
 	test('the deleted file cannot be reopened or navigated back to', () => {
@@ -410,32 +519,10 @@ describe('delete cleans up editor state', () => {
 
 		filer_change('delete', PATH_B);
 
+		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
 		tabs.reopen_last_closed_tab();
 		assert.isUndefined(tabs.by_path.get(b.path));
 		assert.isNull(tabs.navigate_to_tab(b_tab.id));
-	});
-
-	test('keeps unrelated selection and tabs', () => {
-		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		const a = app.diskfiles.get_by_path(PATH_A);
-		const b = app.diskfiles.get_by_path(PATH_B);
-		assert.ok(a && b);
-		const { tabs } = app.diskfiles.editor;
-
-		app.diskfiles.select(b.path, true);
-		app.diskfiles.select(a.path, true);
-
-		filer_change('delete', PATH_B);
-
-		assert.strictEqual(app.diskfiles.selected_path, a.path);
-		assert.strictEqual(tabs.selected_path, a.path);
-		assert.strictEqual(tabs.items.size, 1);
-	});
-
-	test('deleting an unknown path is a no-op', () => {
-		app.diskfiles.add_initial([create_disknode(PATH_A)]);
-		filer_change('delete', PATH_B);
-		assert.strictEqual(app.diskfiles.items.size, 1);
 	});
 });
 
@@ -529,16 +616,12 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 	test('saving writes the path back', async () => {
 		const { editor_state } = await setup_dirty();
-		const writes: Array<[string, string]> = [];
-		app.diskfiles.update = (path, content) => {
-			writes.push([path, content]);
-			return Promise.resolve(update_ok(content));
-		};
 		filer_change('delete', PATH_B);
 
 		assert.isTrue(await editor_state.save_changes());
 
-		assert.deepEqual(writes, [[PATH_B, 'b edited']]);
+		assert.deepEqual(disk.creates, [{ path: PATH_B, content: 'b edited' }]);
+		assert.strictEqual(disk.files.get(PATH_B), 'b edited');
 	});
 
 	test('closing the tab after discarding the draft forgets the diskfile ("don\'t save")', async () => {
@@ -604,6 +687,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 	});
 
 	test('a draft from a file part (never in a tab) keeps a deleted or pruned file', async () => {
+		// the index covers the snapshot's root, so the prune is a delete
+		app.projects.add({ root: SOURCE_DIR });
 		await disk.load(PATH_A, 'a');
 		await disk.load(PATH_B, 'b');
 		const b = app.diskfiles.get_by_path(PATH_B);
@@ -626,7 +711,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.isUndefined(part.diskfile);
 	});
 
-	test('a file without a draft is not kept', async () => {
+	test('a file without a draft or a tab is not kept', async () => {
 		await disk.load(PATH_B, 'b');
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(b);
@@ -645,18 +730,13 @@ describe('delete with unsaved edits keeps the tab', () => {
 		editor_state.set_content_from_history(original.id);
 		assert.isFalse(editor_state.has_changes);
 		assert.ok(editor_state.has_unsaved_edits);
-		const writes: Array<[string, string]> = [];
-		app.diskfiles.update = (path, content) => {
-			writes.push([path, content]);
-			return Promise.resolve(update_ok(content));
-		};
 
 		filer_change('delete', PATH_B);
 		assert.isTrue(b.deleted_on_disk);
 		assert.isTrue(editor_state.can_save);
 
 		assert.isTrue(await editor_state.save_changes());
-		assert.deepEqual(writes, [[PATH_B, 'b']]);
+		assert.deepEqual(disk.creates, [{ path: PATH_B, content: 'b' }]);
 	});
 
 	test('reusing a preview tab away from the file keeps its draft', async () => {
@@ -773,7 +853,37 @@ describe('release_uncovered', () => {
 		assert.isFalse(b.deleted_on_disk, 'still on disk');
 		const x = app.diskfiles.get_by_path(at('/dev/gone/x.ts'));
 		assert.ok(x, 'its draft keeps it');
-		assert.isTrue(x.deleted_on_disk, 'its repo gone, as a snapshot would remove it');
+		assert.isTrue(x.uncovered, 'its repo missing: out of the index, not seen deleted');
+		assert.isFalse(x.deleted_on_disk);
+	});
+
+	test('closing a project keeps a file with a tab or a draft, flagged uncovered, and forgets the rest', async () => {
+		const WS = dir('/ws/');
+		app.projects.add({ root: WS });
+		const paths = [PATH_A, PATH_B, PATH_C];
+		for (const path of paths) await disk.load(path, path);
+		const a = app.diskfiles.get_by_path(PATH_A);
+		const b = app.diskfiles.get_by_path(PATH_B);
+		assert.ok(a && b);
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
+		assert.ok(tab);
+		app.diskfiles.get_editor_state(b).current_content = 'b edited';
+
+		app.projects.remove_by_root(WS);
+
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a, 'its tab keeps it');
+		assert.isTrue(a.uncovered);
+		assert.isFalse(a.deleted_on_disk, 'not seen deleted');
+		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b, 'its draft keeps it');
+		assert.isTrue(b.uncovered);
+		assert.isFalse(b.deleted_on_disk);
+		assert.sameMembers(app.diskfiles.listed_unindexed, [a, b]);
+		assert.notInclude(app.diskfiles.on_disk, a, 'pickers skip it');
+		assert.isUndefined(app.diskfiles.get_by_path(PATH_C), 'nothing holds it');
+
+		app.diskfiles.editor.close_tab(tab.id);
+		assert.isUndefined(app.diskfiles.get_by_path(PATH_A));
 	});
 
 	test('a root turned registry keeps its loose files and what another root covers', async () => {
@@ -1293,7 +1403,7 @@ describe('create_file selects the new file', () => {
 		await app.diskfiles.create_file('b.txt');
 
 		app.projects.remove_by_root(SOURCE_DIR);
-		assert.ok(!app.diskfiles.get_by_path(a.path), "the closed project's file is released");
+		assert.isTrue(a.uncovered, "the closed project's file is kept for its tab, flagged");
 		filer_change('add', PATH_B);
 
 		const b = app.diskfiles.get_by_path(PATH_B);

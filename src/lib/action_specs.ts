@@ -186,8 +186,8 @@ export type DiskfileReadOutput = Infer<typeof DiskfileReadOutput>;
  * compare-and-swap: the `hash` of the `diskfile_read` the edit is based on,
  * and the file is written only if it still holds those bytes — else
  * `conflict` / `disk_changed`, nothing written. Omitted, the save writes
- * whatever is on disk: recreating a deleted file, or forcing a write the
- * client can't base on a read.
+ * whatever is on disk: forcing a write the client can't base on a read.
+ * Recreating a deleted file is `diskfile_create`, exclusive, not this.
  */
 export const DiskfileUpdateInput = object({
 	path: DiskfilePath,

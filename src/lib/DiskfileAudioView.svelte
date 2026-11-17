@@ -12,7 +12,7 @@
 	import Icon from './Icon.svelte';
 	import JobStatusView from './JobStatusView.svelte';
 	import TranscriptSegments from './TranscriptSegments.svelte';
-	import { delete_diskfile } from './diskfile_helpers.ts';
+	import { DISKFILE_UNCOVERED_LABEL, delete_diskfile } from './diskfile_helpers.ts';
 	import { DiskfilePath } from './diskfile_types.ts';
 	import { to_file_bytes_url } from './file_bytes.ts';
 	import { format_recording_duration } from './recording_helpers.ts';
@@ -137,6 +137,8 @@
 						<Icon data={icon_stop} /> <span class="ml_xs">stop</span>
 					</button>
 				</p>
+			{:else if diskfile.uncovered}
+				<p class="text_50">{DISKFILE_UNCOVERED_LABEL}</p>
 			{:else if url === null}
 				<p class="color_c_60">no backend to play this file from</p>
 			{:else}

@@ -2,20 +2,17 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
-import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 
-import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
+import { DiskfileDirectoryPath, DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import {
-	answer_update,
 	flush_reads,
 	install_fake_disk,
 	update_ok,
-	type FakeDisk,
-	type HeldUpdateResult
+	type FakeDisk
 } from './diskfile_test_helpers.ts';
 
 /**
@@ -263,23 +260,18 @@ describe('save_draft', () => {
 
 describe('saving a file deleted on disk', () => {
 	test('recreates it: closing its tab before the add broadcast keeps it', async () => {
+		app.projects.add({ root: parse_or_throw(DiskfileDirectoryPath, '/w/') });
 		const a = await upsert(PATH_A, 'v1');
 		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		editor_state.current_content = 'DRAFT';
+		disk.files.delete(PATH_A);
 		app.diskfiles.remove_by_path(PATH_A);
 		assert.isTrue(a.deleted_on_disk);
-		const { deferred } = (() => {
-			const d = create_deferred<HeldUpdateResult>();
-			app.diskfiles.update = (_path, content) =>
-				d.promise.then((result) => answer_update(content, result));
-			return { deferred: d };
-		})();
-
-		const saving = editor_state.save_changes();
-		deferred.resolve({ ok: true, value: null });
-		assert.isTrue(await saving);
+		assert.isTrue(await editor_state.save_changes());
+		assert.deepEqual(disk.creates, [{ path: PATH_A, content: 'DRAFT' }]);
 		assert.isFalse(a.deleted_on_disk, 'cleared by the save itself');
+		assert.isFalse(a.uncovered, 'its project indexes it, so its add is on the way');
 
 		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
