@@ -53,7 +53,7 @@ const parse_str_list_const = (source: string, name: string): Array<string> => {
 
 describe('the file index ignores what the backend filer ignores', () => {
 	test('ignored directory names match the names the filer ignores', () => {
-		const filer = read_crate_source('filer.rs');
+		const filer = read_crate_source('filer/walk.rs');
 		const scoped_fs = read_crate_source('scoped_fs.rs');
 		// a constant is the filer's own or one it imports from `scoped_fs.rs`
 		const names = [
@@ -82,7 +82,7 @@ describe('the file index ignores what the backend filer ignores', () => {
 			'`is_temp_file_name` is a plain prefix check, as the TS side assumes'
 		);
 		assert.include(
-			read_crate_source('filer.rs'),
+			read_crate_source('filer/walk.rs'),
 			'crate::scoped_fs::is_temp_file_name(name)',
 			'the filer ignores staging files by that check'
 		);

@@ -258,7 +258,7 @@ links go unchecked. The GitHub check workflow is Node-only (no sibling Rust
 spine checkout), so the Rust gates run locally.
 
 `zzz_server`'s own `#[cfg(test)]` unit tests sit beside the code they cover
-(the provider modules, `filer.rs`, `pty_manager.rs`, `scoped_fs.rs`, …);
+(the provider modules, `filer/`, `pty_manager.rs`, `scoped_fs.rs`, …);
 auth, origin, and trusted-proxy pure functions are unit-tested in the spine
 crates (`fuz_auth`, `fuz_http`).
 
@@ -402,7 +402,15 @@ crates/zzz_server/src/
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
 ├── file_bytes.rs     # Byte routes for files (`/api/files/bytes`): ranged read with a response-header lockdown, exclusive create, offset-checked append — hand-written axum handlers with their own auth + scope gates
 ├── file_trust.rs     # Whether discovered config is the daemon user's alone to write — Debian sshd's rule: owned by the user or root, never `o+w`, `g+w` only by the user's private group (`TrustedOwner`, NSS read once by `current`)
-├── filer.rs          # Filer + FilerManager (notify crate) — level-triggered, stat-only file index (events are hints, `lstat` decides; no file is read), change by `lstat` stamp with git's racily-clean rule, per-directory watches from the filer's own walk (degraded polling past the watch limit), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped; a whole tree, or a registry root's top level alone (`FilerDepth`)
+├── filer/            # File index + watcher (notify crate) — level-triggered, stat-only (events are hints, `lstat` decides; no file is read), change by `lstat` stamp with git's racily-clean rule, per-directory watches from the filer's own walk (degraded polling past the watch limit), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped; a whole tree, or a registry root's top level alone (`FilerDepth`)
+│   ├── mod.rs        # Module docs (the filer's design), re-exports of the public API, the indexing limits, the `filer_change` notification params, `SerializableDisknode`, `WatchStatus`, and the dir-prefix helpers
+│   ├── core.rs       # `Filer` (the running handle), `FilerConfig`, `FilerDepth`, `start_filer`, the notify callback's `watcher_factory`, `RescanSignal`
+│   ├── index.rs      # The index's file metadata: `FileStat` and its racily-clean rule (`reusable_stat`, `is_unchanged`), disknodes, and `apply_subtree`, the diff of a scanned subtree
+│   ├── watches.rs    # `DirWatches` (the per-directory watch bookkeeping, degraded mode) and `classify_event`
+│   ├── walk.rs       # The blocking `walk_blocking` + `scan_directory`/`scan_file`, the ignore rules (`is_ignored`, `DEFAULT_IGNORED_DIRS`), the orphaned-staging-file sweep
+│   ├── event_loop.rs # `FilerState` + `filer_event_loop`: events resolved against the disk, the debounce / coalesce, `flush_ready`, `filer_change_notification`
+│   ├── manager.rs    # `FilerManager`: lifetimes (permanent / project), depths, dedup of concurrent starts, snapshots, `hold_index`, a `#[cfg(test)]` seam that holds an index for writing (`project_manager`'s tests use it)
+│   └── test_support.rs # `#[cfg(test)]` helpers shared across the filer's test modules (`TempDir`, scan and state builders)
 ├── project_manager.rs # The open projects and the one path that changes them (`ProjectManager`): an open, close, focus, or unfocus computes the next state and `commit`s it under the state's lock — ensuring the filers it needs (`desired_filers`: each directory at the deepest any open project indexes it), stopping or narrowing the ones it doesn't (`release`), setting the runtime `ScopedFs` roots, publishing the snapshot `project_list` and `session_load` read, and broadcasting `project_changed` — a commit that changes anything bumps the lifecycle rev (seeded from the clock at boot, `rev_seed`) and stamps it on what changed, which every reply, notification, and `session_load`'s `projects_rev` carry; an open's and a focus's reply read their files under that lock; an open's requested focuses land or are refused one by one (`Opened::refused`), its own filers required; scans run before the lock
 ├── project.rs        # Resolving an opened path to its project: a registry (`repos.toml`, found by `fuz_repos`'s bounded discovery — strictly below `$HOME` or within an allowlisted root — each candidate trusted, confined, and outside protected directories, or the open is refused), else the nearest `.git` (a directory or gitfile), else the directory; a path under a `.git` component opens as the directory holding the outermost one; a path under a registry's root in none of its present entries (or the root of a checkout with none present), or under a refused registry kept inside a checkout, falls back to rules 2–3, never above the registry's root (`Fallback`, the project's `fallback`); entries canonicalized and confined to the root, refused one by one (`resolve_project`, `ProjectError` / `EntryRefusal` reasons)
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
@@ -656,7 +664,7 @@ joined after the drain, before PTY teardown.
   the connection's loop and never queue. **The budget bounds a burst, it doesn't
   absorb one of any size**: a sender never waits for a socket, so anything
   that produces faster than a client takes for longer than the budget holds
-  closes that client's socket. The filer's flush (`filer::flush_ready`) yields
+  closes that client's socket. The filer's flush (`filer::event_loop::flush_ready`) yields
   to the runtime after each broadcast, so each connection's writer gets a turn
   to take a frame before the next is queued and a batch isn't queued whole —
   it is a turn, not backpressure: a client that takes the batch slower than

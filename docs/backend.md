@@ -626,7 +626,7 @@ commands):
   handling (`is_ignored`), rather than indexed under a lossy U+FFFD key no
   client could address.
 - **Filer watches** — each filer adds one non-recursive notify watch per
-  directory it indexes, from its own walk (`filer::DirWatches`), so ignored,
+  directory it indexes, from its own walk (`filer::watches::DirWatches`), so ignored,
   symlinked, and non-UTF-8 directories and the app dir get none — the watch
   budget scales with what's indexed, not with `node_modules/` or `target/`.
   Each directory is watched before it's listed, so an entry created in
@@ -665,7 +665,7 @@ commands):
   `project_open` returns is only logged — no notification carries the
   change. **Change by stamp**: watch events and rescans (`session_load`,
   overflow, degraded polling) alike decide from a file's `lstat` stamp
-  (`filer::FileStat`: dev, inode, size, mtime, and `st_ctime`, the inode
+  (`filer::index::FileStat`: dev, inode, size, mtime, and `st_ctime`, the inode
   change time — not the wire `ctime`, which is the birth time) — a file
   whose stamp matches its indexed one is unchanged and not broadcast, any
   other is a `change` (a `touch` and a rewrite of the same bytes included,

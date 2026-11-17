@@ -177,7 +177,7 @@ export const to_diskfile_copy_paths = (
 /**
  * Names the file index never enters or lists, wherever they appear under a
  * root — a folder's or a file's — the backend filer's default ignores
- * (`DEFAULT_IGNORED_DIRS` in `crates/zzz_server/src/filer.rs`) and the
+ * (`DEFAULT_IGNORED_DIRS` in `crates/zzz_server/src/filer/walk.rs`) and the
  * credential directories it skips too (`CREDENTIAL_DIR_NAMES` in
  * `crates/zzz_server/src/scoped_fs.rs`), which a test holds this to. Read
  * through `is_file_index_ignored_name`: a link into one is `skipped`, not
@@ -210,7 +210,7 @@ export const FILE_INDEX_TEMP_FILE_PREFIX = '.zzz-tmp-';
  * Whether the file index skips any path part named `name`, file or folder:
  * an ignored name (`FILE_INDEX_IGNORED_DIR_NAMES`) or a staging file's
  * (`FILE_INDEX_TEMP_FILE_PREFIX`) — the filer's `is_ignored_name` in
- * `crates/zzz_server/src/filer.rs`. The one rule the explorer, the tree, and
+ * `crates/zzz_server/src/filer/walk.rs`. The one rule the explorer, the tree, and
  * markdown links share.
  */
 export const is_file_index_ignored_name = (name: string): boolean =>

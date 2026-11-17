@@ -13,7 +13,7 @@
 //! Auth, dispatch, and the JSON-RPC / WS routes come from the spine
 //! (`fuz_actions::perform_action` plus the route states built in `main.rs`).
 //! `App.realtime` is the sole connection-tracking surface; it drives the
-//! `broadcast` shim called from `filer.rs` and `project_manager.rs`, and
+//! `broadcast` shim called from `filer/` and `project_manager.rs`, and
 //! `pty_manager.rs`, `job_manager.rs`, and `transcription/` send a terminal's
 //! and a job's notifications through it to the owning account only
 //! (`send_to_account`).
@@ -172,7 +172,7 @@ impl App {
     ///
     /// Shim over `App.realtime`. The spine WS handler registers
     /// connections in `App.realtime` (`Arc<fuz_realtime::ConnectionRegistry>`);
-    /// call sites (`filer::app_broadcast`,
+    /// call sites (`filer::manager::app_broadcast`,
     /// `project_manager::broadcast_project_changed`)
     /// broadcast through this shim. Terminal output and job state are
     /// per-account, so `pty_manager` and `job_manager` use
