@@ -404,7 +404,9 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
   nothing else under a registry's root is indexed by the registry's
   project — an unregistered directory only as its own project, once a path
   in it is opened — and a new file where nothing is indexed is refused.
-- **Chats, prompts, and terminal presets** live in page memory, lost on reload.
+- **Chats, prompts, terminal presets, and file drafts** live in page
+  memory, lost on reload — a draft outlives its project's close (dormant),
+  not the page.
 - **WebSocket auth** at upgrade only, with event-driven revocation; at most
   50 sockets per account; no batch JSON-RPC.
 - **Message caps** — 16 MiB per JSON-RPC message, 32 MiB outbound queue per

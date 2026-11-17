@@ -37,7 +37,7 @@ export const SAVE_ERROR_RECREATES =
  */
 export const SAVE_ERROR_CHANGED_AGAIN = 'not saved — the file changed on disk again';
 
-/** Label of the history entry holding a file's draft. */
+/** Label of a file's draft as the views list it with the history (`DiskfileEditorState.draft_entry`). */
 export const HISTORY_LABEL_UNSAVED_EDIT = 'Unsaved edit';
 /** Label of a history entry recording a disk state. */
 export const HISTORY_LABEL_DISK_CHANGE = 'Disk change';
@@ -142,7 +142,10 @@ export class DiskfileEditorState {
 	/** Set by `dispose` — a disposed state takes no edits and saves nothing. */
 	#disposed: boolean = $state.raw(false);
 
-	/** The history entry the editor shows, `null` for the disk content. */
+	/**
+	 * The entry the editor shows — a history entry's id, or the draft's
+	 * (`draft_entry`) — `null` for the disk content.
+	 */
 	selected_history_entry_id: Uuid | null = $state.raw(null);
 
 	/** Whether the editor shows content the user chose — typed, or picked from the history. */
@@ -366,7 +369,7 @@ export class DiskfileEditorState {
 	readonly unsaved_history_entries: Array<HistoryEntry> = $derived(
 		this.draft_entry ? [this.draft_entry] : []
 	);
-	/** The id of the file's draft — its unsaved-edit entry — if it has one. */
+	/** The id of the file's draft (and so of `draft_entry`), if it has one. */
 	readonly unsaved_edit_entry_id: Uuid | null = $derived(this.draft?.id ?? null);
 
 	readonly has_history = $derived(this.content_history.length > 1);
@@ -412,10 +415,11 @@ export class DiskfileEditorState {
 	);
 
 	/**
-	 * The editor's text: the selected history entry's, else the disk content.
-	 * Always `''` when the content isn't loaded — a draft or earlier text in history
-	 * (from before the file grew past the index cap, say) isn't what's on
-	 * disk, so the read-only editor never shows or copies it.
+	 * The editor's text: the selected entry's (a history entry, or the
+	 * draft), else the disk content. Always `''` when the content isn't
+	 * loaded — a draft or earlier text in the history (from before the file
+	 * grew past the index cap, say) isn't what's on disk, so the read-only
+	 * editor never shows or copies it.
 	 */
 	get current_content(): string {
 		if (!this.content_loaded) return '';

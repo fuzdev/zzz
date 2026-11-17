@@ -2277,7 +2277,9 @@ Population, per capability:
   focus and all, and dropped only if the reopen is refused or lands on
   another root), files it no longer
   indexes are pruned (a file with a draft or a tab stays, flagged deleted
-  on disk, or `uncovered` when the index no longer covers it), and running terminals it doesn't list become `lost`. Notifications
+  on disk, or `uncovered` when the index no longer covers it — dormant if
+  no open root holds it), and running terminals it doesn't list become
+  `lost`. Notifications
   sent while the socket was down aren't replayed, so terminal output from that
   window is missing (the terminal view says so). See § File Editing.
 - **16 MiB messages** — a JSON-RPC message is capped at 16 MiB on both
