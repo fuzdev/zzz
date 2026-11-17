@@ -71,9 +71,8 @@ export const format_project_fallback = (fallback: ProjectFallbackJson): string =
 };
 
 /**
- * Where an open of `path` landed and why, for the notice after it —
- * `Opened /dev/zzz/src, rooted at /dev/zzz/ — a git checkout; /dev/repos.toml
- * lists no cloned repo holding it.`
+ * Where an open of `path` landed and why, for the notice after it, e.g.
+ * `Opened /dev/zzz/src, rooted at /dev/zzz/ — a git checkout; /dev/repos.toml lists no cloned repo holding it.`
  */
 export const format_project_opened = (
 	path: string,
