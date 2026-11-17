@@ -169,28 +169,28 @@ describe('disk change detection', () => {
 		assert.strictEqual(history.entries.length, count_after_first);
 	});
 
-	test('marks existing entry as disk change when content matches', () => {
-		// Add an entry to history that isn't initially marked as a disk change
+	test('a draft the disk now holds becomes the disk state', () => {
 		const history = editor_state.history;
-		const entry = history.add_entry('New content on disk', {
-			is_disk_change: false,
-			is_unsaved_edit: true // Initially mark as unsaved
-		});
+		editor_state.current_content = 'New content on disk';
+		const draft_id = editor_state.unsaved_edit_entry_id;
+		assert.ok(draft_id);
+		assert.strictEqual(editor_state.selected_history_entry_id, draft_id);
 
-		// Verify the entry isn't marked as a disk change yet
-		assert.ok(!entry.is_disk_change);
-		assert.ok(entry.is_unsaved_edit);
-
-		// Make a disk change that matches the existing entry's content
+		// Make a disk change that matches the draft's content
 		test_diskfile.content = 'New content on disk';
 		editor_state.check_disk_changes();
 
-		// The existing entry should now be marked as a disk change and not an unsaved edit
+		// the draft is gone, recorded as the disk change, and the editor shows it
+		assert.isFalse(app.diskfiles.drafts.has(test_diskfile.path));
 		assert.ok(history.entries[0]!.is_disk_change);
-		assert.ok(!history.entries[0]!.is_unsaved_edit);
+		assert.strictEqual(history.entries[0]!.content, 'New content on disk');
+		assert.strictEqual(history.entries[0]!.id, draft_id, 'the row keeps its identity');
+		assert.strictEqual(editor_state.selected_history_entry_id, draft_id);
+		assert.isFalse(editor_state.content_was_modified_by_user);
+		assert.isFalse(editor_state.disk_conflict);
 
-		// No new entry should be created
-		assert.strictEqual(history.entries.length, 2); // Original + our added entry
+		// the original and the disk change
+		assert.strictEqual(history.entries.length, 2);
 	});
 });
 

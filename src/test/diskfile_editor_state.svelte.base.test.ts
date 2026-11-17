@@ -62,7 +62,7 @@ describe('initialization', () => {
 
 		// The initial entry should contain the original content
 		assert.strictEqual(history.entries[0]!.content, TEST_CONTENT);
-		assert.ok(!history.entries[0]!.is_unsaved_edit);
+		assert.ok(!history.entries[0]!.is_discarded_edit);
 		assert.ok(!history.entries[0]!.is_disk_change);
 		assert.ok(history.entries[0]!.is_original_state);
 	});
@@ -143,10 +143,12 @@ describe('content editing', () => {
 		// Selection should still be active
 		assert.ok(editor_state.selected_history_entry_id !== null);
 
-		// Content should be updated in the selected entry
-		const updated_entry = history.find_entry_by_id(editor_state.selected_history_entry_id);
-		assert.isDefined(updated_entry);
+		// Content should be updated in the selected entry — the draft, not the history
+		const updated_entry = editor_state.selected_history_entry;
+		assert.ok(updated_entry);
+		assert.strictEqual(updated_entry.id, selected_id);
 		assert.strictEqual(updated_entry.content, 'Second edit');
+		assert.isUndefined(history.find_entry_by_id(selected_id));
 	});
 
 	test('editing to match original content clears user modified flag', () => {
@@ -315,14 +317,11 @@ describe('file management', () => {
 		assert.isFalse(editor_state.content_was_modified_by_user);
 		assert.isFalse(editor_state.has_unsaved_edits);
 		assert.isNull(editor_state.unsaved_edit_entry_id);
-		// the draft's text stays restorable
+		// the draft's text stays restorable, in the history under its id
+		assert.isFalse(app.diskfiles.drafts.has(test_diskfile.path));
 		const set_aside = editor_state.history.find_entry_by_id(draft_id);
 		assert.ok(set_aside);
-		assert.include(set_aside, {
-			content: 'Edited content',
-			is_unsaved_edit: false,
-			is_discarded_edit: true
-		});
+		assert.include(set_aside, { content: 'Edited content', is_discarded_edit: true });
 	});
 
 	test('reset_view shows the draft if there is one, else the disk content', () => {
@@ -457,7 +456,7 @@ describe('saving changes', () => {
 		// Check history entry
 		const history = editor_state.history;
 		assert.strictEqual(history.entries[0]!.content, 'Content to be saved');
-		assert.ok(!history.entries[0]!.is_unsaved_edit);
+		assert.isNull(editor_state.draft);
 		assert.ok(!history.entries[0]!.is_disk_change);
 	});
 });
@@ -590,8 +589,7 @@ describe('saving failures and concurrent edits', () => {
 		// the saved content is recorded, the newer edit stays the live unsaved entry
 		const saved = history.entries.find((entry) => entry.content === 'first');
 		assert.ok(saved);
-		assert.isFalse(saved.is_unsaved_edit);
-		const unsaved = history.entries.filter((entry) => entry.is_unsaved_edit);
+		const unsaved = editor_state.unsaved_history_entries;
 		assert.strictEqual(unsaved.length, 1);
 		assert.strictEqual(unsaved[0]!.content, 'first, then more');
 		assert.strictEqual(editor_state.unsaved_edit_entry_id, unsaved[0]!.id);
@@ -599,7 +597,7 @@ describe('saving failures and concurrent edits', () => {
 
 		// further typing keeps updating that entry rather than adding more
 		editor_state.current_content = 'first, then even more';
-		assert.strictEqual(history.entries.filter((entry) => entry.is_unsaved_edit).length, 1);
+		assert.strictEqual(editor_state.unsaved_history_entries.length, 1);
 	});
 
 	test('a save with no edits while in flight still settles to the saved entry', async () => {
@@ -729,8 +727,7 @@ describe('saving failures and concurrent edits', () => {
 		// the saved content is a saved entry, and no unsaved edit lingers
 		const saved = history.entries.filter((entry) => entry.content === 'saved');
 		assert.strictEqual(saved.length, 1);
-		assert.isFalse(saved[0]!.is_unsaved_edit);
-		assert.isFalse(history.has_unsaved_edits);
+		assert.isFalse(editor_state.has_unsaved_edits);
 		assert.isNull(editor_state.unsaved_edit_entry_id);
 	});
 
@@ -784,7 +781,7 @@ describe('saving failures and concurrent edits', () => {
 		assert.strictEqual(editor_state.current_content, 'saved');
 		const selected = editor_state.selected_history_entry;
 		assert.ok(selected);
-		assert.isFalse(selected.is_unsaved_edit);
+		assert.ok(history.find_entry_by_id(selected.id), 'a history entry, not a draft');
 		assert.strictEqual(selected.content, 'saved');
 		assert.ok(history.entries.some((entry) => entry.content === 'external'));
 	});
@@ -843,7 +840,6 @@ describe('saving failures and concurrent edits', () => {
 			// the saved file's history holds the save, with no lingering unsaved edit
 			const saved = editor_state.history.entries.filter((entry) => entry.content === 'edited');
 			assert.strictEqual(saved.length, 1);
-			assert.isFalse(saved[0]!.is_unsaved_edit);
 			assert.isFalse(editor_state.has_unsaved_edits);
 			assert.strictEqual(editor_state.current_content, 'edited');
 			// the other file is untouched

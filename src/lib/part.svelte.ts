@@ -276,9 +276,7 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 		if (!this.path) return null;
 		const diskfile = this.app.diskfiles.peek(this.path);
 		if (!diskfile?.deleted_on_disk) return diskfile;
-		return this.app.diskfiles.find_editor_state(diskfile.path)?.has_unsaved_edits
-			? diskfile
-			: undefined;
+		return this.app.diskfiles.drafts.has(diskfile.path) ? diskfile : undefined;
 	});
 
 	/**
@@ -290,10 +288,10 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	readonly draft_status: 'unsaved' | 'conflict' | 'deleted' | null = $derived.by(() => {
 		const { diskfile } = this;
 		if (!diskfile) return null;
-		const editor_state = this.app.diskfiles.find_editor_state(diskfile.path);
-		if (!editor_state?.has_unsaved_edits) return null;
+		const draft = this.app.diskfiles.drafts.get(diskfile.path);
+		if (!draft) return null;
 		if (diskfile.deleted_on_disk) return 'deleted';
-		return editor_state.disk_conflict ? 'conflict' : 'unsaved';
+		return draft.status === 'stale' ? 'conflict' : 'unsaved';
 	});
 
 	// The current relative path value for display in the XML path attribute
@@ -314,10 +312,7 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 		const { diskfile } = this;
 		if (!diskfile) return undefined;
 		if (!diskfile.content_loaded) return null;
-		return (
-			this.app.diskfiles.find_editor_state(diskfile.path)?.history.draft_entry?.content ??
-			diskfile.content
-		);
+		return this.app.diskfiles.drafts.get(diskfile.path)?.text ?? diskfile.content;
 	}
 
 	/** The file's `Diskfile.content_status`, `undefined` when there's no file at `path`. */

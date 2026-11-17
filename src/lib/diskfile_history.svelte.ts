@@ -27,7 +27,6 @@ export const HistoryEntry = object({
 	content: string,
 	label: string,
 	is_disk_change: with_default(boolean, false),
-	is_unsaved_edit: with_default(boolean, false), // Indicates entries containing unsaved user edits
 	is_original_state: with_default(boolean, false), // Indicates if this entry represents the original disk state
 	/** An unsaved edit that was set aside unsaved — kept so its text can still be restored. */
 	is_discarded_edit: with_default(boolean, false)
@@ -63,23 +62,25 @@ export type DiskfileHistoryOptions = CellOptions<typeof DiskfileHistoryJson>;
 /** Options for `DiskfileHistory.add_entry`. */
 export interface DiskfileHistoryAddEntryOptions {
 	is_disk_change?: boolean;
-	is_unsaved_edit?: boolean;
 	is_original_state?: boolean;
 	is_discarded_edit?: boolean;
 	label?: string;
 	created?: number;
+	/** The new entry's id — say a draft's, becoming an entry, so a view keeps its row. */
+	id?: Uuid;
 	/** An entry trimming must keep, e.g. the one an editor shows. */
 	keep_id?: Uuid | null;
 }
 
 /**
- * Stores edit history for a single diskfile, newest first. Owned by the file's
- * app-level `DiskfileEditorState`, which keeps at most one unsaved edit in it.
+ * Stores the disk, saved, and discarded states of a single diskfile, newest
+ * first. Owned by the file's app-level `DiskfileEditorState`. The file's
+ * draft isn't here — it's in `Diskfiles.drafts`.
  *
  * Capped by `max_entries` and `max_content_length`: adding or growing an entry
  * drops the oldest entries past either cap (discarded edits included), but
- * never an unsaved edit, the newest saved state, or the caller's `keep_id` —
- * so the caps can be exceeded only by those.
+ * never the newest saved state or the caller's `keep_id` — so the caps can
+ * be exceeded only by those.
  */
 export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 	path: DiskfilePath = $state.raw()!;
@@ -94,14 +95,6 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 	 */
 	readonly current_entry: HistoryEntry | null = $derived(this.entries[0] ?? null);
 
-	/** The newest entry holding unsaved user edits — the file's draft. */
-	readonly draft_entry: HistoryEntry | null = $derived(
-		this.entries.find((entry) => entry.is_unsaved_edit) ?? null
-	);
-
-	/** Whether any entry holds unsaved user edits. */
-	readonly has_unsaved_edits: boolean = $derived(this.draft_entry !== null);
-
 	constructor(options: DiskfileHistoryOptions) {
 		super(DiskfileHistoryJson, options);
 		this.init();
@@ -109,11 +102,10 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 
 	/**
 	 * Add a new history entry — or return the current one when it's a duplicate:
-	 * the same content, the same kind (an unsaved edit, a discarded edit, or a
-	 * saved state — each defaulting to a saved state when not given), and the
-	 * same `is_disk_change` / `is_original_state` / `label` wherever `options`
-	 * sets them. So adding a saved state never returns a draft or a discarded
-	 * edit that happens to hold its content.
+	 * the same content, the same kind (a discarded edit, or a saved state when
+	 * not given), and the same `is_disk_change` / `is_original_state` /
+	 * `label` wherever `options` sets them. So adding a saved state never
+	 * returns a discarded edit that happens to hold its content.
 	 */
 	add_entry(content: string, options: DiskfileHistoryAddEntryOptions = EMPTY_OBJECT): HistoryEntry {
 		// Don't add duplicate entries with the same content and metadata back-to-back
@@ -125,12 +117,11 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 		}
 
 		const entry: HistoryEntry = {
-			id: create_uuid(),
+			id: options.id ?? create_uuid(),
 			created: options.created ?? Date.now(),
 			content,
 			label: options.label ?? '',
 			is_disk_change: options.is_disk_change ?? false,
-			is_unsaved_edit: options.is_unsaved_edit ?? false,
 			is_original_state: options.is_original_state ?? false,
 			is_discarded_edit: options.is_discarded_edit ?? false
 		};
@@ -141,23 +132,6 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 
 		// the stored proxy, so callers' mutations are reactive
 		return this.find_entry_by_id(entry.id) ?? entry;
-	}
-
-	/**
-	 * Replaces the content of entry `id` and dates it now, moving it to the
-	 * front — how a draft tracks the latest edit.
-	 *
-	 * @returns the entry, or `undefined` if it's gone
-	 */
-	update_entry_content(id: Uuid, content: string): HistoryEntry | undefined {
-		const entry = this.find_entry_by_id(id);
-		if (!entry) return undefined;
-		const new_entries = this.entries.filter((e) => e.id !== id);
-		entry.content = content;
-		entry.created = Math.max(Date.now(), entry.created);
-		insert_sorted(new_entries, entry);
-		this.entries = this.#trim(new_entries, id);
-		return entry;
 	}
 
 	/**
@@ -174,7 +148,7 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 
 	/**
 	 * Drops the oldest entries until `entries` fits `max_entries` and
-	 * `max_content_length`, sparing unsaved edits, the newest saved state, and `keep_id`.
+	 * `max_content_length`, sparing the newest saved state and `keep_id`.
 	 */
 	#trim(entries: Array<HistoryEntry>, keep_id: Uuid | null): Array<HistoryEntry> {
 		let count = entries.length;
@@ -182,14 +156,12 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 		for (const entry of entries) length += entry.content.length;
 		if (count <= this.max_entries && length <= this.max_content_length) return entries;
 
-		const newest_saved = entries.find(
-			(entry) => !entry.is_unsaved_edit && !entry.is_discarded_edit
-		);
+		const newest_saved = entries.find((entry) => !entry.is_discarded_edit);
 		const removed: Set<HistoryEntry> = new Set();
 		for (let i = entries.length - 1; i >= 0; i--) {
 			if (count <= this.max_entries && length <= this.max_content_length) break;
 			const entry = entries[i]!; // loop bounds guarantee
-			if (entry.is_unsaved_edit || entry === newest_saved || entry.id === keep_id) continue;
+			if (entry === newest_saved || entry.id === keep_id) continue;
 			removed.add(entry);
 			count--;
 			length -= entry.content.length;
@@ -203,7 +175,6 @@ export class DiskfileHistory extends Cell<typeof DiskfileHistoryJson> {
 	 */
 	#has_same_metadata(entry: HistoryEntry, options: DiskfileHistoryAddEntryOptions): boolean {
 		return (
-			entry.is_unsaved_edit === (options.is_unsaved_edit ?? false) &&
 			entry.is_discarded_edit === (options.is_discarded_edit ?? false) &&
 			entry.is_disk_change === (options.is_disk_change ?? entry.is_disk_change) &&
 			entry.is_original_state === (options.is_original_state ?? entry.is_original_state) &&

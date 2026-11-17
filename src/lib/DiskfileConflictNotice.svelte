@@ -61,7 +61,10 @@
 
 	// what the user has besides the disk: their draft, or an older version they picked
 	const yours = $derived(
-		editor_state.selected_history_entry?.is_unsaved_edit ? 'your draft' : 'your version'
+		editor_state.selected_history_entry_id !== null &&
+			editor_state.selected_history_entry_id === editor_state.unsaved_edit_entry_id
+			? 'your draft'
+			: 'your version'
 	);
 
 	/**

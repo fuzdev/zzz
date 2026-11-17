@@ -35,6 +35,7 @@ import {
 	to_diskfile_unloaded_message,
 	to_innermost_unindexed_part,
 	to_file_directories,
+	to_innermost_root,
 	to_relative_path,
 	type FileIndexUnindexedPart
 } from './diskfile_helpers.ts';
@@ -44,6 +45,7 @@ import { Cell, type CellOptions } from './cell.svelte.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
+import { Drafts } from './drafts.svelte.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { DiskfileIndex } from './diskfile_index.svelte.ts';
@@ -108,6 +110,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly #editor_states: SvelteMap<DiskfilePath, DiskfileEditorState> = new SvelteMap();
 
 	/**
+	 * The files' drafts, by path — apart from the cells, so a draft outlives
+	 * its file's cell and editing state. A draft keeps a file the index no
+	 * longer has (`#is_held`).
+	 */
+	readonly drafts: Drafts = new Drafts(this);
+
+	/**
 	 * The metadata of every file on disk the index reports — the source of
 	 * truth for what's on disk here. A file has a cell (`cells`) only while
 	 * something needs one; the cells kept after leaving the index
@@ -166,11 +175,12 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	});
 
 	/**
-	 * Whether any file is `dirty` (see `DiskfileEditorState.dirty`: it has a
-	 * draft, or its editor shows other content than the disk's) — edits that
-	 * live only in memory, lost on a reload.
+	 * Whether any file has a draft or is `dirty` (see
+	 * `DiskfileEditorState.dirty`: its editor shows other content than the
+	 * disk's) — edits that live only in memory, lost on a reload.
 	 */
 	readonly has_unsaved_changes: boolean = $derived.by(() => {
+		if (this.drafts.size) return true;
 		for (const editor_state of this.#editor_states.values()) {
 			if (editor_state.dirty) return true;
 		}
@@ -282,8 +292,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		diskfile.dispose();
 	}
 
-	/** Drops every cell and record. */
+	/** Drops every cell, record, and draft. */
 	#clear(): void {
+		this.drafts.clear();
 		for (const diskfile of Array.from(this.#cells.values())) this.#remove_cell(diskfile, false);
 		for (const record of Array.from(this.index.values())) this.index.delete(record.id);
 	}
@@ -341,8 +352,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		// a stale `diskfile` (gone from `cells`) never gets the live cell's state
 		if (existing?.diskfile === diskfile) return existing;
 		return create_detached(() => {
-			const editor_state = new DiskfileEditorState({ app: this.app, diskfile });
-			if (this.peek(diskfile.path) === diskfile) {
+			const throwaway = this.peek(diskfile.path) !== diskfile;
+			const editor_state = new DiskfileEditorState({ app: this.app, diskfile, throwaway });
+			if (!throwaway) {
 				this.#editor_states.set(diskfile.path, editor_state);
 			} else {
 				// unmanaged, so nothing would dispose it — keep it out of the cell registry
@@ -948,10 +960,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * (`release_uncovered`), until both are gone (`release_if_unneeded`).
 	 */
 	#is_held(diskfile: Diskfile): boolean {
-		return (
-			!!this.#editor_states.get(diskfile.path)?.has_unsaved_edits ||
-			this.editor.tabs.by_path.has(diskfile.path)
-		);
+		return this.drafts.has(diskfile.path) || this.editor.tabs.by_path.has(diskfile.path);
 	}
 
 	/**
@@ -1519,6 +1528,23 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const editor_state = diskfile && this.get_editor_state(diskfile);
 		this.release(path, holder);
 		return editor_state;
+	}
+
+	/**
+	 * The hash of the latest content known to be on disk at `path`: its
+	 * editing state's (`DiskfileEditorState.last_seen_disk_hash`, which also
+	 * moves when our own save lands), else its cell's last read, else `null`.
+	 * What a draft's `base_hash` is weighed against (`Draft.status`).
+	 */
+	to_known_disk_hash(path: DiskfilePath): string | null {
+		const editor_state = this.#editor_states.get(path);
+		if (editor_state) return editor_state.last_seen_disk_hash;
+		return this.peek(path)?.content_hash ?? null;
+	}
+
+	/** The innermost of `indexed_roots` holding `path`, `null` under none. */
+	to_innermost_root(path: DiskfilePath): DiskfileDirectoryPath | null {
+		return to_innermost_root(path, this.indexed_roots) as DiskfileDirectoryPath | null;
 	}
 
 	/**

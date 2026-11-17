@@ -1245,7 +1245,8 @@ their source offsets, not the `href`, since mdz can rewrite a root-relative
 injected component renders, is left alone — and follows a click from the
 link's reference.
 
-The frontend file pipeline is six Cells plus a per-file editing-state class:
+The frontend file pipeline is six Cells plus a per-file editing-state class
+and the drafts store:
 
 - `Diskfiles` — `IndexedCollection<Diskfile>` (`by_path` single index,
   `immutable_key` since a path is a diskfile's disk identity); its
@@ -1267,14 +1268,28 @@ The frontend file pipeline is six Cells plus a per-file editing-state class:
   permanent tab — at once if its `filer_change` already arrived, else when
   it arrives (under the path as the backend normalizes it), unless the user
   selects another file or tab or closes its project first
-- `DiskfileHistory` — one file's edit history (disk changes, the draft,
-  saved and discarded edits), newest first; capped at 100 entries and 16M
-  characters of content, trimming the oldest but never the draft, the
-  newest saved state, or the entry an editor shows — in-memory only, lost
+- `Drafts` (`Diskfiles.drafts`, plain classes, not Cells) — each file's
+  draft, keyed by path: its text, the innermost root it was made under
+  (`root`, recorded, not part of the key, since a path can sit under
+  several open roots), and `base_hash`, the BLAKE3 of the disk content it's
+  based on (what a save sends as `expected_hash`). It's kept apart from the
+  `Diskfile`, which mirrors the disk, and from the editing state, so it can
+  outlive both (for now a draft still keeps its cell). Its `status` is
+  derived, never set: `bound`, `stale` (the
+  disk's hash isn't `base_hash`, or the editing state saw the disk move),
+  or `deleted` (the file is deleted on disk). In-memory only, lost on
+  reload
+- `DiskfileHistory` — one file's disk, saved, and discarded states (not
+  the draft), newest first; capped at 100 entries and 16M characters of
+  content (the draft not counted), trimming the oldest but never the
+  newest saved state or the entry an editor shows — in-memory only, lost
   on reload
 - `DiskfileEditorState` (plain class, not a Cell) — one file's editing
-  state, like a VS Code text model: the selected history entry
-  (`current_content`), the draft, the conflict flag, and `save_changes()`.
+  state, like a VS Code text model: the selected history entry or the draft
+  (`current_content`), the conflict flag, and `save_changes()`. It reads and
+  writes the file's draft in `Drafts`, and lists it with the history
+  (`content_history`); a state made for a file that already has a draft
+  shows it.
   `Diskfiles.get_editor_state` creates it on first use, detached from the
   calling component (see below), and keeps it until the diskfile is removed.
   The `/files` editor, file-part editors, and tabs are views over it, so a
@@ -1285,7 +1300,7 @@ Save round trip:
 
 ```
 User edits → DiskfileEditorState.current_content setter
-  → the file's draft (one unsaved-edit entry in its DiskfileHistory)
+  → the file's draft (Diskfiles.drafts, based on the disk content's hash)
 Save → save_changes() → app.api.diskfile_update({path, content, expected_hash})
   → ScopedFs::write_file (compares the file's bytes to expected_hash, then
     writes; the response is the written bytes' hash — no content echo)
@@ -1388,7 +1403,10 @@ mounted — so a file reopens on the disk content, never text a save would
 write back over an external change. A clean editor follows the disk. Editing
 keeps one draft per file, updated in place and dated to the latest edit;
 editing from another entry picked in the history starts a new draft and sets
-the previous one aside as a _discarded_ entry. A draft itself is only ever
+the previous one aside as a _discarded_ entry (under the draft's id, so its
+history row stays). A draft is based on the disk content it started from
+(`base_hash`), and rebased when our own save lands under it (typing
+continued past the save) or the user writes over the disk. A draft itself is only ever
 deleted by saving it, editing it back to the disk content, or the explicit
 "clear unsaved edits"; discarded entries are ordinary history, so the
 history caps and "clear history" can drop them. Saving records a saved-state
@@ -1428,7 +1446,9 @@ a textarea reads a CRLF file's line breaks as `\n`, so its first edit saves
 it with `\n` throughout, with no indicator.
 
 **Conflicts.** A disk change under the user's content (the draft, or a
-picked older entry) keeps that content and sets `disk_conflict`. While the
+picked older entry) keeps that content and sets `disk_conflict`; a draft
+whose `base_hash` isn't the disk's is stale too, even one made before this
+editing state (it outlived an earlier one). While the
 editor shows content that differs from the disk (`has_conflict`), saving is
 paused: Ctrl+S (which moves focus to the notice) and the save button write
 nothing, and a notice offers **overwrite with your draft**

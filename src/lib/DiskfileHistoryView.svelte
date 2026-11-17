@@ -65,7 +65,7 @@
 					<span>{format_time(new Date(entry.created))}</span>
 					{#if entry.is_disk_change}
 						<span class="ml_xl">from disk</span>
-					{:else if entry.is_unsaved_edit}
+					{:else if entry.id === editor_state.unsaved_edit_entry_id}
 						<span class="ml_xl">unsaved</span>
 					{:else if entry.is_discarded_edit}
 						<span class="ml_xl">discarded</span>

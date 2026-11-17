@@ -14,6 +14,7 @@ import {
 } from './diskfile_helpers.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import { DiskfileHistory, type HistoryEntry } from './diskfile_history.svelte.ts';
+import type { Draft } from './drafts.svelte.ts';
 import { to_default_markdown_view_mode, type MarkdownViewMode } from './markdown_view_mode.ts';
 
 /** `save_error` for a save that found the file gone — its delete not reported yet. */
@@ -49,30 +50,8 @@ const to_diff_percent = (diff: number, original: number): number => {
 	return Math.round((diff / original) * 100);
 };
 
-/**
- * Removes the unsaved-edit entry `entry_id` once `saved_content` is written,
- * if it still holds exactly that content — not if it was edited since, if a
- * disk-change broadcast already claimed it as the disk state, or if it's
- * `keep_entry_id`.
- *
- * @returns whether the entry was removed
- * @mutates history - splices the entry out of `entries`
- */
-const remove_superseded_unsaved_entry = (
-	history: DiskfileHistory,
-	entry_id: Uuid | null,
-	saved_content: string,
-	keep_entry_id: Uuid | null = null
-): boolean => {
-	if (entry_id === null || entry_id === keep_entry_id) return false;
-	const entry = history.find_entry_by_id(entry_id);
-	if (!entry?.is_unsaved_edit || entry.content !== saved_content) return false;
-	return history.remove_entry(entry_id);
-};
-
-/** Whether `entry` records a saved or disk state — not the draft, nor a discarded edit. */
-const is_saved_state = (entry: HistoryEntry): boolean =>
-	!entry.is_unsaved_edit && !entry.is_discarded_edit;
+/** Whether `entry` records a saved or disk state — not a discarded edit. */
+const is_saved_state = (entry: HistoryEntry): boolean => !entry.is_discarded_edit;
 
 /** What an overwrite is checked against, taken when the user asks for it — see `save_changes`. */
 interface OverwriteBase {
@@ -128,10 +107,12 @@ export interface DiskfileSaveOptions {
  *   history's original state — it's not a change on disk.
  * - The editor shows the selected history entry (`current_content`), or the
  *   disk content when none is selected. A clean editor follows the disk.
- * - Editing keeps the file's one draft: a single unsaved-edit entry, updated
- *   in place and re-dated on each edit. Editing from another entry (an older
- *   state picked from the history) starts a new draft and sets the old one
- *   aside as a discarded-edit entry, so its text stays restorable.
+ * - Editing keeps the file's one draft (`draft`, in `Diskfiles.drafts` — not
+ *   in the history, so it outlives this state and the file's cell), updated
+ *   in place and re-dated on each edit. The views list it with the history
+ *   (`content_history`, as `draft_entry`). Editing from another entry (an
+ *   older state picked from the history) starts a new draft and sets the old
+ *   one aside as a discarded-edit entry, so its text stays restorable.
  * - When the disk changes under a draft, or under a picked entry, the edit is
  *   kept and `has_conflict` is set: saving stops until the user chooses to
  *   overwrite (`save_changes({overwrite: true})`) or keep the disk version
@@ -147,8 +128,14 @@ export interface DiskfileSaveOptions {
 export class DiskfileEditorState {
 	readonly app: Frontend;
 	readonly diskfile: Diskfile;
-	/** The file's edit history — owned by this state, disposed with it. */
+	/**
+	 * The file's history of disk, saved, and discarded states — owned by this
+	 * state, disposed with it. Never holds the draft (`draft`).
+	 */
 	readonly history: DiskfileHistory;
+
+	/** Set by `dispose` — a disposed state takes no edits and saves nothing. */
+	#disposed: boolean = $state.raw(false);
 
 	/** The history entry the editor shows, `null` for the disk content. */
 	selected_history_entry_id: Uuid | null = $state.raw(null);
@@ -177,7 +164,9 @@ export class DiskfileEditorState {
 	 * picked entry), so that content predates what's on disk. Surfaced, and
 	 * saving blocked, as `has_conflict` while the editor shows something else
 	 * than the disk. Cleared by saving with `overwrite`, `discard_draft`,
-	 * or the editor settling on the disk content.
+	 * or the editor settling on the disk content. A draft is also stale when
+	 * its `base_hash` isn't the disk's (`Draft.status`) — say for a draft
+	 * that outlived an earlier editing state — which `has_conflict` counts too.
 	 */
 	disk_conflict: boolean = $state.raw(false);
 
@@ -229,6 +218,34 @@ export class DiskfileEditorState {
 	// Basic derived states
 	readonly original_content: string | null = $derived.by(() => this.diskfile.content);
 	readonly path: DiskfilePath = $derived.by(() => this.diskfile.path);
+
+	/**
+	 * The file's draft (`Diskfiles.drafts`), `null` when it has none — and
+	 * always for a disposed state, so a throwaway one (`Diskfiles.get_editor_state`
+	 * for a stale cell) never shows, saves, or discards the live file's draft.
+	 */
+	readonly draft: Draft | null = $derived.by(() =>
+		this.#disposed ? null : (this.app.diskfiles.drafts.get(this.path) ?? null)
+	);
+
+	/**
+	 * The draft as a history entry, for the views that list it with the
+	 * history (`content_history`) — made from `draft`, never stored. Its id
+	 * is the draft's.
+	 */
+	readonly draft_entry: HistoryEntry | null = $derived.by(() => {
+		const { draft } = this;
+		if (!draft) return null;
+		return {
+			id: draft.id,
+			created: draft.updated,
+			content: draft.text,
+			label: HISTORY_LABEL_UNSAVED_EDIT,
+			is_disk_change: false,
+			is_original_state: false,
+			is_discarded_edit: false
+		};
+	});
 	/**
 	 * Whether the file's content is loaded (see `Diskfile.content_loaded`).
 	 * While it isn't — still loading, or not loadable — the editor is
@@ -272,7 +289,9 @@ export class DiskfileEditorState {
 	 * predates (see `disk_conflict`). While true, `save_changes` refuses unless
 	 * asked to `overwrite`.
 	 */
-	readonly has_conflict: boolean = $derived(this.disk_conflict && this.has_changes);
+	readonly has_conflict: boolean = $derived(
+		(this.disk_conflict || this.draft?.status === 'stale') && this.has_changes
+	);
 	/**
 	 * Whether the views show the disk content rather than the user's
 	 * (`shown_content`), read-only — asked for with `set_showing_disk` during
@@ -297,28 +316,40 @@ export class DiskfileEditorState {
 	 * and the views show the user's content, not the disk's (`showing_disk`).
 	 * While false, setting `current_content` is ignored.
 	 */
-	readonly can_edit: boolean = $derived(this.content_loaded && !this.showing_disk);
+	readonly can_edit: boolean = $derived(
+		this.content_loaded && !this.showing_disk && !this.#disposed
+	);
 
 	// History-related derived states
-	readonly selected_history_entry: HistoryEntry | null = $derived.by(() =>
-		this.selected_history_entry_id
-			? (this.history.find_entry_by_id(this.selected_history_entry_id) ?? null)
-			: null
-	);
-	readonly content_history: Array<HistoryEntry> = $derived.by(() => this.history.entries);
-	readonly saved_history_entries: Array<HistoryEntry> = $derived(
-		this.content_history.filter((entry) => !entry.is_unsaved_edit)
-	);
+	readonly selected_history_entry: HistoryEntry | null = $derived.by(() => {
+		const id = this.selected_history_entry_id;
+		if (!id) return null;
+		const { draft_entry } = this;
+		if (draft_entry?.id === id) return draft_entry;
+		return this.history.find_entry_by_id(id) ?? null;
+	});
+	/** The history with the draft (`draft_entry`) among it, newest first. */
+	readonly content_history: Array<HistoryEntry> = $derived.by(() => {
+		const { entries } = this.history;
+		const { draft_entry } = this;
+		if (!draft_entry) return entries;
+		const merged = entries.slice();
+		let index = 0;
+		while (index < merged.length && merged[index]!.created > draft_entry.created) index++;
+		merged.splice(index, 0, draft_entry);
+		return merged;
+	});
+	/** The history's entries — every one but the draft. */
+	readonly saved_history_entries: Array<HistoryEntry> = $derived.by(() => this.history.entries);
+	/** The draft as the one unsaved entry, or none. */
 	readonly unsaved_history_entries: Array<HistoryEntry> = $derived(
-		this.content_history.filter((entry) => entry.is_unsaved_edit)
+		this.draft_entry ? [this.draft_entry] : []
 	);
 	/** The id of the file's draft — its unsaved-edit entry — if it has one. */
-	readonly unsaved_edit_entry_id: Uuid | null = $derived.by(
-		() => this.history.draft_entry?.id ?? null
-	);
+	readonly unsaved_edit_entry_id: Uuid | null = $derived(this.draft?.id ?? null);
 
 	readonly has_history = $derived(this.content_history.length > 1);
-	readonly has_unsaved_edits = $derived.by(() => this.history.has_unsaved_edits);
+	readonly has_unsaved_edits: boolean = $derived(this.draft !== null);
 	/**
 	 * Whether the file is marked modified (the tab's and explorer's ●): it has a
 	 * draft, or the editor shows something other than the disk content.
@@ -361,7 +392,7 @@ export class DiskfileEditorState {
 
 	/**
 	 * The editor's text: the selected history entry's, else the disk content.
-	 * Always `''` when the content isn't loaded — earlier text in history
+	 * Always `''` when the content isn't loaded — a draft or earlier text in history
 	 * (from before the file grew past the index cap, say) isn't what's on
 	 * disk, so the read-only editor never shows or copies it.
 	 */
@@ -385,10 +416,17 @@ export class DiskfileEditorState {
 		if (value !== shown) this.#apply_edit(value, shown);
 	}
 
-	constructor(options: { app: Frontend; diskfile: Diskfile }) {
+	/**
+	 * @param options.throwaway - a state for a cell no longer at its path
+	 * (`Diskfiles.get_editor_state`, which disposes it), that sees no draft
+	 * from the start, so seeding never shows or drops the live file's draft
+	 */
+	constructor(options: { app: Frontend; diskfile: Diskfile; throwaway?: boolean }) {
 		this.app = options.app;
 		this.diskfile = options.diskfile;
 		this.history = new DiskfileHistory({ app: this.app, json: { path: this.diskfile.path } });
+		// before seeding, so a throwaway never shows — or drops — the live draft
+		if (options.throwaway) this.#disposed = true;
 
 		const { content, content_hash } = this.diskfile;
 		if (content !== null) this.#seed(content, content_hash);
@@ -396,18 +434,36 @@ export class DiskfileEditorState {
 
 	/**
 	 * Takes the file's first loaded content as its original state — at
-	 * construction, or when it lands later (see `check_disk_changes`).
+	 * construction, or when it lands later (see `check_disk_changes`). A
+	 * draft the file already has — it outlived an earlier editing state — is
+	 * shown, and weighed against this content by its `base_hash`.
 	 */
 	#seed(content: string, content_hash: string | null): void {
 		this.last_seen_disk_content = content;
 		this.last_seen_disk_hash = content_hash;
-		this.selected_history_entry_id = this.history.add_entry(content, {
-			is_original_state: true
-		}).id;
+		const original_id = this.history.add_entry(content, { is_original_state: true }).id;
+		const { draft } = this;
+		if (draft?.text === content) {
+			// the disk holds the draft now — nothing is unsaved
+			this.app.diskfiles.drafts.remove(this.path, draft.id);
+			this.selected_history_entry_id = original_id;
+		} else if (draft) {
+			this.selected_history_entry_id = draft.id;
+			this.content_was_modified_by_user = draft.text !== content;
+		} else {
+			this.selected_history_entry_id = original_id;
+		}
 	}
 
-	/** Disposes the history. Called by `Diskfiles` when the diskfile goes away. */
+	/**
+	 * Disposes the history. Called by `Diskfiles` when the diskfile goes
+	 * away, and for a throwaway state (`Diskfiles.get_editor_state`). The
+	 * draft isn't this state's — it stays — and a disposed state sees no
+	 * draft (`draft`), takes no edits, and saves nothing, so a throwaway
+	 * state never touches it.
+	 */
 	dispose(): void {
+		this.#disposed = true;
 		this.#show_disk = false;
 		this.history.dispose();
 	}
@@ -427,17 +483,17 @@ export class DiskfileEditorState {
 	 * @param shown - what the editor showed before the edit
 	 */
 	#apply_edit(content: string, shown: string): void {
-		const { history } = this;
-		const draft = history.draft_entry;
+		const { draft } = this;
+		const { drafts } = this.app.diskfiles;
 
 		// typing into the draft updates it — or drops it, once back at the disk content
 		if (draft && draft.id === this.selected_history_entry_id) {
 			if (content === this.original_content) {
-				history.remove_entry(draft.id);
+				drafts.remove(this.path, draft.id);
 				this.#select_disk_entry();
 				this.#clear_conflict_if_settled();
 			} else {
-				history.update_entry_content(draft.id, content);
+				draft.set_text(content);
 			}
 			return;
 		}
@@ -448,32 +504,44 @@ export class DiskfileEditorState {
 			this.#clear_conflict_if_settled();
 			return;
 		}
-		if (draft?.content === content) {
+		if (draft?.text === content) {
 			this.selected_history_entry_id = draft.id;
 			return;
 		}
 
 		// new text: it becomes the draft, and a previous draft is set aside —
-		// even when it matches an older saved state, it's unsaved in this file
+		// even when it matches an older saved state, it's unsaved in this file.
+		// It's based on the disk content last seen, as the old one was unless
+		// the disk moved under it — then it's stale too, unless it starts from
+		// the disk content
+		const from_disk = shown === this.original_content;
+		const base_hash =
+			draft && !from_disk && draft.base_hash !== this.last_seen_disk_hash
+				? draft.base_hash
+				: this.last_seen_disk_hash;
 		if (draft) this.#set_aside_draft(draft);
-		this.selected_history_entry_id = history.add_entry(content, {
-			label: HISTORY_LABEL_UNSAVED_EDIT,
-			is_unsaved_edit: true
-		}).id;
+		this.selected_history_entry_id = drafts.create(this.path, content, base_hash).id;
 		// a draft started from the disk content is based on it — any conflict was
 		// the set-aside draft's
-		if (shown === this.original_content) this.disk_conflict = false;
+		if (from_disk) this.disk_conflict = false;
 	}
 
 	/**
-	 * Keeps `draft`'s text as a discarded-edit entry instead of an unsaved edit.
-	 *
-	 * @mutates draft - flags it discarded
+	 * Keeps `draft`'s text as a discarded-edit entry in the history — under
+	 * the draft's id, so a view keeps its row — and removes the draft.
 	 */
-	#set_aside_draft(draft: HistoryEntry): void {
-		draft.is_unsaved_edit = false;
-		draft.is_discarded_edit = true;
-		draft.label = HISTORY_LABEL_DISCARDED_EDIT;
+	#set_aside_draft(draft: Draft): void {
+		// kept through the trim it may cause (it's often the oldest) — the
+		// callers move the selection off it right after
+		const entry = this.history.add_entry(draft.text, {
+			id: draft.id,
+			label: HISTORY_LABEL_DISCARDED_EDIT,
+			is_discarded_edit: true,
+			created: draft.updated,
+			keep_id: draft.id
+		});
+		this.app.diskfiles.drafts.remove(this.path, draft.id);
+		if (this.selected_history_entry_id === draft.id) this.selected_history_entry_id = entry.id;
 	}
 
 	/** Selects the newest saved entry holding the disk content, or none (showing the disk content). */
@@ -485,7 +553,7 @@ export class DiskfileEditorState {
 	}
 
 	#clear_conflict_if_settled(): void {
-		if (!this.content_was_modified_by_user && !this.history.has_unsaved_edits) {
+		if (!this.content_was_modified_by_user && !this.draft) {
 			this.disk_conflict = false;
 		}
 	}
@@ -511,8 +579,12 @@ export class DiskfileEditorState {
 		if (disk_content === null) return;
 		if (disk_content === this.last_seen_disk_content) {
 			// the same text is the same bytes, so the same hash — taken when none
-			// was known, for content seeded without a read
-			this.last_seen_disk_hash ??= content_hash;
+			// was known, for content seeded without a read, and by a draft based on it
+			if (this.last_seen_disk_hash === null && content_hash !== null) {
+				const { draft } = this;
+				if (draft && draft.base_hash === null) draft.base_hash = content_hash;
+				this.last_seen_disk_hash = content_hash;
+			}
 			return;
 		}
 		// never loaded until now (nothing can be edited before), so nothing to weigh it against
@@ -523,16 +595,26 @@ export class DiskfileEditorState {
 		this.last_seen_disk_content = disk_content;
 		this.last_seen_disk_hash = content_hash;
 
-		const { history } = this;
-		const draft = history.draft_entry;
+		const { history, draft } = this;
+		const own_write = this.#in_flight_save?.content === disk_content;
 		let disk_entry: HistoryEntry;
-		if (draft?.content === disk_content) {
+		if (draft?.text === disk_content) {
 			// the draft is on disk now — it's the disk state
-			draft.is_unsaved_edit = false;
-			draft.is_disk_change = true;
-			draft.label = HISTORY_LABEL_DISK_CHANGE;
-			disk_entry = draft;
+			disk_entry = history.add_entry(disk_content, {
+				id: draft.id,
+				is_disk_change: true,
+				label: HISTORY_LABEL_DISK_CHANGE,
+				created: draft.updated,
+				keep_id: this.selected_history_entry_id
+			});
+			this.app.diskfiles.drafts.remove(this.path, draft.id);
+			if (this.selected_history_entry_id === draft.id) {
+				this.selected_history_entry_id = disk_entry.id;
+			}
 		} else {
+			// our own write landing, with typing continued past it: the draft is
+			// based on what it wrote
+			if (draft && own_write) draft.base_hash = content_hash;
 			const newest_saved = history.entries.find(is_saved_state);
 			if (newest_saved?.content === disk_content) {
 				newest_saved.is_disk_change = true;
@@ -558,9 +640,7 @@ export class DiskfileEditorState {
 		// our own write landing (typing may have continued past it) resolves any
 		// conflict; any other change leaves the user's content — shown, or a draft
 		// viewed away from — predating the disk
-		this.disk_conflict =
-			this.#in_flight_save?.content !== disk_content &&
-			(this.content_was_modified_by_user || history.has_unsaved_edits);
+		this.disk_conflict = !own_write && (this.content_was_modified_by_user || this.draft !== null);
 	}
 
 	/**
@@ -631,6 +711,7 @@ export class DiskfileEditorState {
 	): Promise<boolean> {
 		// choosing to overwrite shows the content being written
 		if (options?.overwrite) this.#show_disk = false;
+		if (this.#disposed) return Promise.resolve(false);
 		// never write over a file whose content isn't loaded
 		// (`Diskfiles.update` refuses it too)
 		if (!this.content_loaded) {
@@ -689,7 +770,11 @@ export class DiskfileEditorState {
 	#save_base(options: DiskfileSaveOptions | undefined): string | null {
 		if (this.diskfile.deleted_on_disk) return null;
 		if (options?.overwrite && this.diskfile.content_error !== null) return null;
-		return this.last_seen_disk_hash;
+		// an overwrite is of the version shown, whose hash this state has or not
+		if (options?.overwrite) return this.last_seen_disk_hash;
+		// a draft made before this state, on content this state saw without a
+		// hash, still sends the base it was made on
+		return this.last_seen_disk_hash ?? this.draft?.base_hash ?? null;
 	}
 
 	/**
@@ -754,7 +839,7 @@ export class DiskfileEditorState {
 	 * @returns see `save_changes`
 	 */
 	save_draft(options?: DiskfileSaveOptions): Promise<boolean> {
-		const draft = this.history.draft_entry;
+		const { draft } = this;
 		if (draft && draft.id !== this.selected_history_entry_id) {
 			this.set_content_from_history(draft.id);
 		}
@@ -764,7 +849,7 @@ export class DiskfileEditorState {
 	async #save(in_flight_save: InFlightSave): Promise<boolean> {
 		const { diskfile, history } = this;
 		const content_to_save = in_flight_save.content;
-		const unsaved_edit_entry_id = this.unsaved_edit_entry_id;
+		const draft_at_start = this.draft;
 		const last_seen_at_start = this.last_seen_disk_content;
 		const started = Date.now();
 
@@ -826,13 +911,17 @@ export class DiskfileEditorState {
 		// nothing moved while in flight, so the editor settles on the saved content
 		const settled = !disk_moved_on && this.current_content === content_to_save;
 
-		// a still-viewed entry stays put when the editor doesn't settle on the save
-		remove_superseded_unsaved_entry(
-			history,
-			unsaved_edit_entry_id,
-			content_to_save,
-			settled ? null : this.selected_history_entry_id
-		);
+		// the draft saved is done with, if it still holds exactly that content —
+		// not if it was edited since, a disk change already claimed it, or the
+		// editor still shows it without settling on the save
+		if (
+			draft_at_start &&
+			this.draft === draft_at_start &&
+			draft_at_start.text === content_to_save &&
+			(settled || this.selected_history_entry_id !== draft_at_start.id)
+		) {
+			this.app.diskfiles.drafts.remove(this.path, draft_at_start.id);
+		}
 
 		// dated to when the save was issued, so it sorts below later disk changes;
 		// deduped by `add_entry` when a disk-change entry for it is already newest
@@ -841,7 +930,6 @@ export class DiskfileEditorState {
 			history.entries.some((entry) => is_saved_state(entry) && entry.content === content_to_save)
 				? null
 				: history.add_entry(content_to_save, {
-						is_unsaved_edit: false,
 						created: started,
 						keep_id: this.selected_history_entry_id
 					});
@@ -849,8 +937,11 @@ export class DiskfileEditorState {
 		if (!disk_moved_on) {
 			this.last_seen_disk_content = content_to_save;
 			this.last_seen_disk_hash = written_hash;
-			// the disk holds what was saved, so nothing edited predates it
+			// the disk holds what was saved, so nothing edited predates it — a
+			// draft left (typed past the save) is based on it
 			this.disk_conflict = false;
+			const { draft } = this;
+			if (draft) draft.base_hash = written_hash;
 		}
 
 		if (settled && saved_entry) {
@@ -949,7 +1040,7 @@ export class DiskfileEditorState {
 	 * disposing this state.
 	 */
 	discard_draft(): void {
-		const draft = this.history.draft_entry;
+		const { draft } = this;
 		if (draft) this.#set_aside_draft(draft);
 		this.#select_disk_entry();
 		this.content_was_modified_by_user = false;
@@ -964,7 +1055,7 @@ export class DiskfileEditorState {
 	 */
 	reset_view(): void {
 		this.#show_disk = false;
-		const draft = this.history.draft_entry;
+		const { draft } = this;
 		if (draft) {
 			this.selected_history_entry_id = draft.id;
 		} else {
@@ -980,7 +1071,8 @@ export class DiskfileEditorState {
 	 * Picking an entry changes nothing else — editing it is what starts a draft.
 	 */
 	set_content_from_history(id: Uuid): void {
-		const entry = this.history.find_entry_by_id(id);
+		const entry =
+			this.draft_entry?.id === id ? this.draft_entry : this.history.find_entry_by_id(id);
 		if (!entry) return;
 		this.#show_disk = false;
 		this.selected_history_entry_id = id;
@@ -989,7 +1081,7 @@ export class DiskfileEditorState {
 	}
 
 	/**
-	 * Clears the history down to the unsaved edits and the entry for the disk
+	 * Clears the history down to the entry for the disk
 	 * content — the newest saved entry holding it, else a new one, never an
 	 * older state that would show as a change to save — which becomes the
 	 * original state. A selection it removes moves to that entry. For a file
@@ -1007,10 +1099,8 @@ export class DiskfileEditorState {
 				? (saved[0] ?? null)
 				: history.add_entry(disk_content, { is_original_state: true }));
 		if (disk_entry) disk_entry.is_original_state = true;
-		// already sorted newest first
-		history.entries = history.entries.filter(
-			(entry) => entry.is_unsaved_edit || entry === disk_entry
-		);
+		// already sorted newest first; the draft isn't in the history
+		history.entries = history.entries.filter((entry) => entry === disk_entry);
 
 		if (!this.selected_history_entry) {
 			this.selected_history_entry_id = disk_entry?.id ?? null;
@@ -1019,13 +1109,12 @@ export class DiskfileEditorState {
 	}
 
 	/**
-	 * Deletes the unsaved edits from the history. If the editor showed one, it
-	 * moves to the disk content.
+	 * Deletes the draft. If the editor showed it, it moves to the disk content.
 	 */
 	clear_unsaved_edits(): void {
-		const { history } = this;
-		const selected_unsaved = this.selected_history_entry?.is_unsaved_edit ?? false;
-		history.entries = history.entries.filter((entry) => !entry.is_unsaved_edit);
+		const { draft } = this;
+		const selected_unsaved = !!draft && this.selected_history_entry_id === draft.id;
+		if (draft) this.app.diskfiles.drafts.remove(this.path, draft.id);
 		if (selected_unsaved) {
 			this.#select_disk_entry();
 			this.content_was_modified_by_user = false;

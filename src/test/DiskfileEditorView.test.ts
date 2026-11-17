@@ -169,9 +169,11 @@ describe('DiskfileEditorView', () => {
 		assert.isTrue(editor_state.content_was_modified_by_user);
 
 		type_into(second.textarea(), 'draft, more');
-		const unsaved = editor_state.history.entries.filter((entry) => entry.is_unsaved_edit);
-		assert.strictEqual(unsaved.length, 1);
-		assert.strictEqual(unsaved[0]!.content, 'draft, more');
+		assert.strictEqual(app.diskfiles.drafts.get(a.path)?.text, 'draft, more');
+		assert.isFalse(
+			editor_state.history.entries.some((entry) => entry.content.startsWith('draft')),
+			'one draft, none set aside'
+		);
 	});
 
 	test('switching tabs keeps the draft, and an external change meanwhile is a conflict', async () => {
@@ -269,16 +271,15 @@ describe('DiskfileEditorView', () => {
 		const a = await disk.load(PATH_A, 'v1');
 		const view = render(DiskfileEditorView, { diskfile: a });
 		const editor_state = app.diskfiles.get_editor_state(a);
-		const { history } = editor_state;
 		// read while mounted, as the view does
-		assert.isFalse(history.has_unsaved_edits);
-		assert.strictEqual(history.current_entry?.content, 'v1');
+		assert.isFalse(editor_state.has_unsaved_edits);
+		assert.strictEqual(editor_state.content_history[0]?.content, 'v1');
 		view.destroy();
 
 		editor_state.current_content = 'edit after unmount';
 
-		assert.isTrue(history.has_unsaved_edits);
-		assert.strictEqual(history.current_entry?.content, 'edit after unmount');
+		assert.isTrue(editor_state.has_unsaved_edits);
+		assert.strictEqual(editor_state.content_history[0]?.content, 'edit after unmount');
 		assert.isTrue(editor_state.has_changes);
 
 		// the dirty-tab rule reads it: a delete on disk keeps the tab

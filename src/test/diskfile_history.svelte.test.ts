@@ -52,7 +52,7 @@ describe('DiskfileHistory', () => {
 			assert.isDefined(entry.id);
 			assert.strictEqual(typeof entry.created, 'number');
 			assert.ok(!entry.is_disk_change);
-			assert.ok(!entry.is_unsaved_edit);
+			assert.ok(!entry.is_discarded_edit);
 			assert.ok(!entry.is_original_state);
 		});
 
@@ -62,7 +62,7 @@ describe('DiskfileHistory', () => {
 			const entry = history.add_entry(TEST_CONTENT, {
 				created: custom_timestamp,
 				is_disk_change: true,
-				is_unsaved_edit: true,
+				is_discarded_edit: true,
 				is_original_state: true,
 				label: 'Custom Label'
 			});
@@ -70,7 +70,7 @@ describe('DiskfileHistory', () => {
 			// Verify all options were applied
 			assert.strictEqual(entry.created, custom_timestamp);
 			assert.ok(entry.is_disk_change);
-			assert.ok(entry.is_unsaved_edit);
+			assert.ok(entry.is_discarded_edit);
 			assert.ok(entry.is_original_state);
 			assert.strictEqual(entry.label, 'Custom Label');
 		});
@@ -174,20 +174,18 @@ describe('DiskfileHistory', () => {
 			assert.strictEqual(history.entries[1]!.content, 'middle entry');
 		});
 
-		test('trimming never drops unsaved edits, the newest saved state, or keep_id', () => {
-			history.max_entries = 3;
-			const draft = history.add_entry('draft', { is_unsaved_edit: true, created: 1 });
+		test('trimming never drops the newest saved state or keep_id', () => {
+			history.max_entries = 2;
+			history.add_entry('discarded', { is_discarded_edit: true, created: 1 });
 			const kept = history.add_entry('kept', { created: 2 });
 			for (let i = 0; i < 10; i++) {
 				history.add_entry(`disk ${i}`, { created: 10 + i, keep_id: kept.id });
 			}
 
-			assert.strictEqual(history.entries.length, 3);
 			assert.deepEqual(
 				history.entries.map((entry) => entry.content),
-				['disk 9', 'kept', 'draft']
+				['disk 9', 'kept']
 			);
-			assert.strictEqual(history.draft_entry?.id, draft.id);
 		});
 
 		test('max_content_length drops the oldest entries past it', () => {
@@ -204,42 +202,14 @@ describe('DiskfileHistory', () => {
 
 		test('max_content_length can be exceeded only by protected entries', () => {
 			history.max_content_length = 5;
-			history.add_entry('unsaved edit', { is_unsaved_edit: true, created: 1 });
-			history.add_entry('older', { created: 2 });
-			history.add_entry('newest saved', { created: 3 });
+			const kept = history.add_entry('kept entry', { created: 1 });
+			history.add_entry('older', { created: 2, keep_id: kept.id });
+			history.add_entry('newest saved', { created: 3, keep_id: kept.id });
 
 			assert.deepEqual(
 				history.entries.map((entry) => entry.content),
-				['newest saved', 'unsaved edit']
+				['newest saved', 'kept entry']
 			);
-		});
-
-		test('growing an entry trims others to fit', () => {
-			history.max_content_length = 10;
-			history.add_entry('old', { created: 1 });
-			history.add_entry('new', { created: 2 });
-			const draft = history.add_entry('d', { is_unsaved_edit: true, created: 3 });
-
-			const updated = history.update_entry_content(draft.id, 'draft!');
-
-			assert.strictEqual(updated?.content, 'draft!');
-			assert.deepEqual(
-				history.entries.map((entry) => entry.content),
-				['draft!', 'new']
-			);
-		});
-
-		test('update_entry_content re-dates the entry to the front', () => {
-			const first = history.add_entry('first', { created: 1 });
-			history.add_entry('second', { created: 2 });
-
-			history.update_entry_content(first.id, 'first, edited');
-
-			const current = history.current_entry;
-			assert.ok(current);
-			assert.strictEqual(current.id, first.id);
-			assert.strictEqual(current.content, 'first, edited');
-			assert.isAbove(current.created, 2);
 		});
 	});
 
@@ -360,27 +330,22 @@ describe('DiskfileHistory', () => {
 			history.add_entry(TEST_CONTENT, { is_disk_change: true });
 
 			// Add entry with same content but different options
-			const second = history.add_entry(TEST_CONTENT, { is_unsaved_edit: true });
+			const second = history.add_entry(TEST_CONTENT, { is_discarded_edit: true });
 
 			// Both entries should be added since they represent different states
 			assert.strictEqual(history.entries.length, 2);
-			assert.ok(second.is_unsaved_edit);
+			assert.ok(second.is_discarded_edit);
 		});
 
-		test('add_entry never dedupes a saved state onto a draft or a discarded edit', () => {
+		test('add_entry never dedupes a saved state onto a discarded edit', () => {
 			const discarded = history.add_entry(TEST_CONTENT, { is_discarded_edit: true });
-			const saved = history.add_entry(TEST_CONTENT, { is_unsaved_edit: false });
+			const saved = history.add_entry(TEST_CONTENT, { is_discarded_edit: false });
 			assert.notStrictEqual(saved.id, discarded.id);
 			assert.isFalse(saved.is_discarded_edit);
 
-			const draft = history.add_entry('draft', { is_unsaved_edit: true });
-			const saved_draft = history.add_entry('draft');
-			assert.notStrictEqual(saved_draft.id, draft.id);
-			assert.isFalse(saved_draft.is_unsaved_edit);
-
 			// a saved state still dedupes onto a disk change or the original state
 			const disk = history.add_entry('disk', { is_disk_change: true });
-			assert.strictEqual(history.add_entry('disk', { is_unsaved_edit: false }).id, disk.id);
+			assert.strictEqual(history.add_entry('disk').id, disk.id);
 		});
 
 		test('complex editing workflow', () => {
@@ -391,14 +356,14 @@ describe('DiskfileHistory', () => {
 			});
 
 			// Add some edits
-			history.add_entry('first edit', { is_unsaved_edit: true });
-			history.add_entry('second edit', { is_unsaved_edit: true });
+			history.add_entry('first edit', { is_discarded_edit: true });
+			history.add_entry('second edit', { is_discarded_edit: true });
 
 			// Add a save
 			const saved = history.add_entry('saved content', { is_disk_change: true });
 
 			// More edits
-			const latest = history.add_entry('latest edit', { is_unsaved_edit: true });
+			const latest = history.add_entry('latest edit', { is_discarded_edit: true });
 
 			// Verify state
 			assert.strictEqual(history.entries.length, 5);

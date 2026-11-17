@@ -132,7 +132,7 @@ describe('the draft', () => {
 
 		const { history } = editor_state;
 		assert.strictEqual(history.entries.length, history.max_entries);
-		assert.isTrue(history.has_unsaved_edits);
+		assert.isTrue(editor_state.has_unsaved_edits);
 		assert.strictEqual(editor_state.current_content, 'my unsaved edit');
 		assert.isTrue(editor_state.content_was_modified_by_user);
 		assert.strictEqual(history.entries[0]?.content, 'v150');

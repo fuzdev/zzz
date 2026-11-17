@@ -60,12 +60,12 @@ const preview_conflict = async (): Promise<void> => {
 	assert.isTrue(editor_state.showing_disk);
 };
 
-/** The history's entries, as plain values. */
+/** The history's entries with the draft, as plain values. */
 const snapshot_history = () =>
-	editor_state.history.entries.map(({ id, content, is_unsaved_edit, is_discarded_edit }) => ({
+	editor_state.content_history.map(({ id, content, is_discarded_edit }) => ({
 		id,
 		content,
-		is_unsaved_edit,
+		is_unsaved_edit: id === editor_state.unsaved_edit_entry_id,
 		is_discarded_edit
 	}));
 

@@ -45,15 +45,15 @@ describe('unsaved edit creation', () => {
 		// Verify an unsaved entry was created
 		assert.ok(editor_state.unsaved_edit_entry_id !== null);
 
-		// Verify the new entry
-		const history = editor_state.history;
-		const new_entry = history.find_entry_by_id(editor_state.unsaved_edit_entry_id);
-
+		// Verify the new draft, listed as an entry but not stored in the history
+		const new_entry = editor_state.draft_entry;
 		assert.include(new_entry, {
+			id: editor_state.unsaved_edit_entry_id,
 			content: new_content,
-			is_unsaved_edit: true,
 			label: 'Unsaved edit'
 		});
+		assert.strictEqual(app.diskfiles.drafts.get(TEST_PATH)?.text, new_content);
+		assert.isUndefined(editor_state.history.find_entry_by_id(new_entry!.id));
 
 		// Selection should match the unsaved entry
 		assert.strictEqual(editor_state.selected_history_entry_id, editor_state.unsaved_edit_entry_id);
@@ -74,14 +74,8 @@ describe('unsaved edit creation', () => {
 		// Verify the same entry was updated
 		assert.strictEqual(editor_state.unsaved_edit_entry_id, unsaved_id);
 
-		// Verify the entry content was updated
-		const history = editor_state.history;
-		const updated_entry = history.find_entry_by_id(unsaved_id);
-
-		assert.include(updated_entry, {
-			content: 'Third edit',
-			is_unsaved_edit: true
-		});
+		// Verify the draft's content was updated
+		assert.include(editor_state.draft_entry, { id: unsaved_id, content: 'Third edit' });
 	});
 
 	test('setting content back to original removes unsaved entry', () => {
@@ -98,6 +92,7 @@ describe('unsaved edit creation', () => {
 		// Entry should no longer exist
 		const history = editor_state.history;
 		assert.ok(history.find_entry_by_id(unsaved_id!) === undefined);
+		assert.isFalse(app.diskfiles.drafts.has(TEST_PATH));
 	});
 
 	test('editing to match an older saved state makes a draft of it', () => {
@@ -126,7 +121,7 @@ describe('unsaved edit creation', () => {
 	test('editing to match existing unsaved edit selects that entry', () => {
 		// Create an unsaved entry
 		const history = editor_state.history;
-		const unsaved_entry = history.add_entry('Unsaved content', { is_unsaved_edit: true });
+		const unsaved_entry = app.diskfiles.drafts.create(TEST_PATH, 'Unsaved content', null);
 
 		// Select a different entry
 		const other_entry = history.add_entry('Other content');
@@ -165,8 +160,7 @@ describe('history navigation', () => {
 
 	test('set_content_from_history with unsaved edit sets unsaved_edit_entry_id', () => {
 		// Create unsaved entry
-		const history = editor_state.history;
-		const unsaved_entry = history.add_entry('Unsaved content', { is_unsaved_edit: true });
+		const unsaved_entry = app.diskfiles.drafts.create(TEST_PATH, 'Unsaved content', null);
 
 		// Select unsaved entry
 		editor_state.set_content_from_history(unsaved_entry.id);
@@ -189,7 +183,7 @@ describe('history navigation', () => {
 		// picking changes only what's shown
 		assert.strictEqual(editor_state.selected_history_entry_id, saved_entry.id);
 		assert.strictEqual(editor_state.unsaved_edit_entry_id, draft_id);
-		assert.strictEqual(history.find_entry_by_id(draft_id)?.content, 'Unsaved content');
+		assert.strictEqual(app.diskfiles.drafts.get(TEST_PATH)?.text, 'Unsaved content');
 	});
 
 	test('content_matching_entry_ids tracks entries with matching content', () => {
@@ -230,8 +224,9 @@ describe('saving history changes', () => {
 		const history = editor_state.history;
 		assert.include(history.entries[0]!, {
 			content: 'Content to save',
-			is_unsaved_edit: false
+			is_discarded_edit: false
 		});
+		assert.isFalse(app.diskfiles.drafts.has(TEST_PATH));
 
 		// Selection should point to the new entry
 		assert.strictEqual(editor_state.selected_history_entry_id, history.entries[0]!.id);
@@ -282,20 +277,16 @@ describe('managing unsaved edits', () => {
 
 		// one unsaved entry, the other kept as a discarded edit
 		assert.strictEqual(editor_state.unsaved_history_entries.length, 1);
-		assert.include(history.find_entry_by_id(draft2_id), {
-			content: 'Modified 2',
-			is_unsaved_edit: true
-		});
+		assert.include(editor_state.draft_entry, { id: draft2_id, content: 'Modified 2' });
 		assert.include(history.find_entry_by_id(draft1_id), {
 			content: 'Modified 1',
-			is_unsaved_edit: false,
 			is_discarded_edit: true
 		});
 	});
 
 	test('editing the draft keeps one entry and dates it to the latest edit', async () => {
 		editor_state.current_content = 'First';
-		const draft = editor_state.history.draft_entry;
+		const draft = editor_state.draft_entry;
 		assert.ok(draft);
 		const first_created = draft.created;
 		await new Promise((resolve) => setTimeout(resolve, 5));
@@ -303,27 +294,23 @@ describe('managing unsaved edits', () => {
 		editor_state.current_content = 'Second';
 
 		assert.strictEqual(editor_state.unsaved_history_entries.length, 1);
-		assert.strictEqual(editor_state.history.draft_entry?.id, draft.id);
-		assert.isAbove(editor_state.history.draft_entry!.created, first_created);
-		assert.strictEqual(editor_state.history.current_entry?.id, draft.id);
+		assert.strictEqual(editor_state.draft_entry?.id, draft.id);
+		assert.isAbove(editor_state.draft_entry!.created, first_created);
+		assert.strictEqual(editor_state.content_history[0]?.id, draft.id);
 	});
 
-	test('clear_unsaved_edits removes all unsaved entries', () => {
-		// Create multiple unsaved edits
-		const history = editor_state.history;
-
-		// Add one through normal editing
+	test('clear_unsaved_edits removes the draft', () => {
 		editor_state.current_content = 'Unsaved 1';
+		assert.isTrue(app.diskfiles.drafts.has(TEST_PATH));
 
-		// Add another directly to history
-		history.add_entry('Unsaved 2', { is_unsaved_edit: true });
-
-		// Clear unsaved edits
 		editor_state.clear_unsaved_edits();
 
-		// Verify all unsaved entries are gone
-		const unsaved_after = history.entries.filter((e) => e.is_unsaved_edit);
-		assert.strictEqual(unsaved_after.length, 0);
+		assert.isFalse(app.diskfiles.drafts.has(TEST_PATH));
+		assert.strictEqual(editor_state.unsaved_history_entries.length, 0);
+		assert.isFalse(
+			editor_state.history.entries.some((entry) => entry.content === 'Unsaved 1'),
+			'cleared, not set aside'
+		);
 
 		// Unsaved edit id should be cleared
 		assert.isNull(editor_state.unsaved_edit_entry_id);
@@ -392,7 +379,8 @@ describe('history clearing', () => {
 		// the save is a real saved state, not the discarded entry
 		const shown = editor_state.selected_history_entry!;
 		assert.notStrictEqual(shown.id, draft_id);
-		assert.include(shown, { content: 'mine', is_unsaved_edit: false, is_discarded_edit: false });
+		assert.include(shown, { content: 'mine', is_discarded_edit: false });
+		assert.isNull(editor_state.draft);
 		assert.include(editor_state.history.find_entry_by_id(draft_id), { is_discarded_edit: true });
 		assert.isFalse(editor_state.dirty);
 
@@ -426,7 +414,7 @@ describe('history clearing', () => {
 		assert.ok(await saving);
 
 		const saved = editor_state.history.entries.filter(
-			(entry) => entry.content === 'mine' && !entry.is_unsaved_edit && !entry.is_discarded_edit
+			(entry) => entry.content === 'mine' && !entry.is_discarded_edit
 		);
 		assert.strictEqual(saved.length, 1, 'the save is recorded as a saved state');
 		assert.include(editor_state.history.find_entry_by_id(draft_id), { is_discarded_edit: true });
@@ -447,30 +435,18 @@ describe('history clearing', () => {
 		assert.isUndefined(history.find_entry_by_id(stale.id));
 	});
 
-	test('clear_history preserves the unsaved edits', () => {
+	test('clear_history keeps the draft', () => {
 		const history = editor_state.history;
 		history.add_entry('Newest entry');
-		const unsaved_entry1 = history.add_entry('Unsaved edit 1', {
-			is_unsaved_edit: true,
-			label: 'Unsaved 1'
-		});
-		const unsaved_entry2 = history.add_entry('Unsaved edit 2', {
-			is_unsaved_edit: true,
-			label: 'Unsaved 2'
-		});
+		editor_state.current_content = 'Unsaved edit';
+		const draft_id = editor_state.unsaved_edit_entry_id;
+		assert.ok(draft_id);
 
 		editor_state.clear_history();
 
-		assert.include(history.find_entry_by_id(unsaved_entry1.id), {
-			content: 'Unsaved edit 1',
-			is_unsaved_edit: true
-		});
-		assert.include(history.find_entry_by_id(unsaved_entry2.id), {
-			content: 'Unsaved edit 2',
-			is_unsaved_edit: true
-		});
-		const saved_after_clear = history.entries.filter((entry) => !entry.is_unsaved_edit);
-		assert.strictEqual(saved_after_clear.length, 1);
-		assert.include(saved_after_clear[0], { content: TEST_CONTENT, is_original_state: true });
+		assert.include(editor_state.draft_entry, { id: draft_id, content: 'Unsaved edit' });
+		assert.strictEqual(editor_state.current_content, 'Unsaved edit');
+		assert.strictEqual(history.entries.length, 1);
+		assert.include(history.entries[0], { content: TEST_CONTENT, is_original_state: true });
 	});
 });

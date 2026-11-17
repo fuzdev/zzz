@@ -78,7 +78,7 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 		if (!request) return null;
 		const tab = this.tabs.items.by_id.get(request.tab_id);
 		if (!tab) return null;
-		const draft = this.app.diskfiles.find_editor_state(tab.path)?.history.draft_entry;
+		const draft = this.app.diskfiles.drafts.get(tab.path);
 		return draft?.id === request.draft_id ? request : null;
 	});
 
@@ -161,7 +161,7 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	request_close_tab(tab_id: Uuid): boolean {
 		const tab = this.tabs.items.by_id.get(tab_id);
 		if (!tab) return false;
-		const draft = this.app.diskfiles.find_editor_state(tab.path)?.history.draft_entry;
+		const draft = this.app.diskfiles.drafts.get(tab.path);
 		if (draft) {
 			this.#pending_close = { tab_id, draft_id: draft.id, cancelled: false };
 			return false;

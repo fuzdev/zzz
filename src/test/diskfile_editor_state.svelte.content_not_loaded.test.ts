@@ -72,9 +72,9 @@ describe('a file whose content was not loaded', () => {
 		assert.isFalse(editor_state.can_save);
 		assert.isFalse(await editor_state.save_changes());
 		assert.strictEqual(update.mock.calls.length, 0);
-		// the stale edit stays in history, but the editor shows (and copies) nothing
+		// the stale edit stays the draft, but the editor shows (and copies) nothing
 		assert.strictEqual(editor_state.current_content, '');
-		assert.ok(editor_state.history.entries.some((entry) => entry.content === 'edited'));
+		assert.strictEqual(app.diskfiles.drafts.get(diskfile.path)?.text, 'edited');
 	});
 
 	test('`Diskfiles.update` refuses to write over it', async () => {
