@@ -280,8 +280,9 @@ describe('saving a file deleted on disk', () => {
 		assert.strictEqual(seed_diskfile(app, PATH_A), a);
 
 		await upsert(PATH_A, 'DRAFT');
-		assert.strictEqual(seed_diskfile(app, PATH_A), a, 'same id');
-		assert.strictEqual(app.diskfiles.find_editor_state(a.path), editor_state, 'history kept');
+		// saved and clean, so its editing state and cell went with its last tab
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
+		assert.ok(app.diskfiles.get_by_path(PATH_A), 'the add lands as a record');
 		assert.strictEqual(app.diskfiles.editor.tabs.items.size, 0, 'no stray tab');
 	});
 });

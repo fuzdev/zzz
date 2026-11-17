@@ -46,6 +46,7 @@ import { create_collection_decoder } from './cell_helpers.ts';
 import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 import { Drafts } from './drafts.svelte.ts';
+import type { MarkdownViewMode } from './markdown_view_mode.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { DiskfileIndex } from './diskfile_index.svelte.ts';
@@ -103,9 +104,9 @@ export interface DiskfileChangeTracker extends DiskfileSnapshotChanges {
 }
 
 export class Diskfiles extends Cell<typeof DiskfilesJson> {
-	// TODO bound memory across files: every file opened keeps its state and history
-	// (each capped) until the diskfile goes away — maybe drop clean ones when their
-	// last view and tab close, or keep an app-wide history budget
+	// TODO bound memory across files: a file with something to keep
+	// (`DiskfileEditorState.can_drop`) keeps its state and history (each capped)
+	// until the diskfile goes away — maybe an app-wide history budget
 	/** The files' app-level editing states, by path — see `get_editor_state`. */
 	readonly #editor_states: SvelteMap<DiskfilePath, DiskfileEditorState> = new SvelteMap();
 
@@ -115,6 +116,14 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * longer has (`#is_held`).
 	 */
 	readonly drafts: Drafts = new Drafts(this);
+
+	/**
+	 * The markdown view mode chosen per file
+	 * (`DiskfileEditorState.markdown_view_mode_choice`), by path — apart from
+	 * the editing states, which are dropped when clean, so a choice lasts for
+	 * the page. Page memory only.
+	 */
+	readonly markdown_view_modes: SvelteMap<DiskfilePath, MarkdownViewMode> = new SvelteMap();
 
 	/**
 	 * The metadata of every file on disk the index reports — the source of
@@ -292,9 +301,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		diskfile.dispose();
 	}
 
-	/** Drops every cell, record, and draft. */
+	/** Drops every cell, record, draft, and view-mode choice. */
 	#clear(): void {
 		this.drafts.clear();
+		this.markdown_view_modes.clear();
 		for (const diskfile of Array.from(this.#cells.values())) this.#remove_cell(diskfile, false);
 		for (const record of Array.from(this.index.values())) this.index.delete(record.id);
 	}
@@ -340,9 +350,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	#select_on_arrival: DiskfilePath | null = null;
 
 	/**
-	 * The app-level editing state of `diskfile` (its draft, history, and save
-	 * state), created on first use and kept until the diskfile is removed —
-	 * views read it, they don't own it. Safe to call from component init or a
+	 * The app-level editing state of `diskfile` (its history and save state,
+	 * over its draft in `drafts`), created on first use and kept until
+	 * nothing holds the file and it has nothing to keep
+	 * (`DiskfileEditorState.can_drop`, see `#settle`) or the diskfile is
+	 * removed — views read it, they don't own it. Safe to call from component init or a
 	 * `$derived`: it's created detached from the calling effect, and reading it
 	 * doesn't track the lookup. A diskfile no longer in `cells` gets a
 	 * throwaway state.
@@ -738,10 +750,15 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Settles `path` once nothing holds it (`release`): a file the index no
 	 * longer has is forgotten unless kept (`release_if_unneeded`), and a file
-	 * on disk drops its cell unless it has an editing state — its record
+	 * on disk drops its cell — with its editing state, unless that has
+	 * something to keep (`DiskfileEditorState.can_drop`: a draft, a
+	 * discarded edit, a save under way, a heading to reveal). Its record
 	 * stays, and the next `acquire` makes a fresh cell, with content read
 	 * again on demand.
 	 */
+	// TODO a state that turns clean while nothing holds the file (a save landing
+	// after its tab closed) stays until the path's next let-go — a re-settle on
+	// every read would also drop the states tests build without holding the file
 	#settle(path: DiskfilePath): void {
 		this.release_if_unneeded(path);
 		const diskfile = untrack(() => this.#cells.get(path));
@@ -750,10 +767,12 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			diskfile.deleted_on_disk ||
 			diskfile.uncovered ||
 			this.#holders.has(path) ||
-			untrack(() => this.#editor_states.has(path) || this.editor.tabs.by_path.has(path))
+			untrack(() => this.editor.tabs.by_path.has(path))
 		) {
 			return;
 		}
+		const editor_state = untrack(() => this.#editor_states.get(path));
+		if (editor_state && !editor_state.can_drop) return;
 		this.#write(() => this.#remove_cell(diskfile, true));
 	}
 
@@ -1520,7 +1539,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * The editing state of the file at `path` (see `get_editor_state`),
 	 * created if there's none — `undefined` when no file is known there. For
-	 * an event handler: the editing state then keeps the file's cell.
+	 * an event handler: the state is dropped with the cell at the next settle
+	 * unless something holds the file or the state has something to keep
+	 * (`DiskfileEditorState.can_drop`) — set what it keeps before returning.
 	 */
 	get_editor_state_at(path: DiskfilePath): DiskfileEditorState | undefined {
 		const holder = {};

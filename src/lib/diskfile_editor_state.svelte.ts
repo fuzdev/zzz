@@ -2,6 +2,7 @@
 
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
+import { untrack } from 'svelte';
 
 import { estimate_token_count } from './helpers.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
@@ -97,8 +98,9 @@ export interface DiskfileSaveOptions {
  * The editing state of one file, shared by every view of it — the `/files`
  * editor, file-part editors, tabs — and kept while none is mounted, like a
  * VS Code text model. Get it with `Diskfiles.get_editor_state`, which creates
- * it on first use and keeps it until the diskfile is removed; views never
- * own it.
+ * it on first use and keeps it until nothing holds the file and it has
+ * nothing to keep (`can_drop`), or the diskfile is removed; views never own
+ * it.
  *
  * It holds the file's `DiskfileHistory`, and records every change of the
  * file's content on disk into it (`Diskfiles` calls `check_disk_changes`
@@ -200,11 +202,19 @@ export class DiskfileEditorState {
 
 	/**
 	 * The markdown view's mode the user chose for this file, `null` until they
-	 * choose one. Kept with the rest of the file's editing state, so it lasts
-	 * across tab switches and reopening for as long as the app keeps the file
-	 * (in memory, like its drafts). See `markdown_view_mode`.
+	 * choose one. Kept by path (`Diskfiles.markdown_view_modes`), not here, so
+	 * it lasts across tab switches and reopening after this state is dropped
+	 * (in page memory, like the drafts) — set even from a throwaway state, the
+	 * choice being the path's. See `markdown_view_mode`.
 	 */
-	markdown_view_mode_choice: MarkdownViewMode | null = $state.raw(null);
+	get markdown_view_mode_choice(): MarkdownViewMode | null {
+		return this.app.diskfiles.markdown_view_modes.get(this.path) ?? null;
+	}
+	set markdown_view_mode_choice(mode: MarkdownViewMode | null) {
+		const modes = this.app.diskfiles.markdown_view_modes;
+		if (mode === null) modes.delete(this.path);
+		else modes.set(this.path, mode);
+	}
 
 	/**
 	 * The id of a heading the markdown view reveals once it shows this file,
@@ -477,6 +487,29 @@ export class DiskfileEditorState {
 		this.#disposed = true;
 		this.#show_disk = false;
 		this.history.dispose();
+	}
+
+	/**
+	 * Whether dropping this state loses nothing worth keeping — so
+	 * `Diskfiles` drops it, and the file's cell, once nothing holds the file
+	 * (no tab, view, or part): not `dirty` (no draft, no picked entry shown),
+	 * no discarded edit (the close dialog's "don't save" promises it stays in
+	 * the history), no save in flight or waiting on a read — a save usually
+	 * leaves the file dirty until its broadcast, but typing back to the disk
+	 * content meanwhile doesn't — and no markdown fragment to reveal (a view
+	 * mode chosen is kept by path, apart from this state). What it does drop
+	 * — the disk and saved entries of the history — comes back as the file is
+	 * read again. Not reactive: read when settling.
+	 */
+	get can_drop(): boolean {
+		return untrack(
+			() =>
+				!this.dirty &&
+				this.#in_flight_save === null &&
+				!this.save_pending &&
+				this.markdown_pending_fragment === null &&
+				!this.history.entries.some((entry) => entry.is_discarded_edit)
+		);
 	}
 
 	/**

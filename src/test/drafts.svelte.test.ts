@@ -205,13 +205,16 @@ describe('the drafts store', () => {
 		assert.isFalse(app.diskfiles.drafts.has(PATH));
 	});
 
-	test('is emptied with the files when the collection is replaced', () => {
-		app.diskfiles.get_editor_state(diskfile).current_content = 'mine';
+	test('is emptied with the files when the collection is replaced, view modes too', () => {
+		const editor_state = app.diskfiles.get_editor_state(diskfile);
+		editor_state.current_content = 'mine';
+		editor_state.markdown_view_mode_choice = 'preview';
 		assert.isTrue(app.diskfiles.drafts.has(PATH));
 
 		app.diskfiles.set_json({ diskfiles: [] });
 
 		assert.strictEqual(app.diskfiles.drafts.size, 0);
+		assert.strictEqual(app.diskfiles.markdown_view_modes.size, 0, 'view-mode choices too');
 		assert.isFalse(app.diskfiles.has_unsaved_changes);
 	});
 });

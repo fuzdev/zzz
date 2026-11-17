@@ -1118,9 +1118,10 @@ markdown (`.md`, `.markdown`) `DiskfileMarkdownView`, and everything else the
 text editor (`DiskfileEditorView`). The markdown view is the text editor's
 twin over the same editing state: its source in `SourceEditor` (fuz_code's
 highlighted `CodeTextarea`) beside a live `MarkdownPreview`, or either alone —
-split, preview, or source, a mode chosen per file and kept on its
-`DiskfileEditorState`, defaulting to the split, or to the preview when the
-content can't be loaded. Ctrl+Shift+1, 2, and 3 switch to split, preview, and
+split, preview, or source, a mode chosen per file and kept by path
+(`Diskfiles.markdown_view_modes`, outlasting the editing state),
+defaulting to the split, or to the preview when the content can't be
+loaded. Ctrl+Shift+1, 2, and 3 switch to split, preview, and
 source from anywhere on the page — the textarea included, since Ctrl+Shift
 types nothing — except an input or contenteditable outside the view, or while
 a modal dialog is open. The markdown view's details add the document's
@@ -1292,7 +1293,12 @@ and the drafts store:
   (`content_history`); a state made for a file that already has a draft
   shows it.
   `Diskfiles.get_editor_state` creates it on first use, detached from the
-  calling component (see below), and keeps it until the diskfile is removed.
+  calling component (see below), and keeps it until nothing holds the file
+  and it has nothing to keep (`can_drop`: no draft or other unsaved
+  content, no discarded edit, no save under way, no heading to reveal) —
+  closing a clean file's last tab drops it with the cell, and its saved and
+  disk history goes with it — or the diskfile is removed. A markdown view mode chosen is kept by
+  path (`Diskfiles.markdown_view_modes`), so it outlives the state.
   The `/files` editor, file-part editors, and tabs are views over it, so a
   tab switch or remount shows the same draft, selection, and save state; a
   file part sends its draft (see "What gets saved and sent")
@@ -1385,10 +1391,10 @@ microtask (`release_if_unneeded`) unless held again first, so an effect
 re-running doesn't release it. Only then does a file have a `Diskfile`
 cell: every other file is its index record (`DiskfileIndex`,
 `get_by_path(path)`), and `acquire` makes the cell from the record. When
-a path's last holder lets go, the cell of a file on disk is dropped
-unless it has an editing state (which keeps its cell until the file is
-forgotten — every file opened in a tab has one) — its record stays, and
-the next hold makes a fresh cell, its content read again on demand.
+a path's last holder lets go, the cell of a file on disk is dropped with
+its editing state, unless that has something to keep
+(`DiskfileEditorState.can_drop`) — its record stays, and the next hold
+makes a fresh cell, its content read again on demand.
 `peek(path)` reads the cell without holding or making one. Every
 disknode that arrives for a file already held — an `add` or `change`, a
 `project_open` index, a reconnect's snapshot entries — re-reads an

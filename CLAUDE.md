@@ -417,10 +417,10 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
   `touch` makes clients holding the file read it again.
 - **Big repos make big focus replies** — the client keeps a metadata
   record per indexed file and makes a `Diskfile` cell only for a file in
-  use (a tab, a part, a view, an editing state — and a tab's view makes an
-  editing state that keeps the cell, so every file opened in a tab keeps
-  one until the file is forgotten or the page reloads), but every file
-  ships in the focus reply, which can pass the 16 MiB message size.
+  use (a tab, a part, a view, or an editing state with something to keep —
+  a draft, a discarded edit, a save under way, a heading to reveal), but
+  every file ships in the focus reply, which can pass the 16 MiB message
+  size.
 - **No persistent undo**; symlinks are invisible; file watching can degrade
   to polling past `max_user_watches`.
 - **The terminal emulator** lacks scrollback scrolling, IME, and mouse

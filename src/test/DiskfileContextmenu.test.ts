@@ -4,6 +4,8 @@ import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 
+import { icon_checkmark } from '@fuzdev/fuz_ui/icons.ts';
+
 import { Frontend } from '#lib/frontend.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
@@ -86,7 +88,7 @@ const open_submenu = async (target: HTMLElement, text: string): Promise<void> =>
 };
 
 describe('DiskfileContextmenu view submenu', () => {
-	test('opening the menu creates no editing state, and choosing a mode sets it', async () => {
+	test('opening the menu or choosing a mode creates no editing state; the choice is kept by path', async () => {
 		const a = await add_diskfile('/w/a.md', '# a');
 		const target = render(a);
 		open_menu(target);
@@ -98,10 +100,30 @@ describe('DiskfileContextmenu view submenu', () => {
 		find_menuitem(target, 'preview')!.click();
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		flushSync();
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
+		assert.strictEqual(app.diskfiles.markdown_view_modes.get(a.path), 'preview');
 		assert.strictEqual(
-			app.diskfiles.find_editor_state(a.path)?.markdown_view_mode_choice,
-			'preview'
+			app.diskfiles.get_editor_state_at(a.path)?.markdown_view_mode_choice,
+			'preview',
+			'an editing state made later shows it'
 		);
+	});
+
+	test('the checkmark marks the choice kept by path', async () => {
+		const a = await add_diskfile('/w/a.md', '# a');
+		app.diskfiles.markdown_view_modes.set(a.path, 'source');
+		const target = render(a);
+		open_menu(target);
+		await open_submenu(target, 'view');
+
+		const checked = (text: string): boolean => {
+			const item = find_menuitem(target, text);
+			assert.ok(item, `a "${text}" entry`);
+			return !!item.querySelector(`path[d="${icon_checkmark.paths[0]!.d}"]`);
+		};
+		// the choice, not the default (split)
+		assert.isTrue(checked('source'));
+		assert.isFalse(checked('split view'));
 	});
 
 	test('only markdown files get the view submenu', async () => {

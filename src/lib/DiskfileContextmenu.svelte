@@ -164,9 +164,9 @@
 			</ContextmenuSubmenu>
 			{#if to_diskfile_content_kind(path) === 'markdown'}
 				{@const current_mode =
-					diskfiles.find_editor_state(path)?.markdown_view_mode ??
+					diskfiles.markdown_view_modes.get(path) ??
 					to_default_markdown_view_mode(diskfile?.content_status !== 'unloadable')}
-				<!-- rendering only looks the editing state up: it's created on a choice, never by opening the menu -->
+				<!-- a choice is kept by path, so no editing state is made for it -->
 				<ContextmenuSubmenu icon={icon_view}>
 					view
 					{#snippet menu()}
@@ -174,8 +174,7 @@
 							<ContextmenuEntry
 								icon={mode === current_mode ? icon_checkmark : icon_view}
 								run={() => {
-									const editor_state = diskfiles.get_editor_state_at(path);
-									if (editor_state) editor_state.markdown_view_mode_choice = mode;
+									diskfiles.markdown_view_modes.set(path, mode);
 								}}
 							>
 								<span>{MARKDOWN_VIEW_MODE_LABELS[mode]}</span>

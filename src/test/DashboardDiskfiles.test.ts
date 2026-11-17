@@ -204,3 +204,33 @@ describe('DashboardDiskfiles header', () => {
 		assert.isNull(details_button(target));
 	});
 });
+
+describe('closing a tab', () => {
+	test("the close button drops a clean file's editing state and cell, keeping its record", async () => {
+		const a = await write_file('/w/a.txt', 'hello');
+		app.diskfiles.select(a.path, true);
+		const target = render();
+		assert.ok(app.diskfiles.find_editor_state(a.path), 'the view made one');
+		const close = target.querySelector<HTMLButtonElement>('button[title="close tab"]');
+		assert.ok(close);
+		close.click();
+		flushSync();
+		await new Promise<void>((resolve) => queueMicrotask(resolve));
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
+		assert.isUndefined(app.diskfiles.peek(a.path));
+		assert.ok(app.diskfiles.get_by_path(a.path), 'its record stays');
+	});
+
+	test('a preview tab moving to another file drops the clean one it showed', async () => {
+		const a = await write_file('/w/a.txt', 'A');
+		const b = await write_file('/w/b.txt', 'B');
+		app.diskfiles.select(a.path);
+		render();
+		assert.ok(app.diskfiles.find_editor_state(a.path));
+		app.diskfiles.select(b.path);
+		flushSync();
+		await new Promise<void>((resolve) => queueMicrotask(resolve));
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
+		assert.ok(app.diskfiles.find_editor_state(b.path));
+	});
+});

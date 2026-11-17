@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
-import { test, beforeEach, assert } from 'vitest';
+import { test, beforeEach, assert, describe } from 'vitest';
 import { flushSync } from 'svelte';
 
 import {
@@ -10,6 +10,8 @@ import {
 	type SerializableDisknode
 } from '#lib/diskfile_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
+import type { Diskfile } from '#lib/diskfile.svelte.ts';
+import type { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
 import { Part } from '#lib/part.svelte.ts';
 import { to_diskfile_index_mismatches } from '#lib/diskfiles.svelte.ts';
 
@@ -205,13 +207,122 @@ test('acquire makes a cell from the record, and the last release drops it, keepi
 	assert.ok(again && again !== a, 'a fresh cell next time');
 });
 
-test('an editing state keeps its cell after the last release', async () => {
+test('a clean editing state is dropped with its cell after the last release', async () => {
 	const { diskfiles } = app;
 	diskfiles.add_initial([record('/dev/r/a.ts')]);
 	const es = diskfiles.get_editor_state_at(at('/dev/r/a.ts'));
 	assert.ok(es);
 	await microtask();
-	assert.strictEqual(diskfiles.peek(at('/dev/r/a.ts')), es.diskfile);
+	assert.isUndefined(diskfiles.peek(at('/dev/r/a.ts')));
+	assert.isUndefined(diskfiles.find_editor_state(at('/dev/r/a.ts')));
+	assert.ok(diskfiles.get_by_path(at('/dev/r/a.ts')), 'its record stays');
+});
+
+describe('an editing state with something to keep keeps its cell after the last release', () => {
+	const PATH = '/dev/r/a.ts';
+
+	/** Loads `PATH` and holds it, returning its editing state and the release. */
+	const setup = async () => {
+		const a = await disk.load(PATH, 'v1');
+		const release = app.diskfiles.hold(a.path);
+		const es = app.diskfiles.get_editor_state(a);
+		return { a, es, release };
+	};
+
+	const assert_kept = async (
+		a: Diskfile,
+		es: DiskfileEditorState,
+		release: () => void
+	): Promise<void> => {
+		release();
+		await microtask();
+		assert.strictEqual(app.diskfiles.peek(a.path), a);
+		assert.strictEqual(app.diskfiles.find_editor_state(a.path), es);
+	};
+
+	test('a draft', async () => {
+		const { a, es, release } = await setup();
+		es.current_content = 'mine';
+		await assert_kept(a, es, release);
+	});
+
+	test('a discarded edit', async () => {
+		const { a, es, release } = await setup();
+		es.current_content = 'mine';
+		es.discard_draft();
+		await assert_kept(a, es, release);
+	});
+
+	test('a picked older entry shown', async () => {
+		const { a, es, release } = await setup();
+		const older = es.history.add_entry('older', { created: 1 });
+		es.set_content_from_history(older.id);
+		await assert_kept(a, es, release);
+	});
+
+	test('not a markdown view mode chosen, which outlives it by path', async () => {
+		const { a, es, release } = await setup();
+		es.markdown_view_mode_choice = 'preview';
+		release();
+		await microtask();
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path), 'dropped');
+
+		const next = app.diskfiles.get_editor_state_at(a.path);
+		assert.ok(next);
+		assert.notStrictEqual(next, es);
+		assert.strictEqual(next.markdown_view_mode_choice, 'preview');
+	});
+
+	test('a fragment to reveal', async () => {
+		const { a, es, release } = await setup();
+		es.markdown_pending_fragment = 'heading';
+		await assert_kept(a, es, release);
+	});
+
+	test('a save in flight, even with the editor typed back to the disk content', async () => {
+		const { a, es, release } = await setup();
+		const release_updates = disk.hold_updates();
+		es.current_content = 'mine';
+		const saving = es.save_changes();
+		es.current_content = 'v1';
+		assert.isFalse(es.dirty);
+		await assert_kept(a, es, release);
+		release_updates();
+		assert.isTrue(await saving);
+	});
+
+	test('a save waiting on a read, even with the editor typed back to the disk content', async () => {
+		const { a, es, release } = await setup();
+		es.current_content = 'mine';
+		const release_reads = disk.hold_reads();
+		disk.write(a.path, 'v1, touched'); // reported — the save waits for its read
+		const saving = es.save_changes();
+		assert.isTrue(es.save_pending);
+		es.current_content = 'v1';
+		assert.isFalse(es.dirty);
+		await assert_kept(a, es, release);
+		release_reads();
+		await saving;
+	});
+
+	test('a save in flight, then dropped once it lands and the file is let go again', async () => {
+		const { a, es, release } = await setup();
+		const release_updates = disk.hold_updates();
+		es.current_content = 'mine';
+		const saving = es.save_changes();
+		await assert_kept(a, es, release);
+
+		release_updates();
+		assert.isTrue(await saving);
+		assert.isFalse(es.can_drop, "the disk isn't known to hold it until its broadcast");
+		disk.write(a.path, 'mine');
+		await flush_reads();
+		assert.isTrue(es.can_drop, 'clean once saved');
+		assert.strictEqual(app.diskfiles.find_editor_state(a.path), es, 'until the next let-go');
+		app.diskfiles.hold(a.path)();
+		await microtask();
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
+	});
 });
 
 test('a file arriving at a held path gets a cell and is read; any other stays a record', async () => {
