@@ -835,7 +835,7 @@ const assert_markers_outside_truncation = (target: HTMLElement, path: string): v
 describe('DiskfileListitem', () => {
 	test('marks a file with unsaved changes, without creating editing state', async () => {
 		const a = await disk.load(PATH_A, 'v1');
-		const view = render(DiskfileListitem, { diskfile: a });
+		const view = render(DiskfileListitem, { path: a.path });
 		const item = view.target.querySelector('[role="button"]');
 		assert.ok(item);
 		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
@@ -852,8 +852,8 @@ describe('DiskfileListitem', () => {
 		const a = await disk.load(PATH_A, 'v1');
 		const calls: Array<boolean> = [];
 		const view = render(DiskfileListitem, {
-			diskfile: a,
-			onselect: (_diskfile: Diskfile, open_not_preview: boolean) => calls.push(open_not_preview)
+			path: a.path,
+			onselect: (_path: DiskfilePath, open_not_preview: boolean) => calls.push(open_not_preview)
 		});
 		const item = view.target.querySelector('[role="button"]');
 		assert.ok(item);
@@ -875,7 +875,7 @@ describe('DiskfileListitem', () => {
 		app.diskfiles.remove_by_path(PATH_A); // kept for its draft, deleted on disk
 		flushSync();
 		assert.isTrue(a.deleted_on_disk);
-		const view = render(DiskfileListitem, { diskfile: a });
+		const view = render(DiskfileListitem, { path: a.path });
 		assert_markers_outside_truncation(view.target, 'a.txt');
 	});
 });

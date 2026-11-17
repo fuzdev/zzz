@@ -61,13 +61,11 @@
 		conflict: false
 	};
 
-	const diskfile = $derived(
-		row.kind === 'file' ? diskfiles.get_by_path(row.path as DiskfilePath) : undefined
-	);
+	const file_path = $derived(row.kind === 'file' ? (row.path as DiskfilePath) : null);
 	const status: DiskfileStatus = $derived(
-		diskfile ? to_diskfile_status(diskfiles, diskfile) : NO_STATUS
+		file_path ? to_diskfile_status(diskfiles, file_path) : NO_STATUS
 	);
-	const selected = $derived(!!diskfile && diskfiles.selected_path === diskfile.path);
+	const selected = $derived(file_path !== null && diskfiles.selected_path === file_path);
 	// a repo's focus or unfocus in flight — the row says which
 	const pending = $derived(
 		row.kind !== 'file' && projects.pending_repos.has(row.path as DiskfileDirectoryPath)
@@ -95,16 +93,14 @@
 			? 'not focused — expand to index its files'
 			: undefined}
 >
-	{#if diskfile}
-		<DiskfileContextmenu {diskfile}>
+	{#if file_path}
+		<DiskfileContextmenu path={file_path}>
 			{@render content()}
 		</DiskfileContextmenu>
 	{:else if row.kind !== 'file'}
 		<DiskfileDirectoryContextmenu {row}>
 			{@render content()}
 		</DiskfileDirectoryContextmenu>
-	{:else}
-		{@render content()}
 	{/if}
 </li>
 

@@ -39,8 +39,8 @@
 		{items}
 		sorters={[
 			// TODO @many rework API to avoid casting
-			sort_by_numeric<Action>('created_newest', 'newest first', 'created_date', 'desc'),
-			sort_by_numeric<Action>('created_oldest', 'oldest first', 'created_date', 'asc'),
+			sort_by_numeric<Action>('created_newest', 'newest first', 'cid', 'desc'),
+			sort_by_numeric<Action>('created_oldest', 'oldest first', 'cid', 'asc'),
 			sort_by_text<Action>('method_asc', 'method (a-z)', 'method'),
 			sort_by_text<Action>('method_desc', 'method (z-a)', 'method', 'desc')
 		]}

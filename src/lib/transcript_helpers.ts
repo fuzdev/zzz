@@ -88,6 +88,25 @@ export const find_transcript_candidates = <T extends { readonly path: string }>(
 };
 
 /**
+ * The paths among `paths` that could be transcript sidecars of the audio
+ * file at `source_path` — `find_transcript_candidates` over bare paths.
+ *
+ * @param paths - the paths to look through
+ * @param source_path - the audio file's absolute path
+ */
+export const find_transcript_candidate_paths = (
+	paths: Iterable<string>,
+	source_path: string
+): Array<string> => {
+	const prefix = source_path + '.';
+	const candidates: Array<string> = [];
+	for (const path of paths) {
+		if (path.startsWith(prefix) && is_transcript_path(path)) candidates.push(path);
+	}
+	return candidates;
+};
+
+/**
  * Finds the transcript sidecars of the audio file at `source_path` among
  * `files`: the files beside it named `<source name>.<model>.transcript.json`
  * whose content says they were made from it. Sorted by model name. A

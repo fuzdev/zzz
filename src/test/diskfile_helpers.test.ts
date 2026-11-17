@@ -26,7 +26,6 @@ import {
 	SerializableDisknode,
 	SnapshotFiles
 } from '#lib/diskfile_types.ts';
-import type { Diskfile } from '#lib/diskfile.svelte.ts';
 
 describe('SnapshotFiles', () => {
 	test('a file is [rel, size, mtime] or [rel, size, mtime, ctime], whole numbers or null', () => {
@@ -314,7 +313,7 @@ describe('delete_diskfile', () => {
 	});
 
 	const path = parse_or_throw(DiskfilePath, '/ws/a.txt');
-	const diskfile = { path, path_relative: 'ws/a.txt' } as unknown as Diskfile;
+	const to_relative_path = () => 'ws/a.txt';
 
 	test('deletes the file', async () => {
 		const deleted: Array<string> = [];
@@ -322,11 +321,12 @@ describe('delete_diskfile', () => {
 			delete: (p: string) => {
 				deleted.push(p);
 				return Promise.resolve();
-			}
+			},
+			to_relative_path
 		} as unknown as Diskfiles;
 		vi.stubGlobal('alert', () => assert.fail('no alert expected'));
 
-		assert.ok(await delete_diskfile(diskfiles, diskfile));
+		assert.ok(await delete_diskfile(diskfiles, path));
 		assert.deepEqual(deleted, [path]);
 	});
 
@@ -335,10 +335,12 @@ describe('delete_diskfile', () => {
 		vi.stubGlobal('alert', (message: string) => alerts.push(message));
 		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const diskfiles = {
-			delete: () => Promise.reject(new Error('failed to delete file: Permission denied: /ws/a.txt'))
+			delete: () =>
+				Promise.reject(new Error('failed to delete file: Permission denied: /ws/a.txt')),
+			to_relative_path
 		} as unknown as Diskfiles;
 
-		assert.ok(!(await delete_diskfile(diskfiles, diskfile)));
+		assert.ok(!(await delete_diskfile(diskfiles, path)));
 		assert.deepEqual(alerts, [
 			"couldn't delete ws/a.txt: failed to delete file: Permission denied: /ws/a.txt"
 		]);

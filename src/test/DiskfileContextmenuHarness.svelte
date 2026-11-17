@@ -9,7 +9,7 @@
 </script>
 
 <ContextmenuRoot>
-	<DiskfileContextmenu {diskfile}>
+	<DiskfileContextmenu path={diskfile.path}>
 		<span class="contextmenu-target">{diskfile.path}</span>
 	</DiskfileContextmenu>
 </ContextmenuRoot>

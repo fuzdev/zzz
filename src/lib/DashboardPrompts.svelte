@@ -154,7 +154,7 @@
 								type="button"
 								class="plain font_size_sm"
 								onclick={add_diskfile_part}
-								disabled={!app.diskfiles.on_disk.length}
+								disabled={!app.diskfiles.index.size}
 							>
 								<div class="row white-space:nowrap">
 									<Icon data={icon_file} />&nbsp; add file
@@ -219,12 +219,12 @@
 
 <DiskfilePickerDialog
 	bind:show={show_diskfile_picker}
-	onpick={(diskfile) => {
-		if (!app.prompts.selected || !diskfile) return false;
+	onpick={(path) => {
+		if (!app.prompts.selected || !path) return false;
 
 		const part = Part.create(app, {
 			type: 'diskfile',
-			path: diskfile.path
+			path
 		});
 
 		app.prompts.selected.add_part(part);

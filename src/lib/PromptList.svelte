@@ -20,8 +20,8 @@
 		// TODO @many probably rely on the db to bump `updated`
 		// sort_by_numeric<Prompt>('updated_newest', 'updated (latest)', 'updated', 'desc'),
 		// sort_by_numeric<Prompt>('updated_oldest', 'updated (past)', 'updated', 'asc'),
-		sort_by_numeric<Prompt>('created_newest', 'created (newest)', 'created', 'desc'),
-		sort_by_numeric<Prompt>('created_oldest', 'created (oldest)', 'created', 'asc'),
+		sort_by_numeric<Prompt>('created_newest', 'created (newest)', 'cid', 'desc'),
+		sort_by_numeric<Prompt>('created_oldest', 'created (oldest)', 'cid', 'asc'),
 		sort_by_text<Prompt>('name_asc', 'name (a-z)', 'name'),
 		sort_by_text<Prompt>('name_desc', 'name (z-a)', 'name', 'desc')
 	]}

@@ -79,10 +79,7 @@
 	const edit_a_copy = async (): Promise<void> => {
 		if (!transcript || !source_path) return;
 		copy_error = null;
-		const path = to_transcript_copy_path(
-			source_path,
-			(p) => diskfiles.get_by_path(parse_or_throw(DiskfilePath, p)) !== undefined
-		);
+		const path = to_transcript_copy_path(source_path, (p) => diskfiles.has_path(p));
 		try {
 			await diskfiles.create_file_at(
 				parse_or_throw(DiskfilePath, path),
@@ -95,11 +92,11 @@
 </script>
 
 {#if loading}
-	<DiskfileContextmenu {diskfile}>
+	<DiskfileContextmenu path={diskfile.path}>
 		<p class="p_md text_50">{DISKFILE_CONTENT_LOADING_MESSAGE}</p>
 	</DiskfileContextmenu>
 {:else if transcript}
-	<DiskfileContextmenu {diskfile}>
+	<DiskfileContextmenu path={diskfile.path}>
 		<!-- a stacking context, so the details drawer's z-index (over the segments it slides across)
 		stays inside the view, under the desk menu's overlay -->
 		<div class="flex height:100% isolation:isolate">
@@ -162,7 +159,7 @@
 						</button>
 					{/if}
 					<ConfirmButton
-						onconfirm={() => delete_diskfile(app.diskfiles, diskfile)}
+						onconfirm={() => delete_diskfile(app.diskfiles, diskfile.path)}
 						class="plain icon-button"
 						title="delete this transcript — the audio can then be transcribed again"
 					>

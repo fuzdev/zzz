@@ -5,7 +5,7 @@
 	import ContextmenuSubmenu from '@fuzdev/fuz_ui/ContextmenuSubmenu.svelte';
 	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
-	import type { Diskfile } from './diskfile.svelte.ts';
+	import type { DiskfilePath } from './diskfile_types.ts';
 	import {
 		icon_checkmark,
 		icon_delete,
@@ -27,12 +27,13 @@
 	} from './markdown_view_mode.ts';
 
 	const {
-		diskfile,
+		path,
 		reveal_in_tree = false,
 		children,
 		...rest
 	}: OmitStrict<ComponentProps<typeof Contextmenu>, 'entries'> & {
-		diskfile: Diskfile | null | undefined;
+		/** The file's path — no menu when `null` or `undefined`. */
+		path: DiskfilePath | null | undefined;
 		/**
 		 * Whether to offer "reveal in tree" — on the files page's list rows and
 		 * tabs, beside the explorer, not on the tree's own rows.
@@ -42,23 +43,27 @@
 	} = $props();
 
 	const app = frontend_context.get();
+	const { diskfiles } = app;
+
+	// only the content entries need the cell
+	// TODO D2 (d): peek
+	const diskfile = $derived(path ? diskfiles.get_by_path(path) : undefined);
 
 	// the folder holding `path`, without a trailing slash, as a terminal's `cwd`
 	const to_parent_dir = (path: string): string => path.slice(0, path.lastIndexOf('/')) || '/';
 </script>
 
-{#if diskfile}
+{#if path}
 	<Contextmenu {...rest} {entries} {children} />
 {:else}
 	{@render children()}
 {/if}
 
 {#snippet entries()}
-	{#if diskfile}
-		{@const { diskfiles } = diskfile.app}
+	{#if path}
 		{@const { tabs } = diskfiles.editor}
-		{@const tab = tabs.by_path.get(diskfile.path)}
-		{@const selected = diskfile === tabs.selected_tab?.diskfile}
+		{@const tab = tabs.by_path.get(path)}
+		{@const selected = tabs.selected_path === path}
 		<ContextmenuSubmenu icon={icon_file}>
 			file
 			{#snippet menu()}
@@ -67,7 +72,7 @@
 					<ContextmenuEntry
 						icon={icon_file}
 						run={() => {
-							diskfiles.select(diskfile.path, true);
+							diskfiles.select(path, true);
 						}}
 					>
 						<span>select tab</span>
@@ -78,7 +83,7 @@
 					<ContextmenuEntry
 						icon={icon_file}
 						run={() => {
-							diskfiles.select(diskfile.path, false);
+							diskfiles.select(path, false);
 						}}
 					>
 						<span>preview tab</span>
@@ -96,28 +101,31 @@
 					</ContextmenuEntry>
 				{/if}
 
-				<DiskfileCopyPathEntries path={diskfile.path} />
+				<DiskfileCopyPathEntries {path} />
 
 				<!-- loaded on click when it isn't yet; kept after a failed read, to say why;
 				never for an empty file, by its content once loaded, else its size on disk -->
-				{#if (diskfile.content_status !== 'unloadable' || diskfile.content_error !== null) &&
-					(diskfile.content === null ? diskfile.size !== 0 : diskfile.content !== '')
-				}
-					<ContextmenuEntryCopyToClipboard
-						content={diskfile.content ?? undefined}
-						load_content={diskfile.content_status === 'loaded'
-							? undefined
-							: () => diskfiles.load_content(diskfile)}
-						label="copy file content"
-						preview={diskfile.content_preview}
-					/>
+				{#if diskfile}
+					{@const file = diskfile}
+					{#if (file.content_status !== 'unloadable' || file.content_error !== null) &&
+						(file.content === null ? file.size !== 0 : file.content !== '')
+					}
+						<ContextmenuEntryCopyToClipboard
+							content={file.content ?? undefined}
+							load_content={file.content_status === 'loaded'
+								? undefined
+								: () => diskfiles.load_content(file)}
+							label="copy file content"
+							preview={file.content_preview}
+						/>
+					{/if}
 				{/if}
 
 				{#if reveal_in_tree}
 					<ContextmenuEntry
 						icon={icon_directory}
 						run={() => {
-							diskfiles.editor.reveal_in_tree(diskfile.path);
+							diskfiles.editor.reveal_in_tree(path);
 						}}
 					>
 						<span>reveal in tree</span>
@@ -125,11 +133,11 @@
 				{/if}
 
 				<!-- a file deleted on disk may have taken its folder with it -->
-				{#if !diskfile.deleted_on_disk}
+				{#if !diskfile?.deleted_on_disk}
 					<ContextmenuEntry
 						icon={icon_terminal}
 						run={() => {
-							void app.terminals.open_shell(to_parent_dir(diskfile.path));
+							void app.terminals.open_shell(to_parent_dir(path));
 						}}
 					>
 						<span>open terminal in its folder</span>
@@ -141,8 +149,8 @@
 					run={async () => {
 						// TODO @many better confirmation
 						// eslint-disable-next-line no-alert
-						if (confirm(`Are you sure you want to delete ${diskfile.path_relative}?`)) {
-							await delete_diskfile(app.diskfiles, diskfile);
+						if (confirm(`Are you sure you want to delete ${diskfiles.to_relative_path(path)}?`)) {
+							await delete_diskfile(diskfiles, path);
 						}
 					}}
 				>
@@ -152,10 +160,10 @@
 				<!-- TODO rename and move, once the backend has actions for them -->
 			{/snippet}
 		</ContextmenuSubmenu>
-		{#if to_diskfile_content_kind(diskfile.path) === 'markdown'}
+		{#if to_diskfile_content_kind(path) === 'markdown'}
 			{@const current_mode =
-				diskfiles.find_editor_state(diskfile.path)?.markdown_view_mode ??
-				to_default_markdown_view_mode(diskfile.content_status !== 'unloadable')}
+				diskfiles.find_editor_state(path)?.markdown_view_mode ??
+				to_default_markdown_view_mode(diskfile?.content_status !== 'unloadable')}
 			<!-- rendering only looks the editing state up: it's created on a choice, never by opening the menu -->
 			<ContextmenuSubmenu icon={icon_view}>
 				view
@@ -164,7 +172,9 @@
 						<ContextmenuEntry
 							icon={mode === current_mode ? icon_checkmark : icon_view}
 							run={() => {
-								diskfiles.get_editor_state(diskfile).markdown_view_mode_choice = mode;
+								// TODO D2 (d): peek
+								const target = diskfiles.get_by_path(path);
+								if (target) diskfiles.get_editor_state(target).markdown_view_mode_choice = mode;
 							}}
 						>
 							<span>{MARKDOWN_VIEW_MODE_LABELS[mode]}</span>

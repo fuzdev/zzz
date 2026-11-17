@@ -446,7 +446,9 @@ describe('DiskfileTreeState', () => {
 				write(path);
 			}
 			const expected = new DiskfileTreeIndex();
-			for (const diskfile of app.diskfiles.on_disk) {
+			for (const diskfile of app.diskfiles.items.values.filter(
+				(d) => !d.deleted_on_disk && !d.uncovered
+			)) {
 				expected.add_file(diskfile.path, to_file_directories(diskfile.path, diskfile.source_dir));
 			}
 			for (const dir of ['/w/', '/w/a/', '/w/a/b/', '/w/e/']) {

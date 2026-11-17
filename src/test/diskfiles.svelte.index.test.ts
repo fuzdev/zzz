@@ -237,3 +237,38 @@ test('settle_recreated, the flag setters, a direct remove, and a decoded reset',
 	});
 	assert_index(['/dev/r/c.ts']);
 });
+
+test('on_disk, listed, listed_count, and has_path follow the records and the held cells', () => {
+	app.diskfiles.add_initial([node('/dev/r/a.ts'), node('/dev/r/b.ts')]);
+	app.diskfiles.select(at('/dev/r/b.ts'), true); // a tab holds it
+	app.diskfiles.remove_by_path('/dev/r/b.ts');
+	assert.deepEqual(
+		app.diskfiles.on_disk.map((record) => record.id),
+		['/dev/r/a.ts']
+	);
+	assert.deepEqual(
+		app.diskfiles.listed.map((record) => record.id),
+		['/dev/r/a.ts', '/dev/r/b.ts']
+	);
+	assert.strictEqual(app.diskfiles.listed_count, 2);
+	assert.ok(app.diskfiles.has_path('/dev/r/a.ts'));
+	assert.ok(app.diskfiles.has_path('/dev/r/b.ts'), 'a held file is known though off disk');
+	assert.ok(!app.diskfiles.has_path('/dev/r/c.ts'));
+	assert.strictEqual(app.diskfiles.index.watch_count, 0, 'no reader, no watch');
+});
+
+test('find_transcript_candidates looks among the folder’s files on disk', () => {
+	app.diskfiles.add_initial([
+		node('/dev/r/rec.webm'),
+		node('/dev/r/rec.webm.base.transcript.json'),
+		node('/dev/r/rec.webm.notes.txt'),
+		node('/dev/r/other.webm.base.transcript.json'),
+		node('/dev/r/sub/rec.webm.base.transcript.json')
+	]);
+	assert.deepEqual(
+		app.diskfiles.find_transcript_candidates('/dev/r/rec.webm').map((d) => d.path),
+		['/dev/r/rec.webm.base.transcript.json']
+	);
+	app.diskfiles.remove_by_path('/dev/r/rec.webm.base.transcript.json');
+	assert.deepEqual(app.diskfiles.find_transcript_candidates('/dev/r/rec.webm'), []);
+});

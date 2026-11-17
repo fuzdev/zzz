@@ -2,7 +2,7 @@
 
 import { number, string, strip_object } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
-import { create_uuid, type Uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { type Uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { DatetimeNow } from '#lib/datetime.ts';
 import { Sortable, type Sorter, sort_by_text, sort_by_numeric } from '#lib/sortable.svelte.ts';
@@ -25,7 +25,7 @@ class TestCell extends Cell<typeof TestCellSchema> {
 	name: string = $state('');
 	value: number = $state(0);
 
-	constructor(app: Frontend, id: Uuid, name: string, value: number, override_cid?: number) {
+	constructor(app: Frontend, id: Uuid, name: string, value: number) {
 		super(TestCellSchema, {
 			app,
 			json: {
@@ -35,24 +35,23 @@ class TestCell extends Cell<typeof TestCellSchema> {
 			}
 		});
 
-		// Allow test to override the monotonic cid for testing sorting behavior
-		if (override_cid !== undefined) {
-			(this as any).cid = override_cid;
-		}
-
 		this.init();
 	}
 }
+
+/** A Uuid that sorts by `n`, for checking the tiebreak by `id`. */
+const ordered_uuid = (n: number): Uuid =>
+	`00000000-0000-4000-8000-${String(n).padStart(12, '0')}` as Uuid;
 
 describe('Sortable', () => {
 	let items: Array<TestCell>;
 	let sorters: Array<Sorter<TestCell>>;
 	let app: Frontend;
 
-	const id1 = create_uuid();
-	const id2 = create_uuid();
-	const id3 = create_uuid();
-	const id4 = create_uuid();
+	const id1 = ordered_uuid(1);
+	const id2 = ordered_uuid(2);
+	const id3 = ordered_uuid(3);
+	const id4 = ordered_uuid(4);
 
 	beforeEach(() => {
 		// Setup a real Zzz instance for testing
@@ -60,10 +59,10 @@ describe('Sortable', () => {
 
 		// Create test items with intentional name collisions to test stable sorting
 		items = [
-			new TestCell(app, id3, 'Banana', 10, 30),
-			new TestCell(app, id1, 'Apple', 5, 10),
-			new TestCell(app, id2, 'Cherry', 15, 20),
-			new TestCell(app, id4, 'Apple', 20, 40) // Same name as item with id1
+			new TestCell(app, id3, 'Banana', 10),
+			new TestCell(app, id4, 'Apple', 20), // Same name as item with id1
+			new TestCell(app, id2, 'Cherry', 15),
+			new TestCell(app, id1, 'Apple', 5)
 		];
 
 		sorters = [
@@ -180,9 +179,9 @@ describe('Sortable', () => {
 			assert.strictEqual(item2.name, 'Banana');
 			assert.strictEqual(item3.name, 'Cherry');
 
-			// Verify that items with the same name are sorted by cid as fallback
-			assert.strictEqual(item0.cid, 40); // First "Apple" has higher cid
-			assert.strictEqual(item1.cid, 10); // Second "Apple" has lower cid
+			// items with the same name tie by id
+			assert.strictEqual(item0.id, id1);
+			assert.strictEqual(item1.id, id4);
 		});
 
 		test('sorts text values in descending order', () => {
@@ -204,9 +203,9 @@ describe('Sortable', () => {
 			assert.strictEqual(item2.name, 'Apple');
 			assert.strictEqual(item3.name, 'Apple');
 
-			// Verify that items with the same name are sorted by cid as fallback
-			assert.strictEqual(item2.cid, 40); // First "Apple" has higher cid
-			assert.strictEqual(item3.cid, 10); // Second "Apple" has lower cid
+			// items with the same name tie by id, not reversed by the direction
+			assert.strictEqual(item2.id, id1);
+			assert.strictEqual(item3.id, id4);
 		});
 	});
 
@@ -251,11 +250,11 @@ describe('Sortable', () => {
 			assert.strictEqual(item3.value, 5);
 		});
 
-		test('sorts null and undefined values last in both directions, ties by cid', () => {
-			const a = new TestCell(app, create_uuid(), 'a', 0, 100);
-			const b = new TestCell(app, create_uuid(), 'b', 10, 200);
-			const c = new TestCell(app, create_uuid(), 'c', 0, 300);
-			const d = new TestCell(app, create_uuid(), 'd', 5, 400);
+		test('sorts null and undefined values last in both directions, ties by id', () => {
+			const a = new TestCell(app, ordered_uuid(4), 'a', 0);
+			const b = new TestCell(app, ordered_uuid(1), 'b', 10);
+			const c = new TestCell(app, ordered_uuid(3), 'c', 0);
+			const d = new TestCell(app, ordered_uuid(2), 'd', 5);
 			// the schema refuses a missing value, so set them past it, as an unknown size arrives
 			a.value = null as unknown as number;
 			c.value = undefined as unknown as number;
@@ -273,12 +272,11 @@ describe('Sortable', () => {
 			);
 		});
 
-		test('maintains stable sort order with equal values using cid', () => {
-			// Create items with equal values but different cids
+		test('orders equal values by id, whatever the input order', () => {
 			const equal_items = [
-				new TestCell(app, create_uuid(), 'Item3', 10, 300),
-				new TestCell(app, create_uuid(), 'Item1', 10, 100),
-				new TestCell(app, create_uuid(), 'Item2', 10, 200)
+				new TestCell(app, ordered_uuid(3), 'Item3', 10),
+				new TestCell(app, ordered_uuid(1), 'Item1', 10),
+				new TestCell(app, ordered_uuid(2), 'Item2', 10)
 			];
 
 			const equal_sorter = sort_by_numeric<TestCell>('value', 'Value', 'value');
@@ -291,10 +289,19 @@ describe('Sortable', () => {
 			assert.isDefined(item1);
 			assert.isDefined(item2);
 
-			// Items with equal values should be sorted by cid
-			assert.strictEqual(item0.cid, 300);
-			assert.strictEqual(item1.cid, 200);
-			assert.strictEqual(item2.cid, 100);
+			assert.strictEqual(item0.name, 'Item1');
+			assert.strictEqual(item1.name, 'Item2');
+			assert.strictEqual(item2.name, 'Item3');
+			for (const order of [
+				[2, 0, 1],
+				[1, 2, 0]
+			]) {
+				const shuffled = order.map((i) => equal_items[i]!);
+				assert.deepEqual(
+					shuffled.sort(equal_sorter.fn).map((cell) => cell.name),
+					['Item1', 'Item2', 'Item3']
+				);
+			}
 		});
 	});
 

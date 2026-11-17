@@ -57,7 +57,7 @@
 
 	<!-- Delete button is always available -->
 	<ConfirmButton
-		onconfirm={() => delete_diskfile(app.diskfiles, diskfile)}
+		onconfirm={() => delete_diskfile(app.diskfiles, diskfile.path)}
 		position={delete_position}
 		class="plain icon-button"
 		title="delete file"

@@ -1,12 +1,17 @@
 // @slop Claude Sonnet 3.7
 
 import type { Thunk } from '@fuzdev/fuz_util/function.ts';
-import type { Cell } from './cell.svelte.ts';
 
 export interface Sorter<T> {
 	key: string;
 	label: string;
 	fn: (a: T, b: T) => number;
+	/**
+	 * Read before each sort, so a sort over values the items array doesn't
+	 * track — like fields of records replaced in place — re-runs when they
+	 * change. Without it, a sort re-runs only when the items or the sorter do.
+	 */
+	track?: () => unknown;
 }
 
 /**
@@ -99,7 +104,7 @@ export class Sortable<T> {
  * new ones are appended, so after a small change the input is nearly sorted,
  * which the engine's sort (TimSort in V8) handles in close to linear time
  * instead of a full `n log n` re-sort. With a comparator that orders every
- * pair (the cell sorters break ties by `cid`) the result doesn't depend on
+ * pair (`sort_by_text` and `sort_by_numeric` break ties by `id`) the result doesn't depend on
  * `hint`, only the cost does: a stale or unrelated hint just sorts slower.
  *
  * @param items - the items to sort, left unmodified
@@ -125,15 +130,37 @@ export const sort_with_hint = <T>(
 	return result.sort(compare);
 };
 
-// TODO @many these arent used in a typesafe way, asserting cell subtypes, maybe require the cell?
+/** Something a sorter orders, told apart by its `id` when its values tie. */
+export interface SortableItem {
+	readonly id: string;
+}
+
+/**
+ * What a sorter compares: a key of the item, or a function giving the value
+ * for an item — for a value the item doesn't hold, like a path relative to a
+ * directory.
+ */
+export type SortField<T> = keyof T | ((item: T) => unknown);
+
+const to_field_value = <T>(item: T, field: SortField<T>): unknown =>
+	typeof field === 'function' ? field(item) : item[field];
+
+/**
+ * Orders `a` and `b` by `id` — the tiebreak of `sort_by_text` and
+ * `sort_by_numeric`, so items with equal values keep one order whatever the
+ * input's. The order means nothing more: for a Uuid it's arbitrary.
+ */
+export const compare_sort_ids = (a: SortableItem, b: SortableItem): number =>
+	a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+
 /**
  * Creates a text sorter with optional direction.
- * Falls back to cell's `cid` for equal values.
+ * Falls back to `id` for equal values (`compare_sort_ids`).
  */
-export const sort_by_text = <T extends Cell<any>>(
+export const sort_by_text = <T extends SortableItem>(
 	key: string,
 	label: string,
-	field: keyof T,
+	field: SortField<T>,
 	direction: 'asc' | 'desc' = 'asc'
 ): Sorter<T> => {
 	const multiplier = direction === 'desc' ? -1 : 1;
@@ -141,32 +168,32 @@ export const sort_by_text = <T extends Cell<any>>(
 		key,
 		label,
 		fn: (a: T, b: T) => {
-			const result = multiplier * String(a[field]).localeCompare(String(b[field]));
-			// If values are equal, sort by cid for stable ordering
-			return result !== 0 ? result : b.cid - a.cid;
+			const result =
+				multiplier *
+				String(to_field_value(a, field)).localeCompare(String(to_field_value(b, field)));
+			return result !== 0 ? result : compare_sort_ids(a, b);
 		}
 	};
 };
 
-// TODO @many these arent used in a typesafe way, asserting cell subtypes, maybe require the cell?
 /**
  * Creates a numeric sorter with optional direction.
  * A `null` or `undefined` value (unknown, like a file's size the backend
  * couldn't say) sorts after every known one in both directions.
- * Falls back to cell's `cid` for equal values.
+ * Falls back to `id` for equal values (`compare_sort_ids`).
  */
-export const sort_by_numeric = <T extends Cell<any>>(
+export const sort_by_numeric = <T extends SortableItem>(
 	key: string,
 	label: string,
-	field: keyof T,
+	field: SortField<T>,
 	direction: 'asc' | 'desc' = 'asc'
 ): Sorter<T> => {
 	return {
 		key,
 		label,
 		fn: (item_a: T, item_b: T) => {
-			const a = item_a[field];
-			const b = item_b[field];
+			const a = to_field_value(item_a, field) as number | null | undefined;
+			const b = to_field_value(item_b, field) as number | null | undefined;
 			let result: number;
 			if (a == null || b == null) {
 				// unknown values last, whichever the direction
@@ -175,8 +202,7 @@ export const sort_by_numeric = <T extends Cell<any>>(
 				result = a < b ? -1 : a > b ? 1 : 0;
 				if (direction === 'desc') result = -result;
 			}
-			// If values are equal, sort by cid for stable ordering
-			return result !== 0 ? result : item_b.cid - item_a.cid;
+			return result !== 0 ? result : compare_sort_ids(item_a, item_b);
 		}
 	};
 };

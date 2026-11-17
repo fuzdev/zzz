@@ -70,10 +70,16 @@ test('a repo dropped from the registry keeps its tab-only file uncovered, not de
 	assert.isTrue(x.uncovered);
 	assert.isFalse(x.deleted_on_disk);
 	assert.isFalse(es.can_save, 'nothing to write without an edit');
-	assert.include(app.diskfiles.listed, x);
+	assert.include(
+		app.diskfiles.listed.map((r) => r.id),
+		x.path
+	);
 	assert.include(app.diskfiles.listed_unindexed, x);
-	assert.notInclude(app.diskfiles.on_disk, x);
-	assert.deepEqual(to_diskfile_status(app.diskfiles, x), {
+	assert.notInclude(
+		app.diskfiles.on_disk.map((r) => r.id),
+		x.path
+	);
+	assert.deepEqual(to_diskfile_status(app.diskfiles, x.path), {
 		deleted: false,
 		uncovered: true,
 		dirty: false,
@@ -190,7 +196,10 @@ test('reopening the project reattaches the uncovered file, clearing the flag', a
 
 	assert.strictEqual(app.diskfiles.get_by_path(at('/ws/a.txt')), a);
 	assert.isFalse(a.uncovered);
-	assert.include(app.diskfiles.on_disk, a);
+	assert.include(
+		app.diskfiles.on_disk.map((r) => r.id),
+		a.path
+	);
 	assert.notInclude(app.diskfiles.listed_unindexed, a);
 });
 

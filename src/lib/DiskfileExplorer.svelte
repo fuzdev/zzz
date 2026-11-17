@@ -128,7 +128,7 @@
 					>
 						<Icon data={icon_chevron_up} />
 					</button>
-				{:else if diskfiles.listed.length > 1}
+				{:else if diskfiles.listed_count > 1}
 					<button
 						type="button"
 						class="plain sized_sm selectable deselectable"
@@ -161,7 +161,7 @@
 			/>
 		{/if}
 
-		{#if empty && diskfiles.listed.length === 0}
+		{#if empty && diskfiles.listed_count === 0}
 			{@render empty()}
 		{/if}
 	{/if}

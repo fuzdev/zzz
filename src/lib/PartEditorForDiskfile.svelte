@@ -169,11 +169,9 @@
 {/if}
 
 <DiskfilePickerDialog
-	selected_ids={diskfile ? [diskfile.id] : []}
+	selected_paths={diskfile_part.path ? [diskfile_part.path] : []}
 	bind:show={show_file_picker}
-	onpick={(diskfile) => {
-		if (diskfile !== undefined) {
-			diskfile_part.path = diskfile ? diskfile.path : diskfile;
-		}
+	onpick={(path) => {
+		if (path !== undefined) diskfile_part.path = path;
 	}}
 />

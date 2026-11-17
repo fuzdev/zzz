@@ -55,7 +55,7 @@
 	});
 </script>
 
-<DiskfileContextmenu {diskfile}>
+<DiskfileContextmenu path={diskfile.path}>
 	<!-- a stacking context, so the details drawer's z-index (over the editor it slides across) stays
 	inside the view, under the desk menu's overlay -->
 	<div class="flex height:100% isolation:isolate">

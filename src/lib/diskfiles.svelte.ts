@@ -51,6 +51,7 @@ import { cell_json_schema } from './cell_types.ts';
 import { DiskfileIndex } from './diskfile_index.svelte.ts';
 import type { ActionInputs, ActionOutputs } from './action_collections.ts';
 import { TaskQueue } from './task_queue.ts';
+import { find_transcript_candidate_paths } from './transcript_helpers.ts';
 
 /**
  * How many `diskfile_read` requests `Diskfiles` keeps in flight — reads
@@ -142,24 +143,33 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	);
 
 	/**
-	 * Diskfiles that exist on disk, as the index reports them — excludes ones
-	 * kept for a draft or a tab after a delete (`deleted_on_disk`) or after
-	 * leaving the index (`uncovered`), so pickers offer only indexed files.
+	 * The records of the files on disk, as the index reports them — not the
+	 * ones kept for a draft or a tab after a delete (`deleted_on_disk`) or
+	 * after leaving the index (`uncovered`), so pickers offer only indexed
+	 * files. Tracks the index's `membership` alone, so a change in place
+	 * (size or times) doesn't rebuild it, or re-sort a list over it: each
+	 * record's `id` is current, but its other fields may be stale, since the
+	 * index replaces a changed record. A sorter that reads them reads the
+	 * live record (`index.get`, untracked) and tracks `index.meta` itself
+	 * (`Sorter.track`). A count is `index.size`.
 	 */
-	readonly on_disk: Array<Diskfile> = $derived(
-		this.items.values.filter((diskfile) => !diskfile.deleted_on_disk && !diskfile.uncovered)
-	);
+	readonly on_disk: Array<SerializableDisknode> = $derived.by(() => {
+		if (this.index.size === 0) return []; // tracks `membership`
+		return untrack(() => Array.from(this.index.values()));
+	});
 
 	/**
-	 * The diskfiles the explorer lists: those on disk, plus ones deleted on disk
-	 * (`remove_by_path`) or uncovered (`release_uncovered`) but kept for a draft
-	 * or a tab, so each stays reachable.
+	 * The files the explorer lists: the records on disk, plus a record for
+	 * each file deleted on disk (`remove_by_path`) or uncovered
+	 * (`release_uncovered`) but kept for a draft or a tab
+	 * (`listed_unindexed`), so each stays reachable. A kept file's record is
+	 * made from its cell, which keeps no `ctime`.
 	 */
-	readonly listed: Array<Diskfile> = $derived(
-		this.items.values.filter(
-			(diskfile) => (!diskfile.deleted_on_disk && !diskfile.uncovered) || this.#is_held(diskfile)
-		)
-	);
+	readonly listed: Array<SerializableDisknode> = $derived.by(() => {
+		const listed = this.on_disk.slice();
+		for (const diskfile of this.listed_unindexed) listed.push(diskfile_to_disknode(diskfile));
+		return listed;
+	});
 
 	/**
 	 * Whether any file is `dirty` (see `DiskfileEditorState.dirty`: it has a
@@ -1037,6 +1047,9 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		Array.from(this.#unindexed_files.values()).filter((diskfile) => this.#is_held(diskfile))
 	);
 
+	/** How many files `listed` holds, without building it. */
+	readonly listed_count: number = $derived(this.index.size + this.listed_unindexed.length);
+
 	/**
 	 * Marks `diskfile` gone from disk, or back — the one writer of
 	 * `Diskfile.deleted_on_disk` besides `upsert`, so `index` stays in step. A delete clears `uncovered`, and ends any
@@ -1307,6 +1320,43 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		return this.items.by_optional('by_path', path);
 	}
 
+	/**
+	 * Whether a file is known at `path`: on disk in the index, or kept off it
+	 * for a draft or a tab (deleted on disk, or uncovered). Subscribes a
+	 * reactive reader to `path` (`DiskfileIndex.has`) and, on an index miss,
+	 * to the whole `#unindexed_files` map too, so any file kept or released
+	 * off the index re-runs it. Read it per path only in component effects,
+	 * or deriveds that live in one.
+	 */
+	has_path(path: string): boolean {
+		if (this.index.has(path)) return true;
+		for (const diskfile of this.#unindexed_files.values()) {
+			if (diskfile.path === path) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The files beside the audio file at `source_path` that may be its
+	 * transcripts, by name (`find_transcript_candidates`) — looked up among
+	 * its folder's files in the tree index, not a scan of every file. Only
+	 * files on disk; their contents say which are transcripts
+	 * (`find_transcripts`).
+	 */
+	find_transcript_candidates(source_path: string): Array<Diskfile> {
+		const dir = source_path.slice(0, source_path.lastIndexOf('/') + 1);
+		const candidates: Array<Diskfile> = [];
+		for (const path of find_transcript_candidate_paths(
+			this.index.tree_index.get_children(dir).files,
+			source_path
+		)) {
+			// TODO D2 (d): peek
+			const diskfile = this.get_by_path(path as DiskfilePath);
+			if (diskfile) candidates.push(diskfile);
+		}
+		return candidates;
+	}
+
 	// TODO make this a derived property?
 	/** The value `undefined` means uninitialized, `null` means loading, `''` means none. */
 	to_relative_path(path: string): string | null | undefined {
@@ -1339,7 +1389,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	select_next(): void {
-		this.select(this.on_disk[0]?.path ?? null);
+		this.select(this.index.values().next().value?.id ?? null);
 	}
 }
 

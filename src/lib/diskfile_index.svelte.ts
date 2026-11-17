@@ -1,6 +1,8 @@
+import { untrack } from 'svelte';
 import { createSubscriber, SvelteSet } from 'svelte/reactivity';
 
 import type { DiskfilePath, SerializableDisknode } from './diskfile_types.ts';
+import { sort_by_numeric, type Sorter } from './sortable.svelte.ts';
 import { to_file_directories } from './diskfile_helpers.ts';
 import { DiskfileTreeIndex } from './diskfile_tree_state.svelte.ts';
 
@@ -239,3 +241,36 @@ export class DiskfileIndex {
 		}
 	}
 }
+
+/**
+ * Creates a numeric sorter over records from `index` (`Diskfiles.on_disk`
+ * and `Diskfiles.listed`) by a field the index changes in place. Those
+ * arrays track only `membership`, and their records' fields other than `id`
+ * may be stale, so the sorter reads each record's live one (untracked, so
+ * no path is watched) and tracks `meta` itself (`Sorter.track`): a change
+ * in place re-sorts under this sorter, and not under one that reads only
+ * paths. A record the index doesn't hold (a file kept for a draft or a tab)
+ * sorts by its own fields.
+ *
+ * @param index - the index the records come from
+ * @param key - the sorter's key
+ * @param label - the sorter's label
+ * @param field - the record field to sort by
+ * @param direction - the sort direction
+ * @returns a sorter, unknown values last (`sort_by_numeric`)
+ */
+export const sort_index_records_by_numeric = (
+	index: DiskfileIndex,
+	key: string,
+	label: string,
+	field: 'size' | 'ctime' | 'mtime',
+	direction: 'asc' | 'desc' = 'asc'
+): Sorter<SerializableDisknode> => ({
+	...sort_by_numeric<SerializableDisknode>(
+		key,
+		label,
+		(record) => (untrack(() => index.get(record.id)) ?? record)[field],
+		direction
+	),
+	track: () => index.meta
+});

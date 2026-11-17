@@ -478,7 +478,11 @@ describe('a remote unfocus', () => {
 			await flush();
 			assert.strictEqual(app.diskfiles.get_by_path(SITE_B), b);
 			assert.isTrue(b.uncovered, 'no longer an unfocused repo of an open project');
-			assert.notInclude(app.diskfiles.on_disk, b, 'not listed as an indexed file');
+			assert.notInclude(
+				app.diskfiles.on_disk.map((r) => r.id),
+				b.path,
+				'not listed as an indexed file'
+			);
 			assert.isFalse(app.diskfiles.open_path(b.path), 'not openable as indexed');
 
 			app.diskfiles.get_editor_state(b).discard_draft();

@@ -388,7 +388,7 @@
 
 <svelte:document onkeydown={handle_keydown} />
 
-<DiskfileContextmenu {diskfile}>
+<DiskfileContextmenu path={diskfile.path}>
 	<!-- a stacking context, so the drawer's z-index (over the panes it slides across, the editor's
 	textarea included) and the textarea's stay inside the view, under the desk menu's overlay -->
 	<div class="flex height:100% isolation:isolate" bind:this={root_el}>

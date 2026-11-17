@@ -9,13 +9,13 @@
 
 	import { frontend_context } from '#lib/frontend.svelte.ts';
 	import type { Diskfile } from '#lib/diskfile.svelte.ts';
-	import { DiskfileDirectoryPath } from '#lib/diskfile_types.ts';
+	import { DiskfileDirectoryPath, type DiskfilePath } from '#lib/diskfile_types.ts';
 	import { to_diskfile_content_kind } from '#lib/diskfile_content_kind.ts';
 	import Icon from '#lib/Icon.svelte';
 	import JobStatusView from '#lib/JobStatusView.svelte';
 	import { icon_microphone, icon_record } from '#lib/media_icons.ts';
 	import { format_recording_duration, to_recordings_dir } from '#lib/recording_helpers.ts';
-	import { find_transcript_candidates, find_transcripts } from '#lib/transcript_helpers.ts';
+	import { find_transcripts } from '#lib/transcript_helpers.ts';
 	import PageFooter from '#routes/PageFooter.svelte';
 
 	const app = frontend_context.get();
@@ -26,24 +26,28 @@
 		app.zzz_dir ? parse_or_throw(DiskfileDirectoryPath, to_recordings_dir(app.zzz_dir)) : null
 	);
 
-	// newest first — a recording's name is when it started
-	const recordings = $derived(
-		recordings_dir === null
-			? []
-			: diskfiles.on_disk
-					.filter(
-						(diskfile) =>
-							diskfile.path.startsWith(recordings_dir) &&
-							to_diskfile_content_kind(diskfile.path) === 'audio'
-					)
-					.sort((a, b) => (a.path < b.path ? 1 : -1))
-	);
+	// the recordings' paths, newest first — a recording's name is when it started;
+	// walked from the tree index, so it costs the folder, not the whole index
+	const recordings: Array<DiskfilePath> = $derived.by(() => {
+		if (recordings_dir === null) return [];
+		const { tree_index } = diskfiles.index;
+		const paths: Array<DiskfilePath> = [];
+		const dirs: Array<string> = [recordings_dir];
+		for (let dir = dirs.pop(); dir !== undefined; dir = dirs.pop()) {
+			const children = tree_index.get_children(dir);
+			dirs.push(...children.dirs);
+			for (const path of children.files) {
+				if (to_diskfile_content_kind(path) === 'audio') paths.push(path as DiskfilePath);
+			}
+		}
+		return paths.sort((a, b) => (a < b ? 1 : -1));
+	});
 
 	const to_name = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 
-	/** The files that may be `diskfile`'s transcripts — their contents say which. */
-	const to_candidates = (diskfile: Diskfile): Array<Diskfile> =>
-		find_transcript_candidates(diskfiles.items.values, diskfile.path);
+	/** The files that may be the recording's transcripts — their contents say which. */
+	const to_candidates = (path: DiskfilePath): Array<Diskfile> =>
+		diskfiles.find_transcript_candidates(path);
 
 	const is_loading = (diskfile: Diskfile): boolean =>
 		diskfile.content_status === 'unrequested' || diskfile.content_status === 'loading';
@@ -55,32 +59,31 @@
 		}
 	});
 
-	const open = (diskfile: Diskfile): void => {
-		diskfiles.select(diskfile.path, true);
+	const open = (path: DiskfilePath): void => {
+		diskfiles.select(path, true);
 		void goto(resolve('/files'));
 	};
 
 	let error_message: string | null = $state.raw(null);
 
-	const transcribe = async (diskfile: Diskfile): Promise<void> => {
+	const transcribe = async (path: DiskfilePath): Promise<void> => {
 		error_message = null;
-		const result = await jobs.transcribe(diskfile.path);
-		if (!result.ok)
-			error_message = `couldn't transcribe ${to_name(diskfile.path)}: ${result.error.message}`;
+		const result = await jobs.transcribe(path);
+		if (!result.ok) error_message = `couldn't transcribe ${to_name(path)}: ${result.error.message}`;
 	};
 
 	/** Deletes a recording with its transcripts — here they're one thing. */
-	const delete_recording = async (diskfile: Diskfile): Promise<void> => {
+	const delete_recording = async (path: DiskfilePath): Promise<void> => {
 		error_message = null;
 		try {
-			const candidates = to_candidates(diskfile);
+			const candidates = to_candidates(path);
 			await Promise.all(candidates.map((candidate) => diskfiles.ensure_content(candidate)));
-			for (const { file } of find_transcripts(candidates, diskfile.path)) {
+			for (const { file } of find_transcripts(candidates, path)) {
 				await diskfiles.delete(file.path);
 			}
-			await diskfiles.delete(diskfile.path);
+			await diskfiles.delete(path);
 		} catch (error) {
-			error_message = `couldn't delete ${to_name(diskfile.path)}: ${to_error_message(error)}`;
+			error_message = `couldn't delete ${to_name(path)}: ${to_error_message(error)}`;
 		}
 	};
 </script>
@@ -154,16 +157,16 @@
 		<p class="text_50">no recordings yet</p>
 	{:else}
 		<ul class="unstyled column gap_md">
-			{#each recordings as diskfile (diskfile.id)}
-				{@const candidates = to_candidates(diskfile)}
-				{@const transcripts = find_transcripts(candidates, diskfile.path)}
+			{#each recordings as path (path)}
+				{@const candidates = to_candidates(path)}
+				{@const transcripts = find_transcripts(candidates, path)}
 				{@const transcripts_loading = candidates.some(is_loading)}
-				{@const job = jobs.latest_for_input(diskfile.path)}
-				{@const is_recording = recorder.path === diskfile.path}
+				{@const job = jobs.latest_for_input(path)}
+				{@const is_recording = recorder.path === path}
 				<li class="panel p_md">
 					<div class="row_wrap gap_sm">
-						<button type="button" class="plain" onclick={() => open(diskfile)}>
-							{to_name(diskfile.path)}
+						<button type="button" class="plain" onclick={() => open(path)}>
+							{to_name(path)}
 						</button>
 						{#if is_recording}
 							<small class="chip">recording</small>
@@ -176,13 +179,13 @@
 								transcribed by {transcripts.map((t) => t.transcript.tool.model).join(', ')}
 							</small>
 						{:else}
-							<button type="button" class="plain sized_sm" onclick={() => transcribe(diskfile)}>
+							<button type="button" class="plain sized_sm" onclick={() => transcribe(path)}>
 								transcribe
 							</button>
 						{/if}
 						{#if !is_recording}
 							<ConfirmButton
-								onconfirm={() => delete_recording(diskfile)}
+								onconfirm={() => delete_recording(path)}
 								class="plain icon-button"
 								title={transcripts.length > 0
 									? 'delete the recording and its transcripts'

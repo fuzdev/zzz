@@ -1,7 +1,6 @@
-<script lang="ts" generics="T extends {id: Uuid}">
+<script lang="ts" generics="T extends {id: string}">
 	import type { Snippet } from 'svelte';
 	import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
-	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import { slide } from 'svelte/transition';
 	import type { SvelteHTMLElements } from 'svelte/elements';
 
@@ -26,7 +25,7 @@
 	}: {
 		items: Array<T>;
 		filter?: ((item: T) => boolean) | undefined;
-		exclude_ids?: Array<Uuid> | undefined;
+		exclude_ids?: Array<string> | undefined;
 		sorters?: Array<Sorter<T>> | undefined;
 		sort_key_default?: string | undefined;
 		show_sort_controls?: boolean | undefined;
@@ -80,6 +79,7 @@
 		}
 
 		if (sortable.active_sort_fn) {
+			sortable.active_sorter?.track?.();
 			// copies, so the source is never mutated
 			result = sort_with_hint(result, sortable.active_sort_fn, sorted_hint);
 			sorted_hint = result;

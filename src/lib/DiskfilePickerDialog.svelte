@@ -1,29 +1,39 @@
 <script lang="ts" module>
-	import type { Diskfile } from './diskfile.svelte.ts';
-	import { sort_by_text, sort_by_numeric, type Sorter } from './sortable.svelte.ts';
+	import type { DiskfilePath, SerializableDisknode } from './diskfile_types.ts';
+	import { sort_by_text, type Sorter } from './sortable.svelte.ts';
+	import { sort_index_records_by_numeric, type DiskfileIndex } from './diskfile_index.svelte.ts';
 
 	/**
-	 * The picker's sort orders. The size orders go by the size on disk, so a
-	 * file whose content isn't loaded sorts by its bytes too, and a file of
-	 * unknown size goes last either way.
+	 * Creates the picker's sort orders, over records from `index`. The size
+	 * orders go by the size on disk, and the time orders by the times on disk;
+	 * a file whose size or time is unknown goes last either way.
+	 *
+	 * @param index - the index the picked records come from, read live by the size and time orders
+	 * @returns the sorters
 	 */
-	export const diskfile_picker_sorters: Array<Sorter<Diskfile>> = [
-		// TODO @many rework API to avoid casting
-		sort_by_text<Diskfile>('path_asc', 'path (a-z)', 'path'),
-		sort_by_text<Diskfile>('path_desc', 'path (z-a)', 'path', 'desc'),
-		sort_by_numeric('created_newest', 'newest first', 'created_date', 'desc'),
-		sort_by_numeric('created_oldest', 'oldest first', 'created_date', 'asc'),
-		sort_by_numeric('updated_recently', 'recently updated', 'updated_date', 'desc'),
-		sort_by_numeric('updated_oldest', 'least recently updated', 'updated_date', 'asc'),
-		sort_by_numeric<Diskfile>('size_largest', 'largest first', 'size', 'desc'),
-		sort_by_numeric<Diskfile>('size_smallest', 'smallest first', 'size', 'asc')
+	export const create_diskfile_picker_sorters = (
+		index: DiskfileIndex
+	): Array<Sorter<SerializableDisknode>> => [
+		sort_by_text<SerializableDisknode>('path_asc', 'path (a-z)', 'id'),
+		sort_by_text<SerializableDisknode>('path_desc', 'path (z-a)', 'id', 'desc'),
+		sort_index_records_by_numeric(index, 'created_newest', 'newest first', 'ctime', 'desc'),
+		sort_index_records_by_numeric(index, 'created_oldest', 'oldest first', 'ctime', 'asc'),
+		sort_index_records_by_numeric(index, 'updated_recently', 'recently updated', 'mtime', 'desc'),
+		sort_index_records_by_numeric(
+			index,
+			'updated_oldest',
+			'least recently updated',
+			'mtime',
+			'asc'
+		),
+		sort_index_records_by_numeric(index, 'size_largest', 'largest first', 'size', 'desc'),
+		sort_index_records_by_numeric(index, 'size_smallest', 'smallest first', 'size', 'asc')
 	];
 </script>
 
 <script lang="ts">
 	import type { ComponentProps } from 'svelte';
 	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
-	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 
 	import PickerDialog from './PickerDialog.svelte';
@@ -34,42 +44,42 @@
 		show = $bindable(false),
 		onpick,
 		filter,
-		exclude_ids,
-		selected_ids,
+		selected_paths,
 		dialog_props
 	}: {
-		onpick: (diskfile: Diskfile | undefined) => boolean | void;
+		/** Called with the picked file's path, or `undefined` when the picker closes without one. */
+		onpick: (path: DiskfilePath | undefined) => boolean | void;
 		show?: boolean | undefined;
-		filter?: ((diskfile: Diskfile) => boolean) | undefined;
-		exclude_ids?: Array<Uuid> | undefined;
-		selected_ids?: Array<Uuid> | undefined;
+		filter?: ((record: SerializableDisknode) => boolean) | undefined;
+		selected_paths?: Array<DiskfilePath> | undefined;
 		dialog_props?: OmitStrict<ComponentProps<typeof Dialog>, 'children'> | undefined;
 	} = $props();
 
 	const app = frontend_context.get();
 	const { diskfiles } = app;
+
+	const sorters = create_diskfile_picker_sorters(diskfiles.index);
 </script>
 
 <PickerDialog
 	bind:show
 	items={diskfiles.on_disk}
-	{onpick}
+	onpick={(record) => onpick(record?.id)}
 	{filter}
-	{exclude_ids}
 	{dialog_props}
-	sorters={diskfile_picker_sorters}
+	{sorters}
 	sort_key_default="path_asc"
 	show_sort_controls
 	heading="Pick a file"
-	search_text={(diskfile) => diskfile.path}
+	search_text={(record) => record.id}
 	search_placeholder="filter by path"
 	windowed
 >
-	{#snippet children(diskfile, pick)}
+	{#snippet children(record, pick)}
 		<DiskfileListitem
-			{diskfile}
-			selected={!!selected_ids && selected_ids.includes(diskfile.id)}
-			onselect={pick}
+			path={record.id}
+			selected={!!selected_paths && selected_paths.includes(record.id)}
+			onselect={() => pick(record)}
 		/>
 	{/snippet}
 </PickerDialog>

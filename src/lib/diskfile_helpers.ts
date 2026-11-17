@@ -544,23 +544,24 @@ export const prompt_create_diskfile = async (
 };
 
 /**
- * Deletes `diskfile` on disk (see `Diskfiles.delete`), alerting on failure
- * with its path first (`couldn't delete a.txt: <backend message>`), like
- * `prompt_create_diskfile`. The failure is already logged by the action handler.
+ * Deletes the file at `path` on disk (see `Diskfiles.delete`), alerting on
+ * failure with its path first (`couldn't delete a.txt: <backend message>`),
+ * like `prompt_create_diskfile`. The failure is already logged by the action
+ * handler.
  *
  * @param diskfiles - the diskfiles to delete from
- * @param diskfile - the file to delete
+ * @param path - the file to delete
  * @returns whether the file was deleted
  */
 export const delete_diskfile = async (
 	diskfiles: Diskfiles,
-	diskfile: Diskfile
+	path: DiskfilePath
 ): Promise<boolean> => {
 	try {
-		await diskfiles.delete(diskfile.path);
+		await diskfiles.delete(path);
 		return true;
 	} catch (error) {
-		const display_path = diskfile.path_relative || diskfile.path;
+		const display_path = diskfiles.to_relative_path(path) || path;
 		alert(`couldn't delete ${display_path}: ${to_error_message(error)}`); // eslint-disable-line no-alert
 		return false;
 	}
@@ -604,14 +605,17 @@ export interface DiskfileStatus {
 }
 
 /**
- * The status a file row marks. Only looks the editing state up — a file never
- * opened has none, and listing a file mustn't create one.
+ * The status a file row marks for the file at `path`. Only looks the cell and
+ * the editing state up — a file never opened has no editing state, and
+ * listing a file mustn't create one.
  */
-export const to_diskfile_status = (diskfiles: Diskfiles, diskfile: Diskfile): DiskfileStatus => {
-	const editor_state = diskfiles.find_editor_state(diskfile.path);
+export const to_diskfile_status = (diskfiles: Diskfiles, path: DiskfilePath): DiskfileStatus => {
+	// TODO D2 (d): peek
+	const diskfile = diskfiles.get_by_path(path);
+	const editor_state = diskfiles.find_editor_state(path);
 	return {
-		deleted: diskfile.deleted_on_disk,
-		uncovered: diskfile.uncovered,
+		deleted: diskfile?.deleted_on_disk ?? false,
+		uncovered: diskfile?.uncovered ?? false,
 		dirty: editor_state?.dirty ?? false,
 		conflict: editor_state?.has_conflict ?? false
 	};

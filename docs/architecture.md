@@ -1651,11 +1651,16 @@ The explorer and the file picker stay responsive with tens of thousands of
 files: their `SortableList`s are `windowed`, rendering only the rows in or near
 the scroll viewport (every row the same, measured height) with padding standing
 in for the rest, and re-sorting from the previous order (`sort_with_hint`), so
-a file added or removed doesn't pay for a full sort. The picker's size orders
-go by `Diskfile.size`, the bytes on disk, so files whose content isn't loaded
-sort among the rest, and a file of unknown size goes last in both directions.
-The picker also filters by path (case-insensitive substring). Rows scrolled
-out of range unmount, so focus on one is lost when it scrolls away.
+a file added or removed doesn't pay for a full sort. Both list the index's
+records, not cells (`Diskfiles.on_disk`, and `listed`, which adds a record
+made from each file kept for a draft or a tab), and their rows take a path
+(`DiskfileListitem`), so a row looks its cell up only for its status and its
+menu's content entries. Their orders go by the metadata on disk — the size
+in bytes, `mtime`, and `ctime` — so a file of unknown size or time goes last
+in both directions, and equal values tie by path (every `sort_by_text` and
+`sort_by_numeric` breaks ties by `id`). The picker also filters by path
+(case-insensitive substring). Rows scrolled out of range unmount, so focus
+on one is lost when it scrolls away.
 
 **The explorer's two modes.** The files page's explorer (`DiskfileExplorer`)
 shows the same files as a flat, sortable list (`DiskfileList`) or as a folder

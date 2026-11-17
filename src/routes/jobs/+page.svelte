@@ -10,9 +10,8 @@
 	const { jobs } = app;
 
 	const open_file = (path: DiskfilePath): void => {
-		const diskfile = app.diskfiles.get_by_path(path);
-		if (!diskfile) return;
-		app.diskfiles.select(diskfile.path, true);
+		if (!app.diskfiles.has_path(path)) return;
+		app.diskfiles.select(path, true);
 		void goto(resolve('/files'));
 	};
 </script>
@@ -38,7 +37,7 @@
 						<button
 							type="button"
 							class="plain sized_sm"
-							disabled={!app.diskfiles.get_by_path(job.input_path)}
+							disabled={!app.diskfiles.has_path(job.input_path)}
 							onclick={() => open_file(job.input_path)}
 						>
 							open input
@@ -48,7 +47,7 @@
 							<button
 								type="button"
 								class="plain sized_sm"
-								disabled={!app.diskfiles.get_by_path(output_path)}
+								disabled={!app.diskfiles.has_path(output_path)}
 								onclick={() => open_file(output_path)}
 							>
 								open output

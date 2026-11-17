@@ -186,7 +186,7 @@
 							<p>Something went wrong, this tab has no diskfile</p>
 						</div>
 					{/if}
-				{:else if diskfiles.on_disk.length > 0}
+				{:else if diskfiles.index.size > 0}
 					<div class="box height:100%">
 						<p>
 							<button
@@ -203,8 +203,8 @@
 								type="button"
 								class="inline palette_f"
 								onclick={() => {
-									const diskfile = random_item(app.diskfiles.on_disk);
-									diskfiles.select(diskfile.path);
+									const record = random_item(app.diskfiles.on_disk);
+									diskfiles.select(record.id);
 								}}
 							>
 								go fish
@@ -236,9 +236,9 @@
 
 <DiskfilePickerDialog
 	bind:show={show_diskfile_picker}
-	onpick={(diskfile) => {
-		if (!diskfile) return false;
-		diskfiles.select(diskfile.path);
+	onpick={(path) => {
+		if (!path) return false;
+		diskfiles.select(path);
 		return true;
 	}}
 />

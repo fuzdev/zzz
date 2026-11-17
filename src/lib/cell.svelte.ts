@@ -35,8 +35,9 @@ export interface CellOptions<TSchema extends AnySchema> {
 /**
  * A monotonic id for cell instances on the client.
  * This is not reactive and never changes on the instance,
- * whereas `id` can change. It's useful for ordering -
- * the motivating usecase was correctly sorting objects with the same `created` millisecond.
+ * whereas `id` can change. It's useful for ordering by creation on the
+ * client — the sorters tie by `id` instead (`compare_sort_ids`), since what
+ * they sort needn't be a cell.
  *
  * This may cause issues based on how data gets queried, but at least it's stable once loaded.
  * However we may need to revisit this if it causes problems.

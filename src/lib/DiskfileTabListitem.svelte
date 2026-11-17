@@ -42,7 +42,7 @@
 	);
 </script>
 
-<DiskfileContextmenu {diskfile} reveal_in_tree>
+<DiskfileContextmenu path={diskfile?.path} reveal_in_tree>
 	<div
 		class="diskfile-tab-container"
 		class:selected={tab.is_selected}

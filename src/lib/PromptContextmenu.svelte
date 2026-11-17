@@ -62,7 +62,7 @@
 			<ContextmenuEntry
 				icon={icon_file}
 				run={() => {
-					if (!app.diskfiles.on_disk.length) {
+					if (!app.diskfiles.index.size) {
 						alert('No files available. Add files first.'); // eslint-disable-line no-alert
 						return;
 					}
@@ -105,13 +105,13 @@
 
 <DiskfilePickerDialog
 	bind:show={show_diskfile_picker}
-	onpick={(diskfile) => {
-		if (!diskfile) return false;
+	onpick={(path) => {
+		if (!path) return false;
 
 		prompt.add_part(
 			Part.create(app, {
 				type: 'diskfile',
-				path: diskfile.path
+				path
 			})
 		);
 		return true;

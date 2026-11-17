@@ -15,6 +15,7 @@ import { ProviderName } from './provider_types.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import type { Provider } from './provider.svelte.ts';
+import { sort_by_text, type Sorter } from './sortable.svelte.ts';
 
 export const ModelName = pipe(
 	string,
@@ -86,3 +87,23 @@ export class Model extends Cell<typeof ModelJson> {
 		this.init();
 	}
 }
+
+/**
+ * The model pickers' sort orders. Models of one provider tie on `name`, not
+ * the sorters' default `id` tiebreak: a model's `id` is random per load, so
+ * tied models would reshuffle on every reload.
+ */
+export const model_sorters: Array<Sorter<Model>> = [
+	sort_by_text<Model>('name_asc', 'name (a-z)', 'name'),
+	sort_by_text<Model>('name_desc', 'name (z-a)', 'name', 'desc'),
+	{
+		key: 'provider_asc',
+		label: 'provider (a-z)',
+		fn: (a, b) => a.provider_name.localeCompare(b.provider_name) || a.name.localeCompare(b.name)
+	},
+	{
+		key: 'provider_desc',
+		label: 'provider (z-a)',
+		fn: (a, b) => b.provider_name.localeCompare(a.provider_name) || a.name.localeCompare(b.name)
+	}
+];

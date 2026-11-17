@@ -17,7 +17,6 @@
 	import { to_file_bytes_url } from './file_bytes.ts';
 	import { format_recording_duration } from './recording_helpers.ts';
 	import {
-		find_transcript_candidates,
 		find_transcripts,
 		to_transcript_copy_path,
 		transcript_to_text
@@ -64,9 +63,7 @@
 
 	// the transcripts on disk, one per model, and the job writing another — named
 	// like one, a file's content says whether it's this audio's, so they load on view
-	const transcript_candidates = $derived(
-		find_transcript_candidates(diskfiles.items.values, diskfile.path)
-	);
+	const transcript_candidates = $derived(diskfiles.find_transcript_candidates(diskfile.path));
 	$effect(() => {
 		for (const candidate of transcript_candidates) void diskfiles.ensure_content(candidate);
 	});
@@ -107,10 +104,7 @@
 	const edit_a_copy = async (): Promise<void> => {
 		if (!selected) return;
 		copy_error = null;
-		const path = to_transcript_copy_path(
-			diskfile.path,
-			(p) => diskfiles.get_by_path(parse_or_throw(DiskfilePath, p)) !== undefined
-		);
+		const path = to_transcript_copy_path(diskfile.path, (p) => diskfiles.has_path(p));
 		try {
 			await diskfiles.create_file_at(
 				parse_or_throw(DiskfilePath, path),
@@ -122,7 +116,7 @@
 	};
 </script>
 
-<DiskfileContextmenu {diskfile}>
+<DiskfileContextmenu path={diskfile.path}>
 	<!-- a stacking context, so the details drawer's z-index (over the player it slides across) stays
 	inside the view, under the desk menu's overlay -->
 	<div class="flex height:100% isolation:isolate">
@@ -272,7 +266,7 @@
 					</a>
 				{/if}
 				<ConfirmButton
-					onconfirm={() => delete_diskfile(app.diskfiles, diskfile)}
+					onconfirm={() => delete_diskfile(app.diskfiles, diskfile.path)}
 					class="plain icon-button"
 					title="delete file"
 				>

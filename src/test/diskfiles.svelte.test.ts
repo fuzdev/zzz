@@ -357,9 +357,15 @@ describe('delete with a tab keeps the file', () => {
 		assert.strictEqual(tabs.selected_path, b.path);
 		assert.strictEqual(app.diskfiles.selected_path, b.path);
 		assert.strictEqual(app.diskfiles.find_editor_state(b.path), b_state);
-		assert.include(app.diskfiles.listed, b);
+		assert.include(
+			app.diskfiles.listed.map((r) => r.id),
+			b.path
+		);
 		assert.include(app.diskfiles.listed_unindexed, b);
-		assert.notInclude(app.diskfiles.on_disk, b);
+		assert.notInclude(
+			app.diskfiles.on_disk.map((r) => r.id),
+			b.path
+		);
 	});
 
 	test('closing its tab forgets the diskfile, its tab, and its history', () => {
@@ -384,7 +390,10 @@ describe('delete with a tab keeps the file', () => {
 		assert.ok(!all.has(b.id));
 		assert.ok(!all.has(tab.id));
 		assert.ok(!all.has(history.id));
-		assert.notInclude(app.diskfiles.listed, b);
+		assert.notInclude(
+			app.diskfiles.listed.map((r) => r.id),
+			b.path
+		);
 		assert.strictEqual(tabs.selected_path, a.path);
 		assert.strictEqual(app.diskfiles.selected_path, a.path);
 		// neither the reopen stack nor back-navigation resurrects it
@@ -592,7 +601,10 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(tabs.selected_path, b.path);
 		assert.strictEqual(app.diskfiles.selected_path, b.path);
 		assert.ok(app.diskfiles.find_editor_state(b.path)?.has_unsaved_edits);
-		assert.notInclude(app.diskfiles.on_disk, b);
+		assert.notInclude(
+			app.diskfiles.on_disk.map((r) => r.id),
+			b.path
+		);
 		assert.strictEqual(app.diskfiles.on_disk.length, 1);
 	});
 
@@ -609,7 +621,10 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.isFalse(b.deleted_on_disk);
 		assert.strictEqual(b.content, 'b recreated');
 		assert.strictEqual(tabs.by_path.get(b.path), tab);
-		assert.include(app.diskfiles.on_disk, b);
+		assert.include(
+			app.diskfiles.on_disk.map((r) => r.id),
+			b.path
+		);
 		// the unsaved edit survives the round trip
 		assert.strictEqual(editor_state.current_content, 'b edited');
 	});
@@ -650,8 +665,14 @@ describe('delete with unsaved edits keeps the tab', () => {
 		app.diskfiles.editor.close_tab(tab.id);
 
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
-		assert.include(app.diskfiles.listed, b);
-		assert.notInclude(app.diskfiles.on_disk, b);
+		assert.include(
+			app.diskfiles.listed.map((r) => r.id),
+			b.path
+		);
+		assert.notInclude(
+			app.diskfiles.on_disk.map((r) => r.id),
+			b.path
+		);
 		assert.strictEqual(app.diskfiles.find_editor_state(b.path)?.current_content, 'b edited');
 	});
 	test('closing all tabs keeps the draft too', async () => {
@@ -757,7 +778,10 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		assert.strictEqual(preview.path, a.path);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
-		assert.include(app.diskfiles.listed, b);
+		assert.include(
+			app.diskfiles.listed.map((r) => r.id),
+			b.path
+		);
 	});
 	test('a repeated delete keeps it flagged', async () => {
 		const { b, tabs } = await setup_dirty();
@@ -879,7 +903,11 @@ describe('release_uncovered', () => {
 		assert.isTrue(b.uncovered);
 		assert.isFalse(b.deleted_on_disk);
 		assert.sameMembers(app.diskfiles.listed_unindexed, [a, b]);
-		assert.notInclude(app.diskfiles.on_disk, a, 'pickers skip it');
+		assert.notInclude(
+			app.diskfiles.on_disk.map((r) => r.id),
+			a.path,
+			'pickers skip it'
+		);
 		assert.isUndefined(app.diskfiles.get_by_path(PATH_C), 'nothing holds it');
 
 		app.diskfiles.editor.close_tab(tab.id);
@@ -1519,7 +1547,9 @@ describe('directory_paths', () => {
 	/** The directories a from-scratch walk of the files on disk finds. */
 	const rebuilt = (): Array<string> => {
 		const found: Set<string> = new Set();
-		for (const diskfile of app.diskfiles.on_disk) {
+		for (const diskfile of app.diskfiles.items.values.filter(
+			(d) => !d.deleted_on_disk && !d.uncovered
+		)) {
 			for (const dir of to_file_directories(diskfile.path, diskfile.source_dir)) found.add(dir);
 		}
 		return [...found].sort();

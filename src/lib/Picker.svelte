@@ -1,6 +1,5 @@
-<script lang="ts" generics="T extends {id: Uuid}">
+<script lang="ts" generics="T extends {id: string}">
 	import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
-	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import type { Snippet } from 'svelte';
 
 	import type { Sorter } from './sortable.svelte.ts';
@@ -30,7 +29,7 @@
 		 */
 		onpick: (item: T | undefined) => boolean | void;
 		filter?: ((item: T) => boolean) | undefined;
-		exclude_ids?: Array<Uuid> | undefined;
+		exclude_ids?: Array<string> | undefined;
 		sorters?: Array<Sorter<T>> | undefined;
 		sort_key_default?: string | undefined;
 		show_sort_controls?: boolean | undefined;
