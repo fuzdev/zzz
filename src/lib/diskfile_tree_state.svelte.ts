@@ -925,7 +925,7 @@ export class DiskfileTreeState {
 			void this.focus_repo(row);
 		} else if (row.kind === 'file') {
 			const diskfile = this.app.diskfiles.get_by_path(row.path as DiskfilePath);
-			if (diskfile) this.app.diskfiles.select(diskfile.id, open_not_preview);
+			if (diskfile) this.app.diskfiles.select(diskfile.path, open_not_preview);
 		} else {
 			this.toggle(row);
 		}

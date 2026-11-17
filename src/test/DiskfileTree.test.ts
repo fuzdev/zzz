@@ -112,7 +112,7 @@ describe('the tree’s ARIA', () => {
 	test('rows carry their level, position, expansion, and selection', () => {
 		write('/w/a/x.md');
 		const b = write('/w/b.md');
-		app.diskfiles.select(b.id);
+		app.diskfiles.select(b.path);
 		const { target } = render_tree();
 		click(find_row(target, 'a'));
 		const attrs = Array.from(target.querySelectorAll('[role="treeitem"]')).map((el) =>
@@ -183,14 +183,14 @@ describe('the tree’s keyboard', () => {
 		assert.strictEqual(active_text(target), 'x.md', 'right again moves in');
 
 		press(target, ' ');
-		assert.strictEqual(app.diskfiles.selected_file_id, x.id);
-		assert.isTrue(tabs.by_diskfile_id.get(x.id)?.is_preview, 'space previews');
+		assert.strictEqual(app.diskfiles.selected_path, x.path);
+		assert.isTrue(tabs.by_path.get(x.path)?.is_preview, 'space previews');
 
 		press(target, 'End');
 		assert.strictEqual(active_text(target), 'b.md');
 		press(target, 'Enter');
-		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
-		assert.isFalse(tabs.by_diskfile_id.get(b.id)?.is_preview, 'enter opens it for good');
+		assert.strictEqual(app.diskfiles.selected_path, b.path);
+		assert.isFalse(tabs.by_path.get(b.path)?.is_preview, 'enter opens it for good');
 
 		press(target, 'Home');
 		assert.strictEqual(active_text(target), '/w/');
@@ -250,12 +250,12 @@ describe('the tree’s pointer', () => {
 		const { target } = render_tree();
 		const { tabs } = app.diskfiles.editor;
 		click(find_row(target, 'a.md'));
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
-		assert.isTrue(tabs.by_diskfile_id.get(a.id)?.is_preview);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
+		assert.isTrue(tabs.by_path.get(a.path)?.is_preview);
 		assert.strictEqual(active_text(target), 'a.md', 'and makes it active');
 
 		click(find_row(target, 'a.md'), 2);
-		assert.isFalse(tabs.by_diskfile_id.get(a.id)?.is_preview);
+		assert.isFalse(tabs.by_path.get(a.path)?.is_preview);
 	});
 
 	test('a click toggles a folder, and a double click toggles it once', () => {

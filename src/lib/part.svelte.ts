@@ -276,7 +276,7 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 		if (!this.path) return null;
 		const diskfile = this.app.diskfiles.get_by_path(this.path);
 		if (!diskfile?.deleted_on_disk) return diskfile;
-		return this.app.diskfiles.find_editor_state(diskfile.id)?.has_unsaved_edits
+		return this.app.diskfiles.find_editor_state(diskfile.path)?.has_unsaved_edits
 			? diskfile
 			: undefined;
 	});
@@ -290,7 +290,7 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	readonly draft_status: 'unsaved' | 'conflict' | 'deleted' | null = $derived.by(() => {
 		const { diskfile } = this;
 		if (!diskfile) return null;
-		const editor_state = this.app.diskfiles.find_editor_state(diskfile.id);
+		const editor_state = this.app.diskfiles.find_editor_state(diskfile.path);
 		if (!editor_state?.has_unsaved_edits) return null;
 		if (diskfile.deleted_on_disk) return 'deleted';
 		return editor_state.disk_conflict ? 'conflict' : 'unsaved';
@@ -315,7 +315,7 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 		if (!diskfile) return undefined;
 		if (!diskfile.content_loaded) return null;
 		return (
-			this.app.diskfiles.find_editor_state(diskfile.id)?.history.draft_entry?.content ??
+			this.app.diskfiles.find_editor_state(diskfile.path)?.history.draft_entry?.content ??
 			diskfile.content
 		);
 	}

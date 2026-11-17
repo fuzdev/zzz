@@ -278,7 +278,7 @@ describe('DiskfileEditorView', () => {
 		assert.isTrue(editor_state.has_changes);
 
 		// the dirty-tab rule reads it: a delete on disk keeps the tab
-		app.diskfiles.editor.open_diskfile(a.id);
+		app.diskfiles.editor.open_diskfile(a.path);
 		app.diskfiles.remove_by_path(PATH_A);
 		assert.isTrue(a.deleted_on_disk);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
@@ -793,7 +793,7 @@ describe('PartEditorForDiskfile deleted on disk', () => {
 	test('shows a draft-kept deleted file, and discarding lets it go', async () => {
 		await write_externally(PATH_B, 'b'); // takes the auto-selected tab, so a has none
 		const a = await disk.load(PATH_A, 'v1');
-		assert.isFalse(app.diskfiles.editor.tabs.by_diskfile_id.has(a.id));
+		assert.isFalse(app.diskfiles.editor.tabs.by_path.has(a.path));
 		const part = new DiskfilePart({ app, json: { path: PATH_A } });
 		const view = render(PartEditorForDiskfile, { diskfile_part: part });
 		type_into(view.textarea(), 'part draft');
@@ -835,7 +835,7 @@ describe('DiskfileListitem', () => {
 		const view = render(DiskfileListitem, { diskfile: a });
 		const item = view.target.querySelector('[role="button"]');
 		assert.ok(item);
-		assert.isUndefined(app.diskfiles.find_editor_state(a.id));
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
 		assert.notInclude(view.target.textContent, '●');
 
 		app.diskfiles.get_editor_state(a).current_content = 'draft';
@@ -899,8 +899,8 @@ describe('DiskfileTabListitem', () => {
 	test('only the path truncates, so its markers show past a long path', async () => {
 		app.zzz_dir = '/w/'; // so the path shows relative, as `a.txt`
 		const a = await disk.load(PATH_A, 'v1');
-		app.diskfiles.select(a.id, true);
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		app.diskfiles.get_editor_state(a).current_content = 'draft';
 		app.diskfiles.remove_by_path(PATH_A); // kept for its draft, deleted on disk
@@ -937,8 +937,8 @@ describe('DiskfileCloseDialog', () => {
 
 	const setup_pending = async () => {
 		const a = await disk.load(PATH_A, 'v1');
-		app.diskfiles.select(a.id, true);
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		editor_state.current_content = 'draft';
@@ -977,8 +977,8 @@ describe('DiskfileCloseDialog', () => {
 
 	test('save writes the draft, not an older entry the editor shows', async () => {
 		const a = await disk.load(PATH_A, 'v1');
-		app.diskfiles.select(a.id, true);
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		await write_externally(PATH_A, 'v2');
@@ -1025,9 +1025,9 @@ describe('DiskfileCloseDialog', () => {
 
 		click_button(view.target, 'cancel');
 		const b = await disk.load(PATH_B, 'b');
-		app.diskfiles.select(b.id, true);
+		app.diskfiles.select(b.path, true);
 		app.diskfiles.get_editor_state(b).current_content = 'b draft';
-		const b_tab = app.diskfiles.editor.tabs.by_diskfile_id.get(b.id);
+		const b_tab = app.diskfiles.editor.tabs.by_path.get(b.path);
 		assert.ok(b_tab);
 		app.diskfiles.editor.request_close_tab(b_tab.id);
 		flushSync();
@@ -1043,9 +1043,9 @@ describe('DiskfileCloseDialog', () => {
 	test("after don't save, focus moves to the next tab's editor", async () => {
 		const b = await disk.load(PATH_B, 'b');
 		const a = await disk.load(PATH_A, 'v1');
-		app.diskfiles.select(b.id, true);
-		app.diskfiles.select(a.id, true);
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		app.diskfiles.select(b.path, true);
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		app.diskfiles.get_editor_state(a).current_content = 'draft';
 		const b_view = render(DiskfileEditorView, { diskfile: b });
@@ -1056,7 +1056,7 @@ describe('DiskfileCloseDialog', () => {
 		click_button(dialog.target, "don't save");
 		flushSync();
 
-		assert.strictEqual(app.diskfiles.editor.tabs.selected_diskfile_id, b.id);
+		assert.strictEqual(app.diskfiles.editor.tabs.selected_path, b.path);
 		assert.strictEqual(document.activeElement, b_view.textarea());
 	});
 

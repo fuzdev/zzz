@@ -699,8 +699,8 @@ describe('reconnect', () => {
 		}
 		const shown = paths.at(-1)!;
 		const tabbed = paths.at(-2)!;
-		app.diskfiles.select(get(tabbed).id, true);
-		app.diskfiles.select(get(shown).id, true);
+		app.diskfiles.select(get(tabbed).path, true);
+		app.diskfiles.select(get(shown).path, true);
 
 		app.diskfiles.reconcile(
 			paths.map((path) => metadata(path)),

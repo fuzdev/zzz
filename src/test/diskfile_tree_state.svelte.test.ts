@@ -665,10 +665,10 @@ describe('DiskfileTreeState', () => {
 
 		tree.active_key = to_diskfile_tree_row_key('/w/', '/w/x.md');
 		tree.open_active(false);
-		assert.strictEqual(app.diskfiles.selected_file_id, file.id);
-		assert.isTrue(tabs.by_diskfile_id.get(file.id)?.is_preview);
+		assert.strictEqual(app.diskfiles.selected_path, file.path);
+		assert.isTrue(tabs.by_path.get(file.path)?.is_preview);
 		tree.open_active(true);
-		assert.isFalse(tabs.by_diskfile_id.get(file.id)?.is_preview);
+		assert.isFalse(tabs.by_path.get(file.path)?.is_preview);
 
 		tree.active_key = to_diskfile_tree_row_key('/w/', '/w/a/');
 		tree.open_active(true);

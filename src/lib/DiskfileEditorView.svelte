@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { slide } from 'svelte/transition';
-	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 	import { frontend_context } from './frontend.svelte.ts';
 	import DiskfileInfo from './DiskfileInfo.svelte';
 	import type { Diskfile } from './diskfile.svelte.ts';
+	import type { DiskfilePath } from './diskfile_types.ts';
 	import ContentEditor from './ContentEditor.svelte';
 	import DiskfileActions from './DiskfileActions.svelte';
 	import DiskfileDetailsDrawer from './DiskfileDetailsDrawer.svelte';
@@ -26,7 +26,7 @@
 		onmodified
 	}: {
 		diskfile: Diskfile;
-		onmodified?: (diskfile_id: Uuid) => void;
+		onmodified?: (path: DiskfilePath) => void;
 	} = $props();
 
 	const app = frontend_context.get();
@@ -49,7 +49,7 @@
 	// TODO refactor, try to remove
 	$effect(() => {
 		if (editor_state.content_was_modified_by_user) {
-			onmodified?.(diskfile.id);
+			onmodified?.(diskfile.path);
 		}
 	});
 </script>
@@ -97,7 +97,7 @@
 					() => editor_state.shown_content,
 					(content) => (editor_state.current_content = content)
 				}
-				focus_key={diskfile.id}
+				focus_key={diskfile.path}
 				bind:pending_element_to_focus_key={app.ui.pending_element_to_focus_key}
 				token_count={editor_state.current_token_count}
 				placeholder={editor_state.content_loaded

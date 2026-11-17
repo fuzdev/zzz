@@ -380,7 +380,7 @@ describe('the inline create', () => {
 		click(find_row(target, 'y.md'));
 		click(find_row(target, 'y.md'), 2);
 		assert.include(note(), 'skips "dist"');
-		assert.isFalse(app.diskfiles.editor.tabs.by_diskfile_id.get(y.id)?.is_preview);
+		assert.isFalse(app.diskfiles.editor.tabs.by_path.get(y.path)?.is_preview);
 
 		status().querySelector<HTMLButtonElement>('button')!.click();
 		flushSync();

@@ -221,8 +221,8 @@ describe('MarkdownPreview in-zzz links', () => {
 		const x = await add_file('/w/docs/x.md');
 		const target = render_in_app({ path: GUIDE, content: '[x](./x.md)' });
 		assert.isTrue(click_link(target, 'x'));
-		assert.strictEqual(app.diskfiles.selected_file_id, x.id);
-		assert.strictEqual(app.diskfiles.editor.tabs.preview_tab?.diskfile_id, x.id);
+		assert.strictEqual(app.diskfiles.selected_path, x.path);
+		assert.strictEqual(app.diskfiles.editor.tabs.preview_tab?.path, x.path);
 	});
 
 	test('a middle click or Ctrl-click opens a kept tab, never a browser tab', async () => {
@@ -232,11 +232,11 @@ describe('MarkdownPreview in-zzz links', () => {
 		const target = render_in_app({ path: GUIDE, content: '[x](x.md) [y](../y.md)' });
 
 		assert.isTrue(middle_click_link(target, 'x'));
-		assert.strictEqual(app.diskfiles.selected_file_id, x.id);
+		assert.strictEqual(app.diskfiles.selected_path, x.path);
 		assert.isUndefined(app.diskfiles.editor.tabs.preview_tab, 'not the preview tab');
 
 		assert.isTrue(click_link(target, 'y', { ctrlKey: true }));
-		assert.strictEqual(app.diskfiles.selected_file_id, y.id);
+		assert.strictEqual(app.diskfiles.selected_path, y.path);
 		assert.isUndefined(app.diskfiles.editor.tabs.preview_tab);
 	});
 
@@ -245,7 +245,7 @@ describe('MarkdownPreview in-zzz links', () => {
 		const a = await add_file('/w/src/a.md');
 		const target = render_in_app({ path: GUIDE, content: '[a](/src/a.md)' });
 		assert.isTrue(click_link(target, 'a'));
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 	});
 
 	test('a fragment on a markdown file is left for its view to reveal', async () => {
@@ -262,11 +262,11 @@ describe('MarkdownPreview in-zzz links', () => {
 		await add_file('/w/bare/x.txt');
 		const target = render_in_app({ path: GUIDE, content: '[sub](../sub/) [bare](../bare)' });
 		assert.isTrue(click_link(target, 'sub'));
-		assert.strictEqual(app.diskfiles.selected_file_id, readme.id);
+		assert.strictEqual(app.diskfiles.selected_path, readme.path);
 		assert.include(find_link(target, 'sub').title, 'readme');
 
 		assert.isTrue(click_link(target, 'bare'));
-		assert.strictEqual(app.diskfiles.selected_file_id, readme.id, 'nothing opened');
+		assert.strictEqual(app.diskfiles.selected_path, readme.path, 'nothing opened');
 		assert.include(find_link(target, 'bare').title, 'a folder');
 		assert.isUndefined(status_of(target, 'bare'));
 	});
@@ -280,7 +280,7 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.isUndefined(status_of(target, 'ok'));
 		assert.strictEqual(find_link(target, 'ok').getAttribute('title'), null);
 		assert.isTrue(click_link(target, 'gone'));
-		assert.isNull(app.diskfiles.selected_file_id);
+		assert.isNull(app.diskfiles.selected_path);
 	});
 
 	test('what the index can not see is marked unknown, never broken', async () => {
@@ -349,7 +349,7 @@ describe('MarkdownPreview in-zzz links', () => {
 		});
 		assert.strictEqual(find_link(target, 'g').getAttribute('href'), '/docs/guide.md');
 		assert.isTrue(click_link(target, 'g'));
-		assert.isNull(app.diskfiles.selected_file_id);
+		assert.isNull(app.diskfiles.selected_path);
 		// the link after it still follows its own reference
 		assert.isTrue(click_link(target, 'h'));
 		assert.strictEqual(app.diskfiles.selected_file?.path, GUIDE);
@@ -401,7 +401,7 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.isUndefined(status_of(target, 'ok'));
 		// a click on it follows nothing, as for any relative anchor the links don't account for
 		assert.isTrue(click_link(target, 'x'));
-		assert.isNull(app.diskfiles.selected_file_id);
+		assert.isNull(app.diskfiles.selected_path);
 		assert.isTrue(click_link(target, 'ok'));
 		assert.strictEqual(app.diskfiles.selected_file?.path, GUIDE);
 	});
@@ -411,7 +411,7 @@ describe('MarkdownPreview in-zzz links', () => {
 		const target = render_in_app({ content: '[x](/w/docs/x.md) [gone](./gone.md)' });
 		assert.isUndefined(status_of(target, 'gone'));
 		assert.isTrue(click_link(target, 'x'));
-		assert.isNull(app.diskfiles.selected_file_id);
+		assert.isNull(app.diskfiles.selected_path);
 	});
 });
 

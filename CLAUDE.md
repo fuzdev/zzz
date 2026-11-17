@@ -210,7 +210,7 @@ Details: ./docs/development.md § Adding a New Action.
   class's key in `cell_classes.ts` (never `constructor.name`, which
   minification mangles).
 - Every field has a default, except identity fields a cell can't exist
-  without (`Diskfile.path` / `source_dir`, `DiskfileTab.diskfile_id`,
+  without (`Diskfile.path` / `source_dir`, `DiskfileTab.path`,
   `Project.root`, `Model.name`, `Action.method`, `Turn.role`).
 - An array or object default is `with_default_fn(schema, () => [])` —
   `with_default` shares one value across every parse.

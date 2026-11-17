@@ -9,7 +9,7 @@ import {
 } from '@fuzdev/fuz_schema/schema.ts';
 import { untrack } from 'svelte';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
@@ -75,7 +75,7 @@ type ContentReadResult =
 export const DiskfilesJson = cell_json_schema(
 	{
 		diskfiles: with_default_fn(array(DiskfileJson), () => []),
-		selected_file_id: with_default(nullable(Uuid), null)
+		selected_path: with_default(nullable(DiskfilePath), null)
 	},
 	'Diskfiles'
 );
@@ -103,14 +103,14 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	// TODO bound memory across files: every file opened keeps its state and history
 	// (each capped) until the diskfile goes away — maybe drop clean ones when their
 	// last view and tab close, or keep an app-wide history budget
-	/** The files' app-level editing states, by diskfile id — see `get_editor_state`. */
-	readonly #editor_states: SvelteMap<Uuid, DiskfileEditorState> = new SvelteMap();
+	/** The files' app-level editing states, by path — see `get_editor_state`. */
+	readonly #editor_states: SvelteMap<DiskfilePath, DiskfileEditorState> = new SvelteMap();
 
 	readonly items: IndexedCollection<Diskfile> = new IndexedCollection({
 		dispose_item: (diskfile) => {
 			// every way out of the collection passes here - `remove`, `remove_many`, and `clear`
 			this.#sync_directories(diskfile);
-			this.#remove_editor_state(diskfile.id);
+			this.#remove_editor_state(diskfile);
 			diskfile.dispose();
 		},
 		indexes: [
@@ -124,10 +124,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		]
 	});
 
-	selected_file_id: Uuid | null = $state.raw(null);
+	/** The selected file's path — the selection follows the path, not a particular cell. */
+	selected_path: DiskfilePath | null = $state.raw(null);
 
 	readonly selected_file: Diskfile | null = $derived(
-		this.selected_file_id ? (this.items.by_id.get(this.selected_file_id) ?? null) : null
+		this.selected_path ? (this.get_by_path(this.selected_path) ?? null) : null
 	);
 
 	/** Diskfiles that exist on disk — excludes ones kept only for unsaved edits. */
@@ -142,7 +143,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly listed: Array<Diskfile> = $derived(
 		this.items.values.filter(
 			(diskfile) =>
-				!diskfile.deleted_on_disk || !!this.#editor_states.get(diskfile.id)?.has_unsaved_edits
+				!diskfile.deleted_on_disk || !!this.#editor_states.get(diskfile.path)?.has_unsaved_edits
 		)
 	);
 
@@ -231,7 +232,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.#sync_directories(diskfile);
 		if (diskfile.path === this.#select_on_arrival) {
 			this.#select_on_arrival = null;
-			this.select(diskfile.id, true);
+			this.select(diskfile.path, true);
 			this.editor.tree.reveal_created(diskfile.path);
 		}
 		return diskfile;
@@ -258,12 +259,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * throwaway state.
 	 */
 	get_editor_state(diskfile: Diskfile): DiskfileEditorState {
-		const existing = untrack(() => this.#editor_states.get(diskfile.id));
-		if (existing) return existing;
+		const existing = untrack(() => this.#editor_states.get(diskfile.path));
+		// a stale `diskfile` (gone from the collection) never gets the live cell's state
+		if (existing?.diskfile === diskfile) return existing;
 		return create_detached(() => {
 			const editor_state = new DiskfileEditorState({ app: this.app, diskfile });
-			if (this.items.by_id.get(diskfile.id) === diskfile) {
-				this.#editor_states.set(diskfile.id, editor_state);
+			if (this.get_by_path(diskfile.path) === diskfile) {
+				this.#editor_states.set(diskfile.path, editor_state);
 			} else {
 				// unmanaged, so nothing would dispose it — keep it out of the cell registry
 				editor_state.dispose();
@@ -272,21 +274,22 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		});
 	}
 
-	/** The editing state of diskfile `id` if one was created — see `get_editor_state`. */
-	find_editor_state(id: Uuid): DiskfileEditorState | undefined {
-		return this.#editor_states.get(id);
+	/** The editing state of the file at `path` if one was created — see `get_editor_state`. */
+	find_editor_state(path: DiskfilePath): DiskfileEditorState | undefined {
+		return this.#editor_states.get(path);
 	}
 
-	#remove_editor_state(id: Uuid): void {
-		const editor_state = this.#editor_states.get(id);
-		if (!editor_state) return;
-		this.#editor_states.delete(id);
+	/** Disposes `diskfile`'s editing state — only its own, never another cell's at the same path. */
+	#remove_editor_state(diskfile: Diskfile): void {
+		const editor_state = this.#editor_states.get(diskfile.path);
+		if (editor_state?.diskfile !== diskfile) return;
+		this.#editor_states.delete(diskfile.path);
 		editor_state.dispose();
 	}
 
 	/**
 	 * Adds a diskfile for `disknode`, or updates the existing one at the same
-	 * path in place — keeping its id, so tabs, selection, and parts stay attached.
+	 * path in place — keeping the cell, with its content and editing state.
 	 * A diskfile kept after a delete (see `remove_by_path`) is reattached this
 	 * way when its path reappears on disk.
 	 *
@@ -356,7 +359,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	#is_held_eagerly(diskfile: Diskfile): boolean {
 		return (
-			untrack(() => this.#editor_states.has(diskfile.id)) ||
+			untrack(() => this.#editor_states.has(diskfile.path)) ||
 			(this.#part_paths.get(diskfile.path) ?? 0) > 0
 		);
 	}
@@ -543,7 +546,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		diskfile.content_error_reason = null;
 		diskfile.content = contents;
 		diskfile.content_hash = hash;
-		untrack(() => this.#editor_states.get(diskfile.id))?.check_disk_changes();
+		untrack(() => this.#editor_states.get(diskfile.path))?.check_disk_changes();
 	}
 
 	#is_live(diskfile: Diskfile): boolean {
@@ -553,8 +556,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/** Shown files read first: the selected tab's, then any open tab's, then the rest. */
 	#read_priority(diskfile: Diskfile): number {
 		return untrack(() => {
-			if (this.editor.tabs.selected_diskfile_id === diskfile.id) return 0;
-			if (this.editor.tabs.by_diskfile_id.has(diskfile.id)) return 1;
+			if (this.editor.tabs.selected_path === diskfile.path) return 0;
+			if (this.editor.tabs.by_path.has(diskfile.path)) return 1;
 			return 2;
 		});
 	}
@@ -665,7 +668,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const diskfile = this.items.by_optional('by_path', path);
 		if (!diskfile) return;
 
-		if (this.#editor_states.get(diskfile.id)?.has_unsaved_edits) {
+		if (this.#editor_states.get(diskfile.path)?.has_unsaved_edits) {
 			this.set_deleted_on_disk(diskfile, true);
 			return;
 		}
@@ -708,38 +711,40 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/** Whether `diskfile` has a draft or an editor tab — what keeps one outside the index. */
 	#is_held(diskfile: Diskfile): boolean {
 		return (
-			!!this.#editor_states.get(diskfile.id)?.has_unsaved_edits ||
-			this.editor.tabs.by_diskfile_id.has(diskfile.id)
+			!!this.#editor_states.get(diskfile.path)?.has_unsaved_edits ||
+			this.editor.tabs.by_path.has(diskfile.path)
 		);
 	}
 
 	/**
-	 * Forgets diskfile `id` if it's outside what the index covers — deleted on
+	 * Forgets the diskfile at `path` if it's outside what the index covers — deleted on
 	 * disk, or kept from an unfocused repo for its draft or tab
 	 * (`release_uncovered`) — and nothing holds it anymore: no draft and no tab. Called when its
-	 * draft is discarded and when its last tab closes.
+	 * draft is discarded and when its last tab closes. The path may name a newer cell than the
+	 * caller's (one replaced at the same path); that's safe, since the check is on that cell's
+	 * own state.
 	 */
-	release_if_unneeded(id: Uuid): void {
-		const diskfile = this.items.by_id.get(id);
+	release_if_unneeded(path: DiskfilePath): void {
+		const diskfile = this.get_by_path(path);
 		if (
 			diskfile &&
-			(diskfile.deleted_on_disk || this.is_in_unfocused_repo(diskfile.path)) &&
-			!this.#editor_states.get(id)?.has_unsaved_edits &&
-			!this.editor.tabs.by_diskfile_id.has(id)
+			(diskfile.deleted_on_disk || this.is_in_unfocused_repo(path)) &&
+			!this.#editor_states.get(path)?.has_unsaved_edits &&
+			!this.editor.tabs.by_path.has(path)
 		) {
 			this.#forget(diskfile);
 		}
 	}
 
 	/**
-	 * Called when a diskfile's last tab closes. A diskfile deleted on disk with
+	 * Called when the last tab of the file at `path` closes. A diskfile deleted on disk with
 	 * no draft left is forgotten now (see `release_if_unneeded`). Otherwise its
 	 * editing state resets what it shows (`DiskfileEditorState.reset_view`), so
 	 * a reopen shows the draft if there is one, else the disk content.
 	 */
-	handle_diskfile_detached(diskfile_id: Uuid): void {
-		this.release_if_unneeded(diskfile_id);
-		this.#editor_states.get(diskfile_id)?.reset_view();
+	handle_diskfile_detached(path: DiskfilePath): void {
+		this.release_if_unneeded(path);
+		this.#editor_states.get(path)?.reset_view();
 	}
 
 	/**
@@ -750,10 +755,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	#forget(diskfile: Diskfile): void {
 		// remove first, so closing its tabs re-entering `handle_diskfile_detached` is a no-op
 		this.items.remove(diskfile.id);
-		this.editor.remove_diskfile(diskfile.id);
+		this.editor.remove_diskfile(diskfile.path);
 
-		if (this.selected_file_id === diskfile.id) {
-			this.selected_file_id = this.editor.tabs.selected_diskfile_id;
+		if (this.selected_path === diskfile.path) {
+			this.selected_path = this.editor.tabs.selected_path;
 		}
 	}
 
@@ -954,7 +959,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	readonly listed_deleted: Array<Diskfile> = $derived(
 		Array.from(this.#deleted_files.values()).filter(
-			(diskfile) => !!this.#editor_states.get(diskfile.id)?.has_unsaved_edits
+			(diskfile) => !!this.#editor_states.get(diskfile.path)?.has_unsaved_edits
 		)
 	);
 
@@ -974,7 +979,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	set_deleted_on_disk(diskfile: Diskfile, deleted_on_disk: boolean): void {
 		if (diskfile.deleted_on_disk === deleted_on_disk) return;
 		diskfile.deleted_on_disk = deleted_on_disk;
-		if (deleted_on_disk) this.#editor_states.get(diskfile.id)?.set_showing_disk(false);
+		if (deleted_on_disk) this.#editor_states.get(diskfile.path)?.set_showing_disk(false);
 		this.#sync_directories(diskfile);
 	}
 
@@ -1073,7 +1078,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		if (fragment && to_diskfile_content_kind(diskfile.path) === 'markdown') {
 			this.get_editor_state(diskfile).markdown_pending_fragment = fragment;
 		}
-		this.select(diskfile.id, options?.open_not_preview);
+		this.select(diskfile.path, options?.open_not_preview);
 		return true;
 	}
 
@@ -1136,7 +1141,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const created_path = parse_or_throw(DiskfilePath, normalize_path(path));
 		const created = this.get_by_path(created_path);
 		if (created) {
-			this.select(created.id, true);
+			this.select(created.path, true);
 			this.editor.tree.reveal_created(created_path);
 		} else {
 			// a path the file index skips never arrives — don't wait for it
@@ -1154,7 +1159,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	follow_selected_tab(): void {
 		this.#select_on_arrival = null;
-		this.selected_file_id = this.editor.tabs.selected_diskfile_id;
+		this.selected_path = this.editor.tabs.selected_path;
 	}
 
 	/**
@@ -1223,31 +1228,31 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Select a diskfile by id and also update the editor tabs.
-	 * Default to the first file if `id` is `undefined`.
-	 * If `id` is `null`, it selects no file.
+	 * Select a file by path and also update the editor tabs.
+	 * Default to the first file if `path` is `undefined`.
+	 * If `path` is `null`, it selects no file.
 	 * If `open_not_preview` is `true`, opens as a permanent tab, otherwise previews.
 	 */
-	select(id: Uuid | null | undefined, open_not_preview: boolean = false): void {
+	select(path: DiskfilePath | null | undefined, open_not_preview: boolean = false): void {
 		this.#select_on_arrival = null;
-		if (id === undefined) {
+		if (path === undefined) {
 			this.select_next();
 		} else {
-			this.selected_file_id = id;
+			this.selected_path = path;
 
 			// Update the editor if a file is selected
-			if (id !== null) {
+			if (path !== null) {
 				if (open_not_preview) {
-					this.editor.open_diskfile(id);
+					this.editor.open_diskfile(path);
 				} else {
-					this.editor.preview_diskfile(id);
+					this.editor.preview_diskfile(path);
 				}
 			}
 		}
 	}
 
 	select_next(): void {
-		this.select(this.on_disk[0]?.id ?? null);
+		this.select(this.on_disk[0]?.path ?? null);
 	}
 }
 

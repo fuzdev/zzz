@@ -16,7 +16,7 @@ const MINIMAL_JSON: Partial<Record<CellClassNames, object>> = {
 	Action: { method: 'ping' },
 	Diskfile: { path: '/w/a.txt', source_dir: '/w/' },
 	DiskfileHistory: { path: '/w/a.txt' },
-	DiskfileTab: { diskfile_id: create_uuid() },
+	DiskfileTab: { path: '/w/a.txt' },
 	Job: { job_id: create_uuid(), kind: 'transcription', input_path: '/w/a.webm', queued_at: 1 },
 	Model: { name: 'model', provider_name: 'claude' },
 	Project: { root: '/w/' },

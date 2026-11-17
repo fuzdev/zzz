@@ -593,7 +593,7 @@ export interface DiskfileStatus {
  * opened has none, and listing a file mustn't create one.
  */
 export const to_diskfile_status = (diskfiles: Diskfiles, diskfile: Diskfile): DiskfileStatus => {
-	const editor_state = diskfiles.find_editor_state(diskfile.id);
+	const editor_state = diskfiles.find_editor_state(diskfile.path);
 	return {
 		deleted: diskfile.deleted_on_disk,
 		dirty: editor_state?.dirty ?? false,

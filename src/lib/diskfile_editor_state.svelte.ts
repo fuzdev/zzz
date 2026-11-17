@@ -892,7 +892,7 @@ export class DiskfileEditorState {
 		this.content_was_modified_by_user = false;
 		this.disk_conflict = false;
 		this.save_error = null;
-		this.app.diskfiles.release_if_unneeded(this.diskfile.id);
+		this.app.diskfiles.release_if_unneeded(this.diskfile.path);
 	}
 
 	/**
@@ -968,6 +968,6 @@ export class DiskfileEditorState {
 			this.content_was_modified_by_user = false;
 		}
 		this.#clear_conflict_if_settled();
-		this.app.diskfiles.release_if_unneeded(this.diskfile.id);
+		this.app.diskfiles.release_if_unneeded(this.diskfile.path);
 	}
 }

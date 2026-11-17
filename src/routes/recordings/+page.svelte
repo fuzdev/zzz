@@ -56,7 +56,7 @@
 	});
 
 	const open = (diskfile: Diskfile): void => {
-		diskfiles.select(diskfile.id, true);
+		diskfiles.select(diskfile.path, true);
 		void goto(resolve('/files'));
 	};
 

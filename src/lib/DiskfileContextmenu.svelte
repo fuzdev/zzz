@@ -57,7 +57,7 @@
 	{#if diskfile}
 		{@const { diskfiles } = diskfile.app}
 		{@const { tabs } = diskfiles.editor}
-		{@const tab = tabs.by_diskfile_id.get(diskfile.id)}
+		{@const tab = tabs.by_path.get(diskfile.path)}
 		{@const selected = diskfile === tabs.selected_tab?.diskfile}
 		<ContextmenuSubmenu icon={icon_file}>
 			file
@@ -67,7 +67,7 @@
 					<ContextmenuEntry
 						icon={icon_file}
 						run={() => {
-							diskfiles.select(diskfile.id, true);
+							diskfiles.select(diskfile.path, true);
 						}}
 					>
 						<span>select tab</span>
@@ -78,7 +78,7 @@
 					<ContextmenuEntry
 						icon={icon_file}
 						run={() => {
-							diskfiles.select(diskfile.id, false);
+							diskfiles.select(diskfile.path, false);
 						}}
 					>
 						<span>preview tab</span>
@@ -154,7 +154,7 @@
 		</ContextmenuSubmenu>
 		{#if to_diskfile_content_kind(diskfile.path) === 'markdown'}
 			{@const current_mode =
-				diskfiles.find_editor_state(diskfile.id)?.markdown_view_mode ??
+				diskfiles.find_editor_state(diskfile.path)?.markdown_view_mode ??
 				to_default_markdown_view_mode(diskfile.content_status !== 'unloadable')}
 			<!-- rendering only looks the editing state up: it's created on a choice, never by opening the menu -->
 			<ContextmenuSubmenu icon={icon_view}>

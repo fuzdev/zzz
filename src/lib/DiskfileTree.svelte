@@ -149,7 +149,7 @@
 		if (row.kind === 'file') {
 			const diskfile = diskfiles.get_by_path(row.path as DiskfilePath);
 			// the second click of a double click opens the preview for good, like the list's rows
-			if (diskfile) diskfiles.select(diskfile.id, e.detail === 2);
+			if (diskfile) diskfiles.select(diskfile.path, e.detail === 2);
 		} else if (row.kind === 'unfocused') {
 			if (e.detail <= 1) void tree.focus_repo(row);
 		} else if (e.detail <= 1) {

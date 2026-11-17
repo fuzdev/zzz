@@ -240,7 +240,7 @@ describe('DiskfileMarkdownView', () => {
 	test('in preview mode, a pending focus key is taken by the preview', async () => {
 		const a = await disk.load(PATH_A, '# a');
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
-		app.ui.pending_element_to_focus_key = a.id;
+		app.ui.pending_element_to_focus_key = a.path;
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		assert.isNull(app.ui.pending_element_to_focus_key);
 		const preview = view.target.querySelector('h1')?.closest('[tabindex="-1"]');
@@ -261,7 +261,7 @@ describe('DiskfileMarkdownView', () => {
 
 	test('deleted on disk with unsaved edits offers to discard them, then says the tab holds it', async () => {
 		const a = await disk.load(PATH_A, 'v1');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		type_into(view.textarea()!, 'mine');
 		delete_externally(PATH_A);
@@ -269,7 +269,7 @@ describe('DiskfileMarkdownView', () => {
 		assert.include(view.target.textContent, 'save to recreate it with your edits');
 
 		click_button(view.target, 'discard them');
-		const editor_state = app.diskfiles.find_editor_state(a.id);
+		const editor_state = app.diskfiles.find_editor_state(a.path);
 		assert.isFalse(editor_state?.has_unsaved_edits ?? false);
 		assert.include(
 			view.target.textContent,
@@ -512,7 +512,7 @@ describe('DiskfileMarkdownView outline and links', () => {
 		});
 		link.click();
 		flushSync();
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 		assert.isNull(app.diskfiles.get_editor_state(a).markdown_pending_fragment, 'consumed');
 		assert.deepEqual(scrolls, ['H2']);
 		const textarea = view.textarea()!;
@@ -1013,12 +1013,12 @@ describe('DiskfileMarkdownView outline highlight', () => {
 	test("a file switch starts the outline afresh: the caret's current section stays with its file", async () => {
 		const a = await disk.load(PATH_A, DOC);
 		const b = await disk.load(PATH_B, DOC_B);
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const view = render_switching(a);
 		move_caret(view.textarea()!, DOC.indexOf('see'));
 		assert.deepEqual(lit(view.target), ['A', 'B', 'C!']);
 
-		app.diskfiles.select(b.id, true);
+		app.diskfiles.select(b.path, true);
 		flushSync();
 		assert.deepEqual(lit(view.target), ['P', 'Q', 'R'], "none of a's");
 	});
@@ -1028,13 +1028,13 @@ describe('DiskfileMarkdownView outline highlight', () => {
 		const b = await disk.load(PATH_B, DOC_B);
 		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
 		app.diskfiles.get_editor_state(b).markdown_view_mode_choice = 'preview';
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const view = render_switching(a);
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
 		assert.deepEqual(lit(view.target), ['A*', 'B*!', 'C']);
 
-		app.diskfiles.select(b.id, true);
+		app.diskfiles.select(b.path, true);
 		flushSync();
 		assert.deepEqual(lit(view.target), ['P', 'Q', 'R'], "none of a's");
 	});

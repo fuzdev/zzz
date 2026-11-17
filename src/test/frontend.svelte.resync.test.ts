@@ -400,14 +400,14 @@ describe('file reconcile', () => {
 		await load_content(ZZZ_A);
 		const a = app.diskfiles.get_by_path(ZZZ_A);
 		assert.ok(a);
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		editor_state.current_content = 'a edited';
 
 		await load({ files: [] });
 		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_A), a);
 		assert.isTrue(a.deleted_on_disk);
-		assert.ok(app.diskfiles.editor.tabs.by_diskfile_id.get(a.id));
+		assert.ok(app.diskfiles.editor.tabs.by_path.get(a.path));
 
 		// and reattaches it when a later snapshot has the file again
 		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
@@ -438,7 +438,7 @@ describe('file reconcile', () => {
 		const c = app.diskfiles.get_by_path(ZZZ_C)!;
 		// a has an editing state, b is shown in the selected tab, c is held by nothing
 		const a_state = app.diskfiles.get_editor_state(a);
-		app.diskfiles.select(b.id, true);
+		app.diskfiles.select(b.path, true);
 		app.diskfiles.get_editor_state(b);
 		reads.length = 0;
 		// missed while disconnected: b changed on disk, and a was rewritten with the same text
@@ -622,7 +622,7 @@ describe('projects after a restart', () => {
 		});
 		await load_content(WS_B);
 		const b = app.diskfiles.get_by_path(WS_B)!;
-		app.diskfiles.select(b.id, true);
+		app.diskfiles.select(b.path, true);
 		app.diskfiles.get_editor_state(b).current_content = 'b edited';
 	};
 
@@ -662,7 +662,7 @@ describe('projects after a restart', () => {
 		assert.ok(app.diskfiles.get_by_path(WS_A));
 		const b = app.diskfiles.get_by_path(WS_B);
 		assert.ok(b?.deleted_on_disk, 'the dirty tab survives, flagged deleted');
-		assert.ok(app.diskfiles.editor.tabs.by_diskfile_id.get(b.id));
+		assert.ok(app.diskfiles.editor.tabs.by_path.get(b.path));
 
 		// a later snapshot listing it is plain replace again, with no more reopens
 		await load({

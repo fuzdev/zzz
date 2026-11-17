@@ -299,7 +299,7 @@ describe('file management', () => {
 		editor_state.current_content = 'Edited content';
 		const again = app.diskfiles.get_editor_state(test_diskfile);
 		assert.strictEqual(again, editor_state);
-		assert.strictEqual(app.diskfiles.find_editor_state(test_diskfile.id), editor_state);
+		assert.strictEqual(app.diskfiles.find_editor_state(test_diskfile.path), editor_state);
 		assert.strictEqual(again.current_content, 'Edited content');
 	});
 
@@ -885,13 +885,13 @@ describe('saving failures and concurrent edits', () => {
 	});
 
 	test('closing the last tab clears a failed save error', async () => {
-		app.diskfiles.select(test_diskfile.id, true);
+		app.diskfiles.select(test_diskfile.path, true);
 		editor_state.current_content = 'edited';
 		app.diskfiles.update = () => Promise.resolve({ ok: false, error: ERROR });
 		await editor_state.save_changes();
 		assert.strictEqual(editor_state.save_error, 'disk full');
 
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(test_diskfile.id);
+		const tab = app.diskfiles.editor.tabs.by_path.get(test_diskfile.path);
 		assert.ok(tab);
 		app.diskfiles.editor.close_tab(tab.id);
 

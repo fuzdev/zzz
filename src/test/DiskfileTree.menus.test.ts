@@ -235,8 +235,8 @@ describe('the file contextmenu, toward the tree and the terminals', () => {
 	test('reveal in tree from a tab switches the explorer to the tree, the file active', async () => {
 		const x = write('/w/a/b/x.md');
 		write('/w/c.md');
-		app.diskfiles.select(x.id, true);
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(x.id);
+		app.diskfiles.select(x.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(x.path);
 		assert.ok(tab);
 		const target = render(DiskfileTabListitemHarness, { tab });
 		const tab_button = target.querySelector<HTMLElement>('.diskfile-tab-button');

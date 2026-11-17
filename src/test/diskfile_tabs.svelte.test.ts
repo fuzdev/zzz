@@ -2,20 +2,21 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
-import { create_uuid, type Uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { DISKFILE_TABS_CLOSED_MAX, DiskfileTabs } from '#lib/diskfile_tabs.svelte.ts';
 import { DiskfileTab } from '#lib/diskfile_tab.svelte.ts';
+import { DiskfilePath } from '#lib/diskfile_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 // Test data
-const TEST_DISKFILE_ID_1 = parse_or_throw(UuidWithDefault, undefined);
-const TEST_DISKFILE_ID_2 = parse_or_throw(UuidWithDefault, undefined);
-const TEST_DISKFILE_ID_3 = parse_or_throw(UuidWithDefault, undefined);
-const TEST_DISKFILE_ID_4 = parse_or_throw(UuidWithDefault, undefined);
-const TEST_DISKFILE_ID_5 = parse_or_throw(UuidWithDefault, undefined);
+const TEST_PATH_1 = parse_or_throw(DiskfilePath, '/test/file1.ts');
+const TEST_PATH_2 = parse_or_throw(DiskfilePath, '/test/file2.ts');
+const TEST_PATH_3 = parse_or_throw(DiskfilePath, '/test/file3.ts');
+const TEST_PATH_4 = parse_or_throw(DiskfilePath, '/test/file4.ts');
+const TEST_PATH_5 = parse_or_throw(DiskfilePath, '/test/file5.ts');
 
 describe('DiskfileTabs', () => {
 	// Test suite
@@ -44,17 +45,31 @@ describe('DiskfileTabs', () => {
 			assert.deepEqual(tabs.ordered_tabs, []);
 			assert.ok(tabs.selected_tab === undefined);
 			assert.ok(tabs.preview_tab === undefined);
-			assert.isNull(tabs.selected_diskfile_id);
+			assert.isNull(tabs.selected_path);
 			assert.deepEqual(tabs.recently_closed_tabs, []);
+		});
+	});
+
+	describe('JSON', () => {
+		test('a tab round-trips its path through JSON', () => {
+			const tab = new DiskfileTab({ app, tabs, json: { path: TEST_PATH_1 } });
+			const json = tab.to_json();
+			assert.strictEqual(json.path, TEST_PATH_1);
+			tab.dispose();
+
+			const restored = new DiskfileTab({ app, tabs, json });
+			assert.strictEqual(restored.id, json.id);
+			assert.strictEqual(restored.path, TEST_PATH_1);
+			assert.deepEqual(restored.to_json(), json);
 		});
 	});
 
 	describe('tab creation', () => {
 		test('preview_diskfile creates a new preview tab', () => {
-			const tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const tab = tabs.preview_diskfile(TEST_PATH_1);
 
 			assert.instanceOf(tab, DiskfileTab);
-			assert.strictEqual(tab.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(tab.path, TEST_PATH_1);
 			assert.strictEqual(tabs.preview_tab_id, tab.id);
 			assert.strictEqual(tabs.selected_tab_id, tab.id);
 			assert.include(tabs.tab_order, tab.id);
@@ -63,10 +78,10 @@ describe('DiskfileTabs', () => {
 
 		test('preview_diskfile reuses existing tab', () => {
 			// First create a tab
-			const tab1 = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const tab1 = tabs.preview_diskfile(TEST_PATH_1);
 
 			// Then preview the same file again
-			const tab2 = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const tab2 = tabs.preview_diskfile(TEST_PATH_1);
 
 			// Should return the existing tab, not create a new one
 			assert.strictEqual(tab2, tab1);
@@ -75,23 +90,23 @@ describe('DiskfileTabs', () => {
 
 		test('preview_diskfile reuses existing preview tab for new file', () => {
 			// Create a preview tab
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_1);
 
 			// Then preview a different file
-			const result = tabs.preview_diskfile(TEST_DISKFILE_ID_2);
+			const result = tabs.preview_diskfile(TEST_PATH_2);
 
 			// Should reuse the same preview tab but update its content
 			assert.strictEqual(result, preview_tab);
 			assert.strictEqual(tabs.preview_tab_id, preview_tab.id);
-			assert.strictEqual(preview_tab.diskfile_id, TEST_DISKFILE_ID_2);
+			assert.strictEqual(preview_tab.path, TEST_PATH_2);
 			assert.strictEqual(tabs.items.size, 1);
 		});
 
 		test('open_diskfile creates a permanent tab', () => {
-			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab = tabs.open_diskfile(TEST_PATH_1);
 
 			assert.instanceOf(tab, DiskfileTab);
-			assert.strictEqual(tab.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(tab.path, TEST_PATH_1);
 			assert.ok(!tab.is_preview);
 			assert.isNull(tabs.preview_tab_id);
 			assert.strictEqual(tabs.selected_tab_id, tab.id);
@@ -100,10 +115,10 @@ describe('DiskfileTabs', () => {
 
 		test('open_diskfile reuses existing tab', () => {
 			// First create a tab
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
 
 			// Then open the same file again
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_1);
 
 			// Should return the existing tab, not create a new one
 			assert.strictEqual(tab2, tab1);
@@ -112,10 +127,10 @@ describe('DiskfileTabs', () => {
 
 		test('open_diskfile promotes preview tab to permanent', () => {
 			// Create a preview tab
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_1);
 
 			// Then open the same file
-			const permanent_tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const permanent_tab = tabs.open_diskfile(TEST_PATH_1);
 
 			// Should use the same tab but make it permanent
 			assert.strictEqual(permanent_tab, preview_tab);
@@ -125,59 +140,59 @@ describe('DiskfileTabs', () => {
 
 		test('open_diskfile repurposes existing preview tab', () => {
 			// Create a preview tab
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_1);
 
 			// Then open a different file
-			const permanent_tab = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const permanent_tab = tabs.open_diskfile(TEST_PATH_2);
 
 			// Should repurpose the preview tab
 			assert.strictEqual(permanent_tab, preview_tab);
-			assert.strictEqual(permanent_tab.diskfile_id, TEST_DISKFILE_ID_2);
+			assert.strictEqual(permanent_tab.path, TEST_PATH_2);
 			assert.isNull(tabs.preview_tab_id);
 			assert.strictEqual(tabs.items.size, 1);
 		});
 
 		test('open_diskfile replaces preview tab resulting in 2 tabs total', () => {
 			// Create a permanent tab first
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
 			assert.strictEqual(tabs.items.size, 1);
 			assert.isNull(tabs.preview_tab_id);
 
 			// Create a preview tab for a different file
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_2);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_2);
 			assert.strictEqual(tabs.items.size, 2);
 			assert.strictEqual(tabs.preview_tab_id, preview_tab.id);
 			assert.ok(preview_tab.is_preview);
 
 			// Open a third file, which should repurpose the preview tab
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			// Verify the preview tab was repurposed, not creating a third tab
 			assert.strictEqual(tabs.items.size, 2);
 			assert.strictEqual(tab3, preview_tab); // Should be the same tab object
-			assert.strictEqual(tab3.diskfile_id, TEST_DISKFILE_ID_3); // But with the new diskfile id
+			assert.strictEqual(tab3.path, TEST_PATH_3); // But with the new diskfile id
 			assert.isNull(tabs.preview_tab_id); // No preview tab now
 
 			// Verify tab ids are different
 			assert.notStrictEqual(tab1.id, tab3.id);
 
 			// Verify tabs have the right content
-			assert.strictEqual(tab1.diskfile_id, TEST_DISKFILE_ID_1);
-			assert.strictEqual(tab3.diskfile_id, TEST_DISKFILE_ID_3);
+			assert.strictEqual(tab1.path, TEST_PATH_1);
+			assert.strictEqual(tab3.path, TEST_PATH_3);
 		});
 	});
 
 	describe('tab positioning', () => {
 		test('preview_diskfile positions tab after selected tab', () => {
 			// Create two permanent tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Select the first tab
 			tabs.select_tab(tab1.id);
 
 			// Create a preview tab
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_3);
 
 			// Verify the order: tab1, preview_tab, tab2
 			assert.strictEqual(tabs.tab_order[0]!, tab1.id);
@@ -187,14 +202,14 @@ describe('DiskfileTabs', () => {
 
 		test('positioning with additional preview tabs', () => {
 			// Create two permanent tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Select tab1
 			tabs.select_tab(tab1.id);
 
 			// Create a preview tab
-			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
+			const preview = tabs.preview_diskfile(TEST_PATH_3);
 
 			// Expected order: tab1, preview, tab2
 			assert.strictEqual(tabs.tab_order[0]!, tab1.id);
@@ -203,14 +218,14 @@ describe('DiskfileTabs', () => {
 
 			// Select tab2 and create another preview (reusing the existing one)
 			tabs.select_tab(tab2.id);
-			const preview2 = tabs.preview_diskfile(TEST_DISKFILE_ID_4);
+			const preview2 = tabs.preview_diskfile(TEST_PATH_4);
 
 			// The preview tab should move after tab2
 			assert.strictEqual(tabs.tab_order[0]!, tab1.id);
 			assert.strictEqual(tabs.tab_order[1]!, tab2.id);
 			assert.strictEqual(tabs.tab_order[2]!, preview.id);
 			assert.strictEqual(preview2, preview); // Same tab instance
-			assert.strictEqual(preview2.diskfile_id, TEST_DISKFILE_ID_4);
+			assert.strictEqual(preview2.path, TEST_PATH_4);
 		});
 
 		test('preview tab positioning bug fix - selecting existing preview should not reorder', () => {
@@ -220,14 +235,14 @@ describe('DiskfileTabs', () => {
 			// 3. Click between tabs - preview tab should NOT move
 
 			// Create two permanent tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Select the first tab
 			tabs.select_tab(tab1.id);
 
 			// Preview a third file
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_3);
 
 			// Order should be: tab1, preview_tab, tab2
 			assert.deepEqual(tabs.tab_order, [tab1.id, preview_tab.id, tab2.id]);
@@ -253,13 +268,13 @@ describe('DiskfileTabs', () => {
 
 		test('preview tab repositioning only happens when content changes', () => {
 			// Create permanent tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			// Select tab1 and create a preview
 			tabs.select_tab(tab1.id);
-			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_4);
+			const preview = tabs.preview_diskfile(TEST_PATH_4);
 
 			// Order: tab1, preview, tab2, tab3
 			assert.deepEqual(tabs.tab_order, [tab1.id, preview.id, tab2.id, tab3.id]);
@@ -268,18 +283,18 @@ describe('DiskfileTabs', () => {
 			tabs.select_tab(tab3.id);
 
 			// Preview the same file - should NOT reposition
-			tabs.preview_diskfile(TEST_DISKFILE_ID_4);
+			tabs.preview_diskfile(TEST_PATH_4);
 			assert.deepEqual(tabs.tab_order, [tab1.id, preview.id, tab2.id, tab3.id]);
 
-			tabs.preview_diskfile(TEST_DISKFILE_ID_5);
+			tabs.preview_diskfile(TEST_PATH_5);
 			assert.deepEqual(tabs.tab_order, [tab1.id, preview.id, tab2.id, tab3.id]);
 		});
 
 		test('reorder_tabs changes tab order', () => {
 			// Create three tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			// Initial order
 			assert.deepEqual(tabs.tab_order, [tab1.id, tab2.id, tab3.id]);
@@ -300,8 +315,8 @@ describe('DiskfileTabs', () => {
 	describe('tab selection', () => {
 		test('select_tab updates selected_tab_id', () => {
 			// Create tabs
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Select the second tab
 			tabs.select_tab(tab2.id);
@@ -309,14 +324,14 @@ describe('DiskfileTabs', () => {
 			assert.strictEqual(tabs.selected_tab_id, tab2.id);
 			assert.strictEqual(tabs.selected_tab, tab2);
 			assert.ok(tabs.selected_tab?.is_selected);
-			assert.strictEqual(tabs.selected_diskfile_id, tab2.diskfile_id);
+			assert.strictEqual(tabs.selected_path, tab2.path);
 		});
 	});
 
 	describe('tab closing', () => {
 		test('close_tab removes a tab', () => {
 			// Create a tab
-			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab = tabs.open_diskfile(TEST_PATH_1);
 
 			// Close it
 			tabs.close_tab(tab.id);
@@ -330,9 +345,9 @@ describe('DiskfileTabs', () => {
 
 		test('close_tab with multiple tabs selects the most recently opened tab', () => {
 			// Create tabs
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			assert.strictEqual(tabs.items.size, 3);
 
@@ -348,7 +363,7 @@ describe('DiskfileTabs', () => {
 
 		test('close_tab does nothing for non-existent tab', () => {
 			// Create a tab
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			tabs.open_diskfile(TEST_PATH_1);
 
 			// Initial state
 			const initial_size = tabs.items.size;
@@ -365,7 +380,7 @@ describe('DiskfileTabs', () => {
 
 		test('close_tab clears preview_tab_id if closing preview tab', () => {
 			// Create a preview tab
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_1);
 
 			// Close it
 			tabs.close_tab(preview_tab.id);
@@ -375,9 +390,9 @@ describe('DiskfileTabs', () => {
 
 		test('close_tab selects next tab when available', () => {
 			// Create three tabs
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			// Select the middle tab
 			tabs.select_tab(tab2.id);
@@ -391,8 +406,8 @@ describe('DiskfileTabs', () => {
 
 		test('close_tab selects previous tab when closing last tab', () => {
 			// Create two tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Select the last tab
 			tabs.select_tab(tab2.id);
@@ -406,16 +421,16 @@ describe('DiskfileTabs', () => {
 
 		test('close_all_tabs clears all tabs and state', () => {
 			// Create a permanent tab first
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			tabs.open_diskfile(TEST_PATH_1);
 
 			// Create a preview tab
-			tabs.preview_diskfile(TEST_DISKFILE_ID_2);
+			tabs.preview_diskfile(TEST_PATH_2);
 
 			// Make the preview tab permanent first - this prevents it from being reused
 			tabs.promote_preview_to_permanent();
 
 			// Now create another tab - this will be a new one since there's no preview tab to reuse
-			const permanent = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const permanent = tabs.open_diskfile(TEST_PATH_3);
 
 			// Initial state - verify we have 3 tabs before closing
 			assert.strictEqual(tabs.items.size, 3);
@@ -437,19 +452,19 @@ describe('DiskfileTabs', () => {
 
 	describe('close_all_tabs and the reopen stack', () => {
 		test('keeps the tabs closed before it, below the ones it closed', () => {
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
 			tabs.close_tab(tab1.id);
 
 			tabs.close_all_tabs();
 
-			assert.strictEqual(tabs.reopen_last_closed_tab()?.diskfile_id, TEST_DISKFILE_ID_2);
-			assert.strictEqual(tabs.reopen_last_closed_tab()?.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(tabs.reopen_last_closed_tab()?.path, TEST_PATH_2);
+			assert.strictEqual(tabs.reopen_last_closed_tab()?.path, TEST_PATH_1);
 			assert.isNull(tabs.reopen_last_closed_tab());
 		});
 
 		test('reopening one by one restores the closed tabs in order', () => {
-			for (const id of [TEST_DISKFILE_ID_1, TEST_DISKFILE_ID_2, TEST_DISKFILE_ID_3]) {
+			for (const id of [TEST_PATH_1, TEST_PATH_2, TEST_PATH_3]) {
 				tabs.open_diskfile(id);
 			}
 
@@ -457,8 +472,8 @@ describe('DiskfileTabs', () => {
 			while (tabs.reopen_last_closed_tab());
 
 			assert.deepEqual(
-				tabs.ordered_tabs.map((t) => t.diskfile_id),
-				[TEST_DISKFILE_ID_1, TEST_DISKFILE_ID_2, TEST_DISKFILE_ID_3]
+				tabs.ordered_tabs.map((t) => t.path),
+				[TEST_PATH_1, TEST_PATH_2, TEST_PATH_3]
 			);
 		});
 	});
@@ -467,20 +482,20 @@ describe('DiskfileTabs', () => {
 		test('closing many tabs keeps only the most recent', () => {
 			let last_tab_id: Uuid | null = null;
 			for (let i = 0; i < DISKFILE_TABS_CLOSED_MAX * 3; i++) {
-				const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+				const tab = tabs.open_diskfile(TEST_PATH_1);
 				tabs.close_tab(tab.id);
 				last_tab_id = tab.id;
 			}
 
 			assert.strictEqual(tabs.recently_closed_tabs.length, DISKFILE_TABS_CLOSED_MAX);
-			assert.strictEqual(tabs.closed_tab_diskfiles.size, DISKFILE_TABS_CLOSED_MAX);
+			assert.strictEqual(tabs.closed_tab_paths.size, DISKFILE_TABS_CLOSED_MAX);
 			// the newest are the ones kept
 			assert.strictEqual(tabs.recently_closed_tabs.at(-1)?.id, last_tab_id);
-			assert.ok(last_tab_id && tabs.closed_tab_diskfiles.has(last_tab_id));
+			assert.ok(last_tab_id && tabs.closed_tab_paths.has(last_tab_id));
 		});
 
 		test('close_all_tabs stays within the bound', () => {
-			const ids = [TEST_DISKFILE_ID_1, TEST_DISKFILE_ID_2, TEST_DISKFILE_ID_3];
+			const ids = [TEST_PATH_1, TEST_PATH_2, TEST_PATH_3];
 			for (let i = 0; i < DISKFILE_TABS_CLOSED_MAX; i++) {
 				const tab = tabs.open_diskfile(ids[i % ids.length]!);
 				tabs.close_tab(tab.id);
@@ -490,44 +505,44 @@ describe('DiskfileTabs', () => {
 			tabs.close_all_tabs();
 
 			assert.isAtMost(tabs.recently_closed_tabs.length, DISKFILE_TABS_CLOSED_MAX);
-			assert.strictEqual(tabs.closed_tab_diskfiles.size, DISKFILE_TABS_CLOSED_MAX);
+			assert.strictEqual(tabs.closed_tab_paths.size, DISKFILE_TABS_CLOSED_MAX);
 		});
 	});
 
 	describe('removing a diskfile', () => {
 		test('closes its tab and forgets it for reopening', () => {
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 			tabs.close_tab(tab1.id);
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			tabs.open_diskfile(TEST_PATH_1);
 			assert.strictEqual(tabs.items.size, 2);
 
-			tabs.remove_diskfile(TEST_DISKFILE_ID_1);
+			tabs.remove_diskfile(TEST_PATH_1);
 
 			assert.strictEqual(tabs.items.size, 1);
 			assert.deepEqual(tabs.tab_order, [tab2.id]);
 			assert.strictEqual(tabs.selected_tab_id, tab2.id);
-			assert.ok(tabs.recently_closed_tabs.every((t) => t.diskfile_id !== TEST_DISKFILE_ID_1));
-			for (const diskfile_id of tabs.closed_tab_diskfiles.values()) {
-				assert.notStrictEqual(diskfile_id, TEST_DISKFILE_ID_1);
+			assert.ok(tabs.recently_closed_tabs.every((t) => t.path !== TEST_PATH_1));
+			for (const path of tabs.closed_tab_paths.values()) {
+				assert.notStrictEqual(path, TEST_PATH_1);
 			}
 			assert.isFalse(tabs.recent_tab_ids.includes(tab1.id));
 		});
 
 		test('clears the preview tab when it pointed at the removed diskfile', () => {
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_2);
+			tabs.open_diskfile(TEST_PATH_1);
+			const preview = tabs.preview_diskfile(TEST_PATH_2);
 			assert.strictEqual(tabs.preview_tab_id, preview.id);
 
-			tabs.remove_diskfile(TEST_DISKFILE_ID_2);
+			tabs.remove_diskfile(TEST_PATH_2);
 
 			assert.isNull(tabs.preview_tab_id);
-			assert.strictEqual(tabs.selected_diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(tabs.selected_path, TEST_PATH_1);
 		});
 
 		test('is a no-op for a diskfile without tabs', () => {
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			tabs.remove_diskfile(TEST_DISKFILE_ID_3);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			tabs.remove_diskfile(TEST_PATH_3);
 			assert.strictEqual(tabs.items.size, 1);
 			assert.strictEqual(tabs.selected_tab_id, tab1.id);
 		});
@@ -536,7 +551,7 @@ describe('DiskfileTabs', () => {
 	describe('tab promotion', () => {
 		test('promote_preview_to_permanent converts preview to permanent', () => {
 			// Create a preview tab
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_1);
 
 			assert.strictEqual(tabs.preview_tab_id, preview_tab.id);
 			assert.ok(preview_tab.is_preview);
@@ -551,7 +566,7 @@ describe('DiskfileTabs', () => {
 
 		test('promote_preview_to_permanent returns false if no preview tab', () => {
 			// Create a permanent tab
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			tabs.open_diskfile(TEST_PATH_1);
 
 			// Try to promote
 			const result = tabs.promote_preview_to_permanent();
@@ -561,7 +576,7 @@ describe('DiskfileTabs', () => {
 
 		test('open_tab makes a preview tab permanent', () => {
 			// Create a preview tab
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_1);
 
 			assert.strictEqual(tabs.preview_tab_id, preview_tab.id);
 
@@ -572,8 +587,8 @@ describe('DiskfileTabs', () => {
 		});
 
 		test('open_tab selects the tab it promotes', () => {
-			const other = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const other = tabs.open_diskfile(TEST_PATH_2);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_1);
 			tabs.select_tab(other.id);
 
 			tabs.open_tab(preview_tab.id);
@@ -584,7 +599,7 @@ describe('DiskfileTabs', () => {
 		});
 
 		test('open_tab ignores an unknown tab', () => {
-			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab = tabs.open_diskfile(TEST_PATH_1);
 
 			tabs.open_tab(create_uuid());
 
@@ -593,7 +608,7 @@ describe('DiskfileTabs', () => {
 
 		test('open_tab does nothing for permanent tab', () => {
 			// Create a permanent tab
-			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab = tabs.open_diskfile(TEST_PATH_1);
 
 			// Initial state
 			assert.isNull(tabs.preview_tab_id);
@@ -609,8 +624,8 @@ describe('DiskfileTabs', () => {
 	describe('tab reopening', () => {
 		test('reopen_last_closed_tab reopens the most recently closed tab', () => {
 			// Create and close tabs in sequence
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			tabs.close_tab(tab1.id);
 			tabs.close_tab(tab2.id);
@@ -619,7 +634,7 @@ describe('DiskfileTabs', () => {
 			tabs.reopen_last_closed_tab();
 
 			assert.strictEqual(tabs.items.size, 1);
-			assert.strictEqual(tabs.items.by_id.values().next().value?.diskfile_id, TEST_DISKFILE_ID_2);
+			assert.strictEqual(tabs.items.by_id.values().next().value?.path, TEST_PATH_2);
 			assert.strictEqual(tabs.recently_closed_tabs.length, 1);
 		});
 
@@ -638,7 +653,7 @@ describe('DiskfileTabs', () => {
 
 		test('reopen_last_closed_tab restores selection state', () => {
 			// Create and select a tab
-			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab = tabs.open_diskfile(TEST_PATH_1);
 			tabs.select_tab(tab.id);
 
 			// Close it
@@ -657,9 +672,9 @@ describe('DiskfileTabs', () => {
 
 		test('reopen_last_closed_tab maintains proper tab order', () => {
 			// Create three tabs in order
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			// Remember the original order
 			const original_order = [...tabs.tab_order];
@@ -687,12 +702,12 @@ describe('DiskfileTabs', () => {
 
 	describe('one tab per file', () => {
 		test('no sequence of opens, previews, closes, reopens, and navigation duplicates a tab', () => {
-			const ids = [TEST_DISKFILE_ID_1, TEST_DISKFILE_ID_2, TEST_DISKFILE_ID_3];
+			const ids = [TEST_PATH_1, TEST_PATH_2, TEST_PATH_3];
 			const closed_tab_ids: Array<Uuid> = [];
 			const assert_one_tab_per_file = (step: string) => {
-				const diskfile_ids = tabs.items.values.map((t) => t.diskfile_id);
-				assert.strictEqual(new Set(diskfile_ids).size, diskfile_ids.length, step);
-				assert.strictEqual(tabs.by_diskfile_id.size, tabs.items.size, step);
+				const paths = tabs.items.values.map((t) => t.path);
+				assert.strictEqual(new Set(paths).size, paths.length, step);
+				assert.strictEqual(tabs.by_path.size, tabs.items.size, step);
 			};
 			for (let round = 0; round < 3; round++) {
 				for (const id of ids) {
@@ -706,7 +721,7 @@ describe('DiskfileTabs', () => {
 				closed_tab_ids.push(first.id);
 				tabs.close_tab(first.id);
 				assert_one_tab_per_file(`close ${round}`);
-				tabs.open_diskfile(first.diskfile_id);
+				tabs.open_diskfile(first.path);
 				tabs.reopen_last_closed_tab();
 				assert_one_tab_per_file(`reopen ${round}`);
 				for (const tab_id of closed_tab_ids) tabs.navigate_to_tab(tab_id);
@@ -721,32 +736,29 @@ describe('DiskfileTabs', () => {
 
 	describe('reopening a file that is open again', () => {
 		test('skips it and reopens the next closed file, never duplicating a tab', () => {
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			tabs.open_diskfile(TEST_PATH_3);
 			tabs.close_tab(tab1.id);
 			tabs.close_tab(tab2.id);
-			const reopened_2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const reopened_2 = tabs.open_diskfile(TEST_PATH_2);
 
 			const reopened = tabs.reopen_last_closed_tab();
 
 			assert.ok(reopened);
-			assert.strictEqual(reopened.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(reopened.path, TEST_PATH_1);
 			assert.strictEqual(tabs.selected_tab_id, reopened.id);
 			assert.strictEqual(tabs.items.size, 3);
-			assert.strictEqual(
-				tabs.items.values.filter((t) => t.diskfile_id === TEST_DISKFILE_ID_2).length,
-				1
-			);
-			assert.strictEqual(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_2), reopened_2);
+			assert.strictEqual(tabs.items.values.filter((t) => t.path === TEST_PATH_2).length, 1);
+			assert.strictEqual(tabs.by_path.get(TEST_PATH_2), reopened_2);
 			assert.deepEqual(tabs.recently_closed_tabs, [], 'the skipped entry is dropped');
 		});
 
 		test('does nothing when every closed file is open again', () => {
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
 			tabs.close_tab(tab1.id);
-			tabs.preview_diskfile(TEST_DISKFILE_ID_1); // open again, as a preview
+			tabs.preview_diskfile(TEST_PATH_1); // open again, as a preview
 			const selected = tabs.selected_tab_id;
 
 			assert.isNull(tabs.reopen_last_closed_tab());
@@ -757,7 +769,7 @@ describe('DiskfileTabs', () => {
 		});
 
 		test('a closed preview reopens as a permanent tab', () => {
-			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const preview = tabs.preview_diskfile(TEST_PATH_1);
 			tabs.close_tab(preview.id);
 
 			const reopened = tabs.reopen_last_closed_tab();
@@ -770,9 +782,9 @@ describe('DiskfileTabs', () => {
 	describe('tab history', () => {
 		test('tracks tab access history when selecting tabs', () => {
 			// Create three tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			// Initial history should have tab3 (most recently opened)
 			assert.strictEqual(tabs.recent_tabs[0]!.id, tab3.id);
@@ -790,7 +802,7 @@ describe('DiskfileTabs', () => {
 
 		test('maintains history when reopening tabs', () => {
 			// Create and close a tab
-			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab = tabs.open_diskfile(TEST_PATH_1);
 			tabs.close_tab(tab.id);
 
 			// Reopen the tab
@@ -806,8 +818,7 @@ describe('DiskfileTabs', () => {
 
 			// Create more tabs than the max history size
 			for (let i = 0; i < 5; i++) {
-				const uuid = parse_or_throw(UuidWithDefault, undefined);
-				tabs.open_diskfile(uuid);
+				tabs.open_diskfile(parse_or_throw(DiskfilePath, `/test/history${i}.ts`));
 			}
 
 			// Verify history is limited to max size
@@ -816,8 +827,8 @@ describe('DiskfileTabs', () => {
 
 		test('removes closed tabs from history', () => {
 			// Create two tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Verify both tabs are in history through their ids
 			assert.include(tabs.recent_tab_ids, tab1.id);
@@ -833,8 +844,8 @@ describe('DiskfileTabs', () => {
 
 		test('clears history when closing all tabs', () => {
 			// Create some tabs
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
 
 			// Verify history is not empty
 			assert.ok(tabs.recent_tabs.length > 0);
@@ -850,9 +861,9 @@ describe('DiskfileTabs', () => {
 	describe('tab selection with history', () => {
 		test('selects most recently used tab when closing current tab', () => {
 			// Create tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			// Build history: select tabs in a specific order
 			tabs.select_tab(tab1.id); // History: tab1, tab3, tab2
@@ -869,9 +880,9 @@ describe('DiskfileTabs', () => {
 
 		test('falls back to next tab when no history available', () => {
 			// Create tabs but manipulate history to be empty
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			// Clear history
 			tabs.recent_tab_ids = [];
@@ -891,8 +902,8 @@ describe('DiskfileTabs', () => {
 
 		test('selecting a non-existent tab in history is handled gracefully', () => {
 			// Create and select tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 			tabs.select_tab(tab1.id);
 			tabs.select_tab(tab2.id);
 
@@ -905,8 +916,8 @@ describe('DiskfileTabs', () => {
 
 		test('find_most_recent_tab correctly finds valid tabs', () => {
 			// Create some tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Select them both to build history
 			tabs.select_tab(tab1.id);
@@ -921,8 +932,8 @@ describe('DiskfileTabs', () => {
 
 		test('tab history preserves references after tab modifications', () => {
 			// Create tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Build history
 			tabs.select_tab(tab1.id);
@@ -933,22 +944,22 @@ describe('DiskfileTabs', () => {
 			assert.strictEqual(tabs.recent_tabs[1]!.id, tab1.id);
 
 			// Store tabs for reference before closing
-			const tab1_diskfile_id = tab1.diskfile_id;
+			const tab1_path = tab1.path;
 
 			// Close tab2
 			tabs.close_tab(tab2.id);
 
 			// Check history - tab1 should still be accessible
 			assert.strictEqual(tabs.recent_tabs[0]!.id, tab1.id);
-			assert.strictEqual(tabs.recent_tabs[0]!.diskfile_id, tab1_diskfile_id);
+			assert.strictEqual(tabs.recent_tabs[0]!.path, tab1_path);
 		});
 	});
 
 	describe('tab navigation', () => {
 		test('navigate_to_tab selects existing tab', () => {
 			// Create tabs
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Navigate to tab2
 			const result = tabs.navigate_to_tab(tab2.id);
@@ -960,7 +971,7 @@ describe('DiskfileTabs', () => {
 
 		test('navigate_to_tab creates preview tab for closed tab', () => {
 			// Create and close a tab
-			const tab = tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			const tab = tabs.open_diskfile(TEST_PATH_1);
 			const tab_id = tab.id;
 			tabs.close_tab(tab_id);
 
@@ -974,17 +985,17 @@ describe('DiskfileTabs', () => {
 
 			// Should have the same diskfile
 			const new_tab = tabs.items.by_id.get(result!);
-			assert.strictEqual(new_tab?.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(new_tab?.path, TEST_PATH_1);
 		});
 
 		test('navigate_to_tab creates a new preview tab for closed tab', () => {
 			// Create a tab and a preview tab
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const preview_tab = tabs.preview_diskfile(TEST_DISKFILE_ID_2);
+			tabs.open_diskfile(TEST_PATH_1);
+			const preview_tab = tabs.preview_diskfile(TEST_PATH_2);
 			const preview_tab_id = preview_tab.id;
 
 			// Create and close another tab
-			const closed_tab = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const closed_tab = tabs.open_diskfile(TEST_PATH_3);
 			const closed_tab_id = closed_tab.id;
 			tabs.close_tab(closed_tab_id);
 
@@ -1000,19 +1011,16 @@ describe('DiskfileTabs', () => {
 
 			// But it should have the closed tab's diskfile
 			if (tabs.preview_tab_id && tabs.items.by_id.get(tabs.preview_tab_id)) {
-				assert.strictEqual(
-					tabs.items.by_id.get(tabs.preview_tab_id)?.diskfile_id,
-					TEST_DISKFILE_ID_3
-				);
+				assert.strictEqual(tabs.items.by_id.get(tabs.preview_tab_id)?.path, TEST_PATH_3);
 			}
 		});
 
 		test('navigate_to_tab selects the open tab of a closed tab whose file is open again', () => {
-			const closed = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const closed = tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
 			tabs.close_tab(closed.id);
-			const reopened = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const reopened = tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_3);
 
 			const result = tabs.navigate_to_tab(closed.id);
 
@@ -1023,10 +1031,10 @@ describe('DiskfileTabs', () => {
 
 		test('navigate_to_tab handles unknown tab id gracefully', () => {
 			// Create a tab
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
+			tabs.open_diskfile(TEST_PATH_1);
 
 			// Try to navigate to a non-existent tab
-			const result = tabs.navigate_to_tab(parse_or_throw(UuidWithDefault, undefined));
+			const result = tabs.navigate_to_tab(create_uuid());
 
 			// Should return null without changing selection
 			assert.isNull(result);
@@ -1034,8 +1042,8 @@ describe('DiskfileTabs', () => {
 
 		test('closed tabs are remembered even after closing all tabs', () => {
 			// Create tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
 			const tab1_id = tab1.id;
 
 			// Close all tabs
@@ -1046,15 +1054,15 @@ describe('DiskfileTabs', () => {
 
 			// Should create a preview tab for the correct diskfile
 			const new_tab = tabs.items.by_id.get(result!);
-			assert.strictEqual(new_tab?.diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(new_tab?.path, TEST_PATH_1);
 		});
 	});
 
 	describe('edge cases and integration', () => {
 		test('ordered_tabs handles tabs not in tab_order', () => {
 			// Create tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Manually manipulate tab_order to exclude tab2
 			tabs.tab_order = [tab1.id];
@@ -1067,17 +1075,17 @@ describe('DiskfileTabs', () => {
 
 		test('complex tab workflow', () => {
 			// Create a preview tab
-			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_1);
+			const preview = tabs.preview_diskfile(TEST_PATH_1);
 			assert.strictEqual(tabs.preview_tab_id, preview.id);
 			assert.strictEqual(tabs.selected_tab_id, preview.id);
 
 			// Create a permanent tab
-			const permanent = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const permanent = tabs.open_diskfile(TEST_PATH_2);
 			assert.isNull(tabs.preview_tab_id); // Preview was repurposed
 			assert.strictEqual(tabs.selected_tab_id, permanent.id);
 
 			// Create another preview tab
-			const preview2 = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
+			const preview2 = tabs.preview_diskfile(TEST_PATH_3);
 			assert.strictEqual(tabs.preview_tab_id, preview2.id);
 			assert.strictEqual(tabs.selected_tab_id, preview2.id);
 
@@ -1108,9 +1116,7 @@ describe('DiskfileTabs', () => {
 			const created_tabs = [];
 
 			for (let i = 0; i < tab_count; i++) {
-				// Create proper UUIDs that will pass validation - these are real UUIDs
-				const uuid = parse_or_throw(UuidWithDefault, undefined);
-				const tab = tabs.open_diskfile(uuid);
+				const tab = tabs.open_diskfile(parse_or_throw(DiskfilePath, `/test/perf${i}.ts`));
 				created_tabs.push(tab);
 			}
 
@@ -1145,11 +1151,11 @@ describe('DiskfileTabs', () => {
 
 		test('preview tab lifecycle with multiple operations', () => {
 			// Create initial permanent tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Preview a file
-			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
+			const preview = tabs.preview_diskfile(TEST_PATH_3);
 			assert.ok(preview.is_preview);
 
 			// Double-click simulation - promote to permanent
@@ -1158,7 +1164,7 @@ describe('DiskfileTabs', () => {
 			assert.isNull(tabs.preview_tab_id);
 
 			// Create a new preview
-			const preview2 = tabs.preview_diskfile(TEST_DISKFILE_ID_4);
+			const preview2 = tabs.preview_diskfile(TEST_PATH_4);
 			assert.ok(preview2.is_preview);
 			assert.notStrictEqual(preview2.id, preview.id);
 
@@ -1173,40 +1179,40 @@ describe('DiskfileTabs', () => {
 			assert.ok(tabs.items.by_id.has(preview.id));
 		});
 
-		test('by_diskfile_id map updates correctly', () => {
+		test('by_path map updates correctly', () => {
 			// Create tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
 
 			// Verify map contents
-			assert.strictEqual(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_1), tab1);
-			assert.strictEqual(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_2), tab2);
-			assert.strictEqual(tabs.by_diskfile_id.size, 2);
+			assert.strictEqual(tabs.by_path.get(TEST_PATH_1), tab1);
+			assert.strictEqual(tabs.by_path.get(TEST_PATH_2), tab2);
+			assert.strictEqual(tabs.by_path.size, 2);
 
 			// Create preview that reuses a tab
-			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_3);
-			assert.strictEqual(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_3), preview);
-			assert.strictEqual(tabs.by_diskfile_id.size, 3);
+			const preview = tabs.preview_diskfile(TEST_PATH_3);
+			assert.strictEqual(tabs.by_path.get(TEST_PATH_3), preview);
+			assert.strictEqual(tabs.by_path.size, 3);
 
 			// Reuse preview for different file
-			tabs.preview_diskfile(TEST_DISKFILE_ID_4);
-			assert.ok(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_3) === undefined);
-			assert.strictEqual(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_4), preview);
-			assert.strictEqual(tabs.by_diskfile_id.size, 3);
+			tabs.preview_diskfile(TEST_PATH_4);
+			assert.ok(tabs.by_path.get(TEST_PATH_3) === undefined);
+			assert.strictEqual(tabs.by_path.get(TEST_PATH_4), preview);
+			assert.strictEqual(tabs.by_path.size, 3);
 
 			// Close a tab
 			tabs.close_tab(tab1.id);
-			assert.ok(tabs.by_diskfile_id.get(TEST_DISKFILE_ID_1) === undefined);
-			assert.strictEqual(tabs.by_diskfile_id.size, 2);
+			assert.ok(tabs.by_path.get(TEST_PATH_1) === undefined);
+			assert.strictEqual(tabs.by_path.size, 2);
 		});
 	});
 
 	describe('helper method tests', () => {
 		test('#position_tab inserts tab correctly', () => {
 			// Create tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
 
 			// Initial order
 			assert.deepEqual(tabs.tab_order, [tab1.id, tab2.id, tab3.id]);
@@ -1224,10 +1230,10 @@ describe('DiskfileTabs', () => {
 			tabs.max_tab_history = 3;
 
 			// Create and select tabs to build history
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			const tab3 = tabs.open_diskfile(TEST_DISKFILE_ID_3);
-			const tab4 = tabs.open_diskfile(TEST_DISKFILE_ID_4);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			const tab3 = tabs.open_diskfile(TEST_PATH_3);
+			const tab4 = tabs.open_diskfile(TEST_PATH_4);
 
 			// Select in specific order
 			tabs.select_tab(tab1.id);
@@ -1255,9 +1261,9 @@ describe('DiskfileTabs', () => {
 	describe('state consistency', () => {
 		test('maintains consistency between tab_order and items collection', () => {
 			// Create tabs
-			tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const tab2 = tabs.open_diskfile(TEST_DISKFILE_ID_2);
-			tabs.open_diskfile(TEST_DISKFILE_ID_3);
+			tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			tabs.open_diskfile(TEST_PATH_3);
 
 			// Every tab in tab_order should exist in items
 			for (const tab_id of tabs.tab_order) {
@@ -1282,20 +1288,20 @@ describe('DiskfileTabs', () => {
 
 		test('maintains consistency of derived properties', () => {
 			// Create tabs
-			const tab1 = tabs.open_diskfile(TEST_DISKFILE_ID_1);
-			const preview = tabs.preview_diskfile(TEST_DISKFILE_ID_2);
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const preview = tabs.preview_diskfile(TEST_PATH_2);
 
 			// Check derived properties
 			assert.strictEqual(tabs.selected_tab, preview);
 			assert.strictEqual(tabs.preview_tab, preview);
-			assert.strictEqual(tabs.selected_diskfile_id, TEST_DISKFILE_ID_2);
+			assert.strictEqual(tabs.selected_path, TEST_PATH_2);
 
 			// Select different tab
 			tabs.select_tab(tab1.id);
 
 			// Check updated derived properties
 			assert.strictEqual(tabs.selected_tab, tab1);
-			assert.strictEqual(tabs.selected_diskfile_id, TEST_DISKFILE_ID_1);
+			assert.strictEqual(tabs.selected_path, TEST_PATH_1);
 			assert.strictEqual(tabs.preview_tab, preview); // Preview unchanged
 
 			// Promote preview

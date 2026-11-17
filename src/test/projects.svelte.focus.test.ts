@@ -147,7 +147,7 @@ const edit = async (path: DiskfilePath): Promise<void> => {
 	const diskfile = app.diskfiles.get_by_path(path);
 	assert.ok(diskfile);
 	await app.diskfiles.ensure_content(diskfile);
-	app.diskfiles.select(diskfile.id, true);
+	app.diskfiles.select(diskfile.path, true);
 	app.diskfiles.get_editor_state(diskfile).current_content = 'edited';
 };
 
@@ -302,8 +302,8 @@ describe('Projects.unfocus_repo', () => {
 		await edit(SITE_B);
 		// a tab with no draft
 		const a = app.diskfiles.get_by_path(SITE_A)!;
-		app.diskfiles.select(a.id, true);
-		assert.ok(app.diskfiles.editor.tabs.by_diskfile_id.get(a.id));
+		app.diskfiles.select(a.path, true);
+		assert.ok(app.diskfiles.editor.tabs.by_path.get(a.path));
 
 		const unfocused = app.projects.unfocus_repo(DEV, SITE);
 		assert.deepEqual(unfocus_calls[0]!.input, { root: DEV, dir: SITE });
@@ -315,7 +315,7 @@ describe('Projects.unfocus_repo', () => {
 		assert.ok(!app.diskfiles.get_by_path(SITE_C), 'nothing holds it, so forgotten');
 		assert.strictEqual(app.diskfiles.get_by_path(SITE_A), a, 'kept for its tab');
 		assert.isFalse(a.deleted_on_disk);
-		assert.ok(app.diskfiles.editor.tabs.by_diskfile_id.get(a.id), 'its tab stays open');
+		assert.ok(app.diskfiles.editor.tabs.by_path.get(a.path), 'its tab stays open');
 		const b = app.diskfiles.get_by_path(SITE_B);
 		assert.ok(b, 'kept for its draft');
 		assert.isFalse(b.deleted_on_disk, 'still on disk, only unindexed');
@@ -324,12 +324,12 @@ describe('Projects.unfocus_repo', () => {
 		assert.strictEqual(session_loads, 0);
 
 		// its tab closed, nothing holds it
-		app.diskfiles.editor.close_tab(app.diskfiles.editor.tabs.by_diskfile_id.get(a.id)!.id);
+		app.diskfiles.editor.close_tab(app.diskfiles.editor.tabs.by_path.get(a.path)!.id);
 		assert.ok(!app.diskfiles.get_by_path(SITE_A), 'released');
 		// discarded and closed, nothing holds it
 		app.diskfiles.get_editor_state(b).discard_draft();
 		assert.ok(app.diskfiles.get_by_path(SITE_B), 'its tab still holds it');
-		app.diskfiles.editor.close_tab(app.diskfiles.editor.tabs.by_diskfile_id.get(b.id)!.id);
+		app.diskfiles.editor.close_tab(app.diskfiles.editor.tabs.by_path.get(b.path)!.id);
 		assert.ok(!app.diskfiles.get_by_path(SITE_B), 'released');
 	});
 
@@ -415,7 +415,7 @@ describe('a remote unfocus', () => {
 	test("during an own open, releases at once, and the open's older reply brings nothing back", async () => {
 		setup([APP, SITE], [APP_A, SITE_A, SITE_B, SITE_C]);
 		const c = app.diskfiles.get_by_path(SITE_C)!;
-		app.diskfiles.select(c.id, true);
+		app.diskfiles.select(c.path, true);
 		await edit(SITE_B);
 		const opened = app.projects.open(APP);
 		receive_update(registry_info([APP], 2));

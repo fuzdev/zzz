@@ -286,7 +286,7 @@ describe('Projects.open', () => {
 				}
 			});
 		await app.diskfiles.ensure_content(b);
-		app.diskfiles.select(b.id, true);
+		app.diskfiles.select(b.path, true);
 		app.diskfiles.get_editor_state(b).current_content = 'edited';
 
 		receive_change({ ...WS_INFO, rev: 2 }, 'close');

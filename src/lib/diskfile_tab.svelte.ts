@@ -1,14 +1,14 @@
 import type { Infer, InferInput } from '@fuzdev/fuz_schema/schema.ts';
-import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
+import { DiskfilePath } from './diskfile_types.ts';
 import type { DiskfileTabs } from './diskfile_tabs.svelte.ts';
 
 export const DiskfileTabJson = cell_json_schema(
 	{
-		diskfile_id: Uuid
+		path: DiskfilePath
 	},
 	'DiskfileTab'
 );
@@ -20,7 +20,8 @@ export interface DiskfileTabOptions extends CellOptions<typeof DiskfileTabJson> 
 }
 
 export class DiskfileTab extends Cell<typeof DiskfileTabJson> {
-	diskfile_id: Uuid = $state.raw()!;
+	/** The tab's file — a tab follows its path, not a particular `Diskfile` cell. */
+	path: DiskfilePath = $state.raw()!;
 
 	/**
 	 * Reference to the parent tabs collection,
@@ -40,9 +41,7 @@ export class DiskfileTab extends Cell<typeof DiskfileTabJson> {
 	/** Derived from parent collection's state. */
 	readonly is_selected: boolean = $derived.by(() => this.tabs.selected_tab_id === this.id);
 
-	readonly diskfile: Diskfile | undefined = $derived(
-		this.app.diskfiles.items.by_id.get(this.diskfile_id)
-	);
+	readonly diskfile: Diskfile | undefined = $derived(this.app.diskfiles.get_by_path(this.path));
 
 	constructor(options: DiskfileTabOptions) {
 		super(DiskfileTabJson, options);

@@ -14,6 +14,7 @@ import { DiskfileTabs } from './diskfile_tabs.svelte.ts';
 import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 import { DiskfileTreeState } from './diskfile_tree_state.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
+import type { DiskfilePath } from './diskfile_types.ts';
 
 /**
  * A tab close waiting on the user — see `DiskfilesEditor.request_close_tab`.
@@ -77,7 +78,7 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 		if (!request) return null;
 		const tab = this.tabs.items.by_id.get(request.tab_id);
 		if (!tab) return null;
-		const draft = this.app.diskfiles.find_editor_state(tab.diskfile_id)?.history.draft_entry;
+		const draft = this.app.diskfiles.find_editor_state(tab.path)?.history.draft_entry;
 		return draft?.id === request.draft_id ? request : null;
 	});
 
@@ -99,15 +100,15 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	/**
 	 * Opens a diskfile in preview mode.
 	 */
-	preview_diskfile(diskfile_id: Uuid): void {
-		this.tabs.preview_diskfile(diskfile_id);
+	preview_diskfile(path: DiskfilePath): void {
+		this.tabs.preview_diskfile(path);
 	}
 
 	/**
 	 * Opens a diskfile in permanent mode.
 	 */
-	open_diskfile(diskfile_id: Uuid): void {
-		this.tabs.open_diskfile(diskfile_id);
+	open_diskfile(path: DiskfilePath): void {
+		this.tabs.open_diskfile(path);
 	}
 
 	/**
@@ -139,12 +140,12 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 		const tab = this.tabs.items.by_id.get(tab_id);
 		if (!tab) return;
 		const { diskfiles } = this.app;
-		const was_selected_file = diskfiles.selected_file_id === tab.diskfile_id;
+		const was_selected_file = diskfiles.selected_path === tab.path;
 		if (this.#pending_close?.tab_id === tab_id || !this.pending_close_request) {
 			this.#pending_close = null;
 		}
 		this.tabs.close_tab(tab_id);
-		if (was_selected_file && diskfiles.selected_file_id === tab.diskfile_id) {
+		if (was_selected_file && diskfiles.selected_path === tab.path) {
 			diskfiles.follow_selected_tab();
 		}
 	}
@@ -160,7 +161,7 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	request_close_tab(tab_id: Uuid): boolean {
 		const tab = this.tabs.items.by_id.get(tab_id);
 		if (!tab) return false;
-		const draft = this.app.diskfiles.find_editor_state(tab.diskfile_id)?.history.draft_entry;
+		const draft = this.app.diskfiles.find_editor_state(tab.path)?.history.draft_entry;
 		if (draft) {
 			this.#pending_close = { tab_id, draft_id: draft.id, cancelled: false };
 			return false;
@@ -195,16 +196,16 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	/**
 	 * Forgets a diskfile that no longer exists — see `DiskfileTabs.remove_diskfile`.
 	 */
-	remove_diskfile(diskfile_id: Uuid): void {
-		this.tabs.remove_diskfile(diskfile_id);
+	remove_diskfile(path: DiskfilePath): void {
+		this.tabs.remove_diskfile(path);
 	}
 
 	/**
 	 * Handles when a diskfile's content is modified.
 	 */
-	handle_file_modified(diskfile_id: Uuid): void {
+	handle_file_modified(path: DiskfilePath): void {
 		// a modified file's preview tab becomes permanent
-		const tab = this.tabs.by_diskfile_id.get(diskfile_id);
+		const tab = this.tabs.by_path.get(path);
 		if (tab && tab.id === this.tabs.preview_tab_id) {
 			this.tabs.promote_preview_to_permanent();
 		}

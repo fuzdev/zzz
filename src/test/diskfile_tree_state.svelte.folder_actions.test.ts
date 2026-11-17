@@ -237,7 +237,7 @@ describe('the inline create', () => {
 		await app.diskfiles.create_file_at(parse_or_throw(DiskfilePath, '/w/a/b/new.md'));
 		assert.isNull(tree.active_key, 'not yet arrived');
 		const created = write('/w/a/b/new.md');
-		assert.strictEqual(app.diskfiles.selected_file_id, created.id);
+		assert.strictEqual(app.diskfiles.selected_path, created.path);
 		assert.deepEqual(outline(tree.rows), ['- /w/', '  - a', '    - b', '      new.md', '    x.md']);
 		assert.strictEqual(tree.active_row?.path, '/w/a/b/new.md');
 	});
@@ -275,7 +275,7 @@ describe('the inline create', () => {
 		await app.diskfiles.create_file_at(parse_or_throw(DiskfilePath, '/w/a/new.md'));
 		tree.start_create(dir_row('/w/b/'), 'file');
 		const created = write('/w/a/new.md');
-		assert.strictEqual(app.diskfiles.selected_file_id, created.id, 'still opened');
+		assert.strictEqual(app.diskfiles.selected_path, created.path, 'still opened');
 		assert.strictEqual(tree.active_key, to_diskfile_tree_create_key('/w/', '/w/b/'));
 	});
 
@@ -323,7 +323,7 @@ describe('the inline create', () => {
 		// it can still arrive by another root, say one nested inside the ignored folder
 		app.scoped_dirs = ['/w/node_modules/'];
 		write('/w/node_modules/x.js', '/w/node_modules/');
-		assert.isNull(app.diskfiles.selected_file_id, 'not selected later');
+		assert.isNull(app.diskfiles.selected_path, 'not selected later');
 	});
 });
 

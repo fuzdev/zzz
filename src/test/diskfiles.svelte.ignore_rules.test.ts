@@ -214,7 +214,7 @@ describe('creating', () => {
 		for (const [path, waited] of cases) {
 			await app.diskfiles.create_file_at(parse_or_throw(DiskfilePath, path));
 			const created = write(path);
-			assert.strictEqual(app.diskfiles.selected_file_id === created.id, waited, path);
+			assert.strictEqual(app.diskfiles.selected_path === created.path, waited, path);
 		}
 	});
 });

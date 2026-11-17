@@ -62,7 +62,7 @@
 	const status: DiskfileStatus = $derived(
 		diskfile ? to_diskfile_status(diskfiles, diskfile) : NO_STATUS
 	);
-	const selected = $derived(!!diskfile && diskfiles.selected_file_id === diskfile.id);
+	const selected = $derived(!!diskfile && diskfiles.selected_path === diskfile.path);
 	// a repo's focus or unfocus in flight — the row says which
 	const pending = $derived(
 		row.kind !== 'file' && projects.pending_repos.has(row.path as DiskfileDirectoryPath)

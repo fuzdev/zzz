@@ -30,7 +30,7 @@
 
 	const selected_tab = $derived(editor.tabs.selected_tab);
 	const selected_diskfile = $derived(
-		selected_tab ? diskfiles.items.by_id.get(selected_tab.diskfile_id) : undefined
+		selected_tab ? diskfiles.get_by_path(selected_tab.path) : undefined
 	);
 
 	let show_diskfile_picker = $state.raw(false);
@@ -51,8 +51,8 @@
 	const close_tab = (tab_id: Uuid): void => {
 		editor.request_close_tab(tab_id);
 		if (editor.tabs.items.by_id.has(tab_id)) return; // asking first
-		const diskfile_id = editor.tabs.selected_diskfile_id;
-		if (diskfile_id) app.ui.pending_element_to_focus_key = diskfile_id;
+		const path = editor.tabs.selected_path;
+		if (path) app.ui.pending_element_to_focus_key = path;
 	};
 </script>
 
@@ -130,7 +130,7 @@
 								<!-- TODO notice the different APIs here, needs fixing, diskfiles is higher in the tree -->
 								<DiskfileTabListitem
 									{tab}
-									onselect={(tab) => diskfiles.select(tab.diskfile_id)}
+									onselect={(tab) => diskfiles.select(tab.path)}
 									onclose={(tab) => close_tab(tab.id)}
 									onopen={(tab) => editor.open_tab(tab.id)}
 								/>
@@ -178,7 +178,7 @@
 					{#if selected_diskfile}
 						<DiskfileView
 							diskfile={selected_diskfile}
-							onmodified={(diskfile_id) => editor.handle_file_modified(diskfile_id)}
+							onmodified={(path) => editor.handle_file_modified(path)}
 						/>
 					{:else}
 						<!-- TODO think this through - maybe the tabs should be more flexible than 1:1 with a diskfile? maybe `DiskfileView` should have UI to create a file if there is none? -->
@@ -204,7 +204,7 @@
 								class="inline palette_f"
 								onclick={() => {
 									const diskfile = random_item(app.diskfiles.on_disk);
-									diskfiles.select(diskfile.id);
+									diskfiles.select(diskfile.path);
 								}}
 							>
 								go fish
@@ -238,7 +238,7 @@
 	bind:show={show_diskfile_picker}
 	onpick={(diskfile) => {
 		if (!diskfile) return false;
-		diskfiles.select(diskfile.id);
+		diskfiles.select(diskfile.path);
 		return true;
 	}}
 />

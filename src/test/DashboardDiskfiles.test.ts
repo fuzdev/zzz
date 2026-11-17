@@ -105,14 +105,14 @@ describe('DashboardDiskfiles header', () => {
 
 		const a = app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/w/a.txt'));
 		assert.ok(a);
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		flushSync();
 		assert.ok(details_button(target));
 	});
 
 	test('it is an icon, named by its label and stating whether the drawer is open', async () => {
 		const a = await write_file('/w/a.txt', 'hello');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const target = render();
 		const button = details_button(target);
 		assert.ok(button);
@@ -126,7 +126,7 @@ describe('DashboardDiskfiles header', () => {
 
 	test('a click toggles the setting, and the file view follows', async () => {
 		const a = await write_file('/w/a.txt', 'hello');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const target = render();
 		const button = details_button(target);
 		assert.ok(button);
@@ -147,7 +147,7 @@ describe('DashboardDiskfiles header', () => {
 
 	test('the desk menu button keeps its room in the header only while it shows', async () => {
 		const a = await write_file('/w/a.txt', 'hello');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const target = render();
 		const placeholder = desk_placeholder(target);
 		assert.ok(placeholder, 'the desk menu button shows');
@@ -171,7 +171,7 @@ describe('DashboardDiskfiles header', () => {
 
 	test('with tabs but no file view, the desk menu button keeps its room, and no toggle shows', async () => {
 		const a = await write_file('/w/a.txt', 'hello');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const target = render();
 		assert.ok(details_button(target));
 
@@ -193,7 +193,7 @@ describe('DashboardDiskfiles header', () => {
 
 	test('the toggle and the placeholder sit at the top, not stretched to the tabs', async () => {
 		const a = await write_file('/w/a.txt', 'hello');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const target = render();
 		assert.isTrue(details_button(target)?.classList.contains('align-self:flex-start'));
 		assert.isTrue(desk_placeholder(target)?.classList.contains('align-self:flex-start'));

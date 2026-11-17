@@ -1,7 +1,6 @@
 <script lang="ts">
-	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-
 	import type { Diskfile } from './diskfile.svelte.ts';
+	import type { DiskfilePath } from './diskfile_types.ts';
 	import DiskfileAudioView from './DiskfileAudioView.svelte';
 	import DiskfileEditorView from './DiskfileEditorView.svelte';
 	import DiskfileMarkdownView from './DiskfileMarkdownView.svelte';
@@ -23,14 +22,14 @@
 		onmodified
 	}: {
 		diskfile: Diskfile;
-		onmodified?: (diskfile_id: Uuid) => void;
+		onmodified?: (path: DiskfilePath) => void;
 	} = $props();
 
 	const content_kind = $derived(to_diskfile_content_kind(diskfile.path));
 </script>
 
 <!-- TODO remember each file's scroll and caret in its `DiskfileEditorState`, so a return to a tab picks up where it left off -->
-{#key diskfile.id}
+{#key diskfile}
 	{#if content_kind === 'audio'}
 		<DiskfileAudioView {diskfile} />
 	{:else if content_kind === 'transcript'}

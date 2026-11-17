@@ -87,13 +87,16 @@ describe('DiskfileContextmenu view submenu', () => {
 		open_menu(target);
 		await open_submenu(target, 'view');
 		assert.ok(find_menuitem(target, 'preview'), 'the view submenu lists the modes');
-		assert.isUndefined(app.diskfiles.find_editor_state(a.id));
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
 
 		// entries activate a tick after the click
 		find_menuitem(target, 'preview')!.click();
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		flushSync();
-		assert.strictEqual(app.diskfiles.find_editor_state(a.id)?.markdown_view_mode_choice, 'preview');
+		assert.strictEqual(
+			app.diskfiles.find_editor_state(a.path)?.markdown_view_mode_choice,
+			'preview'
+		);
 	});
 
 	test('only markdown files get the view submenu', async () => {

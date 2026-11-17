@@ -17,7 +17,7 @@
 	const request = $derived(editor.pending_close_request);
 	const tab = $derived(editor.pending_close_tab);
 	const diskfile = $derived(tab?.diskfile);
-	const editor_state = $derived(diskfile ? diskfiles.find_editor_state(diskfile.id) : undefined);
+	const editor_state = $derived(diskfile ? diskfiles.find_editor_state(diskfile.path) : undefined);
 
 	// keyed to the tab, so a failure never carries over to another close
 	let failure = $state.raw<{ tab_id: Uuid; message: string } | null>(null);
@@ -25,8 +25,8 @@
 
 	/** Focuses the editor of the selected tab — after a close, the next one. */
 	const focus_selected_editor = (): void => {
-		const diskfile_id = editor.tabs.selected_diskfile_id;
-		if (diskfile_id) app.ui.pending_element_to_focus_key = diskfile_id;
+		const path = editor.tabs.selected_path;
+		if (path) app.ui.pending_element_to_focus_key = path;
 	};
 
 	// set when a choice handles focus itself, so the lapse handling below stays out
@@ -87,7 +87,7 @@
 			if (handled) return;
 			untrack(() => {
 				if (editor.tabs.items.by_id.has(asked.id) && editor.tabs.selected_tab_id === asked.id) {
-					app.ui.pending_element_to_focus_key = asked.diskfile_id;
+					app.ui.pending_element_to_focus_key = asked.path;
 				}
 			});
 		};

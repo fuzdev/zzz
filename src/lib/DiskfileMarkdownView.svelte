@@ -4,13 +4,13 @@
 	import { inside_editable, is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
 	import { deep_equal } from '@fuzdev/fuz_util/deep_equal.ts';
 	import { mdz_parse } from '@fuzdev/mdz/mdz.ts';
-	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import { icon_edit, icon_preview, icon_view } from '@fuzdev/fuz_ui/icons.ts';
 	import type { SvgData } from '@fuzdev/fuz_ui/svg.ts';
 
 	import { frontend_context } from './frontend.svelte.ts';
 	import DiskfileInfo from './DiskfileInfo.svelte';
 	import type { Diskfile } from './diskfile.svelte.ts';
+	import type { DiskfilePath } from './diskfile_types.ts';
 	import SourceEditor from './SourceEditor.svelte';
 	import MarkdownPreview from './MarkdownPreview.svelte';
 	import MarkdownOutline from './MarkdownOutline.svelte';
@@ -84,7 +84,7 @@
 		onmodified
 	}: {
 		diskfile: Diskfile;
-		onmodified?: (diskfile_id: Uuid) => void;
+		onmodified?: (path: DiskfilePath) => void;
 	} = $props();
 
 	const app = frontend_context.get();
@@ -174,7 +174,7 @@
 	const set_mode = (next: MarkdownViewMode, move_focus: boolean): void => {
 		editor_state.markdown_view_mode_choice = next;
 		// keep the focus in the view: whichever pane it moves to takes it (see `focus_key` below)
-		if (move_focus) app.ui.pending_element_to_focus_key = diskfile.id;
+		if (move_focus) app.ui.pending_element_to_focus_key = diskfile.path;
 	};
 
 	const handle_keydown = (event: KeyboardEvent): void => {
@@ -380,7 +380,7 @@
 	// TODO refactor, try to remove
 	$effect(() => {
 		if (editor_state.content_was_modified_by_user) {
-			onmodified?.(diskfile.id);
+			onmodified?.(diskfile.path);
 		}
 	});
 </script>
@@ -446,7 +446,7 @@
 							bind:this={source_editor}
 							bind:value={() => source, (value) => (editor_state.current_content = value)}
 							{lang}
-							focus_key={diskfile.id}
+							focus_key={diskfile.path}
 							bind:pending_element_to_focus_key={app.ui.pending_element_to_focus_key}
 							placeholder={editor_state.content_loaded
 								? format_placeholder(diskfile.path_relative)
@@ -469,7 +469,7 @@
 						{nodes}
 						{links}
 						path={diskfile.path}
-						focus_key={mode === 'preview' ? diskfile.id : null}
+						focus_key={mode === 'preview' ? diskfile.path : null}
 						bind:pending_element_to_focus_key={app.ui.pending_element_to_focus_key}
 						caret_offset={mode === 'split' ? caret_offset : null}
 						onsourceclick={mode === 'split' ? handle_source_click : undefined}

@@ -11,7 +11,7 @@ import {
 	SerializableDisknode,
 	type DiskfileChangeType
 } from '#lib/diskfile_types.ts';
-import type { DiskfileChangeTracker } from '#lib/diskfiles.svelte.ts';
+import { Diskfiles, type DiskfileChangeTracker } from '#lib/diskfiles.svelte.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { confirm_unload_with_unsaved_changes, to_file_directories } from '#lib/diskfile_helpers.ts';
 
@@ -347,20 +347,20 @@ describe('delete cleans up editor state', () => {
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
 
-		app.diskfiles.select(a.id, true);
-		app.diskfiles.select(b.id, true);
-		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
+		app.diskfiles.select(a.path, true);
+		app.diskfiles.select(b.path, true);
+		assert.strictEqual(app.diskfiles.selected_path, b.path);
 		const b_state = app.diskfiles.get_editor_state(b);
 		b_state.history.add_entry('edited');
 
 		filer_change('delete', PATH_B);
 
-		assert.isUndefined(tabs.by_diskfile_id.get(b.id));
+		assert.isUndefined(tabs.by_path.get(b.path));
 		assert.strictEqual(tabs.items.size, 1);
-		assert.strictEqual(tabs.selected_diskfile_id, a.id);
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(tabs.selected_path, a.path);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 		assert.strictEqual(app.diskfiles.selected_file, a);
-		assert.isUndefined(app.diskfiles.find_editor_state(b.id));
+		assert.isUndefined(app.diskfiles.find_editor_state(b.path));
 		assert.ok(!app.cell_registry.all.has(b_state.history.id));
 	});
 
@@ -368,8 +368,8 @@ describe('delete cleans up editor state', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
-		app.diskfiles.select(a.id, true);
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		const { history } = app.diskfiles.get_editor_state(a);
 		const { all } = app.cell_registry;
@@ -386,12 +386,12 @@ describe('delete cleans up editor state', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
-		app.diskfiles.select(a.id);
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		app.diskfiles.select(a.path);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 
 		filer_change('delete', PATH_A);
 
-		assert.isNull(app.diskfiles.selected_file_id);
+		assert.isNull(app.diskfiles.selected_path);
 		assert.isNull(app.diskfiles.selected_file);
 		assert.strictEqual(app.diskfiles.editor.tabs.items.size, 0);
 	});
@@ -403,15 +403,15 @@ describe('delete cleans up editor state', () => {
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
 
-		app.diskfiles.select(a.id, true);
-		const b_tab = tabs.open_diskfile(b.id);
+		app.diskfiles.select(a.path, true);
+		const b_tab = tabs.open_diskfile(b.path);
 		tabs.close_tab(b_tab.id);
-		assert.strictEqual(tabs.closed_tab_diskfiles.get(b_tab.id), b.id);
+		assert.strictEqual(tabs.closed_tab_paths.get(b_tab.id), b.path);
 
 		filer_change('delete', PATH_B);
 
 		tabs.reopen_last_closed_tab();
-		assert.isUndefined(tabs.by_diskfile_id.get(b.id));
+		assert.isUndefined(tabs.by_path.get(b.path));
 		assert.isNull(tabs.navigate_to_tab(b_tab.id));
 	});
 
@@ -422,13 +422,13 @@ describe('delete cleans up editor state', () => {
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
 
-		app.diskfiles.select(b.id, true);
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(b.path, true);
+		app.diskfiles.select(a.path, true);
 
 		filer_change('delete', PATH_B);
 
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
-		assert.strictEqual(tabs.selected_diskfile_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
+		assert.strictEqual(tabs.selected_path, a.path);
 		assert.strictEqual(tabs.items.size, 1);
 	});
 
@@ -486,8 +486,8 @@ describe('delete with unsaved edits keeps the tab', () => {
 		const a = app.diskfiles.get_by_path(PATH_A);
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
-		app.diskfiles.select(a.id, true);
-		app.diskfiles.select(b.id, true);
+		app.diskfiles.select(a.path, true);
+		app.diskfiles.select(b.path, true);
 		const editor_state = app.diskfiles.get_editor_state(b);
 		editor_state.current_content = 'b edited';
 		assert.ok(editor_state.has_unsaved_edits);
@@ -501,17 +501,17 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
 		assert.isTrue(b.deleted_on_disk);
-		assert.ok(tabs.by_diskfile_id.get(b.id));
-		assert.strictEqual(tabs.selected_diskfile_id, b.id);
-		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
-		assert.ok(app.diskfiles.find_editor_state(b.id)?.has_unsaved_edits);
+		assert.ok(tabs.by_path.get(b.path));
+		assert.strictEqual(tabs.selected_path, b.path);
+		assert.strictEqual(app.diskfiles.selected_path, b.path);
+		assert.ok(app.diskfiles.find_editor_state(b.path)?.has_unsaved_edits);
 		assert.notInclude(app.diskfiles.on_disk, b);
 		assert.strictEqual(app.diskfiles.on_disk.length, 1);
 	});
 
 	test('recreating the path reattaches the same diskfile and clears the flag', async () => {
 		const { b, tabs, editor_state } = await setup_dirty();
-		const tab = tabs.by_diskfile_id.get(b.id);
+		const tab = tabs.by_path.get(b.path);
 		filer_change('delete', PATH_B);
 
 		filer_change('add', PATH_B, 'b recreated');
@@ -521,7 +521,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(count_by_path(PATH_B), 1);
 		assert.isFalse(b.deleted_on_disk);
 		assert.strictEqual(b.content, 'b recreated');
-		assert.strictEqual(tabs.by_diskfile_id.get(b.id), tab);
+		assert.strictEqual(tabs.by_path.get(b.path), tab);
 		assert.include(app.diskfiles.on_disk, b);
 		// the unsaved edit survives the round trip
 		assert.strictEqual(editor_state.current_content, 'b edited');
@@ -544,7 +544,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 	test('closing the tab after discarding the draft forgets the diskfile ("don\'t save")', async () => {
 		const { a, b, tabs, editor_state } = await setup_dirty();
 		filer_change('delete', PATH_B);
-		const tab = tabs.by_diskfile_id.get(b.id);
+		const tab = tabs.by_path.get(b.path);
 		assert.ok(tab);
 
 		editor_state.discard_draft();
@@ -552,16 +552,16 @@ describe('delete with unsaved edits keeps the tab', () => {
 		app.diskfiles.editor.close_tab(tab.id);
 
 		assert.isUndefined(app.diskfiles.get_by_path(PATH_B));
-		assert.isUndefined(app.diskfiles.find_editor_state(b.id));
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.isUndefined(app.diskfiles.find_editor_state(b.path));
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 		tabs.reopen_last_closed_tab();
-		assert.isUndefined(tabs.by_diskfile_id.get(b.id));
+		assert.isUndefined(tabs.by_path.get(b.path));
 	});
 
 	test('closing the tab with the draft kept keeps the diskfile, listed for the draft', async () => {
 		const { b, tabs } = await setup_dirty();
 		filer_change('delete', PATH_B);
-		const tab = tabs.by_diskfile_id.get(b.id);
+		const tab = tabs.by_path.get(b.path);
 		assert.ok(tab);
 
 		app.diskfiles.editor.close_tab(tab.id);
@@ -569,7 +569,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
 		assert.include(app.diskfiles.listed, b);
 		assert.notInclude(app.diskfiles.on_disk, b);
-		assert.strictEqual(app.diskfiles.find_editor_state(b.id)?.current_content, 'b edited');
+		assert.strictEqual(app.diskfiles.find_editor_state(b.path)?.current_content, 'b edited');
 	});
 	test('closing all tabs keeps the draft too', async () => {
 		const { b, tabs } = await setup_dirty();
@@ -579,11 +579,11 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
 		assert.ok(app.diskfiles.get_by_path(PATH_A));
-		assert.isTrue(app.diskfiles.find_editor_state(b.id)?.has_unsaved_edits);
+		assert.isTrue(app.diskfiles.find_editor_state(b.path)?.has_unsaved_edits);
 	});
 	test('closing a tab of a file still on disk keeps it', async () => {
 		const { a, tabs } = await setup_dirty();
-		const tab = tabs.by_diskfile_id.get(a.id);
+		const tab = tabs.by_path.get(a.path);
 		assert.ok(tab);
 
 		tabs.close_tab(tab.id);
@@ -593,7 +593,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 	test('unsaved edits without an open tab keep a deleted file too', async () => {
 		const { b, tabs } = await setup_dirty();
-		const tab = tabs.by_diskfile_id.get(b.id);
+		const tab = tabs.by_path.get(b.path);
 		assert.ok(tab);
 		tabs.close_tab(tab.id);
 
@@ -610,7 +610,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 		assert.ok(b);
 		const part = app.cell_registry.instantiate('DiskfilePart', { type: 'diskfile', path: PATH_B });
 		app.diskfiles.get_editor_state(b).current_content = 'part draft';
-		assert.isFalse(app.diskfiles.editor.tabs.by_diskfile_id.has(b.id));
+		assert.isFalse(app.diskfiles.editor.tabs.by_path.has(b.path));
 
 		app.diskfiles.reconcile([create_disknode(PATH_A, 'a')], ['/ws/']);
 
@@ -666,16 +666,16 @@ describe('delete with unsaved edits keeps the tab', () => {
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
 		const { tabs } = app.diskfiles.editor;
-		const preview = tabs.preview_diskfile(b.id);
+		const preview = tabs.preview_diskfile(b.path);
 		app.diskfiles.get_editor_state(b).current_content = 'b edited';
 
 		filer_change('delete', PATH_B);
 		assert.isTrue(b.deleted_on_disk);
 		assert.strictEqual(tabs.preview_tab_id, preview.id);
 
-		tabs.preview_diskfile(a.id);
+		tabs.preview_diskfile(a.path);
 
-		assert.strictEqual(preview.diskfile_id, a.id);
+		assert.strictEqual(preview.path, a.path);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
 		assert.include(app.diskfiles.listed, b);
 	});
@@ -686,7 +686,7 @@ describe('delete with unsaved edits keeps the tab', () => {
 
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_B), b);
 		assert.isTrue(b.deleted_on_disk);
-		assert.ok(tabs.by_diskfile_id.get(b.id));
+		assert.ok(tabs.by_path.get(b.path));
 		assert.strictEqual(count_by_path(PATH_B), 1);
 	});
 
@@ -744,7 +744,7 @@ describe('release_uncovered', () => {
 		for (const path of paths) await disk.load(path, path);
 		for (const path of held) {
 			const diskfile = app.diskfiles.get_by_path(path)!;
-			app.diskfiles.select(diskfile.id, true);
+			app.diskfiles.select(diskfile.path, true);
 			app.diskfiles.get_editor_state(diskfile).current_content = 'edited';
 		}
 	};
@@ -1033,14 +1033,14 @@ describe('selection on add', () => {
 	test('a file seeded by a snapshot is not selected', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
 
-		assert.isNull(app.diskfiles.selected_file_id);
+		assert.isNull(app.diskfiles.selected_path);
 		assert.strictEqual(app.diskfiles.editor.tabs.items.size, 0);
 	});
 
 	test('a file another tool creates is not selected, with nothing selected', () => {
 		filer_change('add', PATH_A);
 
-		assert.isNull(app.diskfiles.selected_file_id);
+		assert.isNull(app.diskfiles.selected_path);
 		assert.strictEqual(app.diskfiles.editor.tabs.items.size, 0);
 	});
 
@@ -1048,16 +1048,41 @@ describe('selection on add', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
-		app.diskfiles.select(a.id);
+		app.diskfiles.select(a.path);
 		const { tabs } = app.diskfiles.editor;
 		const tab = tabs.selected_tab;
 		assert.ok(tab);
 
 		filer_change('add', PATH_B);
 
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 		assert.strictEqual(tabs.selected_tab, tab);
 		assert.deepEqual(tabs.ordered_tabs, [tab]);
+	});
+});
+
+describe('selection JSON', () => {
+	test('the selected path round-trips through JSON', () => {
+		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
+		app.diskfiles.select(PATH_B);
+
+		const json = app.diskfiles.to_json();
+		assert.strictEqual(json.selected_path, PATH_B);
+
+		const other = monkeypatch_zzz_for_tests(new Frontend());
+		const restored = new Diskfiles({ app: other, json });
+		assert.strictEqual(restored.selected_path, PATH_B);
+		assert.strictEqual(restored.to_json().selected_path, PATH_B);
+		restored.dispose();
+		other.dispose();
+	});
+
+	test('no selection round-trips as null', () => {
+		const json = app.diskfiles.to_json();
+		assert.isNull(json.selected_path);
+		const restored = new Diskfiles({ app, json });
+		assert.isNull(restored.selected_path);
+		restored.dispose();
 	});
 });
 
@@ -1068,17 +1093,17 @@ describe('reopening a closed tab', () => {
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
 		const { editor } = app.diskfiles;
-		app.diskfiles.select(a.id, true);
-		app.diskfiles.select(b.id, true);
-		const b_tab = editor.tabs.by_diskfile_id.get(b.id);
+		app.diskfiles.select(a.path, true);
+		app.diskfiles.select(b.path, true);
+		const b_tab = editor.tabs.by_path.get(b.path);
 		assert.ok(b_tab);
 		editor.close_tab(b_tab.id);
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 
 		editor.reopen_last_closed_tab();
 
-		assert.strictEqual(editor.tabs.selected_diskfile_id, b.id);
-		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
+		assert.strictEqual(editor.tabs.selected_path, b.path);
+		assert.strictEqual(app.diskfiles.selected_path, b.path);
 	});
 });
 
@@ -1089,14 +1114,14 @@ describe('back/forward navigation', () => {
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
 		const { editor } = app.diskfiles;
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const a_tab = editor.tabs.selected_tab;
 		assert.ok(a_tab);
-		app.diskfiles.select(b.id, true);
+		app.diskfiles.select(b.path, true);
 
 		assert.strictEqual(editor.navigate_to_tab(a_tab.id), a_tab.id);
 
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 	});
 
 	test('a closed tab navigated to selects its file in a new preview', () => {
@@ -1105,28 +1130,28 @@ describe('back/forward navigation', () => {
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
 		const { editor } = app.diskfiles;
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const a_tab = editor.tabs.selected_tab;
 		assert.ok(a_tab);
-		app.diskfiles.select(b.id, true);
+		app.diskfiles.select(b.path, true);
 		editor.close_tab(a_tab.id);
 
 		const tab_id = editor.navigate_to_tab(a_tab.id);
 
 		assert.ok(tab_id);
-		assert.strictEqual(editor.tabs.items.by_id.get(tab_id)?.diskfile_id, a.id);
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(editor.tabs.items.by_id.get(tab_id)?.path, a.path);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 	});
 
 	test('an unknown tab leaves the selection alone', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 
 		assert.isNull(app.diskfiles.editor.navigate_to_tab(create_uuid()));
 
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 	});
 });
 
@@ -1137,17 +1162,17 @@ describe('DiskfilesEditor.handle_file_modified', () => {
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(a && b);
 		const { editor } = app.diskfiles;
-		app.diskfiles.select(a.id, true);
-		app.diskfiles.select(b.id);
+		app.diskfiles.select(a.path, true);
+		app.diskfiles.select(b.path);
 		const b_tab = editor.tabs.preview_tab;
-		assert.strictEqual(b_tab?.diskfile_id, b.id);
+		assert.strictEqual(b_tab?.path, b.path);
 
-		editor.handle_file_modified(a.id);
+		editor.handle_file_modified(a.path);
 		assert.strictEqual(editor.tabs.preview_tab, b_tab, 'another file leaves the preview');
 
-		editor.handle_file_modified(b.id);
+		editor.handle_file_modified(b.path);
 		assert.isNull(editor.tabs.preview_tab_id);
-		assert.strictEqual(editor.tabs.by_diskfile_id.get(b.id), b_tab, 'the same tab, now permanent');
+		assert.strictEqual(editor.tabs.by_path.get(b.path), b_tab, 'the same tab, now permanent');
 	});
 });
 
@@ -1163,7 +1188,7 @@ describe('create_file selects the new file', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = app.diskfiles.get_by_path(PATH_A);
 		assert.ok(a);
-		app.diskfiles.select(a.id);
+		app.diskfiles.select(a.path);
 		return a;
 	};
 
@@ -1171,17 +1196,17 @@ describe('create_file selects the new file', () => {
 		const a = setup();
 
 		await app.diskfiles.create_file('b.txt');
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id, 'not there yet');
+		assert.strictEqual(app.diskfiles.selected_path, a.path, 'not there yet');
 
 		filer_change('add', PATH_C);
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id, 'an unrelated file');
+		assert.strictEqual(app.diskfiles.selected_path, a.path, 'an unrelated file');
 
 		filer_change('add', PATH_B);
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(b);
-		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
+		assert.strictEqual(app.diskfiles.selected_path, b.path);
 		const { tabs } = app.diskfiles.editor;
-		assert.strictEqual(tabs.selected_diskfile_id, b.id);
+		assert.strictEqual(tabs.selected_path, b.path);
 		assert.notStrictEqual(tabs.preview_tab_id, tabs.selected_tab_id, 'a permanent tab');
 	});
 
@@ -1192,19 +1217,19 @@ describe('create_file selects the new file', () => {
 
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(b);
-		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
-		assert.strictEqual(app.diskfiles.editor.tabs.selected_diskfile_id, b.id);
+		assert.strictEqual(app.diskfiles.selected_path, b.path);
+		assert.strictEqual(app.diskfiles.editor.tabs.selected_path, b.path);
 	});
 
 	test('only once — a later re-add of the path by another tool does not select it', async () => {
 		const a = setup(() => filer_change('add', PATH_B));
 		await app.diskfiles.create_file('b.txt');
-		app.diskfiles.select(a.id);
+		app.diskfiles.select(a.path);
 
 		filer_change('delete', PATH_B);
 		filer_change('add', PATH_B);
 
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 	});
 
 	for (const filename of ['./b.txt', 'sub/../b.txt', '/b.txt', 'sub//../b.txt']) {
@@ -1214,7 +1239,7 @@ describe('create_file selects the new file', () => {
 			await app.diskfiles.create_file(filename);
 			filer_change('add', PATH_B);
 
-			assert.strictEqual(app.diskfiles.selected_file_id, app.diskfiles.get_by_path(PATH_B)?.id);
+			assert.strictEqual(app.diskfiles.selected_path, app.diskfiles.get_by_path(PATH_B)?.path);
 		});
 	}
 
@@ -1222,10 +1247,10 @@ describe('create_file selects the new file', () => {
 		const a = setup();
 		await app.diskfiles.create_file('b.txt');
 
-		app.diskfiles.select(a.id);
+		app.diskfiles.select(a.path);
 		filer_change('add', PATH_B);
 
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 	});
 
 	test('a tab change through the editor drops the pending selection', async () => {
@@ -1249,17 +1274,17 @@ describe('create_file selects the new file', () => {
 			app.diskfiles.add_initial([create_disknode(PATH_C)]);
 			const c = app.diskfiles.get_by_path(PATH_C);
 			assert.ok(a_tab && c);
-			app.diskfiles.select(c.id, true);
+			app.diskfiles.select(c.path, true);
 			const c_tab = app.diskfiles.editor.tabs.selected_tab;
 			assert.ok(c_tab);
 			await app.diskfiles.create_file('b.txt');
 
 			change_tab(a_tab.id, c_tab.id);
-			const selected = app.diskfiles.selected_file_id;
+			const selected = app.diskfiles.selected_path;
 			filer_change('add', PATH_B);
 
-			assert.strictEqual(app.diskfiles.selected_file_id, selected, name);
-			assert.notStrictEqual(selected, app.diskfiles.get_by_path(PATH_B)?.id, name);
+			assert.strictEqual(app.diskfiles.selected_path, selected, name);
+			assert.notStrictEqual(selected, app.diskfiles.get_by_path(PATH_B)?.path, name);
 		}
 	});
 
@@ -1273,7 +1298,7 @@ describe('create_file selects the new file', () => {
 
 		const b = app.diskfiles.get_by_path(PATH_B);
 		assert.ok(b);
-		assert.notStrictEqual(app.diskfiles.selected_file_id, b.id);
+		assert.notStrictEqual(app.diskfiles.selected_path, b.path);
 	});
 
 	test('the next create replaces the pending selection', async () => {
@@ -1283,10 +1308,10 @@ describe('create_file selects the new file', () => {
 
 		filer_change('add', PATH_B);
 		const b = app.diskfiles.get_by_path(PATH_B);
-		assert.notStrictEqual(app.diskfiles.selected_file_id, b?.id);
+		assert.notStrictEqual(app.diskfiles.selected_path, b?.path);
 
 		filer_change('add', PATH_C);
-		assert.strictEqual(app.diskfiles.selected_file_id, app.diskfiles.get_by_path(PATH_C)?.id);
+		assert.strictEqual(app.diskfiles.selected_path, app.diskfiles.get_by_path(PATH_C)?.path);
 	});
 
 	test('a failed create selects nothing', async () => {
@@ -1299,7 +1324,7 @@ describe('create_file selects the new file', () => {
 		await app.diskfiles.create_file('b.txt').catch(() => {});
 		filer_change('add', PATH_B);
 
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 	});
 });
 
@@ -1430,7 +1455,7 @@ describe('directory_paths', () => {
 
 	test('a file kept deleted on disk for its draft holds no folder until it returns', async () => {
 		const diskfile = await disk.load('/ws/a/x.md', 'x');
-		app.diskfiles.select(diskfile.id, true);
+		app.diskfiles.select(diskfile.path, true);
 		app.diskfiles.get_editor_state(diskfile).current_content = 'edited';
 		filer_change('delete', parse_or_throw(DiskfilePath, '/ws/a/x.md'));
 		assert.isTrue(diskfile.deleted_on_disk);

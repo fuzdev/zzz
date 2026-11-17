@@ -63,7 +63,7 @@ describe('disk changes without an editor', () => {
 	test('files never opened get no editing state', async () => {
 		const a = await upsert(PATH_A, 'v1');
 		await upsert(PATH_A, 'v2');
-		assert.isUndefined(app.diskfiles.find_editor_state(a.id));
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
 	});
 
 	test('an unchanged resync records nothing', async () => {
@@ -93,17 +93,17 @@ describe('the draft', () => {
 
 	test('is what a reopen shows after the last tab closes', async () => {
 		const a = await upsert(PATH_A, 'v1');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		editor_state.current_content = 'draft';
 		const original = editor_state.history.entries.find((entry) => entry.is_original_state);
 		assert.ok(original);
 		editor_state.set_content_from_history(original.id);
 
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		app.diskfiles.editor.close_tab(tab.id);
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 
 		assert.strictEqual(editor_state.current_content, 'draft');
 		assert.isTrue(editor_state.content_was_modified_by_user);
@@ -111,12 +111,12 @@ describe('the draft', () => {
 
 	test('a clean file reopens on the disk content, not a picked older entry', async () => {
 		const a = await upsert(PATH_A, 'v1');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		const older = editor_state.history.add_entry('older', { created: 1 });
 		editor_state.set_content_from_history(older.id);
 
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		app.diskfiles.editor.close_tab(tab.id);
 
@@ -126,7 +126,7 @@ describe('the draft', () => {
 
 	test('outlasts the history cap, keeping the file dirty for the delete rule', async () => {
 		const a = await upsert(PATH_A, 'v0');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		editor_state.current_content = 'my unsaved edit';
 
@@ -153,7 +153,7 @@ describe('lifetime', () => {
 
 		app.diskfiles.remove_by_path(PATH_A);
 
-		assert.isUndefined(app.diskfiles.find_editor_state(a.id));
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
 		assert.ok(!all.has(editor_state.history.id));
 	});
 
@@ -164,7 +164,7 @@ describe('lifetime', () => {
 		const editor_state = app.diskfiles.get_editor_state(a);
 
 		assert.strictEqual(editor_state.diskfile, a);
-		assert.isUndefined(app.diskfiles.find_editor_state(a.id));
+		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
 		assert.ok(!app.cell_registry.all.has(editor_state.history.id));
 	});
 });
@@ -172,8 +172,8 @@ describe('lifetime', () => {
 describe('closing a tab (request_close_tab)', () => {
 	const setup_tab = async () => {
 		const a = await disk.load(PATH_A, 'v1');
-		app.diskfiles.select(a.id, true);
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		app.diskfiles.select(a.path, true);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		return { a, tab, editor_state: app.diskfiles.get_editor_state(a) };
 	};
@@ -208,13 +208,13 @@ describe('closing a tab (request_close_tab)', () => {
 	test('closing the selected file moves selection to the next tab', async () => {
 		const { a, tab } = await setup_tab();
 		const b = await upsert(PATH_B, 'b');
-		app.diskfiles.select(b.id, true);
-		app.diskfiles.select(a.id, true);
-		assert.strictEqual(app.diskfiles.selected_file_id, a.id);
+		app.diskfiles.select(b.path, true);
+		app.diskfiles.select(a.path, true);
+		assert.strictEqual(app.diskfiles.selected_path, a.path);
 
 		app.diskfiles.editor.request_close_tab(tab.id);
 
-		assert.strictEqual(app.diskfiles.selected_file_id, b.id);
+		assert.strictEqual(app.diskfiles.selected_path, b.path);
 	});
 });
 
@@ -264,7 +264,7 @@ describe('save_draft', () => {
 describe('saving a file deleted on disk', () => {
 	test('recreates it: closing its tab before the add broadcast keeps it', async () => {
 		const a = await upsert(PATH_A, 'v1');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		editor_state.current_content = 'DRAFT';
 		app.diskfiles.remove_by_path(PATH_A);
@@ -281,14 +281,14 @@ describe('saving a file deleted on disk', () => {
 		assert.isTrue(await saving);
 		assert.isFalse(a.deleted_on_disk, 'cleared by the save itself');
 
-		const tab = app.diskfiles.editor.tabs.by_diskfile_id.get(a.id);
+		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		app.diskfiles.editor.close_tab(tab.id);
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
 
 		await upsert(PATH_A, 'DRAFT');
 		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a, 'same id');
-		assert.strictEqual(app.diskfiles.find_editor_state(a.id), editor_state, 'history kept');
+		assert.strictEqual(app.diskfiles.find_editor_state(a.path), editor_state, 'history kept');
 		assert.strictEqual(app.diskfiles.editor.tabs.items.size, 0, 'no stray tab');
 	});
 });
@@ -296,11 +296,11 @@ describe('saving a file deleted on disk', () => {
 describe('a pending tab close', () => {
 	test('lapses when its draft goes away elsewhere, and a later draft does not revive it', async () => {
 		const a = await upsert(PATH_A, 'v1');
-		app.diskfiles.select(a.id, true);
+		app.diskfiles.select(a.path, true);
 		const editor_state = app.diskfiles.get_editor_state(a);
 		editor_state.current_content = 'DRAFT';
 		const { editor } = app.diskfiles;
-		const tab = editor.tabs.by_diskfile_id.get(a.id);
+		const tab = editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		editor.request_close_tab(tab.id);
 		assert.strictEqual(editor.pending_close_tab, tab);

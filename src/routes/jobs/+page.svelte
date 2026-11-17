@@ -12,7 +12,7 @@
 	const open_file = (path: DiskfilePath): void => {
 		const diskfile = app.diskfiles.get_by_path(path);
 		if (!diskfile) return;
-		app.diskfiles.select(diskfile.id, true);
+		app.diskfiles.select(diskfile.path, true);
 		void goto(resolve('/files'));
 	};
 </script>

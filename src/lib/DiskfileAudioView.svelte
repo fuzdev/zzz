@@ -208,7 +208,7 @@
 								type="button"
 								class="plain sized_sm"
 								title="open the transcript file"
-								onclick={() => diskfiles.select(selected.file.id, true)}
+								onclick={() => diskfiles.select(selected.file.path, true)}
 							>
 								open file
 							</button>

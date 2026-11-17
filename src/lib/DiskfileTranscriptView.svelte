@@ -3,7 +3,6 @@
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 	import { icon_delete, icon_file } from '@fuzdev/fuz_ui/icons.ts';
 	import { to_error_message } from '@fuzdev/fuz_util/error.ts';
-	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { Diskfile } from './diskfile.svelte.ts';
@@ -35,7 +34,7 @@
 		onmodified
 	}: {
 		diskfile: Diskfile;
-		onmodified?: (diskfile_id: Uuid) => void;
+		onmodified?: (path: DiskfilePath) => void;
 	} = $props();
 
 	const app = frontend_context.get();
@@ -148,7 +147,7 @@
 							type="button"
 							class="plain"
 							title="open the audio file"
-							onclick={() => diskfiles.select(source.id, true)}
+							onclick={() => diskfiles.select(source.path, true)}
 						>
 							open audio
 						</button>

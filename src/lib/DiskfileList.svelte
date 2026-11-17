@@ -39,14 +39,14 @@
 	<!-- TODO show the status of being open in any tab (what signifier?) -->
 	<!-- TODO bug with `selected` -->
 	{#snippet children(diskfile)}
-		{@const selected = diskfiles.selected_file_id === diskfile.id}
+		{@const selected = diskfiles.selected_path === diskfile.path}
 		<DiskfileListitem
 			{diskfile}
 			{selected}
 			reveal_in_tree
 			onselect={(diskfile, open_not_preview) => {
 				// TODO this needs to navigate to the path of the file (so should be a link, not this onselect callback)
-				diskfiles.select(diskfile.id, open_not_preview);
+				diskfiles.select(diskfile.path, open_not_preview);
 			}}
 		/>
 	{/snippet}
