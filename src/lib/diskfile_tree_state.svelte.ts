@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
@@ -924,8 +925,11 @@ export class DiskfileTreeState {
 		if (row.kind === 'unfocused') {
 			void this.focus_repo(row);
 		} else if (row.kind === 'file') {
-			const diskfile = this.app.diskfiles.get_by_path(row.path as DiskfilePath);
-			if (diskfile) this.app.diskfiles.select(diskfile.path, open_not_preview);
+			const path = row.path as DiskfilePath;
+			// a file row is a file on disk, or one kept for a draft or a tab
+			if (untrack(() => this.app.diskfiles.has_path(path))) {
+				this.app.diskfiles.select(path, open_not_preview);
+			}
 		} else {
 			this.toggle(row);
 		}

@@ -193,7 +193,7 @@ describe('DiskfilePart content access', () => {
 
 		assert.deepEqual(update_calls, []);
 		assert.strictEqual(part.content, TEST_CONTENT.EDITABLE.INITIAL);
-		assert.strictEqual(app.diskfiles.get_by_path(path)?.content, TEST_CONTENT.EDITABLE.INITIAL);
+		assert.strictEqual(app.diskfiles.peek(path)?.content, TEST_CONTENT.EDITABLE.INITIAL);
 	});
 
 	test('content is null, never the editor text, when the file content was not loaded', () => {

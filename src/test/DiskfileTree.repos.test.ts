@@ -269,7 +269,7 @@ describe('the repo contextmenus', () => {
 		unfocus_calls[0]!.resolve({ ok: true, value: { project: registry_info([], 3) } });
 		await tick();
 		assert.deepEqual(dev_outline(), ['- /dev/', '  ~ app', '  ~ site', '  README.md']);
-		assert.ok(!app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/dev/app/src/a.ts')));
+		assert.ok(!app.diskfiles.peek(parse_or_throw(DiskfilePath, '/dev/app/src/a.ts')));
 	});
 
 	test('a plain folder’s menu has no unfocus', async () => {

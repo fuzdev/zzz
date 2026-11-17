@@ -139,7 +139,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	selected_path: DiskfilePath | null = $state.raw(null);
 
 	readonly selected_file: Diskfile | null = $derived(
-		this.selected_path ? (this.get_by_path(this.selected_path) ?? null) : null
+		this.selected_path ? (this.peek(this.selected_path) ?? null) : null
 	);
 
 	/**
@@ -295,7 +295,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		if (existing?.diskfile === diskfile) return existing;
 		return create_detached(() => {
 			const editor_state = new DiskfileEditorState({ app: this.app, diskfile });
-			if (this.get_by_path(diskfile.path) === diskfile) {
+			if (this.peek(diskfile.path) === diskfile) {
 				this.#editor_states.set(diskfile.path, editor_state);
 			} else {
 				// unmanaged, so nothing would dispose it — keep it out of the cell registry
@@ -327,14 +327,14 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 *
 	 * A disknode carries metadata only — contents come from `diskfile_read`
 	 * alone — so for a diskfile already held its content may be out of date:
-	 * a file held eagerly — with an editing state, or referenced by a
-	 * `DiskfilePart` — is read again, keeping its content until the new one
+	 * a file held eagerly — with an editing state or a holder (`acquire`: a
+	 * tab, a `DiskfilePart`, a view, a copy) — is read again, keeping its content until the new one
 	 * lands, and any other drops its content to `unrequested`, to be read when
 	 * next needed (`ensure_content`). A read in flight reads again instead. A
 	 * read that lands on the same text changes nothing
 	 * (`DiskfileEditorState.check_disk_changes`), so a resync that re-sends
 	 * every file, or a `touch`, raises no conflict. A new file starts
-	 * `unrequested`, and is read right away if a part references it.
+	 * `unrequested`, and is read right away if something holds its path.
 	 */
 	upsert(disknode: SerializableDisknode): Diskfile {
 		const existing = this.items.by_optional('by_path', disknode.id);
@@ -387,15 +387,14 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Whether `diskfile`'s content is kept current as it changes on disk: it
 	 * has an editing state (an editor shows it, or did — conflicts are caught
-	 * against it), a tab, or a `DiskfilePart` references it (prompts and turns
-	 * read it). Other files load on demand and drop their content on a change.
-	 * Wider than `#is_held`, since a part reads a file but doesn't keep it.
+	 * against it) or a holder (`acquire`: a tab, a `DiskfilePart` — prompts
+	 * and turns read it — a view, a copy in flight). Other files load on
+	 * demand and drop their content on a change. Wider than `#is_held`, since
+	 * only a draft or a tab keeps a file the index no longer has.
 	 */
 	#is_held_eagerly(diskfile: Diskfile): boolean {
 		return (
-			untrack(
-				() => this.#editor_states.has(diskfile.path) || this.editor.tabs.by_path.has(diskfile.path)
-			) || (this.#part_paths.get(diskfile.path) ?? 0) > 0
+			this.#holders.has(diskfile.path) || untrack(() => this.#editor_states.has(diskfile.path))
 		);
 	}
 
@@ -404,8 +403,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 	readonly #read_queue: TaskQueue = new TaskQueue(DISKFILE_READ_CONCURRENCY);
 
-	/** How many `DiskfilePart`s reference each path — see `track_part_path`. Not reactive. */
-	readonly #part_paths: Map<string, number> = new Map();
+	/** What holds each path's cell — see `acquire`. Not reactive. */
+	readonly #holders: Map<DiskfilePath, Set<object>> = new Map();
+
+	/** Paths whose last holder let go, settled in a microtask — see `release`. Not reactive. */
+	readonly #releasing: Set<DiskfilePath> = new Set();
 
 	/**
 	 * Loads `diskfile`'s content (`diskfile_read`) unless it's settled —
@@ -471,6 +473,17 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * @throws Error saying why the content can't be loaded
 	 */
 	async load_content(diskfile: Diskfile): Promise<string> {
+		// held while it reads, as a copy in flight
+		const holder = {};
+		this.acquire(diskfile.path, holder);
+		try {
+			return await this.#load_content(diskfile);
+		} finally {
+			this.release(diskfile.path, holder);
+		}
+	}
+
+	async #load_content(diskfile: Diskfile): Promise<string> {
 		if (
 			diskfile.content_status === 'unloadable' &&
 			diskfile.content_error !== null &&
@@ -602,29 +615,79 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Counts a `DiskfilePart` moving from `previous` to `next` — a file a part
-	 * references is held eagerly (see `upsert`), and is read when the part
-	 * attaches, in a microtask so a part constructed anywhere can call this.
+	 * Holds the cell at `path` for `holder` — a tab, a `DiskfilePart`, a view,
+	 * a copy in flight — until `release(path, holder)`, and returns it, or
+	 * `undefined` when there's none. The hold is by path, so it outlives the
+	 * cell there and holds the next one: a file that leaves and comes back
+	 * is held again. A held file's content is kept current (see `upsert`).
+	 * Holding twice with one holder holds once.
+	 *
+	 * A hold doesn't keep a file the index no longer has: one deleted on disk
+	 * or uncovered is kept only for a draft or a tab (`#is_held`), so a part
+	 * referencing a deleted file finds it missing. A kept file whose draft is
+	 * saved while it's out of the index stays until its last holder lets go.
+	 *
+	 * Writes nothing reactive, so it's safe anywhere — from a constructor,
+	 * an event handler, or an effect.
+	 *
+	 * @mutates this - adds `holder` to the path's holders
 	 */
-	track_part_path(previous: DiskfilePath | null, next: DiskfilePath | null): void {
-		if (previous === next) return;
-		if (previous !== null) {
-			const count = (this.#part_paths.get(previous) ?? 0) - 1;
-			if (count > 0) {
-				this.#part_paths.set(previous, count);
-			} else {
-				this.#part_paths.delete(previous);
-			}
+	acquire(path: DiskfilePath, holder: object): Diskfile | undefined {
+		let holders = this.#holders.get(path);
+		if (!holders) {
+			holders = new Set();
+			this.#holders.set(path, holders);
 		}
-		if (next !== null) {
-			this.#part_paths.set(next, (this.#part_paths.get(next) ?? 0) + 1);
-			queueMicrotask(() => {
-				// a part detached meanwhile no longer needs it
-				if (!this.#part_paths.has(next)) return;
-				const diskfile = this.get_by_path(next);
-				if (diskfile && !diskfile.deleted_on_disk) void this.ensure_content(diskfile);
-			});
-		}
+		holders.add(holder);
+		return untrack(() => this.peek(path));
+	}
+
+	/**
+	 * Lets go of `holder`'s hold on `path` (see `acquire`); releasing what
+	 * isn't held does nothing. When the path's last holder lets go, the file
+	 * is released in a microtask (`release_if_unneeded`) unless something
+	 * holds it again first — so an effect re-running, which lets go and holds
+	 * again, doesn't release it, and a holder let go of while its collection
+	 * is being written can't re-enter it.
+	 *
+	 * @mutates this - drops `holder` from the path's holders
+	 */
+	release(path: DiskfilePath, holder: object): void {
+		const holders = this.#holders.get(path);
+		if (!holders?.delete(holder) || holders.size) return;
+		this.#holders.delete(path);
+		if (this.#releasing.has(path)) return;
+		this.#releasing.add(path);
+		queueMicrotask(() => {
+			this.#releasing.delete(path);
+			if (!this.#holders.has(path)) this.release_if_unneeded(path);
+		});
+	}
+
+	/**
+	 * Holds the cell at `path` until the returned function is called — the
+	 * shape of an `$effect`'s cleanup:
+	 * `$effect(() => diskfiles.hold(path))`. See `acquire`.
+	 */
+	hold(path: DiskfilePath): () => void {
+		const holder = {};
+		this.acquire(path, holder);
+		return () => this.release(path, holder);
+	}
+
+	/** Holds the cells at every one of `paths`, like `hold`, until the returned function is called. */
+	hold_all(paths: Iterable<DiskfilePath>): () => void {
+		const holder = {};
+		const held = Array.from(paths);
+		for (const path of held) this.acquire(path, holder);
+		return () => {
+			for (const path of held) this.release(path, holder);
+		};
+	}
+
+	/** Whether anything holds the cell at `path` (see `acquire`). Not reactive. */
+	is_acquired(path: DiskfilePath): boolean {
+		return this.#holders.has(path);
 	}
 
 	/**
@@ -787,12 +850,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Forgets the diskfile at `path` if it's outside what the index covers — deleted on
 	 * disk, uncovered, or kept from an unfocused repo for its draft or tab
 	 * (`release_uncovered`) — and nothing holds it anymore (`#is_held`): no draft and no tab.
-	 * Called when its draft is discarded and when its last tab closes. The path may name a newer
+	 * Called when its draft is discarded, when its last tab closes, and — in a
+	 * microtask — when its path's last holder lets go (`release`). The path may name a newer
 	 * cell than the caller's (one replaced at the same path); that's safe, since the check is on
 	 * that cell's own state.
 	 */
 	release_if_unneeded(path: DiskfilePath): void {
-		const diskfile = this.get_by_path(path);
+		const diskfile = this.peek(path);
 		if (
 			diskfile &&
 			(diskfile.deleted_on_disk || diskfile.uncovered || this.is_in_unfocused_repo(path)) &&
@@ -852,7 +916,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		content: string,
 		expected_hash: string | null = null
 	): Promise<Result<{ value: ActionOutputs['diskfile_update'] }, { error: JsonrpcErrorObject }>> {
-		const existing = this.get_by_path(path);
+		const existing = this.peek(path);
 		if (existing && !existing.content_loaded) {
 			return Promise.resolve({
 				ok: false,
@@ -1172,13 +1236,15 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		path: string,
 		options?: { fragment?: string | null; open_not_preview?: boolean }
 	): boolean {
-		const diskfile = this.get_by_path(path as DiskfilePath);
-		if (!diskfile || diskfile.deleted_on_disk || diskfile.uncovered) return false;
+		// on disk in the index — never one kept off it for a draft or a tab
+		if (!untrack(() => this.index.has(path))) return false;
+		const diskfile_path = path as DiskfilePath;
 		const fragment = options?.fragment;
-		if (fragment && to_diskfile_content_kind(diskfile.path) === 'markdown') {
-			this.get_editor_state(diskfile).markdown_pending_fragment = fragment;
+		if (fragment && to_diskfile_content_kind(diskfile_path) === 'markdown') {
+			const editor_state = this.get_editor_state_at(diskfile_path);
+			if (editor_state) editor_state.markdown_pending_fragment = fragment;
 		}
-		this.select(diskfile.path, options?.open_not_preview);
+		this.select(diskfile_path, options?.open_not_preview);
 		return true;
 	}
 
@@ -1239,7 +1305,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 		// the backend normalizes the path, and the filer reports it that way
 		const created_path = parse_or_throw(DiskfilePath, normalize_path(path));
-		const created = this.get_by_path(created_path);
+		const created = this.peek(created_path);
 		if (created) {
 			this.select(created.path, true);
 			this.editor.tree.reveal_created(created_path);
@@ -1316,8 +1382,36 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		}
 	}
 
-	get_by_path(path: DiskfilePath): Diskfile | undefined {
+	/**
+	 * The cell at `path`, if there is one — never creates one. A file is held
+	 * by `acquire`; reading the cell needs nothing else. Reactive.
+	 */
+	peek(path: DiskfilePath): Diskfile | undefined {
 		return this.items.by_optional('by_path', path);
+	}
+
+	/**
+	 * The index's record of the file at `path` — `undefined` for a file not on
+	 * disk in the index, including one kept for a draft or a tab
+	 * (`has_path`). Subscribes a reactive reader to `path`
+	 * (`DiskfileIndex.get`); read it per path only in component effects, or
+	 * deriveds that live in one.
+	 */
+	get_by_path(path: DiskfilePath): SerializableDisknode | undefined {
+		return this.index.get(path);
+	}
+
+	/**
+	 * The editing state of the file at `path` (see `get_editor_state`),
+	 * created if there's none — `undefined` when no file is known there. For
+	 * an event handler: the editing state then keeps the file's cell.
+	 */
+	get_editor_state_at(path: DiskfilePath): DiskfileEditorState | undefined {
+		const holder = {};
+		const diskfile = this.acquire(path, holder);
+		const editor_state = diskfile && this.get_editor_state(diskfile);
+		this.release(path, holder);
+		return editor_state;
 	}
 
 	/**
@@ -1337,24 +1431,19 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * The files beside the audio file at `source_path` that may be its
+	 * The paths beside the audio file at `source_path` that may be its
 	 * transcripts, by name (`find_transcript_candidates`) — looked up among
 	 * its folder's files in the tree index, not a scan of every file. Only
 	 * files on disk; their contents say which are transcripts
-	 * (`find_transcripts`).
+	 * (`find_transcripts`), so a view holds them (`hold_all`) and reads their
+	 * cells (`peek`).
 	 */
-	find_transcript_candidates(source_path: string): Array<Diskfile> {
+	to_transcript_candidate_paths(source_path: string): Array<DiskfilePath> {
 		const dir = source_path.slice(0, source_path.lastIndexOf('/') + 1);
-		const candidates: Array<Diskfile> = [];
-		for (const path of find_transcript_candidate_paths(
+		return find_transcript_candidate_paths(
 			this.index.tree_index.get_children(dir).files,
 			source_path
-		)) {
-			// TODO D2 (d): peek
-			const diskfile = this.get_by_path(path as DiskfilePath);
-			if (diskfile) candidates.push(diskfile);
-		}
-		return candidates;
+		) as Array<DiskfilePath>;
 	}
 
 	// TODO make this a derived property?
@@ -1459,8 +1548,7 @@ export const to_diskfile_index_mismatches = (diskfiles: Diskfiles): Array<string
 		}
 		if (index.size !== on_disk.size) {
 			for (const record of index.values()) {
-				if (!diskfiles.get_by_path(record.id))
-					mismatches.push(`${record.id}: in the index, no cell`);
+				if (!diskfiles.peek(record.id)) mismatches.push(`${record.id}: in the index, no cell`);
 			}
 		}
 		if (diskfiles.items.by_id.size <= DISKFILE_INDEX_CHECK_LIMIT) {

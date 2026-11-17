@@ -118,7 +118,7 @@ test('reconcile: adds, changes, prunes, and keeps a held file out of the index',
 	const meta = app.diskfiles.index.meta;
 	app.diskfiles.reconcile([node('/dev/r/a.ts', 2), node('/dev/r/d.ts')], [REPO]);
 	assert.strictEqual(app.diskfiles.index.meta, meta + 1);
-	assert.isTrue(app.diskfiles.get_by_path(at('/dev/r/b.ts'))!.deleted_on_disk, 'its tab keeps it');
+	assert.isTrue(app.diskfiles.peek(at('/dev/r/b.ts'))!.deleted_on_disk, 'its tab keeps it');
 	assert_index(['/dev/r/a.ts', '/dev/r/d.ts']);
 
 	// a tracked change skips the snapshot's entry and its prune
@@ -135,7 +135,7 @@ test('reconcile: adds, changes, prunes, and keeps a held file out of the index',
 
 	// the held file back on disk is reattached
 	app.diskfiles.add_initial([node('/dev/r/b.ts', 5)]);
-	assert.isFalse(app.diskfiles.get_by_path(at('/dev/r/b.ts'))!.deleted_on_disk);
+	assert.isFalse(app.diskfiles.peek(at('/dev/r/b.ts'))!.deleted_on_disk);
 	assert_index(['/dev/r/a.ts', '/dev/r/b.ts', '/dev/r/d.ts']);
 });
 
@@ -155,7 +155,7 @@ test('upsert and filer deletes: unheld forgotten, held kept off the index', asyn
 	assert_index(['/dev/r/a.ts', '/dev/r/b.ts']);
 
 	delete_change('/dev/r/a.ts');
-	assert.isUndefined(app.diskfiles.get_by_path(at('/dev/r/a.ts')));
+	assert.isUndefined(app.diskfiles.peek(at('/dev/r/a.ts')));
 	assert_index(['/dev/r/b.ts']);
 
 	app.diskfiles.select(b.path, true);
@@ -165,7 +165,7 @@ test('upsert and filer deletes: unheld forgotten, held kept off the index', asyn
 
 	// closing its tab forgets it
 	app.diskfiles.editor.close_tab(app.diskfiles.editor.tabs.selected_tab!.id);
-	assert.isUndefined(app.diskfiles.get_by_path(b.path));
+	assert.isUndefined(app.diskfiles.peek(b.path));
 	assert_index([]);
 });
 
@@ -257,7 +257,7 @@ test('on_disk, listed, listed_count, and has_path follow the records and the hel
 	assert.strictEqual(app.diskfiles.index.watch_count, 0, 'no reader, no watch');
 });
 
-test('find_transcript_candidates looks among the folder’s files on disk', () => {
+test('to_transcript_candidate_paths looks among the folder’s files on disk', () => {
 	app.diskfiles.add_initial([
 		node('/dev/r/rec.webm'),
 		node('/dev/r/rec.webm.base.transcript.json'),
@@ -265,10 +265,9 @@ test('find_transcript_candidates looks among the folder’s files on disk', () =
 		node('/dev/r/other.webm.base.transcript.json'),
 		node('/dev/r/sub/rec.webm.base.transcript.json')
 	]);
-	assert.deepEqual(
-		app.diskfiles.find_transcript_candidates('/dev/r/rec.webm').map((d) => d.path),
-		['/dev/r/rec.webm.base.transcript.json']
-	);
+	assert.deepEqual(app.diskfiles.to_transcript_candidate_paths('/dev/r/rec.webm'), [
+		'/dev/r/rec.webm.base.transcript.json'
+	]);
 	app.diskfiles.remove_by_path('/dev/r/rec.webm.base.transcript.json');
-	assert.deepEqual(app.diskfiles.find_transcript_candidates('/dev/r/rec.webm'), []);
+	assert.deepEqual(app.diskfiles.to_transcript_candidate_paths('/dev/r/rec.webm'), []);
 });

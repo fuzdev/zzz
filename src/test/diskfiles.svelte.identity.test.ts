@@ -42,7 +42,7 @@ const load = async (contents: string): Promise<Diskfile> => {
 const replace = async (): Promise<{ stale: Diskfile; live: Diskfile }> => {
 	const stale = await load('v1');
 	app.diskfiles.remove_by_path(PATH_A); // no draft: forgotten
-	assert.isUndefined(app.diskfiles.get_by_path(PATH_A));
+	assert.isUndefined(app.diskfiles.peek(PATH_A));
 	const live = await load('v2');
 	assert.notStrictEqual(stale, live);
 	return { stale, live };

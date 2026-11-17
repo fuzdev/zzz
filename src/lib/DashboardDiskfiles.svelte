@@ -29,9 +29,7 @@
 	const tabs_reorderable = new Reorderable({ item_class: null }); // remove the normal reorderable item styling
 
 	const selected_tab = $derived(editor.tabs.selected_tab);
-	const selected_diskfile = $derived(
-		selected_tab ? diskfiles.get_by_path(selected_tab.path) : undefined
-	);
+	const selected_diskfile = $derived(selected_tab ? diskfiles.peek(selected_tab.path) : undefined);
 
 	let show_diskfile_picker = $state.raw(false);
 

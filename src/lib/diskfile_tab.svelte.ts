@@ -41,7 +41,7 @@ export class DiskfileTab extends Cell<typeof DiskfileTabJson> {
 	/** Derived from parent collection's state. */
 	readonly is_selected: boolean = $derived.by(() => this.tabs.selected_tab_id === this.id);
 
-	readonly diskfile: Diskfile | undefined = $derived(this.app.diskfiles.get_by_path(this.path));
+	readonly diskfile: Diskfile | undefined = $derived(this.app.diskfiles.peek(this.path));
 
 	constructor(options: DiskfileTabOptions) {
 		super(DiskfileTabJson, options);

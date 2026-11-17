@@ -322,7 +322,7 @@ describe('completion output with file parts', () => {
 
 		assert.strictEqual(turn.completion_part?.content, 'final');
 		assert.deepEqual(update_calls, []);
-		assert.strictEqual(app.diskfiles.get_by_path(FILE_PATH)?.content, FILE_CONTENT);
+		assert.strictEqual(app.diskfiles.peek(FILE_PATH)?.content, FILE_CONTENT);
 	});
 
 	test('a turn with only a file part rejects completion output', () => {
@@ -343,7 +343,7 @@ describe('completion output with file parts', () => {
 		}
 
 		assert.deepEqual(update_calls, []);
-		assert.strictEqual(app.diskfiles.get_by_path(FILE_PATH)?.content, FILE_CONTENT);
+		assert.strictEqual(app.diskfiles.peek(FILE_PATH)?.content, FILE_CONTENT);
 		assert.strictEqual(turn.content, FILE_CONTENT);
 		assert.ok(turn.response); // the response metadata still settles the turn
 	});

@@ -610,8 +610,8 @@ export interface DiskfileStatus {
  * listing a file mustn't create one.
  */
 export const to_diskfile_status = (diskfiles: Diskfiles, path: DiskfilePath): DiskfileStatus => {
-	// TODO D2 (d): peek
-	const diskfile = diskfiles.get_by_path(path);
+	// a flagged file's cell is kept — for a draft or a tab, or by its holders after its draft is saved
+	const diskfile = diskfiles.peek(path);
 	const editor_state = diskfiles.find_editor_state(path);
 	return {
 		deleted: diskfile?.deleted_on_disk ?? false,

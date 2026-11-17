@@ -245,12 +245,12 @@ export const install_fake_disk = (
 		const node = disknode(path);
 		app.diskfiles.handle_change({
 			change: {
-				type: type ?? (app.diskfiles.get_by_path(node.id) ? 'change' : 'add'),
+				type: type ?? (app.diskfiles.peek(node.id) ? 'change' : 'add'),
 				path: node.id
 			},
 			disknode: node
 		});
-		return app.diskfiles.get_by_path(node.id)!;
+		return app.diskfiles.peek(node.id)!;
 	};
 
 	return {

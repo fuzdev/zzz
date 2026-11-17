@@ -167,7 +167,7 @@ describe('the tree’s keyboard', () => {
 	test('arrows move and expand, enter opens a file for good, space previews', () => {
 		write('/w/a/x.md');
 		const b = write('/w/b.md');
-		const x = app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/w/a/x.md'))!;
+		const x = app.diskfiles.peek(parse_or_throw(DiskfilePath, '/w/a/x.md'))!;
 		const { target } = render_tree();
 		const { tabs } = app.diskfiles.editor;
 

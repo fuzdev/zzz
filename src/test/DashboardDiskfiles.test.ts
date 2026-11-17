@@ -103,7 +103,7 @@ describe('DashboardDiskfiles header', () => {
 		const target = render();
 		assert.isNull(details_button(target), 'no tab, no toggle');
 
-		const a = app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/w/a.txt'));
+		const a = app.diskfiles.peek(parse_or_throw(DiskfilePath, '/w/a.txt'));
 		assert.ok(a);
 		app.diskfiles.select(a.path, true);
 		flushSync();

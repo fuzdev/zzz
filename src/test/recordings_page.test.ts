@@ -93,3 +93,24 @@ test('lists the audio files under the recordings folder at any depth, newest fir
 		'2025-06-01_10-00-00.webm transcribe'
 	]);
 });
+
+test('holds the transcript candidates while mounted, and lets go on unmount', () => {
+	const audio = disk.write(`${RECORDINGS}2026-11-02_10-00-00.webm`, null);
+	const transcript = disk.write(
+		`${RECORDINGS}2026-11-02_10-00-00.webm.base.transcript.json`,
+		JSON.stringify(create_transcript('2026-11-02_10-00-00.webm', 'base'))
+	);
+
+	mounted = mount(FrontendContextHarness, {
+		target,
+		props: { app, component: RecordingsPage, props: {} }
+	});
+	flushSync();
+	assert.isTrue(app.diskfiles.is_acquired(transcript.path));
+	assert.isFalse(app.diskfiles.is_acquired(audio.path), 'the recording itself is only listed');
+
+	void unmount(mounted);
+	mounted = null;
+	flushSync();
+	assert.isFalse(app.diskfiles.is_acquired(transcript.path));
+});

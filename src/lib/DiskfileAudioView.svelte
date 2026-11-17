@@ -63,7 +63,11 @@
 
 	// the transcripts on disk, one per model, and the job writing another — named
 	// like one, a file's content says whether it's this audio's, so they load on view
-	const transcript_candidates = $derived(diskfiles.find_transcript_candidates(diskfile.path));
+	const candidate_paths = $derived(diskfiles.to_transcript_candidate_paths(diskfile.path));
+	$effect(() => diskfiles.hold_all(candidate_paths));
+	const transcript_candidates: Array<Diskfile> = $derived(
+		candidate_paths.map((path) => diskfiles.peek(path)).filter((d) => d !== undefined)
+	);
 	$effect(() => {
 		for (const candidate of transcript_candidates) void diskfiles.ensure_content(candidate);
 	});

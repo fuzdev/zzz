@@ -59,7 +59,10 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 
 	items: IndexedCollection<DiskfileTab> = new IndexedCollection({
 		// closed tabs kept in `recently_closed_tabs` are only read for their `path`
-		dispose_item: (tab) => tab.dispose()
+		dispose_item: (tab) => {
+			this.app.diskfiles.release(tab.path, tab);
+			tab.dispose();
+		}
 	});
 
 	/** Map for looking up tabs by their file's path. */
@@ -216,6 +219,8 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		});
 
 		this.items.add(new_tab);
+		// an open tab holds its file's cell (`Diskfiles.acquire`), until it closes
+		this.app.diskfiles.acquire(path, new_tab);
 		this.#position_tab(new_tab.id, insert_after);
 
 		return new_tab;
@@ -254,6 +259,9 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 			// Update the tab content
 			const previous_path = current_preview.path;
 			current_preview.path = path;
+			const { diskfiles } = this.app;
+			diskfiles.acquire(path, current_preview);
+			diskfiles.release(previous_path, current_preview);
 			this.#notify_if_detached(previous_path);
 
 			return { tab: current_preview, is_new: false };

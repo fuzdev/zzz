@@ -276,10 +276,10 @@ describe('saving a file deleted on disk', () => {
 		const tab = app.diskfiles.editor.tabs.by_path.get(a.path);
 		assert.ok(tab);
 		app.diskfiles.editor.close_tab(tab.id);
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a);
+		assert.strictEqual(app.diskfiles.peek(PATH_A), a);
 
 		await upsert(PATH_A, 'DRAFT');
-		assert.strictEqual(app.diskfiles.get_by_path(PATH_A), a, 'same id');
+		assert.strictEqual(app.diskfiles.peek(PATH_A), a, 'same id');
 		assert.strictEqual(app.diskfiles.find_editor_state(a.path), editor_state, 'history kept');
 		assert.strictEqual(app.diskfiles.editor.tabs.items.size, 0, 'no stray tab');
 	});

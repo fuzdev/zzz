@@ -45,9 +45,19 @@
 
 	const to_name = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 
-	/** The files that may be the recording's transcripts — their contents say which. */
+	/**
+	 * The files that may be the recording's transcripts — their contents say
+	 * which, so the page holds them (`hold_all`).
+	 */
 	const to_candidates = (path: DiskfilePath): Array<Diskfile> =>
-		diskfiles.find_transcript_candidates(path);
+		diskfiles
+			.to_transcript_candidate_paths(path)
+			.map((candidate) => diskfiles.peek(candidate))
+			.filter((candidate) => candidate !== undefined);
+
+	$effect(() =>
+		diskfiles.hold_all(recordings.flatMap((path) => diskfiles.to_transcript_candidate_paths(path)))
+	);
 
 	const is_loading = (diskfile: Diskfile): boolean =>
 		diskfile.content_status === 'unrequested' || diskfile.content_status === 'loading';

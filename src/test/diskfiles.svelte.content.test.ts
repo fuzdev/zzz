@@ -112,7 +112,7 @@ const answer = async (path: DiskfilePath, result: ReadResult): Promise<void> => 
 };
 
 const get = (path: DiskfilePath): Diskfile => {
-	const diskfile = app.diskfiles.get_by_path(path);
+	const diskfile = app.diskfiles.peek(path);
 	assert.ok(diskfile, `a diskfile at ${path}`);
 	return diskfile;
 };
@@ -387,7 +387,7 @@ describe('stale while in flight', () => {
 		});
 		await answer(PATH_A, read_error('not found'));
 		await loading;
-		assert.isUndefined(app.diskfiles.get_by_path(PATH_A));
+		assert.isUndefined(app.diskfiles.peek(PATH_A));
 	});
 });
 

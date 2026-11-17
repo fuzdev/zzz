@@ -12,7 +12,7 @@ export const monkeypatch_zzz_for_tests = <T extends Frontend>(app: T): T => {
 	// In the real implementation, this would make a server request.
 	// Probably want to mock differently than this but it's fine for now.
 	app.diskfiles.update = (path: DiskfilePath, content: string) => {
-		const diskfile = app.diskfiles.get_by_path(path);
+		const diskfile = app.diskfiles.peek(path);
 		if (diskfile) {
 			diskfile.content = content;
 			diskfile.content_hash = content_hash(content);

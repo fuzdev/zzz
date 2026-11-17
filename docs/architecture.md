@@ -1328,12 +1328,13 @@ the selected tab's file first, then the other tabs'. A read never touches
   (`Diskfiles.update` refuses too). The first content to land seeds the
   editing state's original entry: it's how the file was first seen, not a
   disk change, and never a conflict.
-- **A `DiskfilePart`** as it attaches (`Diskfiles.track_part_path`), so its
-  content, length, and token counts follow; until then a formatted prompt
-  shows a `[loading the content]` placeholder for it.
+- **A `DiskfilePart`** as it attaches (it holds its file —
+  `Diskfiles.acquire`), so its content, length, and token counts follow;
+  until then a formatted prompt shows a `[loading the content]`
+  placeholder for it.
 - **The audio view and the recordings page** load the files named like the
-  audio's transcript sidecars (`find_transcript_candidates`), whose contents
-  say which audio they were made from.
+  audio's transcript sidecars (`to_transcript_candidate_paths`), holding
+  them while shown, whose contents say which audio they were made from.
 - **Sending and copying** await what's missing: `Thread.send_message`
   creates the turns and sets `pending` at once, then awaits the history's
   file parts still loading before building the request (a cancel meanwhile
@@ -1354,12 +1355,23 @@ the selected tab's file first, then the other tabs'. A read never touches
   part's entry never shows for an empty file — known by its `size` before
   its content loads.
 
-A file is held eagerly while it has an editing state or a `DiskfilePart`
-references it. Every disknode that arrives for a file already held — an
-`add` or `change`, a `project_open` index, a reconnect's snapshot entries
-— re-reads an eagerly held file, keeping its content until the new
-one lands so its editor never turns read-only meanwhile, and drops any
-other file's content back to `unrequested`, to load again on next access. A
+A file is held eagerly while it has an editing state or a holder
+(`Diskfiles.acquire`, released by `release`): an open tab, a
+`DiskfilePart` referencing it, a view reading it (the audio view's and
+recordings page's transcript sidecars), or a copy in flight. A hold is
+by path, so it holds the next cell at the path too. It doesn't keep a
+file the index no longer has (deleted on disk, or uncovered): only a
+draft or a tab does, so a part referencing a deleted file finds it
+missing — though a kept file whose draft is saved while it's out of the
+index stays until its last holder lets go. A path whose last holder lets
+go is released in a microtask (`release_if_unneeded`) unless held again
+first, so an effect re-running doesn't release it. `peek(path)` reads
+the cell without holding it, and `get_by_path(path)` is the index's
+record. Every disknode that arrives for a file already held — an `add`
+or `change`, a `project_open` index, a reconnect's snapshot entries —
+re-reads an eagerly held file, keeping its content until the new one
+lands so its editor never turns read-only meanwhile, and drops any other
+file's content back to `unrequested`, to load again on next access. A
 re-read of unchanged text changes nothing (`check_disk_changes` compares
 strings), so a resync raises no spurious conflict.
 

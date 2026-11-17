@@ -46,8 +46,7 @@
 	const { diskfiles } = app;
 
 	// only the content entries need the cell
-	// TODO D2 (d): peek
-	const diskfile = $derived(path ? diskfiles.get_by_path(path) : undefined);
+	const diskfile = $derived(path ? diskfiles.peek(path) : undefined);
 
 	// the folder holding `path`, without a trailing slash, as a terminal's `cwd`
 	const to_parent_dir = (path: string): string => path.slice(0, path.lastIndexOf('/')) || '/';
@@ -172,9 +171,8 @@
 						<ContextmenuEntry
 							icon={mode === current_mode ? icon_checkmark : icon_view}
 							run={() => {
-								// TODO D2 (d): peek
-								const target = diskfiles.get_by_path(path);
-								if (target) diskfiles.get_editor_state(target).markdown_view_mode_choice = mode;
+								const editor_state = diskfiles.get_editor_state_at(path);
+								if (editor_state) editor_state.markdown_view_mode_choice = mode;
 							}}
 						>
 							<span>{MARKDOWN_VIEW_MODE_LABELS[mode]}</span>

@@ -139,7 +139,7 @@ describe('DiskfileContextmenu copy file content', () => {
 		};
 		const path = parse_or_throw(DiskfilePath, '/w/lazy.txt');
 		app.diskfiles.add_initial([{ id: path, source_dir: SOURCE_DIR, size: 9, ctime: 1, mtime: 1 }]);
-		const diskfile = app.diskfiles.get_by_path(path)!;
+		const diskfile = app.diskfiles.peek(path)!;
 		assert.strictEqual(diskfile.content_status, 'unrequested');
 
 		const target = render(diskfile);
@@ -205,7 +205,7 @@ describe('DiskfileContextmenu copy file content', () => {
 		};
 		const path = parse_or_throw(DiskfilePath, '/w/lazy.txt');
 		app.diskfiles.add_initial([{ id: path, source_dir: SOURCE_DIR, size: 9, ctime: 1, mtime: 1 }]);
-		const target = render(app.diskfiles.get_by_path(path)!);
+		const target = render(app.diskfiles.peek(path)!);
 		open_menu(target);
 		await open_submenu(target, 'file');
 
@@ -254,7 +254,7 @@ describe('DiskfileContextmenu copy file content', () => {
 		};
 		const path = parse_or_throw(DiskfilePath, '/w/lazy.txt');
 		app.diskfiles.add_initial([{ id: path, source_dir: SOURCE_DIR, size: 9, ctime: 1, mtime: 1 }]);
-		const target = render(app.diskfiles.get_by_path(path)!);
+		const target = render(app.diskfiles.peek(path)!);
 		open_menu(target);
 		await open_submenu(target, 'file');
 

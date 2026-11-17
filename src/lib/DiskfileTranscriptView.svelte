@@ -58,7 +58,16 @@
 			? parse_or_throw(DiskfilePath, to_transcript_source_path(diskfile.path, transcript))
 			: null
 	);
-	const source = $derived(source_path ? diskfiles.get_by_path(source_path) : undefined);
+	// the audio's metadata alone — its cell when one is kept (deleted on disk or uncovered, for a
+	// draft or a tab), else the index's record — never held, so it isn't read as text on a change
+	const source: { path: DiskfilePath; mtime: number | null; deleted_on_disk: boolean } | undefined =
+		$derived.by(() => {
+			if (!source_path) return undefined;
+			const cell = diskfiles.peek(source_path);
+			if (cell) return cell;
+			const record = diskfiles.get_by_path(source_path);
+			return record && { path: source_path, mtime: record.mtime, deleted_on_disk: false };
+		});
 	const source_url = $derived(
 		source && !source.deleted_on_disk && app.api_url
 			? to_file_bytes_url(app.api_url, source.path)

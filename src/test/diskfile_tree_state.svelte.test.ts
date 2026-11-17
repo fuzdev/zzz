@@ -386,7 +386,7 @@ describe('DiskfileTreeState', () => {
 		write('/w/src/a.ts', '/w/src/');
 		const { tree } = app.diskfiles.editor;
 		app.scoped_dirs = [];
-		assert.ok(app.diskfiles.get_by_path(parse_or_throw(DiskfilePath, '/w/src/a.ts')));
+		assert.ok(app.diskfiles.peek(parse_or_throw(DiskfilePath, '/w/src/a.ts')));
 		assert.deepEqual(outline(tree.rows), ['- /w/', '  + src']);
 	});
 

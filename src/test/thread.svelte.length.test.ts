@@ -72,7 +72,7 @@ describe('Turn and Thread lengths', () => {
 		assert_lengths_match();
 
 		// a file that can't load contributes its marker
-		const unloaded = app.diskfiles.get_by_path(UNLOADED_PATH)!;
+		const unloaded = app.diskfiles.peek(UNLOADED_PATH)!;
 		unloaded.unloaded_status = 'unloadable';
 		unloaded.unloaded_reason = 'too_large';
 		assert.include(with_files.content, 'content not loaded — the file is over 4 MiB]');

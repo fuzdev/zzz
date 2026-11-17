@@ -14,6 +14,7 @@ import {
 	type Infer,
 	type InferInput
 } from '@fuzdev/fuz_schema/schema.ts';
+import { untrack } from 'svelte';
 import { meta } from '@fuzdev/fuz_schema/meta.ts';
 import { EMPTY_OBJECT } from '@fuzdev/fuz_util/object.ts';
 import { UnreachableError } from '@fuzdev/fuz_util/error.ts';
@@ -222,14 +223,15 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	/** Path property with private backing field. */
 	#path: DiskfilePath | null = $state.raw()!;
 
-	/** The path counted for this part in `Diskfiles.track_part_path`. Not reactive. */
-	#tracked_path: DiskfilePath | null = null;
+	/** The path this part holds (`Diskfiles.acquire`). Not reactive. */
+	#held_path: DiskfilePath | null = null;
 
 	/**
 	 * Writable value that determines `this.diskfile`.
 	 * Also includes special diskfile part logic for attributes.
-	 * The file at the path is held eagerly while the part references it, and
-	 * read now if it isn't loaded (`Diskfiles.track_part_path`).
+	 * The part holds the file at the path while it references it
+	 * (`Diskfiles.acquire`), so its content is kept current, and reads it
+	 * once attached if it isn't loaded.
 	 */
 	get path(): DiskfilePath | null {
 		return this.#path;
@@ -237,15 +239,12 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 
 	set path(value: DiskfilePath | null) {
 		this.#path = value;
-		if (!this.#disposed) {
-			this.app.diskfiles.track_part_path(this.#tracked_path, value);
-			this.#tracked_path = value;
-		}
+		if (!this.#disposed) this.#hold(value);
 
 		if (value === null) return;
 
 		// Update the path attribute when the path changes
-		const diskfile = this.app.diskfiles.get_by_path(value);
+		const diskfile = untrack(() => this.app.diskfiles.peek(value));
 		const relative_path = diskfile?.path_relative;
 
 		if (!relative_path) return;
@@ -275,7 +274,7 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 	 */
 	readonly diskfile: Diskfile | null | undefined = $derived.by(() => {
 		if (!this.path) return null;
-		const diskfile = this.app.diskfiles.get_by_path(this.path);
+		const diskfile = this.app.diskfiles.peek(this.path);
 		if (!diskfile?.deleted_on_disk) return diskfile;
 		return this.app.diskfiles.find_editor_state(diskfile.path)?.has_unsaved_edits
 			? diskfile
@@ -342,12 +341,31 @@ export class DiskfilePart extends Part<typeof DiskfilePartJson> {
 		return diskfile ? this.app.diskfiles.ensure_content(diskfile) : Promise.resolve();
 	}
 
-	/** Stops holding the file eagerly for this part. */
+	/**
+	 * Moves this part's hold to `path` — read in a microtask once held, so a
+	 * part constructed anywhere (a `$derived` included) can hold one.
+	 */
+	#hold(path: DiskfilePath | null): void {
+		const previous = this.#held_path;
+		if (previous === path) return;
+		const { diskfiles } = this.app;
+		if (path !== null) diskfiles.acquire(path, this);
+		if (previous !== null) diskfiles.release(previous, this);
+		this.#held_path = path;
+		if (path === null) return;
+		queueMicrotask(() => {
+			// let go of meanwhile, it's no longer needed
+			if (this.#held_path !== path) return;
+			const diskfile = untrack(() => diskfiles.peek(path));
+			if (diskfile && !diskfile.deleted_on_disk) void diskfiles.ensure_content(diskfile);
+		});
+	}
+
+	/** Lets go of this part's file. */
 	override dispose(): void {
 		if (!this.#disposed) {
 			this.#disposed = true;
-			this.app.diskfiles.track_part_path(this.#tracked_path, null);
-			this.#tracked_path = null;
+			this.#hold(null);
 		}
 		super.dispose();
 	}
