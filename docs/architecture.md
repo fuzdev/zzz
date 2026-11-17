@@ -1732,8 +1732,19 @@ concerns":
      root has one kind whichever path opens it. A path under a `.git`
      component opens as the directory holding the outermost one.
   2. **A git checkout** — the nearest directory at or above the path, inside
-     the same bound, holding a `.git` that is a directory or a regular file
-     (a linked worktree's); anything else named `.git` is ignored.
+     the same bound, holding a `.git` that is itself a directory or a
+     regular file (a linked worktree's), by `lstat`; anything else named
+     `.git` is ignored — a symlink too, whatever it points at, so a
+     directory whose `.git` is a symlink is no checkout. Rule 1's
+     discovery reads a checkout the same way, runs no git in a directory
+     whose own `.git` is a symlink, and stops git's own search (which
+     passes over a `.git` it can't use and walks on up) below the nearest
+     symlinked `.git` above where it runs, so no git call goes through a
+     symlinked `.git` to a git dir elsewhere — never followed, as
+     `ScopedFs` refuses symlinks. A registry in a directory whose own
+     `.git` is a symlink opens as a registry rooted there, where the
+     `repos` CLI refuses that root (`root_git_symlink`): zzz never clones,
+     so the sync that refusal guards against can't happen.
   3. **The directory itself.**
 
   **Fallbacks** — a registry found by rule 1 that doesn't root the project

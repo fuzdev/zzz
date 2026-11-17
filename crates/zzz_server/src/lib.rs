@@ -22,6 +22,7 @@
 pub mod file_bytes;
 pub mod file_trust;
 pub mod filer;
+pub mod git;
 pub mod handlers;
 pub mod job_manager;
 pub mod media;
@@ -359,6 +360,8 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     );
     app.tools = config.tools;
     app.root_policy = config.root_policy;
+    // before any filer starts, so a filer can read it
+    app.git_usability = check_daemon_git(&app.zzz_dir).await;
     let app_state = Arc::new(app);
 
     // A deleted or purged account's terminals end with its sockets.
@@ -423,7 +426,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     }
 
     start_permanent_filers(&app_state).await;
-    check_git(&app_state).await;
 
     // -- Routes -----------------------------------------------------------
     //
@@ -523,22 +525,19 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     served
 }
 
-/// Check once that the git project resolution calls is usable
-/// (`Git::check_version`), logging what it found. Without a usable git the
-/// daemon still serves: discovery from a linked worktree and the
-/// registry-root-in-an-entry check find nothing.
-async fn check_git(app_state: &Arc<handlers::App>) {
-    let app = Arc::clone(app_state);
-    let checked =
-        tokio::task::spawn_blocking(move || app.git.check_version(Path::new(&app.zzz_dir))).await;
-    match checked {
-        Ok(Ok(version)) => tracing::info!(%version, "git found"),
-        Ok(Err(e)) => tracing::warn!(
-            error = %fuz_sys::cli::format_error_chain(&e),
-            "git is unusable; project resolution goes without it"
-        ),
-        Err(e) => tracing::warn!(error = %e, "the git check didn't finish"),
-    }
+/// Check once, in the app dir, that the daemon's git is usable
+/// ([`git::check_git`], over a runner built as `App.git` is,
+/// [`git::daemon_git`]).
+async fn check_daemon_git(zzz_dir: &str) -> git::GitUsability {
+    let dir = PathBuf::from(zzz_dir);
+    tokio::task::spawn_blocking(move || git::check_git(&git::daemon_git(), &dir))
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "the git check didn't finish");
+            git::GitUsability::Unusable {
+                reason: format!("the git check didn't finish: {e}"),
+            }
+        })
 }
 
 /// Start the permanent filers: the app dir's, then each scoped dir's (but

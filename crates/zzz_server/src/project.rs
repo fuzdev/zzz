@@ -34,8 +34,10 @@
 //!    and a linked worktree outside it: the root has one kind whichever
 //!    path opens it.
 //! 2. **A git checkout** — the nearest directory at or above the path, inside
-//!    the same bound, holding a `.git` that is a directory or a regular file
-//!    (a linked worktree's gitfile) — anything else there is ignored.
+//!    the same bound, holding a `.git` that is itself a directory or a
+//!    regular file (a linked worktree's gitfile), read by `lstat`
+//!    ([`is_checkout`]) — anything else there, a symlink included, is
+//!    ignored, and that directory is no checkout.
 //! 3. **The directory itself.**
 //!
 //! **Passed over** — a registry found by rule 1 that doesn't root the
@@ -79,10 +81,10 @@
 //! Synchronous and blocking — stat calls, a registry read, and at most a few
 //! git calls (discovery from a linked worktree, and the `RootInEntry`
 //! check): an async caller runs it on `spawn_blocking`. The [`Git`] runner
-//! is the caller's, built over the environment a terminal gets
-//! (`Git::with_clean_env(terminal_env(..))`, keeping `HOME`), its version
-//! checked once (`Git::check_version`); without git, discovery from a
-//! linked worktree and the `RootInEntry` check find nothing.
+//! is the caller's, the daemon's ([`crate::git::daemon_git`]: an allowlisted
+//! environment, keeping `HOME`), its version checked once at boot
+//! ([`crate::git::check_git`], on a runner built as `App.git` is); without git, discovery from a linked
+//! worktree and the `RootInEntry` check find nothing.
 
 use std::fs::File;
 use std::io::Read as _;
@@ -953,9 +955,8 @@ fn confine_entry(root: &Path, name: &str, zzz_dir: &Path) -> EntryDir {
 }
 
 /// Rule 2: the nearest directory at or above `opened` that `within`
-/// admits — it stops at the first it doesn't — holding a `.git` that is a
-/// directory or a regular file (a linked worktree's gitfile), followed
-/// through symlinks. A FIFO, socket, or device named `.git` is no checkout.
+/// admits — it stops at the first it doesn't — that is a checkout
+/// ([`is_checkout`]).
 fn nearest_checkout(opened: &Path, within: impl Fn(&Path) -> bool) -> Option<PathBuf> {
     opened
         .ancestors()
@@ -964,10 +965,20 @@ fn nearest_checkout(opened: &Path, within: impl Fn(&Path) -> bool) -> Option<Pat
         .map(Path::to_owned)
 }
 
-/// Whether `dir` holds a `.git` that is a directory or a regular file,
-/// followed through symlinks ([`nearest_checkout`]).
+/// Whether `dir` is a checkout: it holds a `.git` that is itself a
+/// directory or a regular file (a linked worktree's gitfile), by `lstat`.
+///
+/// A symlink named `.git` makes no checkout, whatever it points at, nor
+/// does a FIFO, socket, or device. Not followed, as `ScopedFs` refuses
+/// symlinks rather than resolving them. Rule 1's discovery decides by
+/// `lstat` too (`fuz_repos`'s `checkout_holding`), runs no git in a dir
+/// whose own `.git` is a symlink, and ceilings git's own search below the
+/// nearest symlinked `.git` above where it runs (git passes over a `.git`
+/// it can't use and walks on up), so none of resolution's git calls goes
+/// through a symlinked `.git` to a git dir elsewhere. The filer's ignore
+/// rule doesn't call this yet; sharing it is the intent.
 fn is_checkout(dir: &Path) -> bool {
-    std::fs::metadata(dir.join(".git")).is_ok_and(|m| m.is_dir() || m.is_file())
+    std::fs::symlink_metadata(dir.join(".git")).is_ok_and(|m| m.is_dir() || m.is_file())
 }
 
 #[cfg(test)]
@@ -1672,17 +1683,82 @@ purpose = "a reference"
         assert!(matches!(project.kind, ProjectKind::PlainDir), "{project:?}");
         assert_eq!(project.root, f.path("home/dev/odd/src"));
 
-        // a gitfile is a linked worktree's, and a symlink is followed
+        // a gitfile is a linked worktree's
         std::fs::remove_file(f.path("home/dev/odd/.git")).unwrap();
         f.write("home/dev/odd/.git", "gitdir: /nowhere\n");
         let project = f.resolve("home/dev/odd/src").unwrap();
         assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
         assert_eq!(project.root, f.path("home/dev/odd"));
-        std::fs::remove_file(f.path("home/dev/odd/.git")).unwrap();
-        f.mkdir("home/dev/gitdir");
-        f.symlink("../gitdir", "home/dev/odd/.git");
-        let project = f.resolve("home/dev/odd/src").unwrap();
-        assert_eq!(project.root, f.path("home/dev/odd"));
+    }
+
+    #[test]
+    fn a_symlinked_git_makes_no_checkout() {
+        let f = Fixture::new();
+        f.mkdir("home/dev/odd/src");
+        // a real git dir, and a gitfile, behind the links
+        f.mkdir("home/dev/real");
+        f.git("home/dev/real", &["init", "-q"]);
+        f.write("home/dev/gitfile", "gitdir: /nowhere\n");
+        for target in ["../real/.git", "../gitfile"] {
+            f.symlink(target, "home/dev/odd/.git");
+            let project = f.resolve("home/dev/odd/src").unwrap();
+            assert!(
+                matches!(project.kind, ProjectKind::PlainDir),
+                "{target}: {project:?}"
+            );
+            assert_eq!(project.root, f.path("home/dev/odd/src"), "{target}");
+            std::fs::remove_file(f.path("home/dev/odd/.git")).unwrap();
+        }
+
+        // passed over for a real checkout further up
+        f.mkdir("home/dev/outer/.git");
+        f.mkdir("home/dev/outer/inner/src");
+        f.symlink("../../real/.git", "home/dev/outer/inner/.git");
+        let project = f.resolve("home/dev/outer/inner/src").unwrap();
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
+        assert_eq!(project.root, f.path("home/dev/outer"));
+    }
+
+    /// A symlink to a linked worktree's gitfile, whose main checkout's
+    /// registry is linked above it: discovery doesn't follow it to that
+    /// main checkout, so the open stays where it was made.
+    #[test]
+    fn a_symlinked_gitfile_never_jumps_to_its_main_checkouts_workspace() {
+        let f = Fixture::new();
+        f.write("home/ws/meta/repos.toml", REGISTRY);
+        f.git("home/ws/meta", &["init", "-q"]);
+        f.git("home/ws/meta", &["add", "repos.toml"]);
+        f.git("home/ws/meta", &["commit", "-q", "-m", "registry"]);
+        f.symlink("meta/repos.toml", "home/ws/repos.toml");
+        f.git("home/ws/meta", &["worktree", "add", "-q", "../../wt"]);
+        f.chmod("home/wt", 0o755);
+        f.chmod("home/wt/repos.toml", 0o644);
+        // the worktree itself jumps, as it should
+        assert_eq!(f.resolve("home/wt").unwrap().root, f.path("home/ws"));
+
+        // a registry of its own, `.git` a symlink to the worktree's
+        f.write("home/plain/repos.toml", REGISTRY);
+        f.symlink("../wt/.git", "home/plain/.git");
+        let project = f.resolve("home/plain").unwrap();
+        assert!(
+            matches!(project.kind, ProjectKind::Registry { .. }),
+            "{project:?}"
+        );
+        assert_eq!(project.root, f.path("home/plain"));
+
+        // no registry: no checkout either, so its own directory
+        std::fs::remove_file(f.path("home/plain/repos.toml")).unwrap();
+        let project = f.resolve("home/plain").unwrap();
+        assert!(matches!(project.kind, ProjectKind::PlainDir), "{project:?}");
+        assert_eq!(project.root, f.path("home/plain"));
+
+        // below it, an empty `.git` dir: git passes over it and walks on
+        // up, to the symlink, but stops below it (its ceiling), so still
+        // no jump — `sub` is its own checkout
+        f.mkdir("home/plain/sub/.git");
+        let project = f.resolve("home/plain/sub").unwrap();
+        assert_eq!(project.root, f.path("home/plain/sub"), "{project:?}");
+        assert!(matches!(project.kind, ProjectKind::GitRepo), "{project:?}");
     }
 
     #[test]

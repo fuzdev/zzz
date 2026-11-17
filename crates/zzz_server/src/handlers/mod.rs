@@ -32,6 +32,7 @@ use deadpool_postgres::Pool;
 
 use crate::file_trust::TrustedOwner;
 use crate::filer::FilerManager;
+use crate::git::GitUsability;
 use crate::job_manager::JobManager;
 use crate::project_manager::ProjectManager;
 use crate::provider::{CompletionOptions, ProviderManager};
@@ -64,10 +65,15 @@ pub struct App {
     /// Whose registry files and directories `project_open` trusts — the
     /// daemon's own user, read once at boot ([`TrustedOwner::current`]).
     pub trusted_owner: TrustedOwner,
-    /// The git runner project resolution calls, over the environment a
-    /// terminal gets ([`crate::pty_manager::terminal_env`] — `HOME` kept, so
-    /// the user's git config applies; zzzd's secrets and config dropped).
+    /// The daemon's git runner, project resolution's among its callers,
+    /// over an allowlisted environment ([`crate::git::git_env`]: `HOME`
+    /// kept, so the user's git config and excludes apply; nothing else of
+    /// zzzd's, so no inherited `GIT_*` steers it).
     pub git: fuz_git::Git,
+    /// Whether git is usable, checked once at boot ([`crate::git::check_git`]).
+    /// [`Self::new`] starts with [`GitUsability::unchecked`], read as
+    /// unusable; `run_app` sets it from the check before any filer starts.
+    pub git_usability: GitUsability,
     pub db_pool: Pool,
     pub scoped_fs: ScopedFs,
     pub zzz_dir: String,
@@ -124,6 +130,7 @@ impl std::fmt::Debug for App {
             .field("zzz_dir", &self.zzz_dir)
             .field("scoped_dirs", &self.scoped_dirs)
             .field("enable_test_actions", &self.enable_test_actions)
+            .field("git_usability", &self.git_usability)
             .finish_non_exhaustive()
     }
 }
@@ -147,9 +154,8 @@ impl App {
             instance_id: Uuid::new_v4(),
             projects: ProjectManager::new(),
             trusted_owner: TrustedOwner::current(),
-            git: fuz_git::Git::with_clean_env(
-                crate::pty_manager::terminal_env(std::env::vars_os()),
-            ),
+            git: crate::git::daemon_git(),
+            git_usability: GitUsability::unchecked(),
             db_pool,
             scoped_fs,
             zzz_dir,

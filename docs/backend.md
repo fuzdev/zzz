@@ -1065,8 +1065,11 @@ commands):
   `tokio::fs` async I/O (the atomic write's blocking I/O, and
   `diskfile_read`'s open and read, run on `spawn_blocking`). `project_open`
   resolves its project on `spawn_blocking` (stats, a registry read, at most
-  a few git calls through the `App::git` runner, built over the terminal
-  environment and version-checked once at boot), and it, `project_close`,
+  a few git calls through the `App::git` runner, built over an allowlisted
+  environment — `PATH`, `HOME`, `XDG_CONFIG_HOME` and nothing
+  else, so no inherited `GIT_*` steers it (`git.rs`) — and
+  version-checked once at boot, the outcome kept as `App::git_usability`
+  for callers with a fallback without git), and it, `project_close`,
   `repo_focus`, and `repo_unfocus` serialize on the `ProjectManager`'s lock
   (a `tokio::sync::Mutex` around the open projects, so holding it is the
   only way to change them), since each spans that state, `ScopedFs`, and
