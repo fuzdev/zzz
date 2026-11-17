@@ -975,9 +975,10 @@ fn nearest_checkout(opened: &Path, within: impl Fn(&Path) -> bool) -> Option<Pat
 /// whose own `.git` is a symlink, and ceilings git's own search below the
 /// nearest symlinked `.git` above where it runs (git passes over a `.git`
 /// it can't use and walks on up), so none of resolution's git calls goes
-/// through a symlinked `.git` to a git dir elsewhere. The filer's ignore
-/// rule doesn't call this yet; sharing it is the intent.
-fn is_checkout(dir: &Path) -> bool {
+/// through a symlinked `.git` to a git dir elsewhere. The filer decides
+/// whether a root takes git's ignore rule by this too, so a root is a git
+/// root exactly when it resolves as a checkout.
+pub(crate) fn is_checkout(dir: &Path) -> bool {
     std::fs::symlink_metadata(dir.join(".git")).is_ok_and(|m| m.is_dir() || m.is_file())
 }
 

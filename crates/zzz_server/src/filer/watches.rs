@@ -6,7 +6,7 @@ use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io;
 use std::ops::Bound;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -158,6 +158,14 @@ pub(super) struct DirWatches {
     /// Whether a root the walk can't list is kept for polling — set once the
     /// filer is running (its initial scan fails instead).
     pub(super) poll_missing_root: bool,
+    /// A git root whose `.git/info/` gets a watch besides the walk's
+    /// directories ([`real_info_dir`](super::ignore::real_info_dir)), for its
+    /// `exclude`: a fixed watch outside the bookkeeping, added again on each
+    /// new watcher, so a reset or an overflow rebuild keeps it.
+    git_info_root: Option<PathBuf>,
+    /// Test seam: whether that watch is in place on the current watcher.
+    #[cfg(test)]
+    git_info_watched: bool,
     /// `unwatched.len()`, published for [`Filer::watch_status`](super::core::Filer::watch_status) readers,
     /// which can't take the lock (a walk holds it on a blocking thread).
     pub(super) unwatched_count: Arc<AtomicUsize>,
@@ -184,6 +192,9 @@ impl DirWatches {
             unreadable: BTreeSet::new(),
             limit_reached: false,
             poll_missing_root: false,
+            git_info_root: None,
+            #[cfg(test)]
+            git_info_watched: false,
             unwatched_count: Arc::new(AtomicUsize::new(0)),
             #[cfg(test)]
             fail_listing: None,
@@ -202,7 +213,48 @@ impl DirWatches {
         self.watch_refs.clear();
         self.unwatched.clear();
         self.limit_reached = false;
+        #[cfg(test)]
+        {
+            self.git_info_watched = false;
+        }
         self.watcher = (self.make_watcher)();
+        self.add_git_info_watch();
+    }
+
+    /// Watch `root`'s `.git/info/` from now on, on this watcher and every
+    /// later one (see [`Self::reset`]).
+    pub(super) fn watch_git_info(&mut self, root: &Path) {
+        self.git_info_root = Some(root.to_path_buf());
+        self.add_git_info_watch();
+    }
+
+    /// Add the `.git/info/` watch to the current watcher, when there's a
+    /// root for it and it's still a real directory under a real `.git`.
+    fn add_git_info_watch(&mut self) {
+        let (Some(root), Some(watcher)) = (&self.git_info_root, self.watcher.as_mut()) else {
+            return;
+        };
+        let Some(info) = super::ignore::real_info_dir(root) else {
+            return;
+        };
+        match watcher.watch(&info, RecursiveMode::NonRecursive) {
+            Ok(()) => {
+                #[cfg(test)]
+                {
+                    self.git_info_watched = true;
+                }
+            }
+            Err(e) => tracing::debug!(
+                path = %info.display(),
+                error = %fuz_sys::cli::format_error_chain(&e),
+                "failed to watch a repo's info/; its exclude file takes effect at the next re-prune"
+            ),
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) const fn is_git_info_watched(&self) -> bool {
+        self.git_info_watched
     }
 
     /// Ensure `dir` is watched before it's listed (a no-op if it already is).
@@ -818,6 +870,12 @@ mod tests {
         let mut state = FilerState {
             source_dir: root.clone(),
             ignored_dirs: vec![],
+            rule: crate::filer::ignore::SharedRule::new(
+                crate::filer::ignore::IgnoreRule::FixedNames,
+            ),
+            git: None,
+            reprune: None,
+            vetted: HashMap::new(),
             depth: FilerDepth::Tree,
             files: Arc::default(),
             pending: HashMap::new(),

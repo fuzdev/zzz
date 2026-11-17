@@ -20,7 +20,7 @@
 //!   takes every indexed file under it along.
 //! - **Per-directory watches.** The filer adds one non-recursive watch per
 //!   directory from its own walk ([`DirWatches`](watches::DirWatches)), so ignored directories
-//!   (`node_modules/`, `target/`, …), symlinks, non-UTF-8 directories, and the
+//!   (`node_modules/`, a `.gitignore`d `target/`, …), symlinks, non-UTF-8 directories, and the
 //!   app dir are never watched — a root needs a watch per directory it
 //!   indexes, not per directory on disk. Each directory is watched before it
 //!   is listed, so an entry created in between is either listed or reported.
@@ -30,6 +30,16 @@
 //!   once), a vanished one ignored, one whose listing fails transiently kept
 //!   as indexed and polled, and only an unreadable or missing root fails
 //!   [`start_filer`].
+//! - **What's ignored** is a per-filer rule ([`ignore`]): fixed names
+//!   (`node_modules/`, `target/`, …) under a plain dir, git's answer under
+//!   a git root — its ignored set listed at start, each listing taken again
+//!   after its walk (so what was created in between isn't indexed
+//!   unvetted), each live add of a path not yet indexed vetted with one
+//!   `check-ignore` per burst, and the set rebuilt (re-pruned) once a
+//!   `.gitignore` or `info/exclude` change settles, or at once when events
+//!   were lost. `.git`, `.zzz`, the credential directories, and the
+//!   staging files are ignored under both, and a git root indexes no repo
+//!   of its own below it (nested repos, populated submodules).
 //! - **Degraded mode.** When the OS runs out of watches (inotify's
 //!   `max_user_watches`), or no watcher can be created at all, the index still
 //!   comes from the scan; the directories left without a watch are rescanned
@@ -84,6 +94,9 @@ use std::time::{Duration, SystemTime};
 
 mod core;
 mod event_loop;
+#[cfg(test)]
+mod git_rule_tests;
+mod ignore;
 mod index;
 mod manager;
 #[cfg(test)]

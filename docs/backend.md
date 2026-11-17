@@ -625,6 +625,80 @@ commands):
   valid UTF-8 is skipped with its whole subtree, by the walker and in event
   handling (`is_ignored`), rather than indexed under a lossy U+FFFD key no
   client could address.
+- **Filer ignore rule** (`filer::ignore`) — `IgnoreRule::FixedNames`
+  (`ALWAYS_IGNORED_DIRS` plus `PLAIN_DIR_IGNORED_DIRS` by name) or
+  `IgnoreRule::Git` (`ALWAYS_IGNORED_DIRS` by name plus an `IgnoredSet` of
+  absolute paths, its pruned dirs kept apart from its ignored files),
+  decided once at `start_filer` (`initial_rule`) from the root alone, so one
+  filer serves every lifetime and project sharing its root: git's for a root
+  that is a checkout (`project::is_checkout`) at `FilerDepth::Tree` when
+  `FilerConfig::git` is set (`FilerManager` sets it from `App.git` when
+  `App.git_usability` is usable) and the first listing succeeds; fixed names
+  otherwise, with a warning for a checkout. The set is `fuz_git`'s
+  `ls_ignored` plus one `check_ignore` over its folded dirs
+  (`GitRoot::prune`), the confirmed dirs pruned whole and the listed files
+  skipped one by one; a `./`-alone listing is the dir ignored whole. Each
+  listing is taken again after its walk — the start's, a re-prune's, a new
+  dir's (`FilerState::relist`) — and what the second adds is dropped from
+  the walk's result with the watches it added: a file created between the
+  listing and the walk would otherwise be indexed unvetted, and its later
+  events skip it as indexed. It's shared (`SharedRule`: an `Arc` snapshot
+  behind a `parking_lot::RwLock`, plus a version) by the notify callback,
+  the walks, and the event loop, its only writer. The walk also skips a dir
+  holding a repo of its own (`is_nested_repo`: any `.git` entry — a dir,
+  gitfile, or symlink, even one git wouldn't read as a repo — makes the dir
+  a repo of its own here). Live, the event loop drains each burst and vets
+  its adds of paths not yet indexed (`FilerState::vet_adds`: one
+  `check_ignore`, a missing path asked about as a file, a path that turned
+  into a dir re-asked, an ignored dir's path that's a file now asked about
+  as the file, then an `ls_ignored` scoped to each new dir git doesn't
+  ignore); a path inside an unpopulated submodule, which git refuses, drops
+  that submodule's paths from the batch and asks again — once per distinct
+  submodule, up to `CHECK_MAX_SUBMODULES` (8) — leaving each unindexed until
+  the next re-prune. A scan's new files no event vetted (a `session_load`
+  rescan, a degraded poll) get one `check_ignore` too (`vet_scanned`),
+  re-pruning when one of them sits in a watched dir — a dir no event vetted,
+  such as one a `.git` left, which a listing would prune whole. A
+  `.gitignore` event (passed through the callback's filter even when ignored
+  itself, `rule_marker`) or an `info/exclude` change (the filer's own
+  watcher keeps a fixed watch on `<root>/.git/info/`,
+  `DirWatches::watch_git_info`, through every reset; a gitfile root isn't
+  watched), or a `.gitignore` a scan finds changed, requests a re-prune once
+  the changes settle (`REPRUNE_SETTLE` 400 ms of quiet, at most
+  `REPRUNE_SETTLE_MAX_WAIT` 5 s), bursts dropped meanwhile (the watches
+  their removes and renames took dropped with them, as applying them would);
+  a failed or oversized vetting (a failed one dropping those watches too),
+  an overflow, and the set outgrowing `LIVE_ADDED_MAX` request one at once.
+  A re-prune runs inline on the event loop after the current step
+  (`FilerState::reprune`): it relists, swaps the set, rescans the root
+  without vetting, and lists again, broadcasting the diff — inline because
+  the loop is the index's only writer, and a re-prune beside it would race
+  the events applied meanwhile. A start whose second listing un-ignores
+  something the first ignored re-prunes as its loop starts (the walk skipped
+  it before any watch could see the excludes file change). One whose listing
+  fails or times out keeps the last set until the next trigger: an edit, an
+  overflow, a rescan that asks for one, or — while that failure is the last
+  word — the next `session_load` rescan or degraded poll, each of which
+  re-prunes in place of its rescan (`FilerState::reprune_if_failing`). So
+  the rule change it was for stays unapplied until the next load or poll at
+  the latest. Its own rescan vets what it finds, and new files git can't vet
+  there stay unindexed until a pass vets them; what that rescan requests is
+  dropped, so a failure never retries itself and `REPRUNE_MAX_FAILURES`
+  counts separate triggers. That many in a row (a git failing on every load
+  falls back by the third), or a root no longer the checkout it was, fall
+  back to fixed names for good. Every git call runs on `spawn_blocking` with
+  the root's parent as discovery ceiling, `refuse_implicit_bare`, and a
+  timeout (`LIST_TIMEOUT` 5 s per listing call, `CHECK_TIMEOUT` 2 s per
+  vetting call — a FIFO `.gitignore` stalls git until it), after re-checking
+  that the dir it runs in is still the real, canonical directory and the
+  root still a checkout (`GitRoot::check_confined`). A burst's vetting can
+  stall the loop for a check, a listing, and the re-prune's listing in turn
+  — about 12 s when git never answers. `session_load` waits on every filer's
+  rescan (`FilerManager::rescan_all`) with no timeout, so a git root stalled
+  that way delays every client's `session_load` by up to the stall's bound —
+  and, while a re-prune has failed, by the re-prune it runs in place of the
+  rescan. `Filer::ignored_version` and `Filer::ignored_paths` expose the set for a
+  publisher.
 - **Filer watches** — each filer adds one non-recursive notify watch per
   directory it indexes, from its own walk (`filer::watches::DirWatches`), so ignored,
   symlinked, and non-UTF-8 directories and the app dir get none — the watch

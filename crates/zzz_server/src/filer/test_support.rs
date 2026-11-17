@@ -1,7 +1,8 @@
 //! Shared helpers for the filer modules' tests.
 
-use super::core::{Filer, FilerConfig, FilerDepth, start_filer};
-use super::event_loop::FilerState;
+use super::core::{Filer, FilerConfig, FilerDepth, initial_rule, start_filer};
+use super::event_loop::{FilerState, GitIgnore};
+use super::ignore::{IgnoreRule, SharedRule};
 use super::index::{FileIndex, apply_subtree, make_disknode};
 use super::walk::scan_directory;
 use super::watches::{DirWatches, WatcherFactory, is_indexable_kind};
@@ -96,6 +97,7 @@ pub(super) async fn scan_into(
             root,
             root,
             ignored_dirs,
+            Arc::new(IgnoreRule::FixedNames),
             FilerDepth::Tree,
             watches,
             false,
@@ -131,6 +133,10 @@ pub(super) async fn state_on(
     FilerState {
         source_dir: root,
         ignored_dirs,
+        rule: SharedRule::new(IgnoreRule::FixedNames),
+        git: None,
+        reprune: None,
+        vetted: HashMap::new(),
         depth: FilerDepth::Tree,
         files: Arc::new(RwLock::new(files)),
         pending: HashMap::new(),
@@ -218,4 +224,229 @@ pub(super) fn lock_dir(path: &Path) -> Option<Unlock> {
     set_mode(path, 0o000);
     let unlock = Unlock(path.to_path_buf());
     std::fs::read_dir(path).is_err().then_some(unlock)
+}
+
+/// The environment a test's git sees — its own and the filer's alike: no
+/// `HOME`, so no user's global config or excludes file changes an answer.
+fn test_git_env() -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+    vec![
+        ("PATH".into(), std::env::var_os("PATH").unwrap_or_default()),
+        ("GIT_CONFIG_NOSYSTEM".into(), "1".into()),
+    ]
+}
+
+/// A git runner for a filer under test, over [`test_git_env`]. Fails the
+/// test when this machine's git is unusable, as the daemon's boot check
+/// would find it.
+pub(super) fn test_git() -> Arc<fuz_git::Git> {
+    crate::git::GitUsability::checked_for_tests();
+    Arc::new(fuz_git::Git::with_clean_env(test_git_env()))
+}
+
+/// Run git in `dir` with `args`, failing the test unless it succeeds.
+pub(super) fn run_git(dir: &Path, args: &[&str]) {
+    let out = std::process::Command::new("git")
+        .current_dir(dir)
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "init.defaultBranch=main",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "protocol.file.allow=always",
+        ])
+        .args(args)
+        .env_clear()
+        .envs(test_git_env())
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+impl TempDir {
+    /// Write `text` to `rel`, making its directories.
+    pub(super) fn write(&self, rel: &str, text: &str) {
+        let path = self.path(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+
+    /// The index keys of `rels`, sorted as the index holds them.
+    pub(super) fn keys(&self, rels: &[&str]) -> Vec<String> {
+        let mut keys: Vec<String> = rels.iter().map(|rel| self.key(rel)).collect();
+        keys.sort();
+        keys
+    }
+}
+
+/// A checkout at a fresh temp dir, its files written from `files`.
+pub(super) fn checkout(files: &[(&str, &str)]) -> TempDir {
+    let tmp = TempDir::new();
+    run_git(&tmp.0, &["init", "-q"]);
+    for (rel, text) in files {
+        tmp.write(rel, text);
+    }
+    tmp
+}
+
+/// A whole-tree filer's config on `tmp`, with `git`.
+pub(super) fn config_with_git(tmp: &TempDir, git: Arc<fuz_git::Git>) -> FilerConfig {
+    FilerConfig {
+        git: Some(git),
+        ..FilerConfig::tree(&tmp.root(), "/nowhere/")
+    }
+}
+
+/// A running whole-tree filer on `tmp`, with git.
+pub(super) async fn start_git(tmp: &TempDir) -> Filer {
+    start(tmp, config_with_git(tmp, test_git())).await
+}
+
+/// The event-loop state of a filer on `tmp`, a checkout, on git's rule
+/// through `git` — its first listing alone, as before `start_filer` lists
+/// again — on the [`settled`] clock.
+pub(super) async fn git_state(tmp: &TempDir, git: Arc<fuz_git::Git>) -> FilerState {
+    let root = tmp.root();
+    let (git_root, rule) = initial_rule(&root, &config_with_git(tmp, git)).await;
+    let git_root = git_root.expect("a checkout on git's rule");
+    let rule = Arc::new(rule);
+    let watches = watches_for(&root, None);
+    let fresh = scan_directory(
+        &root,
+        &root,
+        &[],
+        Arc::clone(&rule),
+        FilerDepth::Tree,
+        &watches,
+        false,
+        settled,
+        None,
+    )
+    .await
+    .expect("the root is listable")
+    .0;
+    let mut files = FileIndex::new();
+    apply_subtree(&mut files, &root, fresh);
+    let mut state = state_for(tmp).await;
+    *state.files.write().await = files;
+    state.watches = watches;
+    state.unwatched_count = Arc::clone(&state.watches.lock().unwatched_count);
+    state.rule = SharedRule::new(Arc::unwrap_or_clone(rule));
+    state.git = Some(GitIgnore {
+        exclude: git_root.info_exclude(),
+        root: git_root,
+        live_added: 0,
+        failures: 0,
+    });
+    state
+}
+
+/// A git for a filer under test whose `ls-files` and `check-ignore` calls
+/// are counted, each kind on its own, and can run a hook after git answers
+/// and before the answer is passed on: a file created by the hook was
+/// created after git looked, as by a racing writer. A hook that fails
+/// fails its call, with no output and exit code 2 — not 1, which
+/// `check-ignore` exits with for "nothing ignored", so a failing hook fails
+/// a `check_ignore` too. The call count is written to a temp file and
+/// renamed into place, so a test reading it mid-write never sees it empty.
+pub(super) struct HookedGit {
+    dir: TempDir,
+    pub(super) git: Arc<fuz_git::Git>,
+}
+
+/// The two git calls a [`HookedGit`] counts and hooks.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum GitCall {
+    LsFiles,
+    CheckIgnore,
+}
+
+impl GitCall {
+    const fn key(self) -> &'static str {
+        match self {
+            Self::LsFiles => "ls",
+            Self::CheckIgnore => "check",
+        }
+    }
+}
+
+impl HookedGit {
+    pub(super) fn new() -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        let real = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .map(|dir| dir.join("git"))
+            .find(|path| path.is_file())
+            .expect("git on PATH");
+        let dir = TempDir::new();
+        let script = format!(
+            r#"#!/bin/sh
+d='{d}'
+k=
+for a in "$@"; do case "$a" in ls-files) k=ls; break;; check-ignore) k=check; break;; esac; done
+[ -z "$k" ] && exec '{git}' "$@"
+n=$(cat "$d/$k.count" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$d/$k.count.$$"; mv "$d/$k.count.$$" "$d/$k.count"
+'{git}' "$@" > "$d/out.$$"; rc=$?
+if [ -f "$d/$k.$n" ] && ! sh "$d/$k.$n" >/dev/null 2>&1 </dev/null; then
+  rm -f "$d/out.$$"; exit 2
+fi
+cat "$d/out.$$"; rm -f "$d/out.$$"; exit $rc
+"#,
+            d = dir.0.display(),
+            git = real.display(),
+        );
+        std::fs::create_dir(dir.path("bin")).unwrap();
+        std::fs::write(dir.path("bin/git"), script).unwrap();
+        std::fs::set_permissions(dir.path("bin/git"), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+        let mut path = std::ffi::OsString::from(dir.path("bin"));
+        path.push(":");
+        path.push(std::env::var_os("PATH").unwrap_or_default());
+        crate::git::GitUsability::checked_for_tests();
+        let git = Arc::new(fuz_git::Git::with_clean_env(vec![
+            ("PATH".into(), path),
+            ("GIT_CONFIG_NOSYSTEM".into(), "1".into()),
+        ]));
+        Self { dir, git }
+    }
+
+    /// Run `script` (`sh`) after the `n`th call of `call`, from 1.
+    pub(super) fn hook(&self, call: GitCall, n: u32, script: &str) {
+        std::fs::write(self.dir.path(&format!("{}.{n}", call.key())), script).unwrap();
+    }
+
+    /// How many calls of `call` have run.
+    pub(super) fn calls(&self, call: GitCall) -> u32 {
+        std::fs::read_to_string(self.dir.path(&format!("{}.count", call.key())))
+            .ok()
+            .and_then(|count| count.trim().parse().ok())
+            .unwrap_or(0)
+    }
+
+    /// Wait (up to 10s) until `call` has run at least `n` times.
+    pub(super) async fn wait_for_calls(&self, call: GitCall, n: u32) {
+        self.wait_for_calls_within(call, n, Duration::from_secs(10))
+            .await;
+    }
+
+    /// Wait (up to `limit`) until `call` has run at least `n` times — for a
+    /// wait that sits out a git timeout, which a loaded machine stretches.
+    pub(super) async fn wait_for_calls_within(&self, call: GitCall, n: u32, limit: Duration) {
+        let deadline = Instant::now() + limit;
+        while self.calls(call) < n {
+            assert!(
+                Instant::now() < deadline,
+                "{call:?} ran {} times, expected {n}",
+                self.calls(call)
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
 }

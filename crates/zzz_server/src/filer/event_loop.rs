@@ -1,20 +1,24 @@
 //! A filer's event loop: its state, the debounced notifications, and the flush.
 
 use super::core::{FilerBroadcast, FilerDepth, RescanSignal};
+use super::ignore::{
+    GitRoot, IgnoreError, IgnoreRule, IgnoredSet, RuleMarker, SharedRule, is_ignored,
+    is_in_nested_repo, is_nested_repo, rule_marker,
+};
 use super::index::{
     FileIndex, FileStat, ScanIndex, ScannedFile, apply_subtree, deleted_disknode, is_unchanged,
     stat_disknode,
 };
-use super::walk::{is_ignored, scan_directory};
+use super::walk::scan_directory;
 use super::watches::{
     DirWatches, PathHint, classify_event, is_transient_list_error, may_drop_watches,
 };
 use super::{
-    ChangeType, Clock, DEGRADED_RESCAN_COST_FACTOR, DiskfileChange, FilerChangeParams,
-    SerializableDisknode, dir_prefix,
+    ChangeType, Clock, DEGRADED_RESCAN_COST_FACTOR, DiskfileChange, EVENT_CHANNEL_CAPACITY,
+    FilerChangeParams, SerializableDisknode, dir_prefix,
 };
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::ops::Bound;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -65,13 +69,144 @@ pub(super) const fn coalesce_change(prev: Option<ChangeType>, next: ChangeType) 
     }
 }
 
+// -- Git's ignore rule, live --------------------------------------------------
+
+/// Most paths one burst (or one scan) vets with a `check_ignore`; more is a
+/// tree arriving wholesale (an unpacked archive, a checkout), cheaper to
+/// re-prune from one listing than to vet path by path.
+pub(super) const VET_MAX_PATHS: usize = 1024;
+
+/// Most new directories one burst lists the ignored paths of, one
+/// `ls_ignored` each, before a re-prune is cheaper.
+const VET_MAX_NEW_DIRS: usize = 8;
+
+/// How many times a burst re-asks about paths that turned into directories
+/// while git answered for them (an answer about a missing path is about a
+/// file), before it re-prunes instead.
+const VET_ROUNDS: usize = 3;
+
+/// Paths a git root's set gains from live vetting before it's rebuilt by a
+/// re-prune — an ignored path's deletion isn't seen (its events are filtered
+/// out), so a tool churning uniquely named ignored files would grow the set
+/// without bound.
+const LIVE_ADDED_MAX: usize = 10_000;
+
+/// Quiet time after a `.gitignore` or `info/exclude` change before its
+/// re-prune runs, each change restarting it. A checkout or a rebase step
+/// writes its files within a few hundred milliseconds, and between steps
+/// git spawns its next process in tens; waiting out the quiet applies the
+/// end state once, not each intermediate one (a `node_modules/`
+/// un-ignored mid-checkout would broadcast every file in it). It stays
+/// short of the lag a hand edit of a `.gitignore` would show.
+pub(super) const REPRUNE_SETTLE: Duration = Duration::from_millis(400);
+
+/// Longest a rule change's re-prune waits after its first change, so a
+/// `.gitignore` rewritten more often than every [`REPRUNE_SETTLE`] (a long
+/// rebase, a tool regenerating it) still re-prunes.
+pub(super) const REPRUNE_SETTLE_MAX_WAIT: Duration = Duration::from_secs(5);
+
+/// Re-prunes in a row whose listing fails (a timeout, a git error) before a
+/// git root falls back to fixed names for good. One failure keeps the last
+/// set and waits for the next trigger — a failed re-prune never retries
+/// itself, so each failure is a separate trigger's (a rule edit, an
+/// overflow, and while one has failed, each `session_load` rescan or
+/// degraded poll): a cold cache on a large tree, or a load spike, can
+/// outlast `LIST_TIMEOUT` once. Three separate
+/// triggers failing in a row is a git that can't answer for this root (a
+/// FIFO `.gitignore` blocks every listing), and a set that can't be
+/// refreshed drifts from git's answer silently.
+pub(super) const REPRUNE_MAX_FAILURES: u32 = 3;
+
+/// A git root's live ignore state ([`FilerState::git`]).
+pub(super) struct GitIgnore {
+    pub(super) root: GitRoot,
+    /// `<root>/.git/info/exclude`, whose events the filer's watcher passes
+    /// through (see `DirWatches::watch_git_info`).
+    pub(super) exclude: PathBuf,
+    /// Paths live vetting added to the set since the last prune.
+    pub(super) live_added: usize,
+    /// Re-prunes in a row whose listing failed ([`REPRUNE_MAX_FAILURES`]).
+    pub(super) failures: u32,
+}
+
+/// A re-prune waiting to run ([`FilerState::reprune`]).
+#[derive(Debug, Clone, Copy)]
+pub(super) struct PendingReprune {
+    /// Whether it rebuilds the watches too.
+    reset_watches: bool,
+    /// When it runs.
+    due: Instant,
+    /// When the first request of a re-prune waiting for the rule's files to
+    /// settle came — what [`REPRUNE_SETTLE_MAX_WAIT`] counts from. `None`
+    /// for one due at once.
+    settling_since: Option<Instant>,
+}
+
+impl PendingReprune {
+    /// The re-prune pending once a rule change is requested at `now`, with
+    /// `prev` pending before it (see [`FilerState::request_settled_reprune`]).
+    pub(super) fn settled(prev: Option<Self>, now: Instant) -> Self {
+        let Some(prev) = prev else {
+            return Self {
+                reset_watches: false,
+                due: now + REPRUNE_SETTLE,
+                settling_since: Some(now),
+            };
+        };
+        prev.settling_since.map_or(prev, |since| Self {
+            due: (now + REPRUNE_SETTLE).min(since + REPRUNE_SETTLE_MAX_WAIT),
+            ..prev
+        })
+    }
+
+    /// When it runs.
+    pub(super) const fn due(&self) -> Instant {
+        self.due
+    }
+
+    /// A re-prune due at once.
+    pub(super) fn now(reset_watches: bool) -> Self {
+        Self {
+            reset_watches,
+            due: Instant::now(),
+            settling_since: None,
+        }
+    }
+}
+
+/// How a sync vets the files its walk finds ([`FilerState::sync_subtree`]).
+#[derive(Debug)]
+pub(super) enum Vetting {
+    /// One `check_ignore` over the files not yet indexed
+    /// ([`FilerState::vet_scanned`]) — a walk no listing just preceded.
+    Scan,
+    /// List the dir again after the walk, against the listing that preceded
+    /// it ([`FilerState::relist`]) — a burst's new dir's, or `None` for a
+    /// re-prune's walk of the root, whose listing is the set itself.
+    Relist(Option<IgnoredSet>),
+    /// Nothing — no git, or none that answers.
+    Off,
+}
+
 // -- Event loop ---------------------------------------------------------------
 
 /// State owned by a filer's event-loop task: the index (shared for reads),
-/// the directory watches, and the pending debounced broadcasts.
+/// the directory watches, the ignore rule, and the pending debounced
+/// broadcasts.
 pub(super) struct FilerState {
     pub(super) source_dir: String,
     pub(super) ignored_dirs: Vec<PathBuf>,
+    /// What the filer ignores; the event loop is its only writer.
+    pub(super) rule: SharedRule,
+    /// A git root's handle on git — `None` under fixed names, for good once
+    /// git can't answer any more.
+    pub(super) git: Option<GitIgnore>,
+    /// A re-prune waiting to run once it's due and the current step is done.
+    pub(super) reprune: Option<PendingReprune>,
+    /// Directories (prefix form) whose ignored paths this burst already
+    /// listed, each with that listing — their walk lists them again rather
+    /// than vet what it finds ([`Vetting::Relist`]).
+    pub(super) vetted: HashMap<String, IgnoredSet>,
     pub(super) depth: FilerDepth,
     pub(super) files: Arc<RwLock<FileIndex>>,
     /// Keyed by index path.
@@ -88,8 +223,20 @@ impl FilerState {
     /// Apply one notify event to the index and the pending broadcasts.
     pub(super) async fn handle_event(&mut self, event: notify::Event) {
         let drops_watches = may_drop_watches(event.kind);
+        let rule = self.rule.get();
+        let source_dir = PathBuf::from(&self.source_dir);
+        let source_dir = source_dir.as_path();
         for (path, hint) in classify_event(event.kind, event.paths) {
-            if is_ignored(&path, Path::new(&self.source_dir), &self.ignored_dirs) {
+            // a `.git` appearing in a watched directory makes it a repo of
+            // its own: its re-sync walks nothing there, dropping what's
+            // indexed
+            let (path, hint) = match rule_marker(&path, source_dir, &self.ignored_dirs, &rule) {
+                Some(RuleMarker::RepoDir(dir)) => (dir, PathHint::Entry),
+                _ => (path, hint),
+            };
+            if is_ignored(&path, source_dir, &self.ignored_dirs, &rule)
+                || (rule.is_git() && is_in_nested_repo(&path, source_dir))
+            {
                 continue;
             }
             // A directory removed or renamed away takes its watches along
@@ -134,13 +281,13 @@ impl FilerState {
                 // it can't be listed any more (chmod'ed unreadable) — which
                 // drops what's indexed under it
                 if hint == PathHint::Entry || !watched || tokio::fs::read_dir(path).await.is_err() {
-                    self.sync_subtree(&path_str, false).await;
+                    self.sync_subtree(&path_str, false, Vetting::Scan).await;
                 }
             }
             // the root itself is gone: its failing sync empties the index
             // and keeps the root polled until it's back
             _ if dir_prefix(&path_str) == self.source_dir => {
-                self.sync_subtree(&path_str, false).await;
+                self.sync_subtree(&path_str, false, Vetting::Scan).await;
             }
             // missing (a stale or short-lived event), a symlink, or a
             // special file — nothing indexable lives here
@@ -210,12 +357,17 @@ impl FilerState {
     /// under it — and if it's the root, it's polled until it's back. What's
     /// indexed under a directory whose listing failed transiently is kept
     /// (and the directory polled), never broadcast as deleted.
-    async fn sync_subtree(&mut self, dir: &str, reset_watches: bool) {
+    ///
+    /// Under a git root, what the walk found is vetted as `vetting` says —
+    /// except that a dir this burst listed the ignored paths of is listed
+    /// again instead ([`Vetting::Relist`]).
+    async fn sync_subtree(&mut self, dir: &str, reset_watches: bool, vetting: Vetting) {
         let prefix = dir_prefix(dir);
         let scanned = scan_directory(
             &prefix,
             &self.source_dir,
             &self.ignored_dirs,
+            self.rule.get(),
             self.depth,
             &self.watches,
             reset_watches,
@@ -228,6 +380,17 @@ impl FilerState {
             Err(e) if is_transient_list_error(&e) => return,
             Err(_) => (ScanIndex::new(), vec![]),
         };
+        let vetting = match (self.git.is_some(), self.vetted.remove(&prefix)) {
+            (false, _) => Vetting::Off,
+            (true, Some(first)) => Vetting::Relist(Some(first)),
+            (true, None) => vetting,
+        };
+        let scan_vetted = matches!(vetting, Vetting::Scan);
+        match vetting {
+            Vetting::Scan => self.vet_scanned(&mut fresh).await,
+            Vetting::Relist(first) => self.relist(&prefix, first, &mut fresh).await,
+            Vetting::Off => {}
+        }
         let changes = {
             let mut index = self.files.write().await;
             for kept_dir in &kept {
@@ -241,6 +404,18 @@ impl FilerState {
             }
             apply_subtree(&mut index, &prefix, fresh)
         };
+        // a `.gitignore` only a scan saw change (in an unwatched dir, while
+        // degraded) — a listing's own walk finds none git didn't read
+        if scan_vetted {
+            let rule = self.rule.get();
+            let source_dir = Path::new(&self.source_dir);
+            if changes.iter().any(|(path, _, _)| {
+                rule_marker(Path::new(path), source_dir, &self.ignored_dirs, &rule)
+                    == Some(RuleMarker::Gitignore)
+            }) {
+                self.request_settled_reprune();
+            }
+        }
         for (path, change, node) in changes {
             self.queue(path, change, node);
         }
@@ -252,7 +427,7 @@ impl FilerState {
     pub(super) async fn rescan(&mut self, reset_watches: bool) {
         self.watches.lock().retry_watches();
         let root = self.source_dir.clone();
-        self.sync_subtree(&root, reset_watches).await;
+        self.sync_subtree(&root, reset_watches, Vetting::Scan).await;
     }
 
     /// Degraded mode: rescan each directory without a watch (each unwatched
@@ -264,8 +439,480 @@ impl FilerState {
             watches.unwatched_roots()
         };
         for root in roots {
-            self.sync_subtree(&root, false).await;
+            self.sync_subtree(&root, false, Vetting::Scan).await;
         }
+    }
+
+    // -- Git's rule, live -----------------------------------------------------
+
+    /// Apply a burst of notify events — under a git root, once its adds are
+    /// vetted ([`Self::vet_adds`]). A `.gitignore` or `info/exclude` among
+    /// them requests a re-prune once they settle, and a vetting that fails
+    /// one at once; the burst is then dropped, as is every burst while a
+    /// re-prune is pending: the re-prune's full rescan resolves every path
+    /// they named against the disk.
+    pub(super) async fn handle_burst(&mut self, events: Vec<notify::Event>) {
+        if let Some(exclude) = self.git.as_ref().map(|git| git.exclude.clone()) {
+            // a snapshot held across `vet_adds` would make each of its
+            // `add_ignored`s clone the whole set
+            let rule_changed = {
+                let rule = self.rule.get();
+                let source_dir = Path::new(&self.source_dir);
+                events.iter().flat_map(|e| &e.paths).any(|path| {
+                    *path == exclude
+                        || rule_marker(path, source_dir, &self.ignored_dirs, &rule)
+                            == Some(RuleMarker::Gitignore)
+                })
+            };
+            if rule_changed {
+                self.request_settled_reprune();
+            }
+            if self.reprune.is_some() {
+                self.drop_watches_of(&events).await;
+                return;
+            }
+            if !self.vet_adds(&events).await {
+                self.request_reprune(false);
+                self.drop_watches_of(&events).await;
+                return;
+            }
+        }
+        for event in events {
+            self.handle_event(event).await;
+        }
+        self.vetted.clear();
+    }
+
+    /// Drop the watches a dropped burst's removes and renames took with
+    /// them, as [`Self::handle_event`] would: the re-prune's walk trusts a
+    /// directory's watch bookkeeping, so one removed and made again under
+    /// the same path would stay unwatched.
+    async fn drop_watches_of(&self, events: &[notify::Event]) {
+        for event in events.iter().filter(|event| may_drop_watches(event.kind)) {
+            for path in event.paths.iter().filter_map(|path| path.to_str()) {
+                self.unwatch_tree(path).await;
+            }
+        }
+    }
+
+    /// Ask git about the paths `events` add that aren't indexed yet — files
+    /// not in the index, directories not watched — in one `check_ignore`,
+    /// adding the ignored ones to the set; then list the ignored paths of
+    /// each new directory git doesn't ignore, before its walk. A missing
+    /// path is asked about as a file (it may be back by the time its event
+    /// is applied); symlinks aren't asked about, nor are paths in a repo of
+    /// their own (nested repos and populated submodules aren't indexed, and
+    /// `check_ignore` refuses a submodule's paths — an unpopulated
+    /// submodule it refuses one in is left unindexed). A dir the set prunes
+    /// that's a file now leaves the set's dirs and is asked about as the
+    /// file. The reverse isn't vetted: a file the set ignores that's a dir
+    /// now (git ignoring `x` but not `x/`) stays skipped as the file was,
+    /// and the dir is picked up at the next re-prune or rescan.
+    ///
+    /// Returns false when the burst must re-prune instead: git failed (a
+    /// failed batch says nothing about which paths are ignored), or the
+    /// burst is too big to vet path by path.
+    async fn vet_adds(&mut self, events: &[notify::Event]) -> bool {
+        let Some(root) = self.git.as_ref().map(|git| git.root.clone()) else {
+            return true;
+        };
+        let source_dir = PathBuf::from(&self.source_dir);
+        let source_dir = source_dir.as_path();
+        let mut candidates = BTreeSet::new();
+        // dirs the set prunes that an event named
+        let mut pruned = BTreeSet::new();
+        {
+            let rule = self.rule.get();
+            let index = self.files.read().await;
+            let watches = self.watches.lock();
+            for path in events.iter().flat_map(|e| &e.paths) {
+                let Some(path_str) = path.to_str() else {
+                    continue;
+                };
+                if rule.prunes_dir(path) {
+                    pruned.insert(path_str.to_owned());
+                    continue;
+                }
+                if is_ignored(path, source_dir, &self.ignored_dirs, &rule) {
+                    continue;
+                }
+                if dir_prefix(path_str) == self.source_dir
+                    || index.contains_key(path_str)
+                    || watches.is_watched(&dir_prefix(path_str))
+                {
+                    continue;
+                }
+                candidates.insert(path_str.to_owned());
+            }
+        }
+        // (path, whether it was a directory when asked about)
+        let mut round: Vec<(String, bool)> = Vec::new();
+        for path in pruned {
+            // still a dir, or gone: the set still answers for it
+            if tokio::fs::symlink_metadata(&path)
+                .await
+                .is_ok_and(|meta| meta.is_file())
+            {
+                self.rule.forget_dir(&path);
+                round.push((path, false));
+            }
+        }
+        for path in candidates {
+            let Ok(meta) = tokio::fs::symlink_metadata(&path).await else {
+                // asked about as a file, so one that's back by the time its
+                // event is applied isn't indexed unasked
+                if !is_in_nested_repo(Path::new(&path), source_dir) {
+                    round.push((path, false));
+                }
+                continue;
+            };
+            let in_repo = is_in_nested_repo(Path::new(&path), source_dir)
+                || (meta.is_dir() && is_nested_repo(Path::new(&path)));
+            if (meta.is_file() || meta.is_dir()) && !in_repo {
+                round.push((path, meta.is_dir()));
+            }
+        }
+        if round.len() > VET_MAX_PATHS {
+            return false;
+        }
+        let mut new_dirs = Vec::new();
+        for _ in 0..VET_ROUNDS {
+            if round.is_empty() {
+                break;
+            }
+            let asked = round.iter().map(|(path, _)| path.clone()).collect();
+            let checked = match root.check(asked).await {
+                Ok(checked) => checked,
+                Err(e) => {
+                    tracing::debug!(
+                        path = %self.source_dir,
+                        error = %fuz_sys::cli::format_error_chain(&e),
+                        "git couldn't vet a burst of new paths; re-pruning"
+                    );
+                    return false;
+                }
+            };
+            for submodule in &checked.submodules {
+                self.leave_unindexed(submodule).await;
+            }
+            let ignored: HashSet<String> = checked.ignored.into_iter().collect();
+            let mut found = IgnoredSet::default();
+            let mut again = Vec::new();
+            for (path, was_dir) in round {
+                if ignored.contains(&path) {
+                    found.insert(path, was_dir);
+                    continue;
+                }
+                if checked
+                    .submodules
+                    .iter()
+                    .any(|submodule| Path::new(&path).starts_with(submodule))
+                {
+                    continue;
+                }
+                let is_dir = tokio::fs::symlink_metadata(&path)
+                    .await
+                    .is_ok_and(|meta| meta.is_dir());
+                if is_dir && !was_dir {
+                    // asked about as a file: ask again, as the directory
+                    again.push((path, true));
+                } else if is_dir {
+                    new_dirs.push(path);
+                }
+            }
+            self.add_ignored(&found);
+            round = again;
+        }
+        if !round.is_empty() || new_dirs.len() > VET_MAX_NEW_DIRS {
+            return false;
+        }
+        for dir in new_dirs {
+            match root.prune(PathBuf::from(&dir)).await {
+                Ok(listed) => {
+                    self.add_ignored(&listed);
+                    self.vetted.insert(dir_prefix(&dir), listed);
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        path = %dir,
+                        error = %fuz_sys::cli::format_error_chain(&e),
+                        "git couldn't list a new directory's ignored paths; re-pruning"
+                    );
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// Leave `dir`, an unpopulated submodule's, unindexed — as a populated
+    /// one is: add it to the set's pruned dirs, and drop what's indexed and
+    /// watched under it.
+    async fn leave_unindexed(&mut self, dir: &str) {
+        let mut set = IgnoredSet::default();
+        set.insert_submodule(dir.to_owned());
+        self.rule.extend(&set);
+        self.remove_tree(dir).await;
+    }
+
+    /// Drop from `fresh` (a scan's result) the new files git ignores —
+    /// files a walk found that no event vetted: a rescan's (`session_load`'s,
+    /// a degraded poll's), or a directory's sync. One `check_ignore` when
+    /// there are any. A failure, or too many to vet, drops the new files
+    /// from `fresh` — unvetted, they stay unindexed until a pass vets them,
+    /// since the re-prune it requests is dropped when this is a failed
+    /// re-prune's own scan — and requests a re-prune. An ignored file in a
+    /// watched dir requests one and leaves `fresh` as it is for the re-prune
+    /// to correct: an event vets what arrives there, so the scan reached a
+    /// dir nothing vetted (one a `.git` just left), which its listing would
+    /// prune whole rather than file by file.
+    async fn vet_scanned(&mut self, fresh: &mut ScanIndex) {
+        let Some(root) = self.git.as_ref().map(|git| git.root.clone()) else {
+            return;
+        };
+        let new: Vec<String> = {
+            let index = self.files.read().await;
+            fresh
+                .iter()
+                .filter(|(path, scanned)| {
+                    matches!(scanned, ScannedFile::Updated(_)) && !index.contains_key(*path)
+                })
+                .map(|(path, _)| path.clone())
+                .collect()
+        };
+        if new.is_empty() {
+            return;
+        }
+        if new.len() > VET_MAX_PATHS {
+            // too many to vet in one check: unvetted, they stay out until a
+            // pass vets them, as on a failed check below
+            for path in &new {
+                fresh.remove(path);
+            }
+            self.request_reprune(false);
+            return;
+        }
+        match root.check(new.clone()).await {
+            Ok(checked) => {
+                for submodule in &checked.submodules {
+                    let prefix = dir_prefix(submodule);
+                    fresh.retain(|path, _| !path.starts_with(&prefix));
+                    self.leave_unindexed(submodule).await;
+                }
+                let in_watched_dir = {
+                    let watches = self.watches.lock();
+                    checked.ignored.iter().any(|path| {
+                        Path::new(path)
+                            .parent()
+                            .and_then(Path::to_str)
+                            .is_some_and(|parent| watches.is_watched(&dir_prefix(parent)))
+                    })
+                };
+                let mut found = IgnoredSet::default();
+                for path in checked.ignored {
+                    fresh.remove(&path);
+                    found.insert(path, false);
+                }
+                self.add_ignored(&found);
+                if in_watched_dir {
+                    self.request_reprune(false);
+                }
+            }
+            Err(e) => {
+                tracing::debug!(
+                    path = %self.source_dir,
+                    error = %fuz_sys::cli::format_error_chain(&e),
+                    "git couldn't vet a scan's new files; re-pruning"
+                );
+                // unvetted, they stay out until a pass vets them: the
+                // re-prune requested here is dropped when this scan is a
+                // failed re-prune's own
+                for path in &new {
+                    fresh.remove(path);
+                }
+                self.request_reprune(false);
+            }
+        }
+    }
+
+    /// The second listing of `prefix`, after its walk: what was created
+    /// between `first` (the listing before it) and the walk is in `fresh`
+    /// unvetted, and its later events would skip it as indexed. What git
+    /// ignores now and didn't then is dropped from `fresh` with any watches
+    /// the walk added under it — the root's listing replacing the set, a
+    /// dir's adding to it. Anything created after this listing arrives as an
+    /// event, vetted. A path that left the set needs no walk: git stops
+    /// ignoring an existing path only when an excludes file changes, which
+    /// re-prunes on its own, or when it's tracked, which no event reports
+    /// anyway. A failed listing re-prunes.
+    async fn relist(&mut self, prefix: &str, first: Option<IgnoredSet>, fresh: &mut ScanIndex) {
+        let Some(root) = self.git.as_ref().map(|git| git.root.clone()) else {
+            return;
+        };
+        let dir = super::prefix_dir(prefix).to_path_buf();
+        let second = match root.prune(dir).await {
+            Ok(second) => second,
+            Err(e) => {
+                tracing::debug!(
+                    path = %prefix,
+                    error = %fuz_sys::cli::format_error_chain(&e),
+                    "git couldn't list a walked directory's ignored paths again; re-pruning"
+                );
+                self.request_reprune(false);
+                return;
+            }
+        };
+        let Some(first) = first else {
+            // the root's: its listing replaces the set
+            let added = match &*self.rule.get() {
+                IgnoreRule::Git(current) => second.added_since(current),
+                IgnoreRule::FixedNames => return,
+            };
+            self.rule.set(IgnoreRule::Git(second));
+            drop_newly_ignored(&added, &self.source_dir, fresh, &self.watches).await;
+            return;
+        };
+        let added = second.added_since(&first);
+        self.add_ignored(&added);
+        drop_newly_ignored(&added, &self.source_dir, fresh, &self.watches).await;
+    }
+
+    /// Add live-vetted paths to the set, re-pruning once it has grown by
+    /// [`LIVE_ADDED_MAX`] since the last prune.
+    fn add_ignored(&mut self, paths: &IgnoredSet) {
+        if paths.is_empty() {
+            return;
+        }
+        let added = self.rule.extend(paths);
+        let Some(git) = self.git.as_mut() else {
+            return;
+        };
+        git.live_added += added;
+        if git.live_added > LIVE_ADDED_MAX {
+            self.request_reprune(false);
+        }
+    }
+
+    /// Request a re-prune ([`Self::run_pending_reprune`]) at once, rebuilding
+    /// the watches too if `reset_watches` — coalesced with any already
+    /// pending, which then runs at once too.
+    pub(super) fn request_reprune(&mut self, reset_watches: bool) {
+        let prev_reset = self.reprune.is_some_and(|prev| prev.reset_watches);
+        self.reprune = Some(PendingReprune::now(reset_watches || prev_reset));
+    }
+
+    /// Request a re-prune once the rule's files settle: [`REPRUNE_SETTLE`]
+    /// after this request, unless another comes first, and no later than
+    /// [`REPRUNE_SETTLE_MAX_WAIT`] after the first. One already due at once
+    /// stays so.
+    pub(super) fn request_settled_reprune(&mut self) {
+        self.reprune = Some(PendingReprune::settled(self.reprune, Instant::now()));
+    }
+
+    /// When the pending re-prune is due, if there is one.
+    pub(super) fn reprune_due(&self) -> Option<Instant> {
+        self.reprune.as_ref().map(PendingReprune::due)
+    }
+
+    /// Run the pending re-prune, if one is due by `now`.
+    pub(super) async fn run_pending_reprune(&mut self, now: Instant) {
+        if let Some(pending) = self.reprune.filter(|pending| pending.due <= now) {
+            self.reprune = None;
+            self.reprune(pending.reset_watches).await;
+        }
+    }
+
+    /// Recompute a git root's ignored set from scratch and apply the
+    /// difference — its full rescan removes (and broadcasts deletes for) what
+    /// is newly ignored, dropping its watches, and walks and adds what no
+    /// longer is; then it lists again ([`Self::relist`]). Without git (fixed
+    /// names, or a fallback) it's a rescan.
+    ///
+    /// Runs inline on the event loop, behind the listing's timeout: the loop
+    /// is the index's only writer, so a re-prune on a task of its own would
+    /// race the events applied meanwhile against the set it's replacing.
+    /// Events queue while it runs, and an overflow coalesces into one more.
+    ///
+    /// The root no longer the checkout it was (a symlink swapped in, its
+    /// `.git` gone) falls back to fixed names for the rest of the filer's
+    /// life, and so do [`REPRUNE_MAX_FAILURES`] failed listings in a row: a
+    /// set that can't be refreshed would drift from git's answer silently.
+    /// A failure short of that keeps the last set — the rescan vetting what
+    /// it finds — until the next trigger (an edit, an overflow, a rescan
+    /// that asks for one, and while a failure is the last word any
+    /// `session_load` rescan or degraded poll, [`Self::reprune_if_failing`])
+    /// re-prunes; nothing the failed re-prune's own rescan requests counts,
+    /// so it never retries itself.
+    pub(super) async fn reprune(&mut self, reset_watches: bool) {
+        let Some(git) = self.git.as_mut() else {
+            self.rescan(reset_watches).await;
+            return;
+        };
+        let root = git.root.clone();
+        let vetting = match root.prune(root.dir().to_path_buf()).await {
+            Ok(set) => {
+                git.live_added = 0;
+                git.failures = 0;
+                self.rule.set(IgnoreRule::Git(set));
+                Vetting::Relist(None)
+            }
+            Err(e) => {
+                git.failures += 1;
+                let unconfined = matches!(e, IgnoreError::Unconfined(_));
+                if unconfined || git.failures >= REPRUNE_MAX_FAILURES {
+                    tracing::warn!(
+                        path = %self.source_dir,
+                        error = %fuz_sys::cli::format_error_chain(&e),
+                        "git can't answer what this root ignores any more; ignoring by fixed names"
+                    );
+                    self.rule.set(IgnoreRule::FixedNames);
+                    self.git = None;
+                    Vetting::Off
+                } else {
+                    tracing::warn!(
+                        path = %self.source_dir,
+                        error = %fuz_sys::cli::format_error_chain(&e),
+                        failures = git.failures,
+                        "git couldn't list what this root ignores; keeping the last listing until the next re-prune"
+                    );
+                    Vetting::Scan
+                }
+            }
+        };
+        self.vetted.clear();
+        self.watches.lock().retry_watches();
+        let source_dir = self.source_dir.clone();
+        // TODO: a re-prune that flips a large dir (a `node_modules/`
+        // un-ignored) queues a `filer_change` per file it adds or removes;
+        // past a threshold, send clients a signal to resync instead
+        let failed = matches!(vetting, Vetting::Scan);
+        self.sync_subtree(&source_dir, reset_watches, vetting).await;
+        if failed {
+            // its own rescan re-requests what it saw (the rule's file still
+            // changed, a failing check): a failure never retries itself, so
+            // one trigger can't spend every failure; the next one re-prunes
+            self.reprune = None;
+        }
+    }
+
+    /// Re-prune in place of a rescan — `session_load`'s, or a degraded
+    /// poll's — while the last re-prune failed, returning whether it did.
+    /// Each such rescan is a trigger of its own: a failure short of
+    /// [`REPRUNE_MAX_FAILURES`] keeps a rule change unapplied only until
+    /// the next one, and a git that keeps failing falls back to fixed names
+    /// after that many.
+    pub(super) async fn reprune_if_failing(&mut self) -> bool {
+        if self.git.as_ref().is_none_or(|git| git.failures == 0) {
+            return false;
+        }
+        // take a pending request with it: one already settled would
+        // otherwise run again right after, a second listing for one trigger
+        let reset_watches = self
+            .reprune
+            .take()
+            .is_some_and(|pending| pending.reset_watches);
+        self.reprune(reset_watches).await;
+        true
     }
 
     pub(super) fn is_degraded(&self) -> bool {
@@ -312,9 +959,37 @@ impl FilerState {
     }
 }
 
+/// Drop from `fresh` (a walk's result) what `added` — the paths a second
+/// listing found ignored — covers, and the watches the walk added under its
+/// dirs.
+pub(super) async fn drop_newly_ignored(
+    added: &IgnoredSet,
+    source_dir: &str,
+    fresh: &mut ScanIndex,
+    watches: &Arc<Mutex<DirWatches>>,
+) {
+    if added.is_empty() {
+        return;
+    }
+    let root = super::prefix_dir(source_dir);
+    fresh.retain(|path, _| !added.covers(Path::new(path), root));
+    let prefixes: Vec<String> = added.pruned_dirs().map(|dir| dir_prefix(dir)).collect();
+    let watches = Arc::clone(watches);
+    let _ = tokio::task::spawn_blocking(move || {
+        let mut watches = watches.lock();
+        for prefix in &prefixes {
+            if watches.tracks_under(prefix) {
+                watches.drop_under(prefix);
+            }
+        }
+    })
+    .await;
+}
+
 /// Background event loop: receives notify events and rescan requests,
-/// updates the index, polls unwatched directories while degraded, and
-/// broadcasts debounced `filer_change` notifications.
+/// updates the index, polls unwatched directories while degraded, runs a
+/// git root's re-prunes when they're due, and broadcasts debounced
+/// `filer_change` notifications.
 pub(super) async fn filer_event_loop(
     mut state: FilerState,
     mut rx: mpsc::Receiver<notify::Event>,
@@ -325,12 +1000,15 @@ pub(super) async fn filer_event_loop(
     // next degraded-mode rescan, while degraded
     let mut poll_at: Option<Instant> = None;
     loop {
+        state.run_pending_reprune(Instant::now()).await;
+        flush_ready(&mut state, Instant::now(), &broadcast).await;
         if !state.is_degraded() {
             poll_at = None;
         } else if poll_at.is_none() {
             poll_at = Some(Instant::now() + state.degraded_rescan_interval);
         }
         let next_deadline = state.next_deadline();
+        let reprune_due = state.reprune_due();
         tokio::select! {
             biased;
             Some(reply) = rescan_rx.recv() => {
@@ -342,7 +1020,9 @@ pub(super) async fn filer_event_loop(
                 while let Ok(reply) = rescan_rx.try_recv() {
                     replies.push(reply);
                 }
-                state.rescan(false).await;
+                if !state.reprune_if_failing().await {
+                    state.rescan(false).await;
+                }
                 for reply in replies {
                     let _ = reply.send(());
                 }
@@ -350,21 +1030,34 @@ pub(super) async fn filer_event_loop(
             // The watcher factory holds a sender, so the channel never closes
             // — not even while there's no watcher, when degraded polling and
             // rescans still run here.
+            // what's queued is one burst, so a git root vets its adds with
+            // one git call
             Some(event) = rx.recv() => {
-                state.handle_event(event).await;
+                let mut burst = vec![event];
+                while burst.len() < EVENT_CHANNEL_CAPACITY
+                    && let Ok(event) = rx.try_recv()
+                {
+                    burst.push(event);
+                }
+                state.handle_burst(burst).await;
             }
             // Below `rx` so an overflow rescan runs once the backlog drains.
             () = signal.notify.notified() => {
                 if signal.take() {
                     tracing::debug!(path = %state.source_dir, "file watcher overflowed, rescanning");
-                    // events were lost, so the watch state may be stale too
-                    state.rescan(true).await;
+                    // events were lost, so the watch state may be stale too,
+                    // and a git root's set: a re-prune (a rescan without git)
+                    state.request_reprune(true);
                 }
             }
+            () = tokio::time::sleep_until(reprune_due.unwrap_or_else(Instant::now)),
+                if reprune_due.is_some() => {}
             () = tokio::time::sleep_until(poll_at.unwrap_or_else(Instant::now)),
                 if poll_at.is_some() => {
                 let started = Instant::now();
-                state.rescan_unwatched().await;
+                if !state.reprune_if_failing().await {
+                    state.rescan_unwatched().await;
+                }
                 let wait = state
                     .degraded_rescan_interval
                     .max(started.elapsed() * DEGRADED_RESCAN_COST_FACTOR);
@@ -373,8 +1066,6 @@ pub(super) async fn filer_event_loop(
             () = tokio::time::sleep_until(next_deadline.unwrap_or_else(Instant::now)),
                 if next_deadline.is_some() => {}
         }
-
-        flush_ready(&mut state, Instant::now(), &broadcast).await;
     }
 }
 
@@ -712,7 +1403,12 @@ mod tests {
         let mut state = state_for(&tmp).await;
         assert_eq!(indexed(&state).await, vec![tmp.key("a.txt")]);
 
-        assert!(is_ignored(&tmp.path(&temp_name), &tmp.0, &[]));
+        assert!(is_ignored(
+            &tmp.path(&temp_name),
+            &tmp.0,
+            &[],
+            &IgnoreRule::FixedNames
+        ));
         state
             .handle_event(event(
                 EventKind::Create(CreateKind::File),
@@ -953,7 +1649,12 @@ mod tests {
             ))
             .await;
         assert!(state.pending.is_empty());
-        assert!(is_ignored(&tmp.path("node_modules/x/y.js"), &tmp.0, &[]));
+        assert!(is_ignored(
+            &tmp.path("node_modules/x/y.js"),
+            &tmp.0,
+            &[],
+            &IgnoreRule::FixedNames
+        ));
     }
 
     #[tokio::test]

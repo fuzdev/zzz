@@ -67,6 +67,15 @@ fn app_broadcast(app: &Arc<App>) -> FilerBroadcast {
     })
 }
 
+/// `config` with the app's git when the boot check found it usable, so a
+/// checkout's filer takes git's ignore rule.
+fn with_app_git(mut config: FilerConfig, app: &App) -> FilerConfig {
+    if app.git_usability.is_usable() {
+        config.git = Some(Arc::clone(&app.git));
+    }
+    config
+}
+
 impl Default for FilerManager {
     fn default() -> Self {
         Self::new()
@@ -104,6 +113,7 @@ impl FilerManager {
         config: FilerConfig,
         lifetime: FilerLifetime,
     ) -> io::Result<bool> {
+        let config = with_app_git(config, &app);
         self.start_with(path, app_broadcast(&app), config, lifetime)
             .await
     }
@@ -204,6 +214,7 @@ impl FilerManager {
         app: Arc<App>,
         config: FilerConfig,
     ) -> io::Result<()> {
+        let config = with_app_git(config, &app);
         self.replace_with(path, app_broadcast(&app), config).await
     }
 
@@ -325,6 +336,9 @@ impl FilerManager {
             let filers = self.filers.read().await;
             filers.values().map(|e| e.filer.rescan_tx.clone()).collect()
         };
+        // TODO: no timeout, so a git root whose rescan stalls on git (up to
+        // its listing timeouts) delays every client's `session_load`; a
+        // per-filer timeout would bound it
         futures_util::future::join_all(senders.into_iter().map(|rescan_tx| async move {
             let (reply_tx, reply_rx) = oneshot::channel();
             if rescan_tx.send(reply_tx).await.is_ok() {

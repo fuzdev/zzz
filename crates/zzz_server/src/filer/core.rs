@@ -1,8 +1,11 @@
 //! A running filer: its configuration, the handle, and `start_filer`.
 
-use super::event_loop::{FilerState, filer_event_loop};
+use super::event_loop::{
+    FilerState, GitIgnore, PendingReprune, drop_newly_ignored, filer_event_loop,
+};
+use super::ignore::{GitRoot, IgnoreRule, SharedRule, is_ignored, rule_marker};
 use super::index::{FileIndex, apply_subtree};
-use super::walk::{is_ignored, scan_directory};
+use super::walk::scan_directory;
 use super::watches::{DirWatches, WatcherFactory, is_indexable_kind};
 use super::{DEGRADED_RESCAN_INTERVAL, EVENT_CHANNEL_CAPACITY, WatchStatus};
 use crate::scoped_fs::{ProtectedDir, protected_dir};
@@ -40,6 +43,10 @@ pub struct FilerConfig {
     pub root_protected: Option<ProtectedDir>,
     /// How much of the root the filer indexes.
     pub depth: FilerDepth,
+    /// The daemon's git, when it's usable — a root that is a checkout,
+    /// indexed whole, takes git's ignore rule through it; `None` leaves every
+    /// root on fixed names (see [`super::ignore`]).
+    pub git: Option<Arc<fuz_git::Git>>,
     /// Test seam: run as if no watcher could be created.
     #[cfg(test)]
     pub no_watcher: bool,
@@ -56,6 +63,7 @@ impl FilerConfig {
             degraded_rescan_interval: DEGRADED_RESCAN_INTERVAL,
             root_protected: None,
             depth: FilerDepth::Tree,
+            git: None,
             #[cfg(test)]
             no_watcher: false,
         }
@@ -67,7 +75,8 @@ impl FilerConfig {
     /// files aren't indexed and broadcast twice. A custom-named app dir is
     /// matched by path, not name, so same-named directories elsewhere (an app
     /// dir named `data` vs a project's own `data/`) stay visible; `.zzz`
-    /// directories are ignored everywhere by `DEFAULT_IGNORED_DIRS`.
+    /// directories are ignored everywhere by name, under every ignore rule
+    /// (see [`super::ignore`]).
     ///
     /// A root in a protected directory is marked [`Self::root_protected`], so
     /// the filer refuses to start on it.
@@ -128,7 +137,7 @@ pub(super) struct RescanSignal {
 impl RescanSignal {
     /// Mark a rescan as needed; wakes the event loop only on the
     /// not-needed → needed transition, so a burst of drops is one rescan.
-    fn request(&self) {
+    pub(super) fn request(&self) {
         if !self.needed.swap(true, Ordering::AcqRel) {
             self.notify.notify_one();
         }
@@ -156,8 +165,13 @@ pub struct Filer {
     pub(super) rescan_tx: mpsc::Sender<oneshot::Sender<()>>,
     /// How many listed directories have no watch.
     unwatched_count: Arc<AtomicUsize>,
+    /// What the filer ignores, as its event loop keeps it.
+    rule: SharedRule,
     #[cfg(test)]
     pub(super) watches: Arc<Mutex<DirWatches>>,
+    /// Test seam: the overflow signal its watcher raises.
+    #[cfg(test)]
+    pub(super) signal: Arc<RescanSignal>,
 }
 
 impl std::fmt::Debug for Filer {
@@ -183,20 +197,40 @@ impl Filer {
             WatchStatus::Degraded
         }
     }
+
+    /// How many times what this filer ignores has changed — a publisher of
+    /// [`Self::ignored_paths`] compares it with the version it last sent.
+    pub fn ignored_version(&self) -> u64 {
+        self.rule.version()
+    }
+
+    /// The absolute paths git ignores under this filer's root, sorted: the
+    /// dirs it prunes whole and the files it skips one by one, without a
+    /// trailing `/`. `None` for a filer on fixed names.
+    pub fn ignored_paths(&self) -> Option<Vec<String>> {
+        match &*self.rule.get() {
+            IgnoreRule::FixedNames => None,
+            IgnoreRule::Git(set) => Some(set.sorted()),
+        }
+    }
 }
 
 /// The [`WatcherFactory`] of a filer on `path`: each watcher it creates
 /// filters its events (ignored paths, access events) and sends them to `tx`,
 /// requesting a rescan on `signal` when events are lost. It holds `tx`, so the
-/// event channel stays open even while there's no watcher.
+/// event channel stays open even while there's no watcher. `exclude` is a git
+/// root's `.git/info/exclude`, passed through though `.git` is ignored.
 fn watcher_factory(
     path: &str,
     config: &FilerConfig,
+    rule: &SharedRule,
+    exclude: Option<PathBuf>,
     tx: mpsc::Sender<notify::Event>,
     signal: Arc<RescanSignal>,
 ) -> WatcherFactory {
     let root = PathBuf::from(path);
     let ignored_dirs = config.ignored_dirs.clone();
+    let rule = rule.clone();
     #[cfg(test)]
     let no_watcher = config.no_watcher;
     Box::new(move || {
@@ -204,9 +238,11 @@ fn watcher_factory(
         if no_watcher {
             return None;
         }
-        let (root, ignored_dirs, tx, signal) = (
+        let (root, ignored_dirs, rule, exclude, tx, signal) = (
             root.clone(),
             ignored_dirs.clone(),
+            rule.clone(),
+            exclude.clone(),
             tx.clone(),
             Arc::clone(&signal),
         );
@@ -232,8 +268,17 @@ fn watcher_factory(
                 }
                 // Filter before the bounded channel. Ignored directories have
                 // no watches, but their own entries are reported by their
-                // parent's.
-                event.paths.retain(|p| !is_ignored(p, &root, &ignored_dirs));
+                // parent's. What a git root's rule hangs on (a `.gitignore`,
+                // a nested `.git`, `info/exclude`) passes even when ignored
+                // itself, and so does a dir git's rule prunes, which may be a
+                // file now.
+                let rule = rule.get();
+                event.paths.retain(|p| {
+                    exclude.as_deref() == Some(p.as_path())
+                        || !is_ignored(p, &root, &ignored_dirs, &rule)
+                        || rule.prunes_dir(p)
+                        || rule_marker(p, &root, &ignored_dirs, &rule).is_some()
+                });
                 if event.paths.is_empty() {
                     return;
                 }
@@ -282,9 +327,12 @@ pub async fn start_filer(
             format!("refusing to index {dir}: {path}"),
         ));
     }
+    let (git_root, rule) = initial_rule(path, &config).await;
+    let rule = SharedRule::new(rule);
     let (tx, rx) = mpsc::channel::<notify::Event>(EVENT_CHANNEL_CAPACITY);
     let signal = Arc::new(RescanSignal::default());
-    let make_watcher = watcher_factory(path, &config, tx, Arc::clone(&signal));
+    let exclude = git_root.as_ref().map(GitRoot::info_exclude);
+    let make_watcher = watcher_factory(path, &config, &rule, exclude, tx, Arc::clone(&signal));
 
     let source_dir = path.to_owned();
     let watches = Arc::new(Mutex::new(DirWatches::new(
@@ -292,15 +340,19 @@ pub async fn start_filer(
         &source_dir,
         config.watch_limit,
     )));
+    if let Some(root) = &git_root {
+        watches.lock().watch_git_info(root.dir());
+    }
     let unwatched_count = Arc::clone(&watches.lock().unwatched_count);
 
     // Initial scan — populate the file index (no broadcast; callers read it).
     // A directory whose listing failed transiently has nothing indexed to
     // keep yet; it's polled until it lists.
-    let (fresh, _kept) = scan_directory(
+    let (mut fresh, _kept) = scan_directory(
         &source_dir,
         &source_dir,
         &config.ignored_dirs,
+        rule.get(),
         config.depth,
         &watches,
         false,
@@ -308,15 +360,56 @@ pub async fn start_filer(
         None,
     )
     .await?;
+    // List again: what was created between the listing and the walk is in
+    // the walk unvetted, and its later events skip it as indexed. Anything
+    // created after this listing arrives as an event, vetted. What left
+    // the set between the listings (an excludes file edited before the
+    // walk's watches saw it) re-prunes as the event loop starts, and so
+    // does a failure, keeping the first set.
+    let mut reprune = None;
+    if let Some(root) = &git_root
+        && let IgnoreRule::Git(first) = &*rule.get()
+    {
+        match root.prune(root.dir().to_path_buf()).await {
+            Ok(second) => {
+                let added = second.added_since(first);
+                // the walk skipped what left the set meanwhile, and no watch
+                // may have seen its excludes file change: a re-prune walks it
+                if !first.added_since(&second).is_empty() {
+                    reprune = Some(PendingReprune::now(false));
+                }
+                rule.set(IgnoreRule::Git(second));
+                drop_newly_ignored(&added, &source_dir, &mut fresh, &watches).await;
+            }
+            Err(e) => {
+                tracing::debug!(
+                    path,
+                    error = %fuz_sys::cli::format_error_chain(&e),
+                    "git couldn't list this checkout's ignored paths again; re-pruning"
+                );
+                reprune = Some(PendingReprune::now(false));
+            }
+        }
+    }
     watches.lock().poll_missing_root = true;
     let mut initial_files = FileIndex::new();
     apply_subtree(&mut initial_files, &source_dir, fresh);
     let files = Arc::new(RwLock::new(initial_files));
 
+    let git = git_root.map(|root| GitIgnore {
+        exclude: root.info_exclude(),
+        root,
+        live_added: 0,
+        failures: 0,
+    });
     let (rescan_tx, rescan_rx) = mpsc::channel(64);
     let state = FilerState {
         source_dir,
         ignored_dirs: config.ignored_dirs,
+        rule: rule.clone(),
+        git,
+        reprune,
+        vetted: HashMap::new(),
         depth: config.depth,
         files: Arc::clone(&files),
         pending: HashMap::new(),
@@ -325,16 +418,62 @@ pub async fn start_filer(
         degraded_rescan_interval: config.degraded_rescan_interval,
         clock: SystemTime::now,
     };
-    let task = tokio::spawn(filer_event_loop(state, rx, rescan_rx, signal, broadcast));
+    let task = tokio::spawn(filer_event_loop(
+        state,
+        rx,
+        rescan_rx,
+        Arc::clone(&signal),
+        broadcast,
+    ));
 
     Ok(Filer {
         task,
         files,
         rescan_tx,
         unwatched_count,
+        rule,
         #[cfg(test)]
         watches,
+        #[cfg(test)]
+        signal,
     })
+}
+
+/// The rule a filer on `path` ([`dir_prefix`](super::dir_prefix) form)
+/// starts with, and its git root when that's git's: a root that is a
+/// checkout (`project::is_checkout`) indexed whole, with a usable git whose
+/// first listing succeeds. Anything else is on fixed names — a failing git
+/// warned about, since the root then indexes what its `.gitignore` names.
+pub(super) async fn initial_rule(
+    path: &str,
+    config: &FilerConfig,
+) -> (Option<GitRoot>, IgnoreRule) {
+    if config.depth != FilerDepth::Tree {
+        return (None, IgnoreRule::FixedNames);
+    }
+    let Some(git) = config.git.as_ref() else {
+        if crate::project::is_checkout(super::prefix_dir(path)) {
+            tracing::warn!(
+                path,
+                "git is unusable; ignoring by fixed names in a checkout"
+            );
+        }
+        return (None, IgnoreRule::FixedNames);
+    };
+    let Some(root) = GitRoot::at(path, Arc::clone(git)) else {
+        return (None, IgnoreRule::FixedNames);
+    };
+    match root.prune(root.dir().to_path_buf()).await {
+        Ok(set) => (Some(root), IgnoreRule::Git(set)),
+        Err(e) => {
+            tracing::warn!(
+                path,
+                error = %fuz_sys::cli::format_error_chain(&e),
+                "git couldn't list what this checkout ignores; ignoring by fixed names"
+            );
+            (None, IgnoreRule::FixedNames)
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1,72 +1,20 @@
-//! The blocking directory walk, the ignore rules, and the scan over it.
+//! The blocking directory walk and the scan over it.
 
 use super::core::FilerDepth;
+use super::ignore::{IgnoreRule, is_nested_repo};
 use super::index::{
     FileIndex, FileStat, ScanIndex, ScannedFile, is_unchanged, make_disknode, reusable_stat,
     system_time_to_ms,
 };
 use super::watches::{DirWatches, WatchAttempt, is_transient_list_error};
 use super::{Clock, WALK_CHANNEL_CAPACITY, dir_prefix};
-use crate::scoped_fs::ZZZ_DIR_NAME;
 use parking_lot::Mutex;
 use std::collections::BTreeSet;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{RwLock, mpsc};
-
-// -- Default ignored directories ----------------------------------------------
-
-/// Directory names ignored by all watchers, wherever they appear. Individual
-/// filers can ignore specific directories by full path on top of these via
-/// `FilerConfig`.
-///
-/// `.zzz` is zzz's conventional app-dir and CLI daemon-home name — the daemon
-/// home (`~/.zzz/`) holds `.env`, `bootstrap_token`, and `run/`, which must
-/// never be indexed or broadcast from a root that covers it. The credential
-/// directories (`scoped_fs::CREDENTIAL_DIR_NAMES`) are ignored the same way,
-/// by [`is_ignored_name`].
-const DEFAULT_IGNORED_DIRS: &[&str] = &[
-    ".git",
-    "node_modules",
-    ".svelte-kit",
-    "target",
-    "dist",
-    ZZZ_DIR_NAME,
-];
-
-/// Check if a single path component is ignored by every watcher: a name in
-/// the default directory ignore list, a credential directory (which
-/// `ScopedFs` refuses too), or a `ScopedFs::write_file` staging file (only
-/// the rename that publishes a write is indexed and broadcast).
-fn is_ignored_name(name: &str) -> bool {
-    DEFAULT_IGNORED_DIRS.contains(&name)
-        || crate::scoped_fs::is_credential_dir_name(name)
-        || crate::scoped_fs::is_temp_file_name(name)
-}
-
-/// Check if a path is ignored: not valid UTF-8, a default-ignored name among
-/// its components below `source_dir`, or at/under one of `ignored_dirs`.
-///
-/// Non-UTF-8 paths are skipped entirely rather than indexed under a lossy
-/// (U+FFFD) key no client could address. A path is non-UTF-8 when any
-/// component is, so everything under a non-UTF-8 directory is skipped too —
-/// the walker never descends into one (see [`walk_blocking`]).
-///
-/// Only checks names after the `source_dir` prefix — root path segments
-/// like `/`, `home`, `user` can never match ignored names and are skipped.
-/// `ignored_dirs` match by whole components (`Path::starts_with`), so
-/// `/w/data` doesn't cover `/w/data2`.
-pub(super) fn is_ignored(path: &Path, source_dir: &Path, ignored_dirs: &[PathBuf]) -> bool {
-    if path.to_str().is_none() || ignored_dirs.iter().any(|dir| path.starts_with(dir)) {
-        return true;
-    }
-    let suffix = path.strip_prefix(source_dir).unwrap_or(path);
-    suffix
-        .components()
-        .any(|c| is_ignored_name(c.as_os_str().to_str().unwrap_or("")))
-}
 
 /// Walk `prefix` (a directory, [`dir_prefix`] form) on the calling blocking
 /// thread: watch each directory, then list it, sending every regular file
@@ -86,16 +34,25 @@ pub(super) fn is_ignored(path: &Path, source_dir: &Path, ignored_dirs: &[PathBuf
 /// Only regular files are yielded and only real directories are descended
 /// into (and watched) — entry types come from `DirEntry::file_type`, which
 /// does not follow symlinks, so symlinks (and link loops) are skipped
-/// entirely, as are FIFOs, sockets, and devices. Ignored and non-UTF-8 names
-/// are skipped with their subtrees.
+/// entirely, as are FIFOs, sockets, and devices. Entries `rule` ignores
+/// ([`IgnoreRule::ignores_name`], [`IgnoreRule::ignores_entry`]) and
+/// non-UTF-8 names are skipped with their subtrees. Under a git root, so is
+/// a directory holding a repo of its own ([`is_nested_repo`]) — `prefix`
+/// itself included, when it's below `source_dir`.
 ///
 /// Returns the directories whose listing failed transiently
 /// ([`is_transient_list_error`]) — the caller keeps what's indexed under
 /// them — or the error of listing `prefix` itself. Below `prefix`, an
 /// unreadable or vanished directory is skipped.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk's inputs, each from the filer's state or its caller"
+)]
 fn walk_blocking(
     prefix: &str,
+    source_dir: &str,
     ignored_dirs: &[PathBuf],
+    rule: &IgnoreRule,
     depth: FilerDepth,
     watches: &mut DirWatches,
     reset_watches: bool,
@@ -109,7 +66,14 @@ fn walk_blocking(
     let mut unreadable = BTreeSet::new();
     let mut kept = Vec::new();
     let mut root_error = None;
-    let mut stack = vec![prefix.to_owned()];
+    // a dir that became a repo of its own lists as nothing, its watches
+    // dropped by the reconcile
+    let nested = rule.is_git() && prefix != source_dir && is_nested_repo(super::prefix_dir(prefix));
+    let mut stack = if nested {
+        vec![]
+    } else {
+        vec![prefix.to_owned()]
+    };
     while let Some(dir) = stack.pop() {
         let entries = match watches.attempt(&dir) {
             WatchAttempt::List => watches.read_dir(&dir),
@@ -156,14 +120,17 @@ fn walk_blocking(
                 }
                 continue;
             }
-            if is_ignored_name(name) || ignored_dirs.contains(&path) {
+            if rule.ignores_name(name) || ignored_dirs.contains(&path) {
                 continue;
             }
             let Ok(file_type) = entry.file_type() else {
                 continue;
             };
+            if rule.ignores_entry(&path_str, file_type.is_dir()) {
+                continue;
+            }
             if file_type.is_dir() {
-                if depth == FilerDepth::Tree {
+                if depth == FilerDepth::Tree && !(rule.is_git() && is_nested_repo(&path)) {
                     stack.push(dir_prefix(&path_str));
                 }
                 continue;
@@ -284,6 +251,7 @@ pub(super) async fn scan_directory(
     prefix: &str,
     source_dir: &str,
     ignored_dirs: &[PathBuf],
+    rule: Arc<IgnoreRule>,
     depth: FilerDepth,
     watches: &Arc<Mutex<DirWatches>>,
     reset_watches: bool,
@@ -293,12 +261,15 @@ pub(super) async fn scan_directory(
     let (job_tx, mut job_rx) = mpsc::channel::<FileJob>(WALK_CHANNEL_CAPACITY);
     let walk = {
         let prefix = prefix.to_owned();
+        let source_dir = source_dir.to_owned();
         let ignored_dirs = ignored_dirs.to_vec();
         let watches = Arc::clone(watches);
         tokio::task::spawn_blocking(move || {
             walk_blocking(
                 &prefix,
+                &source_dir,
                 &ignored_dirs,
+                &rule,
                 depth,
                 &mut watches.lock(),
                 reset_watches,
@@ -348,12 +319,14 @@ mod tests {
     use super::*;
     use crate::filer::ChangeType;
     use crate::filer::core::FilerConfig;
+    use crate::filer::ignore::is_ignored;
     use crate::filer::test_support::settled;
     use crate::filer::test_support::{
         TempDir, event, indexed, pending_of, scan_into, state_for, state_with, watches_for,
     };
     use notify::EventKind;
     use notify::event::CreateKind;
+    use std::path::Path;
     use std::time::Duration;
 
     async fn scan_with(root: &str, ignored_dirs: &[PathBuf]) -> FileIndex {
@@ -414,7 +387,11 @@ mod tests {
             bad_dir.join("inner/deep.txt"),
         ];
         for path in &paths {
-            assert!(is_ignored(path, &tmp.0, &[]), "{}", path.display());
+            assert!(
+                is_ignored(path, &tmp.0, &[], &IgnoreRule::FixedNames),
+                "{}",
+                path.display()
+            );
         }
         state
             .handle_event(event(EventKind::Create(CreateKind::Any), &paths))
@@ -475,12 +452,37 @@ mod tests {
     fn ignored_dirs_match_by_full_path_not_name() {
         let root = Path::new("/w");
         let ignored = [PathBuf::from("/w/app/data")];
-        assert!(is_ignored(Path::new("/w/app/data"), root, &ignored));
-        assert!(is_ignored(Path::new("/w/app/data/x.txt"), root, &ignored));
-        assert!(!is_ignored(Path::new("/w/data/x.txt"), root, &ignored));
-        assert!(!is_ignored(Path::new("/w/app/data2/x.txt"), root, &ignored));
+        assert!(is_ignored(
+            Path::new("/w/app/data"),
+            root,
+            &ignored,
+            &IgnoreRule::FixedNames
+        ));
+        assert!(is_ignored(
+            Path::new("/w/app/data/x.txt"),
+            root,
+            &ignored,
+            &IgnoreRule::FixedNames
+        ));
+        assert!(!is_ignored(
+            Path::new("/w/data/x.txt"),
+            root,
+            &ignored,
+            &IgnoreRule::FixedNames
+        ));
+        assert!(!is_ignored(
+            Path::new("/w/app/data2/x.txt"),
+            root,
+            &ignored,
+            &IgnoreRule::FixedNames
+        ));
         // default names still apply alongside
-        assert!(is_ignored(Path::new("/w/data/.git/HEAD"), root, &ignored));
+        assert!(is_ignored(
+            Path::new("/w/data/.git/HEAD"),
+            root,
+            &ignored,
+            &IgnoreRule::FixedNames
+        ));
     }
 
     #[test]
@@ -498,14 +500,20 @@ mod tests {
             ".zzz/run/daemon.json",
         ] {
             assert!(
-                is_ignored(&home.join(rel), home, &config.ignored_dirs),
+                is_ignored(
+                    &home.join(rel),
+                    home,
+                    &config.ignored_dirs,
+                    &IgnoreRule::FixedNames
+                ),
                 "{rel}"
             );
         }
         assert!(!is_ignored(
             &home.join("notes/.env"),
             home,
-            &config.ignored_dirs
+            &config.ignored_dirs,
+            &IgnoreRule::FixedNames
         ));
     }
 

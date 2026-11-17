@@ -52,12 +52,14 @@ const parse_str_list_const = (source: string, name: string): Array<string> => {
 };
 
 describe('the file index ignores what the backend filer ignores', () => {
-	test('ignored directory names match the names the filer ignores', () => {
-		const filer = read_crate_source('filer/walk.rs');
+	test("ignored directory names match the names a plain root's filer ignores", () => {
+		const filer = read_crate_source('filer/ignore.rs');
 		const scoped_fs = read_crate_source('scoped_fs.rs');
-		// a constant is the filer's own or one it imports from `scoped_fs.rs`
+		// a constant is the filer's own or one it imports from `scoped_fs.rs`;
+		// a plain root ignores both of the filer's lists
 		const names = [
-			...parse_str_list_const(`${filer}\n${scoped_fs}`, 'DEFAULT_IGNORED_DIRS'),
+			...parse_str_list_const(`${filer}\n${scoped_fs}`, 'ALWAYS_IGNORED_DIRS'),
+			...parse_str_list_const(`${filer}\n${scoped_fs}`, 'PLAIN_DIR_IGNORED_DIRS'),
 			...parse_str_list_const(scoped_fs, 'CREDENTIAL_DIR_NAMES')
 		];
 		assert.match(
@@ -82,7 +84,7 @@ describe('the file index ignores what the backend filer ignores', () => {
 			'`is_temp_file_name` is a plain prefix check, as the TS side assumes'
 		);
 		assert.include(
-			read_crate_source('filer/walk.rs'),
+			read_crate_source('filer/ignore.rs'),
 			'crate::scoped_fs::is_temp_file_name(name)',
 			'the filer ignores staging files by that check'
 		);

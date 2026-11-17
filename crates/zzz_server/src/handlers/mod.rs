@@ -69,7 +69,7 @@ pub struct App {
     /// over an allowlisted environment ([`crate::git::git_env`]: `HOME`
     /// kept, so the user's git config and excludes apply; nothing else of
     /// zzzd's, so no inherited `GIT_*` steers it).
-    pub git: fuz_git::Git,
+    pub git: Arc<fuz_git::Git>,
     /// Whether git is usable, checked once at boot ([`crate::git::check_git`]).
     /// [`Self::new`] starts with [`GitUsability::unchecked`], read as
     /// unusable; `run_app` sets it from the check before any filer starts.
@@ -154,7 +154,7 @@ impl App {
             instance_id: Uuid::new_v4(),
             projects: ProjectManager::new(),
             trusted_owner: TrustedOwner::current(),
-            git: crate::git::daemon_git(),
+            git: Arc::new(crate::git::daemon_git()),
             git_usability: GitUsability::unchecked(),
             db_pool,
             scoped_fs,
