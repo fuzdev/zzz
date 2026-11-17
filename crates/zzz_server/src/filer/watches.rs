@@ -873,6 +873,7 @@ mod tests {
             rule: crate::filer::ignore::SharedRule::new(
                 crate::filer::ignore::IgnoreRule::FixedNames,
             ),
+            wire: Arc::default(),
             git: None,
             reprune: None,
             vetted: HashMap::new(),

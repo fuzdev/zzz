@@ -69,6 +69,7 @@ const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectI
 		{ key: 'site', kind: 'repo', dir: SITE, state: 'present' }
 	],
 	focused,
+	ignored: {},
 	rev
 });
 
@@ -148,6 +149,42 @@ const edit = async (path: DiskfilePath): Promise<void> => {
 	await app.diskfiles.ensure_content(diskfile);
 	app.diskfiles.select(diskfile.id, true);
 	app.diskfiles.get_editor_state(diskfile).current_content = 'edited';
+};
+
+/** The plain checkout at `SITE`, resynced `resyncs` times, as stamped at `rev`. */
+const checkout = (rev: number, resyncs: number): ProjectInfoJson => ({
+	root: SITE,
+	name: 'site',
+	opened_at: '2026-11-16T00:00:00.000Z',
+	kind: 'git_repo',
+	registry_path: null,
+	fallback: null,
+	entries: [],
+	focused: [SITE],
+	ignored: { [SITE]: { paths: [], resyncs } },
+	rev
+});
+
+/** Delivers a `project_changed` close through the real handler. */
+const receive_close = (project: ProjectInfoJson): void => {
+	(app.action_handlers.project_changed as unknown as { receive: (event: unknown) => void }).receive(
+		{ data: { input: { type: 'close', project } } }
+	);
+};
+
+/** Answers the own open `open_calls[i]` with `project` and `files`, focusing `SITE`. */
+const reply_open = (i: number, project: ProjectInfoJson, files: Array<DiskfilePath>): void => {
+	open_calls[i]!.resolve({
+		ok: true,
+		value: {
+			project,
+			focus: SITE,
+			watch_status: 'full',
+			files: files.map(node),
+			refused: [],
+			opened: true
+		}
+	});
 };
 
 describe('Projects.focus_repo', () => {
@@ -582,5 +619,263 @@ describe('a remote focus', () => {
 		assert.ok(app.diskfiles.get_by_path(APP_A));
 		assert.ok(app.diskfiles.get_by_path(SITE_A));
 		assert.strictEqual(session_loads, 0);
+	});
+});
+
+describe('a resync of a focused repo', () => {
+	/** `registry_info` with `ignored` for `SITE`. */
+	const with_ignored = (
+		info: ProjectInfoJson,
+		paths: Array<string>,
+		resyncs: number
+	): ProjectInfoJson => ({ ...info, ignored: { [SITE]: { paths, resyncs } } });
+
+	test("pulls the repo whole: what's now ignored pruned, what's no longer ignored added", async () => {
+		app.projects.add(with_ignored(registry_info([SITE]), ['c.txt'], 0));
+		app.diskfiles.add_initial([README, SITE_A, SITE_B].map(node));
+		// `b.txt` newly ignored and `c.txt` un-ignored, past what the daemon
+		// sends per file
+		receive_update(with_ignored(registry_info([SITE], 2), ['b.txt'], 1));
+		assert.deepEqual(app.projects.get_by_root(DEV)?.ignored[SITE], {
+			paths: ['b.txt'],
+			resyncs: 1
+		});
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: DEV, dir: SITE }]
+		);
+		files_calls[0]!.resolve({
+			ok: true,
+			value: { files: [node(SITE_A), node(SITE_C)], watch_status: 'full', rev: 2 }
+		});
+		await flush();
+		assert.ok(app.diskfiles.get_by_path(SITE_A));
+		assert.ok(!app.diskfiles.get_by_path(SITE_B), 'now ignored: pruned');
+		assert.ok(app.diskfiles.get_by_path(SITE_C), 'no longer ignored: added');
+		assert.ok(app.diskfiles.get_by_path(README), 'outside the repo, left alone');
+		assert.strictEqual(session_loads, 0);
+	});
+
+	test('a change of the paths alone pulls nothing: its changes were sent per file', () => {
+		app.projects.add(with_ignored(registry_info([SITE]), [], 0));
+		receive_update(with_ignored(registry_info([SITE], 2), ['x.log', 'out/'], 0));
+		assert.deepEqual(app.projects.get_by_root(DEV)?.ignored[SITE]?.paths, ['x.log', 'out/']);
+		assert.strictEqual(files_calls.length, 0);
+	});
+
+	test('the entry going (git falling back to fixed names) pulls', () => {
+		app.projects.add(with_ignored(registry_info([SITE]), ['b.txt'], 0));
+		receive_update(registry_info([SITE], 2));
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: DEV, dir: SITE }]
+		);
+	});
+
+	test('an older resync changes nothing and fetches nothing', () => {
+		app.projects.add(with_ignored(registry_info([SITE], 3), ['b.txt'], 2));
+		receive_update(with_ignored(registry_info([SITE], 2), [], 1));
+		assert.strictEqual(app.projects.get_by_root(DEV)?.ignored[SITE]?.resyncs, 2);
+		assert.strictEqual(files_calls.length, 0);
+	});
+
+	test('a pull read before a later resync is dropped, whatever order the pulls land in', async () => {
+		app.projects.add(with_ignored(registry_info([SITE]), [], 0));
+		app.diskfiles.add_initial([README, SITE_A].map(node));
+		// un-ignored past what the daemon sends per file, then ignored again
+		// while the first pull is in flight
+		receive_update(with_ignored(registry_info([SITE], 2), [], 1));
+		receive_update(with_ignored(registry_info([SITE], 3), ['b.txt'], 2));
+		assert.strictEqual(files_calls.length, 2);
+		files_calls[1]!.resolve({
+			ok: true,
+			value: { files: [node(SITE_A)], watch_status: 'full', rev: 3 }
+		});
+		await flush();
+		// the first pull, larger, lands last
+		files_calls[0]!.resolve({
+			ok: true,
+			value: { files: [node(SITE_A), node(SITE_B)], watch_status: 'full', rev: 2 }
+		});
+		await flush();
+		assert.ok(app.diskfiles.get_by_path(SITE_A));
+		assert.ok(!app.diskfiles.get_by_path(SITE_B), "the older pull's files aren't applied");
+	});
+
+	test('during an own focus, pulls once it settles — unless the reply covers the repo', async () => {
+		app.projects.add(with_ignored(registry_info([SITE]), [], 0));
+		app.diskfiles.add_initial([README, SITE_A].map(node));
+		const focusing = app.projects.focus_repo(DEV, APP);
+		receive_update(with_ignored(registry_info([APP, SITE], 2), [], 1));
+		assert.strictEqual(files_calls.length, 0, 'held while the focus is in flight');
+		focus_calls[0]!.resolve({
+			ok: true,
+			value: {
+				project: with_ignored(registry_info([APP, SITE], 2), [], 1),
+				files: [node(APP_A)],
+				watch_status: 'full'
+			}
+		});
+		await focusing;
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: DEV, dir: SITE }],
+			'the reply covered the focused repo alone'
+		);
+	});
+
+	test('a resynced plain checkout pulls its root, not the session', async () => {
+		app.projects.add(checkout(1, 0));
+		app.diskfiles.add_initial([SITE_A].map(node));
+		receive_update(checkout(2, 1));
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: SITE, dir: SITE }]
+		);
+		await flush();
+		assert.strictEqual(session_loads, 0, 'no session resync');
+	});
+
+	/** An own open of a path in `SITE` whose reply carries `project`. */
+	const open_with_reply = async (project: ProjectInfoJson): Promise<void> => {
+		const opening = app.projects.open(SITE_A);
+		receive_update(with_ignored(registry_info([SITE], 2), [], 1));
+		assert.strictEqual(files_calls.length, 0, 'held while the open is in flight');
+		open_calls[0]!.resolve({
+			ok: true,
+			value: {
+				project,
+				focus: SITE,
+				watch_status: 'full',
+				files: [node(SITE_A), node(SITE_B)],
+				refused: [],
+				opened: false
+			}
+		});
+		await opening;
+		await flush();
+	};
+
+	test('an own reply covering the resynced repo at its rev settles it: no pull', async () => {
+		app.projects.add(with_ignored(registry_info([SITE]), [], 0));
+		app.diskfiles.add_initial([README, SITE_A].map(node));
+		await open_with_reply(with_ignored(registry_info([SITE], 2), [], 1));
+		assert.ok(app.diskfiles.get_by_path(SITE_B), 'the reply carried the files');
+		assert.strictEqual(files_calls.length, 0);
+		assert.strictEqual(session_loads, 0);
+	});
+
+	test('an own reply covering the resynced repo at an older rev is dropped: the pull goes out', async () => {
+		app.projects.add(with_ignored(registry_info([SITE]), [], 0));
+		app.diskfiles.add_initial([README, SITE_A].map(node));
+		await open_with_reply(with_ignored(registry_info([SITE], 1), [], 0));
+		assert.ok(!app.diskfiles.get_by_path(SITE_B), "the older reply's files aren't applied");
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: DEV, dir: SITE }]
+		);
+		assert.strictEqual(session_loads, 0);
+	});
+});
+
+describe('a checkout new here, once its files arrive', () => {
+	test('settled by its own open reply, a later resync pulls its root', async () => {
+		const opening = app.projects.open(SITE_A);
+		receive_update(checkout(5, 0)); // its own notification first: new here
+		reply_open(0, checkout(5, 0), [SITE_A]);
+		await opening;
+		await flush();
+		assert.strictEqual(session_loads, 0);
+		receive_update(checkout(6, 1));
+		await flush();
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: SITE, dir: SITE }]
+		);
+		assert.strictEqual(session_loads, 0, 'no session resync');
+	});
+
+	test('settled by a snapshot during an own open, a later resync pulls its root', async () => {
+		session.projects = [checkout(5, 0)];
+		session.projects_rev = 5;
+		session.file_roots = [parse_or_throw(DiskfileDirectoryPath, '/zzz/'), SITE];
+		const opening = app.projects.open(parse_or_throw(DiskfilePath, '/elsewhere/x'));
+		receive_update(checkout(5, 0));
+		app.resync_session();
+		await flush();
+		assert.strictEqual(session_loads, 1);
+		open_calls[0]!.resolve({ ok: false, error: { code: -32000, message: 'nope' } });
+		await opening;
+		await flush();
+		assert.strictEqual(session_loads, 1, 'the snapshot settled it');
+		receive_update(checkout(6, 1));
+		await flush();
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: SITE, dir: SITE }]
+		);
+		assert.strictEqual(session_loads, 1, 'no session resync');
+	});
+
+	test('closed while held, then reopened by its own reply, a later resync pulls its root', async () => {
+		const opening = app.projects.open(SITE_A);
+		receive_update(checkout(5, 0));
+		receive_close(checkout(6, 0));
+		assert.ok(!app.projects.get_by_root(SITE));
+		reply_open(0, checkout(7, 0), [SITE_A]);
+		await opening;
+		await flush();
+		assert.ok(app.projects.get_by_root(SITE));
+		const loads = session_loads;
+		receive_update(checkout(8, 1));
+		await flush();
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: SITE, dir: SITE }]
+		);
+		assert.strictEqual(session_loads, loads, 'no session resync');
+	});
+
+	test('held across a restart snapshot during an own open, a later resync pulls its root', async () => {
+		app.resync_session();
+		await flush();
+		const opening = app.projects.open(parse_or_throw(DiskfilePath, '/elsewhere/x'));
+		receive_update(checkout(5, 0));
+		session = {
+			...session,
+			projects: [checkout(2, 0)],
+			projects_rev: 2,
+			server_instance_id: create_uuid(),
+			file_roots: [parse_or_throw(DiskfileDirectoryPath, '/zzz/'), SITE]
+		};
+		app.resync_session();
+		await flush();
+		open_calls[0]!.resolve({ ok: false, error: { code: -32000, message: 'nope' } });
+		await opening;
+		await flush();
+		const loads = session_loads;
+		receive_update(checkout(3, 1));
+		await flush();
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: SITE, dir: SITE }]
+		);
+		assert.strictEqual(session_loads, loads, 'no session resync');
+	});
+
+	test('resynced by the session once, a later resync pulls its root', async () => {
+		session.projects = [checkout(5, 0)];
+		session.projects_rev = 5;
+		session.file_roots = [parse_or_throw(DiskfileDirectoryPath, '/zzz/'), SITE];
+		receive_update(checkout(5, 0));
+		await flush();
+		assert.strictEqual(session_loads, 1);
+		receive_update(checkout(6, 1));
+		await flush();
+		assert.deepEqual(
+			files_calls.map((c) => c.input),
+			[{ root: SITE, dir: SITE }]
+		);
+		assert.strictEqual(session_loads, 1, 'no second session resync');
 	});
 });

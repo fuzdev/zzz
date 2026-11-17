@@ -134,6 +134,7 @@ pub(super) async fn state_on(
         source_dir: root,
         ignored_dirs,
         rule: SharedRule::new(IgnoreRule::FixedNames),
+        wire: Arc::default(),
         git: None,
         reprune: None,
         vetted: HashMap::new(),

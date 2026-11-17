@@ -1100,7 +1100,7 @@ These routes are outside the action system — they don't appear in the actions 
 
 Watches are per directory: the filer's own walk (on a blocking thread) adds one non-recursive watch to each directory it indexes — never inside ignored, symlinked, or non-UTF-8 directories — watching each before listing it, so nothing created in between is missed. A directory that appears gets watches for its subtree when it's synced; one that's removed or renamed away has them dropped (two paths sharing one inode, like a renamed directory's old and new path or a bind mount, share one kernel watch, removed only with its last path). An unreadable subdirectory is skipped and logged once, and picked up once it's readable again; one made unreadable later drops out of the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's indexed under it and retries. A walk or a rescan (`session_load`, overflow recovery) costs one `lstat` per file and reads none, and broadcasts only the files whose stamps moved or weren't trusted yet.
 
-What a filer ignores is decided once, when it starts, from its root alone (`filer::ignore`). A root whose own `.git` is a directory or a gitfile by `lstat` — a checkout, as § Projects resolves one — indexed whole takes **git's rule**; anything else (a plain directory, a registry's root at its top level) keeps **fixed names**: `node_modules`, `.svelte-kit`, `target`, and `dist`, wherever they appear. Under both, `.git`, `.zzz`, the credential directories, and `.zzz-tmp-` staging files are never indexed, whatever a `.gitignore` says. Under git's rule everything else is git's call: at start the filer lists what git ignores (`git ls-files --others --ignored --exclude-standard --directory`, every `.gitignore`, `info/exclude`, and the user's global excludes file), confirms each folded directory with one `git check-ignore` (git folds a directory whose untracked contents are all ignored even when nothing names it — zzz's own `.claude/` — so those are walked and watched, their ignored files skipped one by one), and prunes the walk by the result. A tracked file is never ignored, so a tracked `dist/` is indexed, and so is a `node_modules/` no pattern names. A repo of its own below the root — a nested repo, a populated submodule, a directory whose `.git` is a symlink — is neither walked nor indexed. Every listing is taken twice, around its walk, so what was created in between is listed rather than indexed unvetted. Live, a burst of events that adds paths not yet indexed asks one `check-ignore` about them before they're indexed, and a new directory git doesn't ignore has its own ignored paths listed before its walk; a `.gitignore` changing anywhere under the root or `.git/info/exclude` changing (watched by the filer's own watcher, for a root whose `.git` is a directory) rebuilds the set and rescans once the changes settle (400 ms of quiet, at most 5 s), so a checkout's intermediate states aren't applied one by one, and lost events do so at once — removing what's newly ignored and adding what no longer is. git runs with the daemon's allowlisted environment, its discovery ceilinged at the root's parent, implicit bare repos refused, and short timeouts (5 s per listing call, 2 s per vetting call), after re-checking that the root is still the real directory it was. When git is unusable or its first listing fails, the filer keeps fixed names; a later listing that fails keeps the last set until the next rebuild — a `.gitignore` or `info/exclude` change, lost events, or, while the last rebuild failed, the next `session_load` rescan or degraded poll — and the filer keeps fixed names for the rest of its life once three rebuilds in a row fail, or at once when the root is no longer the checkout it was (swapped for a symlink).
+What a filer ignores is decided once, when it starts, from its root alone (`filer::ignore`). A root whose own `.git` is a directory or a gitfile by `lstat` — a checkout, as § Projects resolves one — indexed whole takes **git's rule**; anything else (a plain directory, a registry's root at its top level) keeps **fixed names**: `node_modules`, `.svelte-kit`, `target`, and `dist`, wherever they appear. Under both, `.git`, `.zzz`, the credential directories, and `.zzz-tmp-` staging files are never indexed, whatever a `.gitignore` says. Under git's rule everything else is git's call: at start the filer lists what git ignores (`git ls-files --others --ignored --exclude-standard --directory`, every `.gitignore`, `info/exclude`, and the user's global excludes file), confirms each folded directory with one `git check-ignore` (git folds a directory whose untracked contents are all ignored even when nothing names it — zzz's own `.claude/` — so those are walked and watched, their ignored files skipped one by one), and prunes the walk by the result. A tracked file is never ignored, so a tracked `dist/` is indexed, and so is a `node_modules/` no pattern names. A repo of its own below the root — a nested repo, a populated submodule, a directory whose `.git` is a symlink — is neither walked nor indexed. Every listing is taken twice, around its walk, so what was created in between is listed rather than indexed unvetted. Live, a burst of events that adds paths not yet indexed asks one `check-ignore` about them before they're indexed, and a new directory git doesn't ignore has its own ignored paths listed before its walk; a `.gitignore` changing anywhere under the root or `.git/info/exclude` changing (watched by the filer's own watcher, for a root whose `.git` is a directory) rebuilds the set and rescans once the changes settle (400 ms of quiet, at most 5 s), so a checkout's intermediate states aren't applied one by one, and lost events do so at once — removing what's newly ignored and adding what no longer is. git runs with the daemon's allowlisted environment, its discovery ceilinged at the root's parent, implicit bare repos refused, and short timeouts (5 s per listing call, 2 s per vetting call), after re-checking that the root is still the real directory it was. When git is unusable or its first listing fails, the filer keeps fixed names; a later listing that fails keeps the last set until the next rebuild — a `.gitignore` or `info/exclude` change, lost events, or, while the last rebuild failed, the next `session_load` rescan or degraded poll — and the filer keeps fixed names for the rest of its life once three rebuilds in a row that a change on disk asked for fail — a `.gitignore` or `info/exclude` change, lost events, new files git couldn't vet, or a set grown past its budget (a load's or poll's retry failing doesn't count) — or at once when the root is no longer the checkout it was (swapped for a symlink).
 
 When the OS runs out of watches (inotify's `max_user_watches`), or no watcher can be created at all (`max_user_instances`), the filer runs **degraded**: the index still comes from the scan, and the directories without a watch are rescanned every 5 seconds or more (retrying their watches each time), so changes there show up late. `project_open` returns this as `watch_status` (`'full'` or `'degraded'`, degraded when any of the project's filers is), which the tab that opened it keeps on its `Project` cell and shows on the projects page and in the desk menu. It's reported at open time only (another tab or a reload shows `'full'`) — a filer that degrades or recovers later is just logged. A project root or focused directory that can't be listed fails `project_open` (`forbidden` / `permission_denied`, or `not_found`); a running filer whose root disappears polls it until it's back.
 
@@ -1878,6 +1878,28 @@ so revs keep increasing across a restart; they stay under 2^53, exact as
 JSON numbers. A reply's files are read under the lock its change committed
 under, so they're the index of exactly the state its rev names.
 
+**Ignored paths on the wire.** Each project carries, for each focused
+directory whose filer is on git's rule (§ Filer), what git ignores there
+(`ProjectInfoJson.ignored`, keyed by the directory): `paths`, relative to
+it and sorted — a directory git prunes whole with a trailing `/` (the
+directory itself as `./`), a file it skips alone without — and `resyncs`,
+a count. A focused directory on fixed names has no entry, and neither has
+a registry's root (indexed at its top level, on fixed names); a permanent
+filer's set (the app directory, a scoped dir) is on the wire only while an
+open project focuses its directory. Every
+commit reads the sets from the filers under the lock, so a set that moved
+is a change of its project like any other, stamping a new rev, and a
+reply carries the set its rev names. A filer whose set changes on its
+own — a `.gitignore` or `info/exclude` edit re-pruning it, a new file
+vetted as ignored — asks for that commit itself (`refresh_ignored`, from a
+task of its own, at most once a second per filer, since each refresh
+resends every changed project's whole set to every client), once the step
+that changed it is done, so a refresh after a re-prune reads the index
+that re-prune left. A re-prune that would send more than 1024
+`filer_change`s for one focused directory (un-ignoring a `node_modules/`
+would be tens of MB to every socket) sends none and bumps `resyncs`
+instead, dropping their pending changes too.
+
 `Projects` applies project state from the daemon by one rule, whatever
 order replies and notifications arrive in — this client's own
 `project_changed` reaches it before its own reply, an HTTP reply can trail
@@ -1918,6 +1940,18 @@ a notification, and two clients' changes interleave:
   of an earlier focus than the one held — across an unfocus and a focus
   again — is dropped, as is one the daemon refuses as `repo_not_focused`
   or whose focus is gone here: the change that dropped it settles it.
+- A newer state whose `ignored` entry for a directory focused before and
+  after has a different `resyncs`, or came or went (a git root falling back
+  to fixed names), marks a re-prune whose changes weren't sent
+  (`is_resynced`): the directory goes pending like a new focus, settled by
+  a reply carrying it or pulled once nothing is in flight — a checkout's
+  root too, pulled rather than resyncing the session — and the pull
+  reconciles it whole, pruning what's now ignored and adding what no
+  longer is. The resync's rev becomes the directory's focus rev, so a
+  pull read before it, of the index it replaced, is dropped like one of an
+  earlier focus, in whatever order the pulls land. A change of the paths alone pulls nothing: a re-prune under
+  the threshold sent its changes, and a file vetted as ignored was never
+  indexed.
 
 `Projects.focus_repo` applies its reply like an open's, reconciling the
 repo's files (a draft kept while it was unfocused whose file is gone is
@@ -2284,12 +2318,27 @@ Population, per capability:
   rebuild whose listing fails or times out leaves the change it was for
   unapplied — and a new file git couldn't vet meanwhile unindexed — until
   the next `session_load` (a reload or a reconnect) or degraded poll
-  rebuilds the set again; three failing in a row fall back to fixed names.
+  rebuilds the set again; three failing in a row that a change on disk
+  asked for (a rule edit, lost events, new files git couldn't vet, a set
+  grown past its budget) fall back to fixed names, but a load's or poll's
+  retry failing doesn't count, so a git that never answers costs a
+  listing's timeout (5 s) per degraded poll and per load until such
+  changes fail too — on a quiet degraded tree, possibly never. Each load
+  waits out the 5 s with the filer blocked; polls back off to about 50 s
+  apart (ten times their own duration, roughly a 10% duty cycle).
   Any `.git` entry — even one git wouldn't read as a repo — makes its
   directory a repo of its own here, so its files aren't indexed. The
-  frontend's own copy of the rule is still the fixed names, so in a
+  frontend's own copy of the rule is still the fixed names — the daemon
+  sends each focused checkout's ignored paths (`ProjectInfoJson.ignored`),
+  but nothing reads them yet but the resync — so in a
   checkout a link into a tracked `dist/` reads as skipped, and a link to a
-  file git ignores reads as broken
+  file git ignores reads as broken. What the wire says is ignored can lag
+  a second behind the filer (refreshes are coalesced), and a re-prune
+  resynced while its project closes and a permanent filer stays on the
+  directory leaves clients' permanent copy of it stale until the next
+  `session_load`; and a filer started by a focus scan before the lock is
+  off the wire until its commit marks it, so a re-prune past the threshold
+  in that window sends each change
 - **Terminals** — any authenticated account can create a terminal, which runs
   a command as the daemon's OS user (see § Security posture). Each terminal
   belongs to the account that created it: its output (`terminal_data`,

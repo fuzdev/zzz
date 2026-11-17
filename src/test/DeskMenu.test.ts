@@ -23,6 +23,7 @@ const plain_info = (root: string, name: string): ProjectInfoJson => ({
 	fallback: null,
 	entries: [],
 	focused: [parse_or_throw(DiskfileDirectoryPath, root)],
+	ignored: {},
 	rev: 1
 });
 

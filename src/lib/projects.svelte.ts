@@ -19,6 +19,7 @@ import { create_single_index } from './indexed_collection_helpers.svelte.ts';
 import {
 	Project,
 	ProjectJson,
+	type ProjectIgnoredJson,
 	type ProjectInfoJson,
 	type ProjectJsonInput
 } from './project.svelte.ts';
@@ -84,6 +85,21 @@ export interface ProjectsReconciled {
 	 */
 	refused: Array<DiskfileDirectoryPath>;
 }
+
+/**
+ * Whether the daemon resynced `dir` between two states of a project: its
+ * `ignored` entry's `resyncs` count moved, or the entry came or went (a git
+ * root falling back to fixed names) — either way the `filer_change`s for
+ * what that re-prune changed weren't sent, so the directory is pulled.
+ * A change of the paths alone isn't one: live-vetted files join the set
+ * without the index changing, and a re-prune small enough to send its
+ * changes sends them.
+ */
+export const is_resynced = (
+	before: Readonly<Record<string, ProjectIgnoredJson>>,
+	after: Readonly<Record<string, ProjectIgnoredJson>>,
+	dir: DiskfileDirectoryPath
+): boolean => (before[dir]?.resyncs ?? null) !== (after[dir]?.resyncs ?? null);
 
 /**
  * Collection of open projects, keyed by root.
@@ -153,8 +169,9 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	#floor = -1;
 	/**
 	 * Per held project, each focused directory with the rev of the state
-	 * that focused it — a `repo_files` reply read before it is of an earlier
-	 * focus of the repo, and dropped.
+	 * that focused it, or that last resynced it (`is_resynced`) — a
+	 * `repo_files` reply read before it is of an earlier focus of the repo,
+	 * or of the index a resync replaced, and dropped.
 	 */
 	readonly #focused_since: Map<DiskfileDirectoryPath, Map<DiskfileDirectoryPath, number>> =
 		new Map();
@@ -169,6 +186,13 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	 * (`repo_files`), or the session resynced for a project new here.
 	 */
 	readonly #pending: Map<DiskfileDirectoryPath, Map<DiskfileDirectoryPath, number>> = new Map();
+	/**
+	 * The roots of `#pending` whose project is new here — the session is
+	 * resynced for them. Apart from `#pending`'s root entry: a plain git
+	 * checkout's root is also its one focus, pending when resynced, and
+	 * that's pulled (`repo_files`), not a session resync.
+	 */
+	readonly #pending_new: Set<DiskfileDirectoryPath> = new Set();
 	#received = 0;
 
 	/**
@@ -233,7 +257,11 @@ export class Projects extends Cell<typeof ProjectsJson> {
 	 * files the daemon no longer indexes, and stopping a filer deletes
 	 * nothing here, so they're released (`Diskfiles.release_uncovered`).
 	 * A newer state that widens needs the files of what it added, which
-	 * `covered` may carry; the rest go pending (see `#pending`).
+	 * `covered` may carry; the rest go pending (see `#pending`). So does a
+	 * focused directory the daemon resynced (`is_resynced`): it re-pruned
+	 * the directory without sending each change, and the pull reconciles
+	 * the directory whole — the files it no longer indexes pruned, the ones
+	 * it now does added.
 	 *
 	 * @param covered - the directories whose files arrive with `json`: a
 	 *   reply's, or `all` for a session snapshot, whose files cover every
@@ -256,7 +284,10 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		}
 		// a project held at an unknown rev (across a restart) is new here: what
 		// this client has of it says nothing of what the daemon indexes now
-		const before = held && held.rev >= 0 ? { kind: held.kind, focused: [...held.focused] } : null;
+		const before =
+			held && held.rev >= 0
+				? { kind: held.kind, focused: [...held.focused], ignored: held.ignored }
+				: null;
 		const was_focused = held ? [...held.focused] : [];
 		let project: Project;
 		if (held) {
@@ -272,17 +303,31 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		const dropped = was_focused.filter((dir) => !json.focused.includes(dir));
 		if (dropped.length) this.app.diskfiles.release_uncovered(dropped);
 
+		// a pull read before a resync is of the index the resync replaced, so
+		// it's dropped as one of an earlier focus is, in whatever order it lands
+		if (before) {
+			const since = this.#focused_since.get(json.root);
+			for (const dir of json.focused) {
+				if (is_resynced(before.ignored, json.ignored, dir)) {
+					since?.set(dir, json.rev);
+				}
+			}
+		}
+
 		if (covered === 'all') return { project, applied: true };
 		let pending = this.#pending.get(json.root);
 		const needed =
 			before === null
 				? [json.root, ...json.focused]
-				: json.focused.filter((dir) => !before.focused.includes(dir));
+				: json.focused.filter(
+						(dir) => !before.focused.includes(dir) || is_resynced(before.ignored, json.ignored, dir)
+					);
 		for (const dir of needed) {
 			if (covered.includes(dir)) continue;
 			if (!pending) this.#pending.set(json.root, (pending = new Map()));
 			pending.set(dir, json.rev);
 		}
+		if (before === null && pending?.has(json.root)) this.#pending_new.add(json.root);
 		if (pending?.size === 0) this.#pending.delete(json.root);
 		return { project, applied: true };
 	}
@@ -300,8 +345,10 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		if (!pending) return;
 		for (const dir of covered) {
 			const since = pending.get(dir);
+			// defensive: every caller settles at the rev held, so nothing pending is newer
 			if (since !== undefined && since <= rev) pending.delete(dir);
 		}
+		if (!pending.has(root)) this.#pending_new.delete(root);
 		if (pending.size === 0) this.#pending.delete(root);
 	}
 
@@ -386,19 +433,22 @@ export class Projects extends Cell<typeof ProjectsJson> {
 
 	/**
 	 * Once no open or focus of this client's is in flight, fetches what
-	 * `#pending` holds: each repo still focused pulled alone, or the session
-	 * resynced for a project new here.
+	 * `#pending` holds: each repo still focused pulled alone — a checkout's
+	 * root too — or the session resynced for a project new here
+	 * (`#pending_new`).
 	 */
 	#flush(): void {
 		if (this.#in_flight > 0 || this.#pending.size === 0) return;
 		const pending = Array.from(this.#pending);
+		const pending_new = new Set(this.#pending_new);
 		this.#pending.clear();
+		this.#pending_new.clear();
 		let resync = false;
 		for (const [root, dirs] of pending) {
 			const project = this.get_by_root(root);
 			if (!project) continue;
 			// a project new here: a registry's top level isn't a repo to pull
-			if (dirs.has(root)) {
+			if (pending_new.has(root)) {
 				resync = true;
 				continue;
 			}
@@ -548,6 +598,7 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		this.items.remove(id);
 		this.#focused_since.delete(project.root);
 		this.#pending.delete(project.root);
+		this.#pending_new.delete(project.root);
 		this.app.diskfiles.handle_project_removed(project.root);
 		if (id === this.active_id) {
 			const next = this.items.by_id.values().next();
@@ -608,6 +659,7 @@ export class Projects extends Cell<typeof ProjectsJson> {
 			for (const [dir, rev] of dirs) {
 				if (rev <= projects_rev) dirs.delete(dir);
 			}
+			if (!dirs.has(root)) this.#pending_new.delete(root);
 			if (dirs.size === 0) this.#pending.delete(root);
 		}
 		return { unlisted, newer, refused };
@@ -626,6 +678,7 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		this.#floor = -1;
 		this.#focused_since.clear();
 		this.#pending.clear();
+		this.#pending_new.clear();
 	}
 
 	get_by_root(root: DiskfileDirectoryPath): Project | undefined {

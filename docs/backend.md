@@ -684,8 +684,17 @@ commands):
   the latest. Its own rescan vets what it finds, and new files git can't vet
   there stay unindexed until a pass vets them; what that rescan requests is
   dropped, so a failure never retries itself and `REPRUNE_MAX_FAILURES`
-  counts separate triggers. That many in a row (a git failing on every load
-  falls back by the third), or a root no longer the checkout it was, fall
+  counts separate triggers — any re-prune a change on disk asked for: a
+  rule edit, lost events, new files git couldn't vet, or a set grown past
+  its budget (`RepruneTrigger::Change`). A load's or poll's retry that
+  fails doesn't count (`RepruneTrigger::Retry`), so reloads alone never
+  give up git's rule, and a git that never answers costs a listing's
+  timeout per degraded poll and per load until such changes fail too — on
+  a quiet degraded tree, possibly never. Each load waits out that 5 s with
+  the filer's loop blocked; the polls are bounded by
+  `DEGRADED_RESCAN_COST_FACTOR`, which spaces them by ten times their own
+  duration — about 50 s apart, roughly a 10% duty cycle. That many
+  counted failures in a row, or a root no longer the checkout it was, fall
   back to fixed names for good. Every git call runs on `spawn_blocking` with
   the root's parent as discovery ceiling, `refuse_implicit_bare`, and a
   timeout (`LIST_TIMEOUT` 5 s per listing call, `CHECK_TIMEOUT` 2 s per
@@ -697,8 +706,39 @@ commands):
   rescan (`FilerManager::rescan_all`) with no timeout, so a git root stalled
   that way delays every client's `session_load` by up to the stall's bound —
   and, while a re-prune has failed, by the re-prune it runs in place of the
-  rescan. `Filer::ignored_version` and `Filer::ignored_paths` expose the set for a
-  publisher.
+  rescan.
+- **Ignored paths on the wire** — `Filer::ignored_on_wire` is the set as
+  an open project carries it (`filer::IgnoredPaths`: the paths relative to
+  the root, sorted, dirs with a trailing `/`, cached per rule version; and
+  the resync count, `resyncs` on the wire), `None` on fixed names. Every `ProjectManager` commit,
+  after ensuring its filers and under the lock, reads it for every focused
+  dir of every project in the next state (`refresh_ignored_of`, through
+  `FilerManager::ignored_on_wire`, which also marks each filer on or off the
+  wire) — lock order: the projects mutex, the filer map (read), each
+  filer's rule (read), as `focused_files` takes them. A project whose set
+  moved is a change (`OpenProject::ignored` is in the state's equality):
+  stamped and broadcast as `update`, even by a commit its caller meant as
+  a no-op. A filer whose set changes on its own signals from its event
+  loop, between whole steps — the rule's version or the resync count moved
+  since the last signal — through a coalescing flag (`RescanSignal`, as
+  the overflow rescan uses) to a publisher task per git filer
+  (`publish_ignored_changes`), which calls `FilerConfig::on_ignored_change`
+  at once and then at most every `IGNORED_REFRESH_INTERVAL` (1 s): live
+  vetting changes the set a file at a time, and each refresh resends every
+  changed project's whole set. The hook (`FilerManager`'s, holding the app
+  weakly) spawns `ProjectManager::refresh_ignored` — the open projects
+  committed unchanged — on a task of its own, since a commit may stop the
+  filer whose publisher called it (aborting that task) and must run to
+  completion; the filer never awaits the projects mutex. **The flood
+  guard**: a re-prune that would queue more than `REPRUNE_BROADCAST_MAX`
+  (1024) `filer_change`s on a filer on the wire queues none, drops those
+  paths' pending changes (a stale one after the client's pull would undo
+  it), and bumps the resync count, which the loop then signals; each
+  client sees the count move and pulls the dir (`repo_files`), reading the
+  index the re-prune left. 1024 changes are about 350 KiB per socket —
+  about one `repo_files` reply of a repo of a few thousand files — far
+  under the 32 MiB socket budget (about 95,000). Off the wire (a permanent
+  filer alone) nobody would pull, so every change is sent.
 - **Filer watches** — each filer adds one non-recursive notify watch per
   directory it indexes, from its own walk (`filer::watches::DirWatches`), so ignored,
   symlinked, and non-UTF-8 directories and the app dir get none — the watch
@@ -1201,6 +1241,11 @@ commands):
   no newer state has reached it, would take as the truth (an empty listing
   pruning a repo's files). Reading under the lock costs a clone of the
   reply's indexes while other changes wait, as `repo_files` already does.
+- **Ignored paths in the commit**: each commit reads every focused dir's
+  ignored set from its filer under the lock (./architecture.md § Projects
+  → Ignored paths on the wire), so a set that moved stamps a rev like any
+  change and a reply carries the set its rev names; the reply's project is
+  read back from the committed state, not the caller's copy.
 - **`parking_lot::RwLock`** for short synchronous sections (the published
   projects snapshot, `ScopedFs` roots); no poisoning. The async managers (filer index,
   PTY terminals, providers) use `tokio::sync::RwLock` — scope sync guards

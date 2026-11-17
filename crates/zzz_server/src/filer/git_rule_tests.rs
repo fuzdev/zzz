@@ -6,7 +6,8 @@
 use super::core::{Filer, FilerConfig};
 use super::dir_prefix;
 use super::event_loop::{
-    PendingReprune, REPRUNE_MAX_FAILURES, REPRUNE_SETTLE, REPRUNE_SETTLE_MAX_WAIT, VET_MAX_PATHS,
+    PendingReprune, REPRUNE_MAX_FAILURES, REPRUNE_SETTLE, REPRUNE_SETTLE_MAX_WAIT, RepruneTrigger,
+    VET_MAX_PATHS,
 };
 use super::ignore::GitRoot;
 use super::test_support::{
@@ -436,11 +437,11 @@ async fn a_degraded_poll_after_a_failed_re_prune_re_prunes() {
     assert!(git.calls(GitCall::LsFiles) > listed + 1, "re-pruned again");
 }
 
-/// A git failing for every load rescan falls back to fixed names once
-/// [`REPRUNE_MAX_FAILURES`] re-prunes have failed: each load is a trigger
-/// of its own.
+/// A git failing for every load rescan keeps retrying on git's rule: each
+/// load re-prunes, but a retry's failure doesn't count toward
+/// [`REPRUNE_MAX_FAILURES`] — only re-prunes a change on disk asked for do.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn load_rescans_on_a_failing_git_fall_back_to_fixed_names() {
+async fn load_rescans_on_a_failing_git_retry_without_falling_back() {
     let tmp = checkout(&[
         (".gitignore", "venv/\n"),
         ("venv/lib/a.py", "a"),
@@ -449,25 +450,59 @@ async fn load_rescans_on_a_failing_git_fall_back_to_fixed_names() {
     let git = HookedGit::new();
     let filer = start(&tmp, config_with_git(&tmp, Arc::clone(&git.git))).await;
     let listed = git.calls(GitCall::LsFiles);
-    for n in 1..=REPRUNE_MAX_FAILURES {
+    let loads = REPRUNE_MAX_FAILURES + 1;
+    for n in 1..=loads + 1 {
         git.hook(GitCall::LsFiles, listed + n, "exit 1");
     }
     tmp.write(".gitignore", "venv/\n# one write\n");
     git.wait_for_calls(GitCall::LsFiles, listed + 1).await;
-    for n in 2..=REPRUNE_MAX_FAILURES {
-        assert!(filer.ignored_paths().is_some(), "fell back before load {n}");
+    for n in 1..=loads {
         rescan(&filer).await;
         assert_eq!(
             git.calls(GitCall::LsFiles),
-            listed + n,
+            listed + 1 + n,
             "load {n} re-prunes"
         );
+        assert!(filer.ignored_paths().is_some(), "fell back at load {n}");
     }
-    assert!(filer.ignored_paths().is_none(), "fell back");
-    wait_for_keys(&filer, &tmp.keys(&[".gitignore", "a.txt", "venv/lib/a.py"])).await;
-    // a load on fixed names is a rescan
-    rescan(&filer).await;
-    assert_eq!(git.calls(GitCall::LsFiles), listed + REPRUNE_MAX_FAILURES);
+    wait_for_keys(&filer, &tmp.keys(&[".gitignore", "a.txt"])).await;
+}
+
+/// [`REPRUNE_MAX_FAILURES`] re-prunes a change on disk asked for failing in
+/// a row fall back to fixed names, whatever failing retries come between.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rule_changes_on_a_failing_git_fall_back_to_fixed_names() {
+    let tmp = checkout(&[
+        (".gitignore", "venv/\n"),
+        ("venv/lib/a.py", "a"),
+        ("a.txt", "a"),
+    ]);
+    let git = HookedGit::new();
+    let mut state = git_state(&tmp, Arc::clone(&git.git)).await;
+    let listed = git.calls(GitCall::LsFiles);
+    let failing = REPRUNE_MAX_FAILURES * 2;
+    for n in 1..=failing {
+        git.hook(GitCall::LsFiles, listed + n, "exit 1");
+    }
+    for n in 1..=REPRUNE_MAX_FAILURES {
+        assert!(state.git.is_some(), "fell back before change {n}");
+        state.reprune(false, RepruneTrigger::Change).await;
+        if n < REPRUNE_MAX_FAILURES {
+            // a failing retry between changes counts for nothing
+            assert!(state.reprune_if_failing().await, "retried");
+            assert!(state.git.is_some(), "a retry's failure counted");
+        }
+    }
+    assert_eq!(
+        git.calls(GitCall::LsFiles),
+        listed + REPRUNE_MAX_FAILURES * 2 - 1
+    );
+    assert!(state.git.is_none(), "fell back");
+    assert_eq!(
+        indexed(&state).await,
+        tmp.keys(&[".gitignore", "a.txt", "venv/lib/a.py"])
+    );
+    assert!(!state.reprune_if_failing().await, "fixed names don't retry");
 }
 
 /// Bursts dropped while a re-prune settles still drop the watches their
@@ -614,7 +649,7 @@ async fn a_failed_re_prune_leaves_what_it_couldnt_vet_unindexed() {
     tmp.write(".gitignore", "*.log\n*.tmp\n");
     tmp.write("x.tmp", "x");
     tmp.write("y.txt", "y");
-    state.reprune(false).await;
+    state.reprune(false, RepruneTrigger::Change).await;
     assert_eq!(
         git.calls(GitCall::CheckIgnore),
         checked + 1,
@@ -1053,4 +1088,219 @@ async fn a_deeper_file_after_its_ancestor_became_a_repo_is_not_indexed() {
         std::fs::remove_dir(tmp.path("plain/.git")).unwrap();
         rescan(&filer).await;
     }
+}
+
+// -- The ignored set on the wire ----------------------------------------------
+
+/// A running git filer on `tmp` whose broadcasts and ignored-change calls
+/// are recorded: the paths of each `filer_change`, and a call count.
+async fn start_recorded(
+    tmp: &TempDir,
+) -> (
+    Filer,
+    Arc<parking_lot::Mutex<Vec<String>>>,
+    Arc<std::sync::atomic::AtomicUsize>,
+) {
+    let broadcasts: Arc<parking_lot::Mutex<Vec<String>>> = Arc::default();
+    let calls: Arc<std::sync::atomic::AtomicUsize> = Arc::default();
+    let sink = Arc::clone(&broadcasts);
+    let counter = Arc::clone(&calls);
+    let config = FilerConfig {
+        on_ignored_change: Some(Arc::new(move || {
+            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        })),
+        ..config_with_git(tmp, test_git())
+    };
+    let filer = super::core::start_filer(
+        &tmp.root(),
+        Arc::new(move |message: &str| {
+            let message: serde_json::Value = serde_json::from_str(message).unwrap();
+            let path = message["params"]["change"]["path"].as_str().unwrap();
+            sink.lock().push(path.to_owned());
+        }),
+        config,
+    )
+    .await
+    .unwrap();
+    (filer, broadcasts, calls)
+}
+
+/// A checkout with `n` files in an ignored `big/` and one plain file.
+fn big_ignored_checkout(n: usize) -> TempDir {
+    let tmp = checkout(&[(".gitignore", "big/\n"), ("a.txt", "a")]);
+    std::fs::create_dir_all(tmp.path("big")).unwrap();
+    for i in 0..n {
+        std::fs::write(tmp.path(&format!("big/{i}.js")), "x").unwrap();
+    }
+    tmp
+}
+
+/// Un-ignoring a big tree on the wire sends no `filer_change` per file: it
+/// bumps the resync count, and the filer asks for a refresh once its index
+/// holds the whole tree.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_big_re_prune_on_the_wire_resyncs_instead_of_broadcasting() {
+    let n = super::REPRUNE_BROADCAST_MAX + 10;
+    let tmp = big_ignored_checkout(n);
+    let (filer, broadcasts, calls) = start_recorded(&tmp).await;
+    filer.set_on_wire(true);
+    let root = tmp.root();
+    let before = filer.ignored_on_wire(&root).unwrap();
+    assert_eq!(before.resyncs, 0);
+    assert!(before.paths.contains(&"big/".to_owned()), "{before:?}");
+
+    tmp.write(".gitignore", "");
+    wait_until(&filer, "the resync", |filer| {
+        filer.ignored_on_wire(&root).unwrap().resyncs == 1
+    })
+    .await;
+    // the refresh is asked for after the re-prune, so its pull reads all
+    wait_until(&filer, "the refresh", |_| {
+        calls.load(std::sync::atomic::Ordering::SeqCst) >= 1
+    })
+    .await;
+    assert_eq!(filer.files.read().await.len(), n + 2);
+    let after = filer.ignored_on_wire(&root).unwrap();
+    assert!(!after.paths.contains(&"big/".to_owned()), "{after:?}");
+    // past the debounce: nothing under `big/` went out
+    tokio::time::sleep(Duration::from_millis(700)).await;
+    let big = tmp.key("big/");
+    assert!(
+        !broadcasts.lock().iter().any(|path| path.starts_with(&big)),
+        "a per-file change went out"
+    );
+}
+
+/// Off the wire (a permanent filer alone) nobody would pull, so the same
+/// re-prune sends every change; and one under the threshold sends them
+/// either way.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_re_prune_off_the_wire_or_under_the_threshold_broadcasts_each_change() {
+    let n = super::REPRUNE_BROADCAST_MAX + 10;
+    for (files, on_wire) in [(n, false), (20, true)] {
+        let tmp = big_ignored_checkout(files);
+        let (filer, broadcasts, _) = start_recorded(&tmp).await;
+        filer.set_on_wire(on_wire);
+        tmp.write(".gitignore", "");
+        let big = tmp.key("big/");
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while broadcasts
+            .lock()
+            .iter()
+            .filter(|path| path.starts_with(&big))
+            .count()
+            < files
+        {
+            assert!(
+                Instant::now() < deadline,
+                "{files} {on_wire}: not every change went out"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(filer.ignored_on_wire(&tmp.root()).unwrap().resyncs, 0);
+    }
+}
+
+/// The publisher calls at once, then at most once per interval however
+/// often it's signalled, and keeps a signal raised meanwhile.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ignored_changes_are_published_at_most_once_per_interval() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let signal = Arc::new(super::core::RescanSignal::default());
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&calls);
+    let interval = Duration::from_millis(600);
+    let task = tokio::spawn(super::core::publish_ignored_changes(
+        Arc::clone(&signal),
+        Arc::new(move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+        }),
+        interval,
+    ));
+    let count = || calls.load(Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(count(), 0, "nothing signalled");
+    let started = Instant::now();
+    for _ in 0..5 {
+        signal.request();
+    }
+    while count() == 0 {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    // a burst inside the interval waits it out
+    for _ in 0..5 {
+        signal.request();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    if started.elapsed() < interval {
+        assert_eq!(count(), 1, "held for the interval");
+    }
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while count() < 2 {
+        assert!(Instant::now() < deadline, "the burst was dropped");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(started.elapsed() >= interval, "the second came early");
+    tokio::time::sleep(interval * 2).await;
+    assert_eq!(count(), 2, "the burst, once; nothing more signalled");
+    task.abort();
+}
+
+/// a re-prune that resyncs with the rule unchanged (an overflow
+/// over a big unseen tree) still asks for a refresh — the count alone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_resync_alone_asks_for_a_refresh() {
+    let tmp = checkout(&[(".gitignore", "*.log\n"), ("a.txt", "a")]);
+    let calls: Arc<std::sync::atomic::AtomicUsize> = Arc::default();
+    let counter = Arc::clone(&calls);
+    let config = FilerConfig {
+        on_ignored_change: Some(Arc::new(move || {
+            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        })),
+        no_watcher: true,
+        degraded_rescan_interval: Duration::from_secs(3600),
+        ..config_with_git(&tmp, test_git())
+    };
+    let filer = super::core::start_filer(&tmp.root(), Arc::new(|_: &str| {}), config)
+        .await
+        .unwrap();
+    filer.set_on_wire(true);
+    let version = filer.ignored_version();
+    std::fs::create_dir_all(tmp.path("new")).unwrap();
+    for i in 0..super::REPRUNE_BROADCAST_MAX + 10 {
+        std::fs::write(tmp.path(&format!("new/{i}.js")), "x").unwrap();
+    }
+    filer.signal.request();
+    let root = tmp.root();
+    wait_until(&filer, "the resync", |filer| {
+        filer.ignored_on_wire(&root).unwrap().resyncs == 1
+    })
+    .await;
+    assert_eq!(filer.ignored_version(), version, "the rule didn't move");
+    wait_until(&filer, "the refresh", |_| {
+        calls.load(std::sync::atomic::Ordering::SeqCst) >= 1
+    })
+    .await;
+}
+
+/// A rule change pending when a load or poll retries is taken by the retry
+/// (`FilerState::reprune_if_failing`) and counts as the change it is.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_rule_change_a_retry_takes_counts() {
+    let tmp = checkout(&[(".gitignore", "venv/\n"), ("a.txt", "a")]);
+    let git = HookedGit::new();
+    let mut state = git_state(&tmp, Arc::clone(&git.git)).await;
+    let listed = git.calls(GitCall::LsFiles);
+    for n in 1..=REPRUNE_MAX_FAILURES {
+        git.hook(GitCall::LsFiles, listed + n, "exit 1");
+    }
+    for _ in 1..REPRUNE_MAX_FAILURES {
+        state.reprune(false, RepruneTrigger::Change).await;
+    }
+    assert!(state.git.is_some());
+    // a `.gitignore` edit settling, not yet due, when a load retries
+    state.reprune = Some(PendingReprune::settled(None, Instant::now()));
+    assert!(state.reprune_if_failing().await);
+    assert!(state.reprune.is_none(), "taken");
+    assert!(state.git.is_none(), "the taken rule change counted");
 }

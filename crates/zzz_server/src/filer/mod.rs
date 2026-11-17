@@ -40,6 +40,13 @@
 //!   were lost. `.git`, `.zzz`, the credential directories, and the
 //!   staging files are ignored under both, and a git root indexes no repo
 //!   of its own below it (nested repos, populated submodules).
+//! - **On the wire.** A git root's set goes out on each open project that
+//!   focuses it (`IgnoredPaths`, read by every `ProjectManager` commit). When
+//!   it changes, the event loop signals a publisher that asks the projects
+//!   for a refresh at most once a second ([`FilerIgnoredChange`]); a
+//!   re-prune past [`REPRUNE_BROADCAST_MAX`] changes on the wire sends none
+//!   and bumps the set's resync count instead, so each client pulls the
+//!   dir once.
 //! - **Degraded mode.** When the OS runs out of watches (inotify's
 //!   `max_user_watches`), or no watcher can be created at all, the index still
 //!   comes from the scan; the directories left without a watch are rescanned
@@ -90,6 +97,8 @@ use serde::Serialize;
 use std::collections::BTreeSet;
 use std::ops::Bound;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::time::{Duration, SystemTime};
 
 mod core;
@@ -104,7 +113,9 @@ mod test_support;
 mod walk;
 mod watches;
 
-pub use self::core::{Filer, FilerBroadcast, FilerConfig, FilerDepth, start_filer};
+pub use self::core::{
+    Filer, FilerBroadcast, FilerConfig, FilerDepth, FilerIgnoredChange, start_filer,
+};
 pub(crate) use self::index::system_time_to_ms;
 pub use self::manager::{FilerEntry, FilerLifetime, FilerManager, FilerSnapshot};
 
@@ -216,6 +227,67 @@ impl SerializableDisknode {
         make_disknode(id.to_owned(), "/w/", size, mtime, mtime, None)
     }
 }
+
+/// What git ignores under a filer's root, as an open project's `ignored`
+/// carries it for each focused dir on git's rule — twin of
+/// `ProjectIgnoredJson`.
+///
+/// `paths` is shared (`Arc`), so cloning a project's state — every commit
+/// does — copies no path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IgnoredPaths {
+    /// Relative to the root, sorted, each dir with a trailing `/`
+    /// (`IgnoredSet::relative_sorted`).
+    pub paths: Arc<Vec<String>>,
+    /// How many of the root's re-prunes sent no `filer_change` per file
+    /// (more than [`REPRUNE_BROADCAST_MAX`] changes) — a client that sees it
+    /// move pulls the dir's files whole (`repo_files`) instead.
+    pub resyncs: u64,
+}
+
+impl Serialize for IgnoredPaths {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("IgnoredPaths", 2)?;
+        state.serialize_field("paths", &*self.paths)?;
+        state.serialize_field("resyncs", &self.resyncs)?;
+        state.end()
+    }
+}
+
+/// What a filer shares with its publisher about its ignored set on the
+/// wire: whether it's on it, and how many re-prunes it resynced.
+#[derive(Debug, Default)]
+struct IgnoredWire {
+    /// Whether an open project carries this filer's set — set by every
+    /// `ProjectManager` commit ([`FilerManager::ignored_on_wire`]). A
+    /// re-prune holds back its per-file changes only while it is: off the
+    /// wire (a permanent filer alone), no client would learn to pull.
+    on_wire: AtomicBool,
+    /// [`IgnoredPaths::resyncs`].
+    resyncs: AtomicU64,
+}
+
+/// Most `filer_change` notifications one re-prune of a filer on the wire
+/// sends per file; past it, it sends none and bumps [`IgnoredPaths::resyncs`]
+/// instead, so each client pulls the dir once.
+///
+/// A `filer_change` is about 350 bytes, so this many is about 350 KiB to
+/// every socket and as many cell updates on every client — about what one
+/// `repo_files` reply of a repo of a few thousand files costs, so past it a
+/// pull is the cheaper of the two. It also sits far below where a burst
+/// threatens a socket: `WS_OUTBOUND_QUEUE_BYTES` (32 MiB) holds about 95,000
+/// of them, which un-ignoring one `node_modules/` can pass. Matches
+/// `VET_MAX_PATHS`, the point a burst stops being vetted path by path.
+const REPRUNE_BROADCAST_MAX: usize = 1024;
+
+/// Shortest interval between two refreshes a filer asks of the open
+/// projects when its ignored set changes ([`FilerIgnoredChange`]). Live
+/// vetting changes the set one file at a time, often in bursts (an editor's
+/// swap files, a build's logs), and each refresh resends every changed
+/// project's whole set to every client: at most one a second keeps that
+/// bounded, at a second's lag on what the wire says is ignored.
+const IGNORED_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Whether every directory a filer indexes has a watch — returned by
 /// `project_open` as `watch_status`.

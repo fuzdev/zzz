@@ -162,8 +162,35 @@ impl IgnoredSet {
 
     /// The ignored paths, dirs and files alike, sorted — the submodules
     /// aren't git's ignored paths, so they're left out.
+    #[cfg(test)]
     pub(super) fn sorted(&self) -> Vec<String> {
         let mut paths: Vec<String> = self.dirs.iter().chain(&self.files).cloned().collect();
+        paths.sort_unstable();
+        paths
+    }
+
+    /// The ignored paths as the wire carries them: relative to `source_dir`
+    /// (the root, [`dir_prefix`](super::dir_prefix) form), sorted, each dir
+    /// with a trailing `/` so a client can tell a pruned dir from a file
+    /// skipped alone, and the root itself, ignored whole, as `./`. The
+    /// submodules are left out — they aren't git's ignored paths.
+    pub(super) fn relative_sorted(&self, source_dir: &str) -> Vec<String> {
+        let root = source_dir.trim_end_matches('/');
+        let relative = |path: &String| {
+            if path == root {
+                return Some(String::new());
+            }
+            path.strip_prefix(source_dir).map(str::to_owned)
+        };
+        let dirs = self.dirs.iter().filter_map(relative).map(|mut dir| {
+            if dir.is_empty() {
+                dir.push('.');
+            }
+            dir.push('/');
+            dir
+        });
+        let files = self.files.iter().filter_map(relative);
+        let mut paths: Vec<String> = dirs.chain(files).collect();
         paths.sort_unstable();
         paths
     }
@@ -338,6 +365,13 @@ impl SharedRule {
     /// How many times the rule has changed.
     pub(super) fn version(&self) -> u64 {
         self.version.load(Ordering::Acquire)
+    }
+
+    /// The rule and its version, read together: every change bumps the
+    /// version under the write lock, so the two always agree.
+    pub(super) fn get_versioned(&self) -> (Arc<IgnoreRule>, u64) {
+        let current = self.current.read();
+        (Arc::clone(&current), self.version.load(Ordering::Acquire))
     }
 
     /// Replace the rule, bumping the version when it differs.
@@ -758,6 +792,22 @@ mod tests {
             0,
             "fixed names hold no set"
         );
+    }
+
+    #[test]
+    fn the_wire_form_is_relative_with_dirs_marked_and_no_submodules() {
+        let mut set = IgnoredSet::of(&["/w/build", "/w/src/out"], &["/w/a.log", "/w/src/x.local"]);
+        set.insert_submodule("/w/vendor/sub".to_owned());
+        assert_eq!(
+            set.relative_sorted("/w/"),
+            ["a.log", "build/", "src/out/", "src/x.local"]
+        );
+        // the root ignored whole
+        assert_eq!(IgnoredSet::of(&["/w"], &[]).relative_sorted("/w/"), ["./"]);
+        let shared = SharedRule::new(IgnoreRule::Git(set));
+        let (rule, version) = shared.get_versioned();
+        assert_eq!(version, 0);
+        assert!(rule.is_git());
     }
 
     // -- Filers on git roots --------------------------------------------------

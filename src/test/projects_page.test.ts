@@ -49,6 +49,7 @@ const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectI
 		}
 	],
 	focused,
+	ignored: {},
 	rev
 });
 
@@ -165,6 +166,7 @@ const fallback_info = (fallback: ProjectInfoJson['fallback'], rev = 1): ProjectI
 	fallback,
 	entries: [],
 	focused: [LOOSE],
+	ignored: {},
 	rev
 });
 

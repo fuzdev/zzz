@@ -95,6 +95,7 @@ const WS_INFO: ProjectInfoJson = {
 	fallback: null,
 	entries: [],
 	focused: [WS_DIR],
+	ignored: {},
 	rev: 1
 };
 
@@ -406,6 +407,7 @@ describe('a registry project', () => {
 			{ key: 'site', kind: 'repo', dir: SITE, state: 'present' }
 		],
 		focused,
+		ignored: {},
 		rev
 	});
 	const node = (path: string, mtime = 1): SerializableDisknode => ({

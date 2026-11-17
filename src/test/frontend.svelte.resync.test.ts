@@ -52,6 +52,7 @@ const create_project_info = (root: DiskfileDirectoryPath, rev = 1): ProjectInfoJ
 	fallback: null,
 	entries: [],
 	focused: [root],
+	ignored: {},
 	rev
 });
 

@@ -235,6 +235,13 @@ mod tests {
                             registry_path: "/w/repos.toml".to_owned(),
                             reason: "registry_invalid",
                         }),
+                        ignored: std::collections::BTreeMap::from([(
+                            "/w/".to_owned(),
+                            crate::filer::IgnoredPaths {
+                                paths: Arc::new(vec!["build/".to_owned(), "a.log".to_owned()]),
+                                resyncs: 2,
+                            },
+                        )]),
                         rev: 7,
                     }
                     .to_info(),
@@ -272,6 +279,7 @@ mod tests {
                         "reason": "registry_invalid",
                     },
                     "focused": ["/w/"],
+                    "ignored": {"/w/": {"paths": ["build/", "a.log"], "resyncs": 2}},
                     "rev": 7,
                 }],
                 "projects_rev": 9,

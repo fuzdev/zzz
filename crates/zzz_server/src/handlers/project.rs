@@ -18,6 +18,7 @@
 //! its subdirectories are its repos, and an unfocused one isn't indexed at
 //! all.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -422,6 +423,8 @@ fn to_open_project(
         opened_at,
         kind,
         fallback,
+        // the commit reads them from the filers
+        ignored: BTreeMap::new(),
         rev: 0,
     })
 }
@@ -935,6 +938,7 @@ purpose = "a reference"
                 ],
                 "fallback": null,
                 "focused": ["/w/app/"],
+                "ignored": {},
                 "rev": 0,
             })
         );
@@ -1182,6 +1186,7 @@ purpose = "a reference"
             },
             rev: 0,
             fallback: None,
+            ignored: BTreeMap::new(),
         }
     }
 

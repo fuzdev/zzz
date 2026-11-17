@@ -1,13 +1,13 @@
 //! `FilerManager`: the filers of a daemon, their lifetimes and depths.
 
-use super::core::{Filer, FilerBroadcast, FilerConfig, FilerDepth, start_filer};
+use super::core::{
+    Filer, FilerBroadcast, FilerConfig, FilerDepth, FilerIgnoredChange, start_filer,
+};
 use super::index::FileIndex;
-use super::{SerializableDisknode, WatchStatus};
+use super::{IgnoredPaths, SerializableDisknode, WatchStatus};
 use crate::handlers::App;
 use parking_lot::Mutex;
-#[cfg(test)]
-use std::collections::BTreeMap;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -67,12 +67,36 @@ fn app_broadcast(app: &Arc<App>) -> FilerBroadcast {
     })
 }
 
+/// A [`FilerIgnoredChange`] that refreshes the open projects
+/// (`ProjectManager::refresh_ignored`) on a task of its own: the refresh
+/// takes the projects lock, and a commit may stop the very filer whose
+/// publisher calls this, aborting it — a commit must run to completion.
+/// Holds the app weakly, as [`app_broadcast`] does.
+fn app_ignored_change(app: &Arc<App>) -> FilerIgnoredChange {
+    let app: Weak<App> = Arc::downgrade(app);
+    Arc::new(move || {
+        let Some(app) = app.upgrade() else {
+            return;
+        };
+        tokio::spawn(async move {
+            if let Err(e) = app.projects.refresh_ignored(&app).await {
+                tracing::warn!(
+                    error = %fuz_sys::cli::format_error_chain(&e),
+                    "failed to republish a filer's ignored paths"
+                );
+            }
+        });
+    })
+}
+
 /// `config` with the app's git when the boot check found it usable, so a
-/// checkout's filer takes git's ignore rule.
-fn with_app_git(mut config: FilerConfig, app: &App) -> FilerConfig {
+/// checkout's filer takes git's ignore rule, and the hook that republishes
+/// its ignored set.
+fn with_app(mut config: FilerConfig, app: &Arc<App>) -> FilerConfig {
     if app.git_usability.is_usable() {
         config.git = Some(Arc::clone(&app.git));
     }
+    config.on_ignored_change = Some(app_ignored_change(app));
     config
 }
 
@@ -113,7 +137,7 @@ impl FilerManager {
         config: FilerConfig,
         lifetime: FilerLifetime,
     ) -> io::Result<bool> {
-        let config = with_app_git(config, &app);
+        let config = with_app(config, &app);
         self.start_with(path, app_broadcast(&app), config, lifetime)
             .await
     }
@@ -214,7 +238,7 @@ impl FilerManager {
         app: Arc<App>,
         config: FilerConfig,
     ) -> io::Result<()> {
-        let config = with_app_git(config, &app);
+        let config = with_app(config, &app);
         self.replace_with(path, app_broadcast(&app), config).await
     }
 
@@ -346,6 +370,29 @@ impl FilerManager {
             }
         }))
         .await;
+    }
+
+    /// What each of `dirs` (trailing `/`) carries on the wire as ignored
+    /// ([`Filer::ignored_on_wire`]): one entry per dir whose filer indexes
+    /// its whole tree on git's rule — none for a dir on fixed names, a
+    /// top-level filer, or no filer. Every filer is marked on or off the
+    /// wire by whether its dir is among `dirs` ([`Filer::set_on_wire`]), all
+    /// under one read of the filer map.
+    ///
+    /// Lock order: the filer map (read), then each filer's rule (read) —
+    /// called by `ProjectManager`'s commit under the projects lock, as
+    /// `files_for` is; no filer lock is held across an await.
+    pub async fn ignored_on_wire(&self, dirs: &BTreeSet<String>) -> BTreeMap<String, IgnoredPaths> {
+        let filers = self.filers.read().await;
+        let mut ignored = BTreeMap::new();
+        for (root, entry) in filers.iter() {
+            let wanted = entry.depth == FilerDepth::Tree && dirs.contains(root);
+            entry.filer.set_on_wire(wanted);
+            if wanted && let Some(paths) = entry.filer.ignored_on_wire(root) {
+                ignored.insert(root.clone(), paths);
+            }
+        }
+        ignored
     }
 
     /// The indexed files of the filer watching exactly `path` (trailing
@@ -612,5 +659,52 @@ mod tests {
         let snapshot = manager.snapshot(&kept).await;
         assert_eq!(snapshot.roots, vec![a.root()]);
         assert_eq!(snapshot.files.len(), 1);
+    }
+
+    /// each filer is on the wire exactly while a focused dir names
+    /// it and it indexes its tree — a permanent one too, while focused.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn ignored_on_wire_marks_each_filer() {
+        let (a, b, c) = (TempDir::new(), TempDir::new(), TempDir::new());
+        let manager = FilerManager::new();
+        let sink = || -> FilerBroadcast { Arc::new(|_: &str| {}) };
+        let (ra, rb, rc) = (a.root(), b.root(), c.root());
+        for (root, config, lifetime) in [
+            (
+                &ra,
+                FilerConfig::tree(&ra, "/nowhere/"),
+                FilerLifetime::Project,
+            ),
+            (
+                &rb,
+                FilerConfig::tree(&rb, "/nowhere/"),
+                FilerLifetime::Permanent,
+            ),
+            (
+                &rc,
+                FilerConfig::top_level(&rc, "/nowhere/"),
+                FilerLifetime::Project,
+            ),
+        ] {
+            manager
+                .start_with(root, sink(), config, lifetime)
+                .await
+                .unwrap();
+        }
+        let marks = |manager: &FilerManager| {
+            let filers = manager.filers.try_read().unwrap();
+            [&ra, &rb, &rc].map(|r| filers[r.as_str()].filer.is_on_wire())
+        };
+        assert!(
+            manager
+                .ignored_on_wire(&BTreeSet::from([ra.clone(), rc.clone()]))
+                .await
+                .is_empty()
+        );
+        assert_eq!(marks(&manager), [true, false, false]);
+        manager.ignored_on_wire(&BTreeSet::from([rb.clone()])).await;
+        assert_eq!(marks(&manager), [false, true, false]);
+        manager.ignored_on_wire(&BTreeSet::new()).await;
+        assert_eq!(marks(&manager), [false, false, false]);
     }
 }

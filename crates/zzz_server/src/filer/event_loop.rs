@@ -15,7 +15,7 @@ use super::watches::{
 };
 use super::{
     ChangeType, Clock, DEGRADED_RESCAN_COST_FACTOR, DiskfileChange, EVENT_CHANNEL_CAPACITY,
-    FilerChangeParams, SerializableDisknode, dir_prefix,
+    FilerChangeParams, IgnoredWire, REPRUNE_BROADCAST_MAX, SerializableDisknode, dir_prefix,
 };
 use parking_lot::Mutex;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -23,9 +23,13 @@ use std::ops::Bound;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
 use std::time::{Duration, SystemTime};
 use tokio::sync::{RwLock, mpsc, oneshot};
 use tokio::time::Instant;
+
+/// A change a sync found: the path, how it changed, and its node.
+type Change = (String, ChangeType, SerializableDisknode);
 
 // -- Debouncing ---------------------------------------------------------------
 
@@ -105,17 +109,41 @@ pub(super) const REPRUNE_SETTLE: Duration = Duration::from_millis(400);
 /// rebase, a tool regenerating it) still re-prunes.
 pub(super) const REPRUNE_SETTLE_MAX_WAIT: Duration = Duration::from_secs(5);
 
-/// Re-prunes in a row whose listing fails (a timeout, a git error) before a
-/// git root falls back to fixed names for good. One failure keeps the last
-/// set and waits for the next trigger — a failed re-prune never retries
-/// itself, so each failure is a separate trigger's (a rule edit, an
-/// overflow, and while one has failed, each `session_load` rescan or
-/// degraded poll): a cold cache on a large tree, or a load spike, can
-/// outlast `LIST_TIMEOUT` once. Three separate
-/// triggers failing in a row is a git that can't answer for this root (a
-/// FIFO `.gitignore` blocks every listing), and a set that can't be
+/// Re-prunes in a row that a change on disk asked for — a rule edit, lost
+/// events, new files git couldn't vet, a set grown past
+/// [`LIVE_ADDED_MAX`] — whose listing fails (a timeout, a git error)
+/// before a git root falls back to fixed names for good. One failure keeps
+/// the last set and waits for the next trigger — a failed re-prune never
+/// retries itself, so each failure is a separate trigger's: a cold cache on
+/// a large tree, or a load spike, can outlast `LIST_TIMEOUT` once. Three
+/// separate changes failing in a row is a git that can't answer for this
+/// root (a FIFO `.gitignore` blocks every listing), and a set that can't be
 /// refreshed drifts from git's answer silently.
+///
+/// The retries while one has failed — each `session_load` rescan and
+/// degraded poll ([`FilerState::reprune_if_failing`]) — don't count: they
+/// come at the user's and the poll's pace, not the disk's, and a reload or
+/// two shouldn't give up git's rule. So a git that never answers costs a
+/// listing's timeout per degraded poll and per load until a third change
+/// fails too — on a quiet degraded tree, possibly never. Each load waits
+/// out that timeout (`LIST_TIMEOUT`, 5 s) with the filer's loop blocked;
+/// the polls are bounded by `DEGRADED_RESCAN_COST_FACTOR`, which spaces
+/// them by ten times the poll's own duration — about 50 s apart, roughly a
+/// 10% duty cycle.
 pub(super) const REPRUNE_MAX_FAILURES: u32 = 3;
+
+/// What a re-prune answers ([`FilerState::reprune`]) — whether its failure
+/// counts toward [`REPRUNE_MAX_FAILURES`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RepruneTrigger {
+    /// A re-prune a change on disk asked for (a rule edit, lost events, new
+    /// files git couldn't vet, a set grown past its budget): a failure
+    /// counts.
+    Change,
+    /// A retry after a failure, by a `session_load` rescan or a degraded
+    /// poll: a failure doesn't count.
+    Retry,
+}
 
 /// A git root's live ignore state ([`FilerState::git`]).
 pub(super) struct GitIgnore {
@@ -125,7 +153,8 @@ pub(super) struct GitIgnore {
     pub(super) exclude: PathBuf,
     /// Paths live vetting added to the set since the last prune.
     pub(super) live_added: usize,
-    /// Re-prunes in a row whose listing failed ([`REPRUNE_MAX_FAILURES`]).
+    /// Re-prunes in a row a change on disk asked for whose listing failed
+    /// ([`REPRUNE_MAX_FAILURES`]); nonzero while the last re-prune failed.
     pub(super) failures: u32,
 }
 
@@ -198,6 +227,8 @@ pub(super) struct FilerState {
     pub(super) ignored_dirs: Vec<PathBuf>,
     /// What the filer ignores; the event loop is its only writer.
     pub(super) rule: SharedRule,
+    /// Whether the set is on the wire, and the resync count the loop bumps.
+    pub(super) wire: Arc<IgnoredWire>,
     /// A git root's handle on git — `None` under fixed names, for good once
     /// git can't answer any more.
     pub(super) git: Option<GitIgnore>,
@@ -362,6 +393,19 @@ impl FilerState {
     /// except that a dir this burst listed the ignored paths of is listed
     /// again instead ([`Vetting::Relist`]).
     async fn sync_subtree(&mut self, dir: &str, reset_watches: bool, vetting: Vetting) {
+        for (path, change, node) in self.sync_changes(dir, reset_watches, vetting).await {
+            self.queue(path, change, node);
+        }
+    }
+
+    /// [`Self::sync_subtree`] up to the changes it applied to the index,
+    /// which it returns rather than queues.
+    async fn sync_changes(
+        &mut self,
+        dir: &str,
+        reset_watches: bool,
+        vetting: Vetting,
+    ) -> Vec<Change> {
         let prefix = dir_prefix(dir);
         let scanned = scan_directory(
             &prefix,
@@ -377,7 +421,7 @@ impl FilerState {
         .await;
         let (mut fresh, kept) = match scanned {
             Ok(scanned) => scanned,
-            Err(e) if is_transient_list_error(&e) => return,
+            Err(e) if is_transient_list_error(&e) => return vec![],
             Err(_) => (ScanIndex::new(), vec![]),
         };
         let vetting = match (self.git.is_some(), self.vetted.remove(&prefix)) {
@@ -416,9 +460,7 @@ impl FilerState {
                 self.request_settled_reprune();
             }
         }
-        for (path, change, node) in changes {
-            self.queue(path, change, node);
-        }
+        changes
     }
 
     /// Reconcile the whole index with the disk. `reset_watches` rebuilds
@@ -818,7 +860,8 @@ impl FilerState {
     pub(super) async fn run_pending_reprune(&mut self, now: Instant) {
         if let Some(pending) = self.reprune.filter(|pending| pending.due <= now) {
             self.reprune = None;
-            self.reprune(pending.reset_watches).await;
+            self.reprune(pending.reset_watches, RepruneTrigger::Change)
+                .await;
         }
     }
 
@@ -835,15 +878,16 @@ impl FilerState {
     ///
     /// The root no longer the checkout it was (a symlink swapped in, its
     /// `.git` gone) falls back to fixed names for the rest of the filer's
-    /// life, and so do [`REPRUNE_MAX_FAILURES`] failed listings in a row: a
-    /// set that can't be refreshed would drift from git's answer silently.
-    /// A failure short of that keeps the last set — the rescan vetting what
-    /// it finds — until the next trigger (an edit, an overflow, a rescan
-    /// that asks for one, and while a failure is the last word any
-    /// `session_load` rescan or degraded poll, [`Self::reprune_if_failing`])
-    /// re-prunes; nothing the failed re-prune's own rescan requests counts,
-    /// so it never retries itself.
-    pub(super) async fn reprune(&mut self, reset_watches: bool) {
+    /// life, and so do [`REPRUNE_MAX_FAILURES`] failed listings in a row of
+    /// `trigger`s that count ([`RepruneTrigger::Change`]): a set that can't
+    /// be refreshed would drift from git's answer silently. A failure short
+    /// of that keeps the last set — the rescan vetting what it finds — until
+    /// the next trigger (an edit, an overflow, a rescan that asks for one,
+    /// and while a failure is the last word any `session_load` rescan or
+    /// degraded poll, [`Self::reprune_if_failing`], whose failures don't
+    /// count) re-prunes; nothing the failed re-prune's own rescan requests
+    /// counts, so it never retries itself.
+    pub(super) async fn reprune(&mut self, reset_watches: bool, trigger: RepruneTrigger) {
         let Some(git) = self.git.as_mut() else {
             self.rescan(reset_watches).await;
             return;
@@ -857,7 +901,11 @@ impl FilerState {
                 Vetting::Relist(None)
             }
             Err(e) => {
-                git.failures += 1;
+                // a retry's failure leaves the count as it was, nonzero, so
+                // the next load or poll retries again
+                if trigger == RepruneTrigger::Change {
+                    git.failures += 1;
+                }
                 let unconfined = matches!(e, IgnoreError::Unconfined(_));
                 if unconfined || git.failures >= REPRUNE_MAX_FAILURES {
                     tracing::warn!(
@@ -882,11 +930,9 @@ impl FilerState {
         self.vetted.clear();
         self.watches.lock().retry_watches();
         let source_dir = self.source_dir.clone();
-        // TODO: a re-prune that flips a large dir (a `node_modules/`
-        // un-ignored) queues a `filer_change` per file it adds or removes;
-        // past a threshold, send clients a signal to resync instead
         let failed = matches!(vetting, Vetting::Scan);
-        self.sync_subtree(&source_dir, reset_watches, vetting).await;
+        let changes = self.sync_changes(&source_dir, reset_watches, vetting).await;
+        self.queue_or_resync(changes);
         if failed {
             // its own rescan re-requests what it saw (the rule's file still
             // changed, a failing check): a failure never retries itself, so
@@ -897,22 +943,70 @@ impl FilerState {
 
     /// Re-prune in place of a rescan — `session_load`'s, or a degraded
     /// poll's — while the last re-prune failed, returning whether it did.
-    /// Each such rescan is a trigger of its own: a failure short of
-    /// [`REPRUNE_MAX_FAILURES`] keeps a rule change unapplied only until
-    /// the next one, and a git that keeps failing falls back to fixed names
-    /// after that many.
+    /// Each such rescan retries, so a failure short of
+    /// [`REPRUNE_MAX_FAILURES`] keeps a rule change unapplied only until the
+    /// next one — but a retry's failure doesn't count toward the fallback
+    /// ([`RepruneTrigger::Retry`]): only re-prunes a change on disk asked
+    /// for do, a pending one this takes with it included. A git that never
+    /// answers so costs a listing's timeout per load and per degraded poll,
+    /// on a quiet tree without end (bounded as [`REPRUNE_MAX_FAILURES`]
+    /// says).
     pub(super) async fn reprune_if_failing(&mut self) -> bool {
         if self.git.as_ref().is_none_or(|git| git.failures == 0) {
             return false;
         }
         // take a pending request with it: one already settled would
         // otherwise run again right after, a second listing for one trigger
-        let reset_watches = self
+        let (reset_watches, trigger) = self
             .reprune
             .take()
-            .is_some_and(|pending| pending.reset_watches);
-        self.reprune(reset_watches).await;
+            .map_or((false, RepruneTrigger::Retry), |pending| {
+                (pending.reset_watches, RepruneTrigger::Change)
+            });
+        self.reprune(reset_watches, trigger).await;
         true
+    }
+
+    /// Queue a re-prune's changes — or, past [`REPRUNE_BROADCAST_MAX`] of
+    /// them while the set is on the wire, none: un-ignoring a big tree (a
+    /// `node_modules/`) would otherwise send a `filer_change` per file,
+    /// tens of MB, to every socket. It bumps the resync count instead,
+    /// which the loop then publishes ([`filer_event_loop`]), and every
+    /// client pulls the dir whole once (`repo_files`) — reading the index
+    /// this re-prune left, since the refresh that publishes the count
+    /// follows it.
+    ///
+    /// Each held-back path's pending change goes too: a stale one sent
+    /// after the pull's reply would undo it on the client. Off the wire (a
+    /// permanent filer alone) nobody would pull, so it sends them all.
+    ///
+    /// @mutates self.pending - the changes queued, or their paths' pending
+    ///   changes dropped
+    pub(super) fn queue_or_resync(&mut self, changes: Vec<Change>) {
+        if changes.len() > REPRUNE_BROADCAST_MAX && self.wire.on_wire.load(Ordering::Acquire) {
+            tracing::debug!(
+                path = %self.source_dir,
+                changes = changes.len(),
+                "a re-prune changed too many files to send each; clients pull the dir instead"
+            );
+            for (path, _, _) in &changes {
+                self.pending.remove(path);
+            }
+            self.wire.resyncs.fetch_add(1, Ordering::AcqRel);
+            return;
+        }
+        for (path, change, node) in changes {
+            self.queue(path, change, node);
+        }
+    }
+
+    /// What the publisher watches for change: the rule's version and the
+    /// resync count.
+    fn ignored_stamp(&self) -> (u64, u64) {
+        (
+            self.rule.version(),
+            self.wire.resyncs.load(Ordering::Acquire),
+        )
     }
 
     pub(super) fn is_degraded(&self) -> bool {
@@ -995,12 +1089,22 @@ pub(super) async fn filer_event_loop(
     mut rx: mpsc::Receiver<notify::Event>,
     mut rescan_rx: mpsc::Receiver<oneshot::Sender<()>>,
     signal: Arc<RescanSignal>,
+    ignored_signal: Arc<RescanSignal>,
     broadcast: FilerBroadcast,
 ) {
     // next degraded-mode rescan, while degraded
     let mut poll_at: Option<Instant> = None;
+    // the set as `start_filer` left it is read by the commit that follows
+    let mut published = state.ignored_stamp();
     loop {
         state.run_pending_reprune(Instant::now()).await;
+        // checked here, between whole steps, so a refresh reads what a
+        // step left — a re-prune's index included, not one partway through
+        let stamp = state.ignored_stamp();
+        if stamp != published {
+            published = stamp;
+            ignored_signal.request();
+        }
         flush_ready(&mut state, Instant::now(), &broadcast).await;
         if !state.is_degraded() {
             poll_at = None;
@@ -2086,5 +2190,36 @@ mod tests {
         assert!(modified(&mut state, &path).await.is_empty());
         state.rescan(false).await;
         assert!(state.pending.is_empty(), "{:?}", pending_of(&state));
+    }
+
+    /// a resynced re-prune drops the pending changes of its own
+    /// paths only, and bumps the count; off the wire it queues them all.
+    #[tokio::test]
+    async fn a_resynced_re_prune_drops_only_its_paths_pending_changes() {
+        let tmp = TempDir::new();
+        let root = tmp.root();
+        for on_wire in [true, false] {
+            let mut state = state_for(&tmp).await;
+            state.wire.on_wire.store(on_wire, Ordering::Release);
+            let outside = format!("{root}outside.txt");
+            let inside = format!("{root}big/0.js");
+            state.queue(outside.clone(), ChangeType::Change, node(&outside, 1, 1.0));
+            state.queue(inside.clone(), ChangeType::Add, node(&inside, 1, 1.0));
+            let changes: Vec<Change> = (0..=REPRUNE_BROADCAST_MAX)
+                .map(|i| {
+                    let p = format!("{root}big/{i}.js");
+                    (p.clone(), ChangeType::Delete, node(&p, 1, 1.0))
+                })
+                .collect();
+            state.queue_or_resync(changes);
+            let resyncs = state.wire.resyncs.load(Ordering::Acquire);
+            if on_wire {
+                assert_eq!(pending_of(&state), vec![(outside, ChangeType::Change)]);
+                assert_eq!(resyncs, 1);
+            } else {
+                assert_eq!(pending_of(&state).len(), REPRUNE_BROADCAST_MAX + 2);
+                assert_eq!(resyncs, 0);
+            }
+        }
     }
 }

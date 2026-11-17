@@ -22,6 +22,14 @@
 //! exactly the state its rev names. The counter starts at the clock
 //! ([`rev_seed`]), so revs keep increasing across restarts.
 //!
+//! Each commit also refreshes what git ignores under every focused dir on
+//! git's rule ([`OpenProject::ignored`]), read from the filers under the
+//! lock: a change there is a change of the project's state, stamped and
+//! broadcast like any other. A filer whose set changes on its own (an edit
+//! to a `.gitignore`, a live-vetted file) asks for that commit
+//! ([`ProjectManager::refresh_ignored`]) from a task of its own, never
+//! waiting on the lock itself.
+//!
 //! What a project keeps indexed is [`filers_of`]: a registry's root at its
 //! top level, and each focused directory whole. Two projects can keep one
 //! directory (a registry's entry that's also open as its own project), so
@@ -45,7 +53,9 @@ use fuz_realtime::notify_to_string;
 use fuz_repos::registry::EntryKind;
 use serde::Serialize;
 
-use crate::filer::{FilerConfig, FilerDepth, FilerLifetime, SerializableDisknode, WatchStatus};
+use crate::filer::{
+    FilerConfig, FilerDepth, FilerLifetime, IgnoredPaths, SerializableDisknode, WatchStatus,
+};
 use crate::handlers::App;
 
 // -- State ----------------------------------------------------------------------
@@ -68,6 +78,11 @@ pub struct OpenProject {
     /// The registry passed over to root it here, when one was
     /// ([`crate::project::Fallback`]) — as the latest resolve found it.
     pub fallback: Option<OpenFallback>,
+    /// What git ignores under each focused dir whose filer is on git's
+    /// rule, keyed by the dir — none for a dir on fixed names. Filled by
+    /// every commit from the filers ([`ProjectManager::commit`]); empty on
+    /// a project as resolved.
+    pub ignored: BTreeMap<String, IgnoredPaths>,
     /// The manager's rev at the commit that last changed this project
     /// ([`ProjectManager::commit`]); 0 for a project as resolved, not yet
     /// committed.
@@ -84,6 +99,7 @@ impl PartialEq for OpenProject {
             opened_at,
             kind,
             fallback,
+            ignored,
             rev: _,
         } = self;
         *root == other.root
@@ -91,6 +107,7 @@ impl PartialEq for OpenProject {
             && *opened_at == other.opened_at
             && *kind == other.kind
             && *fallback == other.fallback
+            && *ignored == other.ignored
     }
 }
 
@@ -190,6 +207,7 @@ impl OpenProject {
             entries,
             fallback: self.fallback.clone(),
             focused: self.focused().into_iter().map(str::to_owned).collect(),
+            ignored: self.ignored.clone(),
             rev: self.rev,
         }
     }
@@ -236,6 +254,11 @@ pub struct ProjectInfo {
     pub fallback: Option<OpenFallback>,
     /// The focused directories (trailing `/`), sorted ([`OpenProject::focused`]).
     pub focused: Vec<String>,
+    /// What git ignores under each focused dir on git's rule
+    /// ([`OpenProject::ignored`]); a focused dir missing from it is on fixed
+    /// names, and a registry's root, indexed at its top level, never has an
+    /// entry.
+    pub ignored: BTreeMap<String, IgnoredPaths>,
     /// The rev at which this project last changed ([`OpenProject::rev`]) —
     /// on a close, the close's own. A client applies a project's state only
     /// when its rev is newer than the one it holds.
@@ -474,6 +497,9 @@ fn deepen(filers: &mut Filers, more: &Filers) {
 pub(crate) fn merge_project(existing: &OpenProject, fresh: &OpenProject) -> OpenProject {
     let mut merged = OpenProject {
         opened_at: existing.opened_at.clone(),
+        // what the filers last said, until the commit reads them again — so
+        // comparing the merge with `existing` sees only the resolve's change
+        ignored: existing.ignored.clone(),
         // the rev it last changed at, until a commit stamps a change
         rev: existing.rev,
         ..fresh.clone()
@@ -870,12 +896,10 @@ impl ProjectManager {
         let mut next = projects.clone();
         next.insert(project.root.clone(), project.clone());
         let changes = change.map(|change| (change, project.clone()));
-        if let Some(rev) = self
-            .commit(app, &mut projects, next, &started, changes)
-            .await?
-        {
-            project.rev = rev;
-        }
+        self.commit(app, &mut projects, next, &started, changes)
+            .await?;
+        // as committed: stamped, with the ignored paths the commit read
+        let project = projects[&project.root].clone();
         // read before the lock drops: a commit after it could stop or narrow
         // a filer this reads, and the reply would carry files no state at
         // `project.rev` held — which a client applying the reply's state by
@@ -1038,7 +1062,7 @@ impl ProjectManager {
                 focused_mut(&mut project)?.insert(dir.to_owned());
                 Ok((previous.clone(), project))
             });
-        let (previous, mut project) = match checked {
+        let (previous, project) = match checked {
             Ok(checked) => checked,
             Err(error) => {
                 release(app, started, &desired_filers(projects.values())).await;
@@ -1048,12 +1072,10 @@ impl ProjectManager {
         let mut next = projects.clone();
         next.insert(project.root.clone(), project.clone());
         let changes = (previous != project).then(|| (ProjectChange::Update, project.clone()));
-        if let Some(rev) = self
-            .commit(app, &mut projects, next, started, changes)
-            .await?
-        {
-            project.rev = rev;
-        }
+        self.commit(app, &mut projects, next, started, changes)
+            .await?;
+        // as committed, as an open's is
+        let project = projects[root].clone();
         // read before the lock drops, as an open's reply is
         let files = app.filer_manager.files_for(dir).await;
         let watch_status = watch_status_of(app, &filers_of(&project)).await;
@@ -1099,13 +1121,28 @@ impl ProjectManager {
         let mut next = projects.clone();
         next.insert(project.root.clone(), project.clone());
         let changes = [(ProjectChange::Update, project.clone())];
-        if let Some(rev) = self
-            .commit(app, &mut projects, next, &Filers::new(), changes)
-            .await?
-        {
-            project.rev = rev;
-        }
-        Ok(project)
+        self.commit(app, &mut projects, next, &Filers::new(), changes)
+            .await?;
+        // as committed: its dropped focus's ignored paths gone with it
+        Ok(projects[root].clone())
+    }
+
+    /// Commit the open projects unchanged, so the commit reads every
+    /// focused dir's ignored paths again — what a filer whose set changed
+    /// asks for (`FilerIgnoredChange`, at most once a second per filer).
+    /// A project whose set moved is stamped and broadcast as `update`;
+    /// nothing else changes, and no filer starts or stops.
+    ///
+    /// # Errors
+    ///
+    /// [`LifecycleError::Filer`] if a filer the projects keep was gone and
+    /// can't start again; [`LifecycleError::Notify`].
+    pub async fn refresh_ignored(&self, app: &Arc<App>) -> Result<(), LifecycleError> {
+        let mut projects = self.projects.lock().await;
+        let next = projects.clone();
+        self.commit(app, &mut projects, next, &Filers::new(), [])
+            .await?;
+        Ok(())
     }
 
     /// Make `next` the open projects. `started` is what the caller's scans
@@ -1116,7 +1153,9 @@ impl ProjectManager {
     ///
     /// In order: every filer `next` needs is ensured — a failure there
     /// releases what the operation started and leaves everything as it was;
-    /// then, when anything changed, the rev is bumped and stamped on each
+    /// then each project's ignored paths are read from its filers
+    /// ([`refresh_ignored_of`]), a project whose set moved counting as
+    /// changed; then, when anything changed, the rev is bumped and stamped on each
     /// changed project, in `next` and in its notification (a close's on the
     /// closed project alone); then `next` replaces the state, the filers it
     /// no longer needs are stopped or narrowed, the roots it drops leave
@@ -1151,6 +1190,7 @@ impl ProjectManager {
         }
 
         let mut changes: Vec<(ProjectChange, OpenProject)> = changes.into_iter().collect();
+        refresh_ignored_of(app, projects, &mut next, &mut changes).await;
         let stamped = (!changes.is_empty()).then(|| {
             // under the lock, so no two commits share a rev
             let rev = self.rev.load(Ordering::Relaxed) + 1;
@@ -1203,6 +1243,59 @@ impl ProjectManager {
             }
         }
         result
+    }
+}
+
+/// Fill each project of `next` with its focused dirs' ignored paths as the
+/// filers have them now, and add an `update` to `changes` for each project
+/// open before (in `projects`) whose set moved and that isn't already among
+/// them. A changed project's notification carries the fresh set; a close's
+/// keeps what it had.
+///
+/// Every filer `next` keeps runs (the commit ensured them), and the lock is
+/// held, so the sets are those of the filers this state keeps — the reply
+/// and the notification carry what the rev they're stamped with names.
+async fn refresh_ignored_of(
+    app: &App,
+    projects: &Projects,
+    next: &mut Projects,
+    changes: &mut Vec<(ProjectChange, OpenProject)>,
+) {
+    let focused: BTreeSet<String> = next
+        .values()
+        .flat_map(OpenProject::focused)
+        .map(str::to_owned)
+        .collect();
+    let ignored = app.filer_manager.ignored_on_wire(&focused).await;
+    // TODO every `project_changed` resends each focused dir's whole set, a
+    // vetted file joining it included: with the live-added budget (up to
+    // ~10k paths) that's ~0.5 MB per change to every socket. A per-dir
+    // version clients already hold, or keeping live-added paths off the
+    // wire, would send a set only when it moved.
+    for project in next.values_mut() {
+        let of_project = project
+            .focused()
+            .into_iter()
+            .filter_map(|dir| Some((dir.to_owned(), ignored.get(dir)?.clone())))
+            .collect();
+        project.ignored = of_project;
+    }
+    for (change, project) in changes.iter_mut() {
+        if *change != ProjectChange::Close
+            && let Some(kept) = next.get(&project.root)
+        {
+            project.ignored = kept.ignored.clone();
+        }
+    }
+    for (root, project) in next.iter() {
+        let listed = changes.iter().any(|(_, changed)| changed.root == *root);
+        if !listed
+            && projects
+                .get(root)
+                .is_some_and(|previous| previous != project)
+        {
+            changes.push((ProjectChange::Update, project.clone()));
+        }
     }
 }
 
@@ -1260,6 +1353,7 @@ async fn check_invariants(app: &App, projects: &Projects, desired: &Filers) {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::time::Duration;
 
     use serde_json::Value;
 
@@ -1300,6 +1394,33 @@ mod tests {
             projects: ProjectManager::with_rev_seed(seed),
             ..app_value(Arc::new(fuz_realtime::ConnectionRegistry::new()))
         })
+    }
+
+    /// [`inert_app`] with a usable git, so a checkout's filer takes git's
+    /// rule and publishes its ignored set.
+    fn app_with_git(realtime: Arc<fuz_realtime::ConnectionRegistry>) -> Arc<App> {
+        Arc::new(App {
+            git_usability: crate::git::GitUsability::checked_for_tests(),
+            ..app_value(realtime)
+        })
+    }
+
+    /// `git init` in `dir`, failing the test unless it succeeds.
+    fn git_init(dir: &Path) {
+        let out = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(["init", "-q"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+    }
+
+    /// A checkout project at `root` (a key), focusing its root.
+    fn checkout_at(root: &str) -> OpenProject {
+        OpenProject {
+            kind: OpenKind::GitRepo,
+            ..plain_at(root)
+        }
     }
 
     /// [`inert_app`] with one socket, whose frames the receiver takes.
@@ -1383,6 +1504,7 @@ mod tests {
             },
             rev: 0,
             fallback: None,
+            ignored: BTreeMap::new(),
         }
     }
 
@@ -1395,6 +1517,7 @@ mod tests {
             kind: OpenKind::PlainDir,
             rev: 0,
             fallback: None,
+            ignored: BTreeMap::new(),
         }
     }
 
@@ -1578,14 +1701,14 @@ mod tests {
             let (app, root, app_dir) = (Arc::clone(&app), root.clone(), app_dir.clone());
             async move { app.projects.focused_files(&app, &root, &app_dir).await }
         });
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::time::timeout(Duration::from_secs(5), async {
             while app.projects.projects.try_lock().is_ok() {
                 tokio::task::yield_now().await;
             }
         })
         .await
         .expect("the read takes the lock");
-        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        tokio::time::sleep(Duration::from_millis(20)).await;
         assert!(!reader.is_finished(), "the read waits on the index");
         assert!(
             app.projects.projects.try_lock().is_err(),
@@ -1632,14 +1755,14 @@ mod tests {
                     }
                 }
             });
-            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::time::timeout(Duration::from_secs(5), async {
                 while app.projects.projects.try_lock().is_ok() {
                     tokio::task::yield_now().await;
                 }
             })
             .await
             .expect("the change takes the lock");
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            tokio::time::sleep(Duration::from_millis(20)).await;
             assert!(!reply.is_finished(), "the reply's read waits on the index");
             assert!(
                 app.projects.projects.try_lock().is_err(),
@@ -1694,7 +1817,7 @@ mod tests {
             let (app, root, app_dir) = (Arc::clone(&app), root.clone(), app_dir.clone());
             async move { app.projects.focused_files(&app, &root, &app_dir).await }
         });
-        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        tokio::time::sleep(Duration::from_millis(20)).await;
         assert!(!reader.is_finished(), "the read waits on the lock");
 
         // the commit finishes, and the read sees the state it left
@@ -1861,9 +1984,9 @@ mod tests {
 
     #[test]
     fn the_rev_seed_is_the_clock_in_microseconds_and_exact_as_a_json_number() {
-        let at = |micros: u64| UNIX_EPOCH + std::time::Duration::from_micros(micros);
+        let at = |micros: u64| UNIX_EPOCH + Duration::from_micros(micros);
         assert_eq!(rev_seed(at(1_763_251_200_000_000)), 1_763_251_200_000_000);
-        assert_eq!(rev_seed(UNIX_EPOCH - std::time::Duration::from_secs(1)), 0);
+        assert_eq!(rev_seed(UNIX_EPOCH - Duration::from_secs(1)), 0);
         // a JSON number is a double: exact up to 2^53, which a seed from the
         // clock stays under for centuries
         assert!(rev_seed(SystemTime::now()) < 1 << 53);
@@ -1894,7 +2017,7 @@ mod tests {
         assert_settled(&first).await;
 
         // a restart a millisecond later — a thousand revs of headroom
-        let second = app_seeded(rev_seed(booted + std::time::Duration::from_millis(1)));
+        let second = app_seeded(rev_seed(booted + Duration::from_millis(1)));
         assert!(second.projects.published().rev > last);
         let reopened = second
             .projects
@@ -2175,12 +2298,12 @@ mod tests {
                     .await
             }
         });
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::time::timeout(Duration::from_secs(5), async {
             while app.filer_manager.depth_of(&app_dir).await.map(|(d, _)| d)
                 != Some(FilerDepth::Tree)
                 || app.filer_manager.depth_of(&site_dir).await.is_none()
             {
-                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+                tokio::time::sleep(Duration::from_millis(2)).await;
             }
         })
         .await
@@ -2256,9 +2379,9 @@ mod tests {
                     .await
             }
         });
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::time::timeout(Duration::from_secs(5), async {
             while app.filer_manager.depth_of(&app_dir).await.is_none() {
-                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+                tokio::time::sleep(Duration::from_millis(2)).await;
             }
         })
         .await
@@ -2339,6 +2462,112 @@ mod tests {
 
     /// A tiny deterministic generator, so a failing interleaving reproduces
     /// from its seed.
+    /// The `project_changed` notifications queued on `rx`, each its type,
+    /// its rev, and the `ignored` it reports.
+    fn ignored_changes(rx: &mut fuz_realtime::ConnectionReceiver) -> Vec<(String, u64, Value)> {
+        let mut changes = Vec::new();
+        while let Ok(frame) = rx.try_recv() {
+            let message: Value = serde_json::from_str(frame.as_str()).unwrap();
+            if message["method"] == "project_changed" {
+                let params = &message["params"];
+                changes.push((
+                    params["type"].as_str().unwrap().to_owned(),
+                    params["project"]["rev"].as_u64().unwrap(),
+                    params["project"]["ignored"].clone(),
+                ));
+            }
+        }
+        changes
+    }
+
+    /// Whether `paths` (an `ignored` entry's paths, as JSON) holds `path`.
+    fn lists(ignored: &Value, dir: &str, path: &str) -> bool {
+        ignored[dir]["paths"]
+            .as_array()
+            .is_some_and(|paths| paths.iter().any(|p| p == path))
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_ignored_change_is_stamped_broadcast_and_carried_by_replies() {
+        let tmp = TempDir::new();
+        std::fs::create_dir_all(tmp.key("repo")).unwrap();
+        git_init(Path::new(&tmp.key("repo")));
+        std::fs::write(tmp.key("repo/.gitignore"), "*.log\n").unwrap();
+        tmp.write("repo/a.log");
+        tmp.write("repo/b.txt");
+        tmp.write("plain/c.txt");
+        let realtime = Arc::new(fuz_realtime::ConnectionRegistry::new());
+        let (sender, mut rx) = fuz_realtime::connection_channel(1 << 20);
+        let _connection = realtime.add_connection(
+            sender,
+            fuz_realtime::ConnectionIdentity::default(),
+            tokio_util::sync::CancellationToken::new(),
+        );
+        let app = app_with_git(realtime);
+        let root = tmp.key("repo/");
+
+        // the open's reply and notification carry the set, relative
+        let opened = app
+            .projects
+            .open(&app, checkout_at(&root), &[])
+            .await
+            .unwrap();
+        let project = &opened.landed.project;
+        let ignored = &project.ignored[&root];
+        assert!(ignored.paths.contains(&"a.log".to_owned()), "{ignored:?}");
+        assert_eq!(ignored.resyncs, 0);
+        let changes = ignored_changes(&mut rx);
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].0, "open");
+        assert!(lists(&changes[0].2, &root, "a.log"), "{changes:?}");
+        let open_rev = project.rev;
+        assert_eq!(changes[0].1, open_rev);
+        // a plain dir is on fixed names: no entry
+        let plain = tmp.key("plain/");
+        let opened = app
+            .projects
+            .open(&app, plain_at(&plain), &[])
+            .await
+            .unwrap();
+        assert!(opened.landed.project.ignored.is_empty());
+        let _ = ignored_changes(&mut rx);
+
+        // a `.gitignore` edit re-prunes, and the filer asks for a refresh:
+        // an `update` at a new rev with the new set
+        std::fs::write(tmp.key("repo/.gitignore"), "*.txt\n").unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        let update = loop {
+            let found = ignored_changes(&mut rx)
+                .into_iter()
+                .find(|(_, _, ignored)| lists(ignored, &root, "b.txt"));
+            if let Some(found) = found {
+                break found;
+            }
+            assert!(std::time::Instant::now() < deadline, "no refresh");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert_eq!(update.0, "update");
+        assert!(update.1 > open_rev);
+        assert!(!lists(&update.2, &root, "a.log"));
+        // the published state and a focus read agree with it
+        let published = app.projects.published();
+        let held = published.projects.iter().find(|p| p.root == root).unwrap();
+        assert_eq!(held.rev, update.1);
+        assert!(held.ignored[&root].paths.contains(&"b.txt".to_owned()));
+        let read = app
+            .projects
+            .focused_files(&app, &root, &root)
+            .await
+            .unwrap();
+        assert!(read.rev >= update.1);
+        // a refresh that finds nothing moved stamps nothing
+        let _ = ignored_changes(&mut rx);
+        app.projects.refresh_ignored(&app).await.unwrap();
+        assert_eq!(app.projects.published().rev, read.rev);
+        assert!(ignored_changes(&mut rx).is_empty());
+        app.projects.close_all(&app).await.unwrap();
+    }
+
     struct Lcg(u64);
 
     impl Lcg {
@@ -2364,7 +2593,10 @@ mod tests {
         ] {
             tmp.write(rel);
         }
-        let app = inert_app();
+        // a checkout, so its filer re-prunes and asks for refreshes, each
+        // taking the projects lock on a task of its own, among the rest
+        git_init(Path::new(&tmp.key("w/app")));
+        let app = app_with_git(Arc::new(fuz_realtime::ConnectionRegistry::new()));
         let (root, app_dir, site_dir, plain) = (
             tmp.key("w/"),
             tmp.key("w/app/"),
@@ -2384,7 +2616,7 @@ mod tests {
                     site_dir.clone(),
                     plain.clone(),
                 );
-                let op = rng.next(10);
+                let op = rng.next(12);
                 tasks.push(tokio::spawn(async move {
                     let manager = &app.projects;
                     match op {
@@ -2416,12 +2648,21 @@ mod tests {
                             )
                             .await
                             .map(drop),
-                        _ => manager.close(&app, &app_dir).await.map(drop),
+                        9 => manager.close(&app, &app_dir).await.map(drop),
+                        10 => manager.refresh_ignored(&app).await,
+                        // a rule edit: a re-prune, and its refresh
+                        _ => {
+                            let rule = if seed % 2 == 0 { "*.txt\n" } else { "sub/\n" };
+                            std::fs::write(format!("{app_dir}.gitignore"), rule).unwrap();
+                            Ok(())
+                        }
                     }
                 }));
             }
             for task in tasks {
-                match task.await.unwrap() {
+                // a deadlock between a commit and a refresh hangs here
+                let done = tokio::time::timeout(Duration::from_secs(60), task).await;
+                match done.expect("no deadlock").unwrap() {
                     Ok(()) => landed += 1,
                     // the one refusal the state allows here: the project
                     // closed under a racing operation
@@ -2436,5 +2677,33 @@ mod tests {
         app.projects.close_all(&app).await.unwrap();
         assert_settled(&app).await;
         assert!(app.filer_manager.project_filers().await.is_empty());
+    }
+
+    /// reopening an open git checkout with nothing changed stamps
+    /// no rev and broadcasts nothing (`merge_project` keeps `ignored`).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_no_op_reopen_of_a_checkout_stamps_nothing() {
+        let tmp = TempDir::new();
+        std::fs::create_dir_all(tmp.key("repo")).unwrap();
+        git_init(Path::new(&tmp.key("repo")));
+        std::fs::write(tmp.key("repo/.gitignore"), "*.log\n").unwrap();
+        tmp.write("repo/a.log");
+        let app = app_with_git(Arc::new(fuz_realtime::ConnectionRegistry::new()));
+        let root = tmp.key("repo/");
+        app.projects
+            .open(&app, checkout_at(&root), &[])
+            .await
+            .unwrap();
+        let rev = app.projects.published().rev;
+        app.projects
+            .open(&app, checkout_at(&root), &[])
+            .await
+            .unwrap();
+        assert_eq!(
+            app.projects.published().rev,
+            rev,
+            "a no-op reopen stamped a rev"
+        );
+        app.projects.close_all(&app).await.unwrap();
     }
 }

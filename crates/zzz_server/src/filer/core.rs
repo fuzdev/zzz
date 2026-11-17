@@ -7,7 +7,10 @@ use super::ignore::{GitRoot, IgnoreRule, SharedRule, is_ignored, rule_marker};
 use super::index::{FileIndex, apply_subtree};
 use super::walk::scan_directory;
 use super::watches::{DirWatches, WatcherFactory, is_indexable_kind};
-use super::{DEGRADED_RESCAN_INTERVAL, EVENT_CHANNEL_CAPACITY, WatchStatus};
+use super::{
+    DEGRADED_RESCAN_INTERVAL, EVENT_CHANNEL_CAPACITY, IGNORED_REFRESH_INTERVAL, IgnoredPaths,
+    IgnoredWire, WatchStatus,
+};
 use crate::scoped_fs::{ProtectedDir, protected_dir};
 use notify::{RecommendedWatcher, Watcher};
 use parking_lot::Mutex;
@@ -23,7 +26,6 @@ use tokio::sync::{Notify, RwLock, mpsc, oneshot};
 
 /// Per-filer configuration: which directories to ignore, and the watch
 /// budget.
-#[derive(Debug)]
 pub struct FilerConfig {
     /// Absolute directories to ignore beyond the default names. For a
     /// tree watcher whose root contains `zzz_dir`, this is `zzz_dir`
@@ -47,6 +49,10 @@ pub struct FilerConfig {
     /// indexed whole, takes git's ignore rule through it; `None` leaves every
     /// root on fixed names (see [`super::ignore`]).
     pub git: Option<Arc<fuz_git::Git>>,
+    /// Called when the filer's ignored set (or its resync count) changed,
+    /// at most once per [`IGNORED_REFRESH_INTERVAL`] — how the open
+    /// projects learn to republish it. Only a filer on git's rule calls it.
+    pub on_ignored_change: Option<FilerIgnoredChange>,
     /// Test seam: run as if no watcher could be created.
     #[cfg(test)]
     pub no_watcher: bool,
@@ -64,6 +70,7 @@ impl FilerConfig {
             root_protected: None,
             depth: FilerDepth::Tree,
             git: None,
+            on_ignored_change: None,
             #[cfg(test)]
             no_watcher: false,
         }
@@ -110,6 +117,18 @@ impl FilerConfig {
     }
 }
 
+impl std::fmt::Debug for FilerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FilerConfig")
+            .field("ignored_dirs", &self.ignored_dirs)
+            .field("watch_limit", &self.watch_limit)
+            .field("depth", &self.depth)
+            .field("git", &self.git.is_some())
+            .field("on_ignored_change", &self.on_ignored_change.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 /// How much of its root a filer indexes ([`FilerConfig::depth`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilerDepth {
@@ -126,8 +145,18 @@ pub enum FilerDepth {
 /// JSON-RPC messages).
 pub type FilerBroadcast = Arc<dyn Fn(&str) + Send + Sync>;
 
-/// Coalesced "rescan the root" request, raised from the notify callback
-/// (sync context) when events were dropped or notify asks for a rescan.
+/// Told that a filer's ignored set changed ([`FilerConfig::on_ignored_change`]).
+///
+/// It runs on the filer's publisher task, which a stopped filer aborts, so
+/// anything that may stop filers (a `ProjectManager` commit) it spawns
+/// rather than awaits — and the filer never waits on it, nor on the lock
+/// that work takes.
+pub type FilerIgnoredChange = Arc<dyn Fn() + Send + Sync>;
+
+/// A coalesced request: "rescan the root", raised from the notify callback
+/// (sync context) when events were dropped or notify asks for a rescan, and
+/// "the ignored set changed", raised by the event loop for the publisher
+/// ([`publish_ignored_changes`]).
 #[derive(Default)]
 pub(super) struct RescanSignal {
     needed: AtomicBool,
@@ -167,6 +196,13 @@ pub struct Filer {
     unwatched_count: Arc<AtomicUsize>,
     /// What the filer ignores, as its event loop keeps it.
     rule: SharedRule,
+    /// Whether its set is on the wire, and its resync count.
+    wire: Arc<IgnoredWire>,
+    /// The wire form of the set at a rule version, so a commit that finds
+    /// the rule unchanged sorts nothing.
+    wire_cache: Mutex<Option<(u64, Arc<Vec<String>>)>>,
+    /// The task that calls [`FilerConfig::on_ignored_change`], if any.
+    publisher: Option<tokio::task::JoinHandle<()>>,
     #[cfg(test)]
     pub(super) watches: Arc<Mutex<DirWatches>>,
     /// Test seam: the overflow signal its watcher raises.
@@ -185,6 +221,9 @@ impl std::fmt::Debug for Filer {
 impl Drop for Filer {
     fn drop(&mut self) {
         self.task.abort();
+        if let Some(publisher) = &self.publisher {
+            publisher.abort();
+        }
     }
 }
 
@@ -198,19 +237,77 @@ impl Filer {
         }
     }
 
-    /// How many times what this filer ignores has changed — a publisher of
-    /// [`Self::ignored_paths`] compares it with the version it last sent.
-    pub fn ignored_version(&self) -> u64 {
+    /// How many times what this filer ignores has changed — for tests; the
+    /// event loop signals its publisher on the same count.
+    #[cfg(test)]
+    pub(crate) fn ignored_version(&self) -> u64 {
         self.rule.version()
     }
 
     /// The absolute paths git ignores under this filer's root, sorted: the
     /// dirs it prunes whole and the files it skips one by one, without a
-    /// trailing `/`. `None` for a filer on fixed names.
-    pub fn ignored_paths(&self) -> Option<Vec<String>> {
+    /// trailing `/`. `None` for a filer on fixed names. For tests; the wire
+    /// form is [`Self::ignored_on_wire`].
+    #[cfg(test)]
+    pub(crate) fn ignored_paths(&self) -> Option<Vec<String>> {
         match &*self.rule.get() {
             IgnoreRule::FixedNames => None,
             IgnoreRule::Git(set) => Some(set.sorted()),
+        }
+    }
+
+    /// What an open project carries for this filer's root: git's ignored
+    /// paths, relative, and the resync count. `None` for a filer on fixed
+    /// names, which leaves the client's own rule in force.
+    pub fn ignored_on_wire(&self, source_dir: &str) -> Option<IgnoredPaths> {
+        let (rule, version) = self.rule.get_versioned();
+        let IgnoreRule::Git(set) = &*rule else {
+            return None;
+        };
+        // read after the rule: a resync bumped meanwhile is a newer one,
+        // whose refresh follows
+        let resyncs = self.wire.resyncs.load(Ordering::Acquire);
+        let mut cache = self.wire_cache.lock();
+        let paths = match &*cache {
+            Some((cached, paths)) if *cached == version => Arc::clone(paths),
+            _ => {
+                let paths = Arc::new(set.relative_sorted(source_dir));
+                *cache = Some((version, Arc::clone(&paths)));
+                paths
+            }
+        };
+        drop(cache);
+        Some(IgnoredPaths { paths, resyncs })
+    }
+
+    /// Whether the filer is marked on the wire — for tests.
+    #[cfg(test)]
+    pub(crate) fn is_on_wire(&self) -> bool {
+        self.wire.on_wire.load(Ordering::Acquire)
+    }
+
+    /// Mark whether an open project carries this filer's set — see
+    /// [`IgnoredWire::on_wire`].
+    pub fn set_on_wire(&self, on_wire: bool) {
+        self.wire.on_wire.store(on_wire, Ordering::Release);
+    }
+}
+
+/// The publisher of a filer's ignored set: each time the event loop raises
+/// `signal`, call `on_change`, then wait out [`IGNORED_REFRESH_INTERVAL`] —
+/// a signal raised meanwhile is kept (the flag stays set, and `Notify`
+/// stores the wakeup) and answered once it's over, so a burst of changes
+/// costs one call now and one after the interval.
+pub(super) async fn publish_ignored_changes(
+    signal: Arc<RescanSignal>,
+    on_change: FilerIgnoredChange,
+    interval: Duration,
+) {
+    loop {
+        signal.notify.notified().await;
+        if signal.take() {
+            on_change();
+            tokio::time::sleep(interval).await;
         }
     }
 }
@@ -329,6 +426,13 @@ pub async fn start_filer(
     }
     let (git_root, rule) = initial_rule(path, &config).await;
     let rule = SharedRule::new(rule);
+    let wire = Arc::new(IgnoredWire::default());
+    let ignored_signal = Arc::new(RescanSignal::default());
+    // fixed names never change, so only a git root has anything to publish
+    let on_ignored_change = config
+        .on_ignored_change
+        .clone()
+        .filter(|_| git_root.is_some());
     let (tx, rx) = mpsc::channel::<notify::Event>(EVENT_CHANNEL_CAPACITY);
     let signal = Arc::new(RescanSignal::default());
     let exclude = git_root.as_ref().map(GitRoot::info_exclude);
@@ -407,6 +511,7 @@ pub async fn start_filer(
         source_dir,
         ignored_dirs: config.ignored_dirs,
         rule: rule.clone(),
+        wire: Arc::clone(&wire),
         git,
         reprune,
         vetted: HashMap::new(),
@@ -418,11 +523,20 @@ pub async fn start_filer(
         degraded_rescan_interval: config.degraded_rescan_interval,
         clock: SystemTime::now,
     };
+    // spawned once nothing can fail, so a failed start leaves no task
+    let publisher = on_ignored_change.map(|on_change| {
+        tokio::spawn(publish_ignored_changes(
+            Arc::clone(&ignored_signal),
+            on_change,
+            IGNORED_REFRESH_INTERVAL,
+        ))
+    });
     let task = tokio::spawn(filer_event_loop(
         state,
         rx,
         rescan_rx,
         Arc::clone(&signal),
+        ignored_signal,
         broadcast,
     ));
 
@@ -432,6 +546,9 @@ pub async fn start_filer(
         rescan_tx,
         unwatched_count,
         rule,
+        wire,
+        wire_cache: Mutex::new(None),
+        publisher,
         #[cfg(test)]
         watches,
         #[cfg(test)]

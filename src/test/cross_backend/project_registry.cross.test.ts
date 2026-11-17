@@ -15,12 +15,15 @@
  * lifecycle rev each change stamps and every reply and notification carries,
  * the refusal of an untrusted registry with its reason, the fallback past a
  * registry for a path in none of its entries or under a refused registry in
- * a checkout (`fallback`, on the reply and `project_changed`), and the scope
- * a close releases.
+ * a checkout (`fallback`, on the reply and `project_changed`), what git
+ * ignores under a focused checkout (`ignored`, on the reply and refreshed by
+ * a `.gitignore` edit), and the scope a close releases.
  *
  * @module
  */
 
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { chmod, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -574,5 +577,60 @@ describe('project registry cross-backend', () => {
 		assert.deepEqual(reopened.project.fallback, fallback as typeof reopened.project.fallback);
 		assert.deepEqual(reopened.project.focused, [`${tool}/`]);
 		assert.deepEqual(reopened.refused, []);
+	});
+
+	test("a focused checkout carries git's ignored paths, refreshed by a .gitignore edit", async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		const app_dir = `${dev}/app/`;
+		await promisify(execFile)('git', ['init', '-q'], { cwd: join(dev, 'app') });
+		for (const [path, text] of [
+			[join(dev, 'app', '.gitignore'), '*.log\n'],
+			[join(dev, 'app', 'x.log'), 'x']
+		] as const) {
+			await writeFile(path, text, 'utf-8');
+			await chmod(path, 0o644);
+		}
+		const opened = await open_project(fixture, join(dev, 'app', 'a.ts'));
+		assert.deepEqual(opened.project.focused, [app_dir]);
+		assert.deepEqual(Object.keys(opened.project.ignored), [app_dir], 'the root has no entry');
+		const ignored = opened.project.ignored[app_dir]!;
+		assert.include(ignored.paths, 'x.log');
+		assert.strictEqual(ignored.resyncs, 0);
+		assert.notInclude(file_ids(opened), join(dev, 'app', 'x.log'));
+
+		const ws = await create_ws_transport({
+			base_url: handle.config.base_url,
+			ws_path: handle.config.ws_path,
+			cookies: fixture.transport.cookies()
+		});
+		try {
+			await ws.request('_warmup', 'ping', undefined);
+			const refreshed = ws.wait_for<Record<string, unknown>>(
+				is_notification_with<{
+					type: string;
+					project: { ignored: Record<string, { paths: Array<string> }> };
+				}>(
+					'project_changed',
+					(params) =>
+						params.type === 'update' &&
+						(params.project.ignored[app_dir]?.paths.includes('src/b.ts') ?? false)
+				),
+				10_000
+			);
+			await writeFile(join(dev, 'app', '.gitignore'), 'src/b.ts\n', 'utf-8');
+			const notification = parse(ProjectChangedInput, (await refreshed).params);
+			assert.ok(notification.ok, JSON.stringify(notification));
+			const { project } = notification.value;
+			assert.ok(project.rev > opened.project.rev, 'a newer rev');
+			assert.notInclude(project.ignored[app_dir]!.paths, 'x.log');
+			// a reply after it carries the new set too
+			const again = await open_project(fixture, join(dev, 'app'));
+			assert.include(again.project.ignored[app_dir]!.paths, 'src/b.ts');
+			assert.include(file_ids(again), join(dev, 'app', 'x.log'));
+			assert.notInclude(file_ids(again), join(dev, 'app', 'src', 'b.ts'));
+		} finally {
+			await ws.close();
+		}
 	});
 });

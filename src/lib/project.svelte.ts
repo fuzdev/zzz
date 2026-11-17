@@ -8,6 +8,7 @@ import {
 	one_of,
 	optional,
 	pipe,
+	record,
 	safe_integer,
 	string,
 	variant,
@@ -91,6 +92,32 @@ export const ProjectRev = pipe(number, safe_integer, min_value(0));
 export type ProjectRev = Infer<typeof ProjectRev>;
 
 /**
+ * What git ignores under one focused directory on git's rule: the daemon's
+ * answer, which replaces the client's fixed names there.
+ */
+export const ProjectIgnoredJson = object({
+	/**
+	 * Relative to the directory, sorted: each directory git prunes whole with
+	 * a trailing `/` (the directory itself, ignored whole, as `./`), and each
+	 * file it skips alone without one.
+	 *
+	 * The daemon sorts by Rust's byte order, which differs from JS string
+	 * order (UTF-16 code units) for non-BMP characters.
+	 * TODO step 5's ignore predicate must not binary-search `paths` on the
+	 * daemon's order — sort it here, or look up without relying on order.
+	 */
+	paths: array(string),
+	/**
+	 * Bumped each time the daemon re-pruned the directory without sending a
+	 * `filer_change` per file — too many changed at once (a `node_modules/`
+	 * un-ignored) — so a client seeing it move pulls the directory's files
+	 * whole (`repo_files`).
+	 */
+	resyncs: pipe(number, safe_integer, min_value(0))
+});
+export type ProjectIgnoredJson = Infer<typeof ProjectIgnoredJson>;
+
+/**
  * The wire format of an open project, shared between frontend and backend —
  * in action spec inputs and outputs, and the `Project` cell's JSON.
  */
@@ -116,6 +143,13 @@ export const ProjectInfoJson = object({
 	 * unfocused entry has no files.
 	 */
 	focused: array(DiskfileDirectoryPath),
+	/**
+	 * What git ignores under each focused directory on git's rule, keyed by
+	 * the directory. A focused directory without an entry is on fixed names
+	 * (a plain directory, or git unusable), and a registry's root, indexed at
+	 * its top level, never has one.
+	 */
+	ignored: record(ProjectIgnoredJson),
 	/** The rev at which this project last changed — on a close, the close's own. */
 	rev: ProjectRev
 });
@@ -141,6 +175,7 @@ export const ProjectJson = cell_json_schema(
 		entries: with_default_fn(array(ProjectEntryJson), () => []),
 		fallback: with_default(nullable(ProjectFallbackJson), null),
 		focused: with_default_fn(array(DiskfileDirectoryPath), () => []),
+		ignored: with_default_fn(record(ProjectIgnoredJson), () => ({})),
 		/**
 		 * The rev of the state held (`ProjectRev`), `-1` when unknown — a
 		 * project not from the daemon, or one held across a restart, which any
@@ -171,6 +206,7 @@ export class Project extends Cell<typeof ProjectJson> {
 	entries: Array<ProjectEntryJson> = $state.raw()!;
 	fallback: ProjectFallbackJson | null = $state.raw()!;
 	focused: Array<DiskfileDirectoryPath> = $state.raw()!;
+	ignored: Record<string, ProjectIgnoredJson> = $state.raw()!;
 	rev: number = $state.raw()!;
 
 	/**

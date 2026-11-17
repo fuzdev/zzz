@@ -73,6 +73,7 @@ const registry_info = (focused: Array<DiskfileDirectoryPath>, rev = 1): ProjectI
 		}
 	],
 	focused,
+	ignored: {},
 	rev
 });
 
