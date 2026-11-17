@@ -42,8 +42,9 @@ use tokio::sync::{RwLock, mpsc};
 ///
 /// Returns the directories whose listing failed transiently
 /// ([`is_transient_list_error`]) — the caller keeps what's indexed under
-/// them — or the error of listing `prefix` itself. Below `prefix`, an
-/// unreadable or vanished directory is skipped.
+/// them — and the nested repos it stopped at (absolute, no trailing `/`),
+/// or the error of listing `prefix` itself. Below `prefix`, an unreadable
+/// or vanished directory is skipped.
 #[expect(
     clippy::too_many_arguments,
     reason = "the walk's inputs, each from the filer's state or its caller"
@@ -58,7 +59,7 @@ fn walk_blocking(
     reset_watches: bool,
     clock: Clock,
     jobs: &mpsc::Sender<FileJob>,
-) -> io::Result<Vec<String>> {
+) -> io::Result<(Vec<String>, Vec<String>)> {
     if reset_watches {
         watches.reset();
     }
@@ -68,12 +69,12 @@ fn walk_blocking(
     let mut root_error = None;
     // a dir that became a repo of its own lists as nothing, its watches
     // dropped by the reconcile
-    let nested = rule.is_git() && prefix != source_dir && is_nested_repo(super::prefix_dir(prefix));
-    let mut stack = if nested {
-        vec![]
-    } else {
-        vec![prefix.to_owned()]
-    };
+    let mut nested = Vec::new();
+    let mut stack = vec![prefix.to_owned()];
+    if rule.is_git() && prefix != source_dir && is_nested_repo(super::prefix_dir(prefix)) {
+        stack.clear();
+        nested.push(prefix.trim_end_matches('/').to_owned());
+    }
     while let Some(dir) = stack.pop() {
         let entries = match watches.attempt(&dir) {
             WatchAttempt::List => watches.read_dir(&dir),
@@ -130,8 +131,12 @@ fn walk_blocking(
                 continue;
             }
             if file_type.is_dir() {
-                if depth == FilerDepth::Tree && !(rule.is_git() && is_nested_repo(&path)) {
-                    stack.push(dir_prefix(&path_str));
+                if depth == FilerDepth::Tree {
+                    if rule.is_git() && is_nested_repo(&path) {
+                        nested.push(path_str);
+                    } else {
+                        stack.push(dir_prefix(&path_str));
+                    }
                 }
                 continue;
             }
@@ -158,7 +163,7 @@ fn walk_blocking(
         }
     }
     watches.reconcile(prefix, &listed, &unreadable, &kept);
-    root_error.map_or(Ok(kept), Err)
+    root_error.map_or(Ok((kept, nested)), Err)
 }
 
 /// Delete `entry` if it's a staging file orphaned by a crash mid-write: a
@@ -237,8 +242,9 @@ fn file_job(
 /// event loop is the index's only writer, so holding `known` for the scan
 /// blocks nobody but itself.
 ///
-/// Returns the files found plus the directories whose listing failed
-/// transiently (see [`walk_blocking`]).
+/// Returns the files found, the directories whose listing failed
+/// transiently, and the nested repos the walk stopped at (see
+/// [`walk_blocking`]).
 ///
 /// # Errors
 ///
@@ -257,7 +263,7 @@ pub(super) async fn scan_directory(
     reset_watches: bool,
     clock: Clock,
     known: Option<&RwLock<FileIndex>>,
-) -> io::Result<(ScanIndex, Vec<String>)> {
+) -> io::Result<DirScan> {
     let (job_tx, mut job_rx) = mpsc::channel::<FileJob>(WALK_CHANNEL_CAPACITY);
     let walk = {
         let prefix = prefix.to_owned();
@@ -289,8 +295,25 @@ pub(super) async fn scan_directory(
             fresh.insert(path_str, scanned);
         }
     }
-    let kept = walk.await.map_err(io::Error::other)??;
-    Ok((fresh, kept))
+    let (kept, nested) = walk.await.map_err(io::Error::other)??;
+    Ok(DirScan {
+        files: fresh,
+        kept,
+        nested,
+    })
+}
+
+/// What [`scan_directory`] found under its prefix.
+#[derive(Debug)]
+pub(super) struct DirScan {
+    /// Each file walked, unchanged or with its fresh node.
+    pub(super) files: ScanIndex,
+    /// The directories whose listing failed transiently, prefix form — what's
+    /// indexed under them is kept.
+    pub(super) kept: Vec<String>,
+    /// The dirs holding a repo of their own the walk stopped at under a git
+    /// root ([`is_nested_repo`]), absolute, no trailing `/`.
+    pub(super) nested: Vec<String>,
 }
 
 /// One walked file as a scan finds it: unchanged when `known` indexes it with

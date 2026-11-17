@@ -161,7 +161,7 @@ const checkout = (rev: number, resyncs: number): ProjectInfoJson => ({
 	fallback: null,
 	entries: [],
 	focused: [SITE],
-	ignored: { [SITE]: { paths: [], resyncs } },
+	ignored: { [SITE]: { paths: [], nested: [], resyncs } },
 	rev
 });
 
@@ -628,7 +628,7 @@ describe('a resync of a focused repo', () => {
 		info: ProjectInfoJson,
 		paths: Array<string>,
 		resyncs: number
-	): ProjectInfoJson => ({ ...info, ignored: { [SITE]: { paths, resyncs } } });
+	): ProjectInfoJson => ({ ...info, ignored: { [SITE]: { paths, nested: [], resyncs } } });
 
 	test("pulls the repo whole: what's now ignored pruned, what's no longer ignored added", async () => {
 		app.projects.add(with_ignored(registry_info([SITE]), ['c.txt'], 0));
@@ -638,6 +638,7 @@ describe('a resync of a focused repo', () => {
 		receive_update(with_ignored(registry_info([SITE], 2), ['b.txt'], 1));
 		assert.deepEqual(app.projects.get_by_root(DEV)?.ignored[SITE], {
 			paths: ['b.txt'],
+			nested: [],
 			resyncs: 1
 		});
 		assert.deepEqual(

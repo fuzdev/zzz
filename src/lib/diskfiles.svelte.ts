@@ -31,10 +31,10 @@ import {
 	normalize_path,
 	parse_new_diskfile_name,
 	to_file_directories,
-	to_innermost_root,
 	to_diskfile_unloaded_message,
+	to_innermost_unindexed_part,
 	to_relative_path,
-	to_unindexed_segment
+	type FileIndexUnindexedPart
 } from './diskfile_helpers.ts';
 import { to_diskfile_content_kind } from './diskfile_content_kind.ts';
 import type { MarkdownLinkIndex } from './markdown_links.ts';
@@ -848,6 +848,26 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	});
 
 	/**
+	 * The part of `path` the file index skips — skipped only where every
+	 * filer holding it skips it (`to_innermost_unindexed_part`), each by its
+	 * root's rule: git's answer for a focused directory the daemon sent one
+	 * for (`Projects.ignore_rules`), fixed names for every other root. Reactive,
+	 * so a refresh of a project's `ignored` reaches the tree and the create
+	 * notice.
+	 *
+	 * @param path - a normalized file path, or a folder's with a trailing `/`
+	 * @returns the skipped part, `null` when the index enters it all or no root holds it
+	 */
+	to_unindexed(path: string): FileIndexUnindexedPart | null {
+		return to_innermost_unindexed_part(
+			path,
+			this.index_coverage.trees,
+			this.index_coverage.top_levels,
+			this.app.projects.ignore_rules
+		);
+	}
+
+	/**
 	 * Whether the index covers `path`, by what's held here: under a root it
 	 * indexes whole — the app dir, a scoped dir, a project's focus — or a
 	 * registry root's loose file, which its top-level filer indexes.
@@ -1013,12 +1033,16 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 	#create_link_index(): MarkdownLinkIndex {
 		const get_coverage = () => this.index_coverage;
+		const get_ignore_rules = () => this.app.projects.ignore_rules;
 		return {
 			has_file: (path) => {
 				const diskfile = this.get_by_path(path as DiskfilePath);
 				return !!diskfile && !diskfile.deleted_on_disk;
 			},
 			has_directory: (path) => this.#directory_paths.has(path),
+			get ignore_rules() {
+				return get_ignore_rules();
+			},
 			get roots() {
 				return get_coverage().trees;
 			},
@@ -1084,7 +1108,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * Creates a new file at an absolute path — never overwriting one, like
 	 * `create_file` — and selects it, opened in a permanent tab, now or when
 	 * its `filer_change` arrives — never, for a path the index skips
-	 * (`to_unindexed_segment`), which isn't waited for. It's revealed in the
+	 * (`to_unindexed`), which isn't waited for. It's revealed in the
 	 * tree then too (`DiskfileTreeState.reveal_created`), which the tree mode
 	 * shows, now or on a later switch to it — so a copy made by "edit a copy"
 	 * in the audio and transcript views is revealed as well.
@@ -1116,8 +1140,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			this.editor.tree.reveal_created(created_path);
 		} else {
 			// a path the file index skips never arrives — don't wait for it
-			const root = to_innermost_root(created_path, this.indexed_roots);
-			if (root && to_unindexed_segment(created_path, root) === null) {
+			if (this.is_indexed(created_path) && this.to_unindexed(created_path) === null) {
 				this.#select_on_arrival = created_path;
 			}
 		}

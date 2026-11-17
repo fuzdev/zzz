@@ -200,7 +200,7 @@ pub struct Filer {
     wire: Arc<IgnoredWire>,
     /// The wire form of the set at a rule version, so a commit that finds
     /// the rule unchanged sorts nothing.
-    wire_cache: Mutex<Option<(u64, Arc<Vec<String>>)>>,
+    wire_cache: Mutex<Option<WireCache>>,
     /// The task that calls [`FilerConfig::on_ignored_change`], if any.
     publisher: Option<tokio::task::JoinHandle<()>>,
     #[cfg(test)]
@@ -208,6 +208,13 @@ pub struct Filer {
     /// Test seam: the overflow signal its watcher raises.
     #[cfg(test)]
     pub(super) signal: Arc<RescanSignal>,
+}
+
+/// [`Filer::ignored_on_wire`]'s lists at one [`SharedRule`] version.
+struct WireCache {
+    version: u64,
+    paths: Arc<Vec<String>>,
+    nested: Arc<Vec<String>>,
 }
 
 impl std::fmt::Debug for Filer {
@@ -257,10 +264,11 @@ impl Filer {
     }
 
     /// What an open project carries for this filer's root: git's ignored
-    /// paths, relative, and the resync count. `None` for a filer on fixed
-    /// names, which leaves the client's own rule in force.
+    /// paths and the nested repos it leaves unindexed, relative, and the
+    /// resync count. `None` for a filer on fixed names, which leaves the
+    /// client's own rule in force.
     pub fn ignored_on_wire(&self, source_dir: &str) -> Option<IgnoredPaths> {
-        let (rule, version) = self.rule.get_versioned();
+        let (rule, nested, version) = self.rule.get_versioned();
         let IgnoreRule::Git(set) = &*rule else {
             return None;
         };
@@ -268,16 +276,27 @@ impl Filer {
         // whose refresh follows
         let resyncs = self.wire.resyncs.load(Ordering::Acquire);
         let mut cache = self.wire_cache.lock();
-        let paths = match &*cache {
-            Some((cached, paths)) if *cached == version => Arc::clone(paths),
+        let (paths, nested) = match &*cache {
+            Some(cached) if cached.version == version => {
+                (Arc::clone(&cached.paths), Arc::clone(&cached.nested))
+            }
             _ => {
                 let paths = Arc::new(set.relative_sorted(source_dir));
-                *cache = Some((version, Arc::clone(&paths)));
-                paths
+                let nested = Arc::new(set.nested_on_wire(&nested, source_dir));
+                *cache = Some(WireCache {
+                    version,
+                    paths: Arc::clone(&paths),
+                    nested: Arc::clone(&nested),
+                });
+                (paths, nested)
             }
         };
         drop(cache);
-        Some(IgnoredPaths { paths, resyncs })
+        Some(IgnoredPaths {
+            paths,
+            nested,
+            resyncs,
+        })
     }
 
     /// Whether the filer is marked on the wire — for tests.
@@ -452,7 +471,7 @@ pub async fn start_filer(
     // Initial scan — populate the file index (no broadcast; callers read it).
     // A directory whose listing failed transiently has nothing indexed to
     // keep yet; it's polled until it lists.
-    let (mut fresh, _kept) = scan_directory(
+    let scan = scan_directory(
         &source_dir,
         &source_dir,
         &config.ignored_dirs,
@@ -464,6 +483,8 @@ pub async fn start_filer(
         None,
     )
     .await?;
+    rule.set_nested_under(&source_dir, &scan.nested, &scan.kept);
+    let mut fresh = scan.files;
     // List again: what was created between the listing and the walk is in
     // the walk unvetted, and its later events skip it as indexed. Anything
     // created after this listing arrives as an event, vetted. What left

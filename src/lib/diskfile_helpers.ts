@@ -175,23 +175,15 @@ export const to_diskfile_copy_paths = (
 };
 
 /**
- * Names the file index never enters or lists, wherever they appear under a
- * plain root — a folder's or a file's — the backend filer's fixed names
- * (`ALWAYS_IGNORED_DIRS` and `PLAIN_DIR_IGNORED_DIRS` in
- * `crates/zzz_server/src/filer/ignore.rs`) and the credential directories it
- * skips too (`CREDENTIAL_DIR_NAMES` in `crates/zzz_server/src/scoped_fs.rs`),
- * which a test holds this to. Under a git root the filer asks git instead,
- * keeping only `ALWAYS_IGNORED_DIRS` and the credential directories, so there
- * this over-reports: a tracked `dist/` is indexed. Read through
- * `is_file_index_ignored_name`: a link into one is `skipped`, not `broken`,
- * and the file tree shows none as a folder (see `to_diskfile_tree_rows`).
+ * Names the file index never enters or lists under any root, on either rule
+ * (`FileIndexIgnoreRule`) — a folder's or a file's: the backend filer's
+ * `ALWAYS_IGNORED_DIRS` in `crates/zzz_server/src/filer/ignore.rs` and the
+ * credential directories it skips too (`CREDENTIAL_DIR_NAMES` in
+ * `crates/zzz_server/src/scoped_fs.rs`), which a test holds this to. Not even
+ * a `.gitignore` can let the index into these.
  */
-export const FILE_INDEX_IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
+export const FILE_INDEX_ALWAYS_IGNORED_NAMES: ReadonlySet<string> = new Set([
 	'.git',
-	'node_modules',
-	'.svelte-kit',
-	'target',
-	'dist',
 	'.zzz',
 	'.ssh',
 	'.gnupg',
@@ -202,6 +194,20 @@ export const FILE_INDEX_IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Names the file index skips besides `FILE_INDEX_ALWAYS_IGNORED_NAMES` under
+ * a root on fixed names only — the build and dependency output that would
+ * swamp it (`PLAIN_DIR_IGNORED_DIRS` in `crates/zzz_server/src/filer/ignore.rs`,
+ * which a test holds this to). Under a git root git decides these instead,
+ * so a tracked `dist/` is indexed there.
+ */
+export const FILE_INDEX_PLAIN_DIR_IGNORED_NAMES: ReadonlySet<string> = new Set([
+	'node_modules',
+	'.svelte-kit',
+	'target',
+	'dist'
+]);
+
+/**
  * The prefix of the backend's staging files, which the index never lists
  * (`TEMP_FILE_PREFIX` in `crates/zzz_server/src/scoped_fs.rs`, which a test
  * holds this to).
@@ -209,32 +215,156 @@ export const FILE_INDEX_IGNORED_DIR_NAMES: ReadonlySet<string> = new Set([
 export const FILE_INDEX_TEMP_FILE_PREFIX = '.zzz-tmp-';
 
 /**
- * Whether the file index skips any path part named `name`, file or folder:
- * an ignored name (`FILE_INDEX_IGNORED_DIR_NAMES`) or a staging file's
- * (`FILE_INDEX_TEMP_FILE_PREFIX`) — the filer's `IgnoreRule::ignores_name`
- * for a plain root in `crates/zzz_server/src/filer/ignore.rs`. The one rule
- * the explorer, the tree, and markdown links share.
+ * How the file index decides what it skips under one root — the client's
+ * view of the backend filer's `IgnoreRule`:
+ *
+ * - `fixed` — by name alone, `FILE_INDEX_ALWAYS_IGNORED_NAMES` and
+ *   `FILE_INDEX_PLAIN_DIR_IGNORED_NAMES` wherever they appear: a plain
+ *   directory, a registry's root (indexed at its top level), the app
+ *   directory and the scoped dirs while no open project focuses them, and a
+ *   focused directory whose project state has no `ignored` entry
+ * - `git` — `FILE_INDEX_ALWAYS_IGNORED_NAMES` by name; `paths`, the
+ *   daemon's `ProjectIgnoredJson.paths` for that root: relative to it, each
+ *   ignored directory with a trailing `/` (the root itself as `./`), each
+ *   ignored file without one; and `nested`, its `ProjectIgnoredJson.nested`:
+ *   the directories holding a repo of their own, which the filer doesn't
+ *   enter, relative, each with a trailing `/`
+ *
+ * A permanent filer on a git checkout (the app dir or a scoped dir) runs
+ * git's rule on the daemon, but its paths aren't on the wire unless a
+ * project focuses it, so here it reads as `fixed`: a tracked `dist/` in it
+ * is indexed but hidden in the tree, and a file git ignores there reads as
+ * broken in a link, and is waited for, without a notice, when created.
  */
-export const is_file_index_ignored_name = (name: string): boolean =>
-	FILE_INDEX_IGNORED_DIR_NAMES.has(name) || name.startsWith(FILE_INDEX_TEMP_FILE_PREFIX);
+export type FileIndexIgnoreRule =
+	{ kind: 'fixed' } | { kind: 'git'; paths: ReadonlySet<string>; nested: ReadonlySet<string> };
+
+/** The rule of every root without git's answer — see `FileIndexIgnoreRule`. */
+export const FILE_INDEX_FIXED_NAMES_RULE: FileIndexIgnoreRule = { kind: 'fixed' };
 
 /**
- * The first part of `path` below `root` that the file index skips: a part
- * with an ignored name (the filer skips a file named so too) or a staging
- * file's name — see `is_file_index_ignored_name`. The filer never lists such
- * a path from `root`, so a file or folder created there never shows.
+ * The part of a path the file index skips — see `to_unindexed_part`:
+ *
+ * - `by` — `name` for an ignored name (`FILE_INDEX_ALWAYS_IGNORED_NAMES`, a
+ *   staging file's prefix, or under fixed names
+ *   `FILE_INDEX_PLAIN_DIR_IGNORED_NAMES`), `git` for a path git ignores,
+ *   `nested` for a folder holding a repo of its own under a git root
+ * - `path` — the skipped part, absolute: a folder with a trailing `/` (the
+ *   root itself when git ignores it whole), a file without one
+ */
+export interface FileIndexUnindexedPart {
+	by: 'name' | 'git' | 'nested';
+	path: string;
+}
+
+/**
+ * Whether the file index skips any path part named `name` under every rule:
+ * an always-ignored name or a staging file's.
+ */
+export const is_file_index_always_ignored_name = (name: string): boolean =>
+	FILE_INDEX_ALWAYS_IGNORED_NAMES.has(name) || name.startsWith(FILE_INDEX_TEMP_FILE_PREFIX);
+
+/**
+ * The first part of `path` below `root` that the file index skips under
+ * `rule` — the backend filer's `is_ignored` for one root, and the one
+ * predicate the file tree, markdown links, and creating a file share. The
+ * filer never lists such a path from `root`, so a link there can't be told
+ * broken, and a file or folder created there never shows.
+ *
+ * Checks each part from the root down: a name ignored under every rule, a
+ * name ignored under fixed names, or under git each folder prefix (`a/`,
+ * `a/b/`, …) and the path itself in `rule.paths`, then each folder prefix in
+ * `rule.nested` — the order the filer's walk checks them in. Set lookups,
+ * O(depth), never relying on the daemon's sort order. A file entry matches
+ * only a file path and a folder entry only a folder, as the filer keeps them
+ * apart.
  *
  * @param path - a normalized file path, or a folder's with a trailing `/`
- * @param root - the root it's under, with a trailing `/`
- * @returns the skipped part's name, `null` when the index enters it all
+ * @param root - the root whose filer would list it, with a trailing `/`
+ * @param rule - that root's rule
+ * @returns the skipped part, `null` when the index enters it all or `path`
+ * isn't under `root`
  */
-export const to_unindexed_segment = (path: string, root: string): string | null => {
+export const to_unindexed_part = (
+	path: string,
+	root: string,
+	rule: FileIndexIgnoreRule
+): FileIndexUnindexedPart | null => {
 	if (!path.startsWith(root)) return null;
+	const git_paths = rule.kind === 'git' ? rule.paths : null;
+	const nested = rule.kind === 'git' ? rule.nested : null;
+	if (git_paths?.has('./')) return { by: 'git', path: root };
 	const rest = path.slice(root.length);
-	for (const segment of (rest.endsWith('/') ? rest.slice(0, -1) : rest).split('/')) {
-		if (is_file_index_ignored_name(segment)) return segment;
+	let start = 0;
+	while (start < rest.length) {
+		const slash = rest.indexOf('/', start);
+		const end = slash === -1 ? rest.length : slash + 1;
+		const name = rest.slice(start, slash === -1 ? rest.length : slash);
+		if (
+			is_file_index_always_ignored_name(name) ||
+			(!git_paths && FILE_INDEX_PLAIN_DIR_IGNORED_NAMES.has(name))
+		) {
+			return { by: 'name', path: root + rest.slice(0, end) };
+		}
+		const part = rest.slice(0, end);
+		if (git_paths?.has(part)) return { by: 'git', path: root + part };
+		if (nested?.has(part)) return { by: 'nested', path: root + part };
+		start = end;
 	}
 	return null;
+};
+
+/**
+ * Says why the file index skips `part`, short: the name it skips everywhere,
+ * the path git ignores, or the folder that's a repo of its own — a path
+ * relative to `root` when below it.
+ *
+ * @param part - what `to_unindexed_part` found
+ * @param root - the root the path is shown under, with a trailing `/`
+ */
+export const to_unindexed_reason = (part: FileIndexUnindexedPart, root: string): string => {
+	if (part.by === 'git') return `git ignores "${to_relative_path(part.path, root)}"`;
+	if (part.by === 'nested') return `"${to_relative_path(part.path, root)}" is a repo of its own`;
+	const path = part.path.endsWith('/') ? part.path.slice(0, -1) : part.path;
+	return `the file index skips "${path.slice(path.lastIndexOf('/') + 1)}"`;
+};
+
+/**
+ * Like `to_unindexed_part`, over every filer that would hold `path`: the
+ * daemon indexes the union of its filers, so a path is skipped only when
+ * each root holding it below itself skips it — a whole tree in `trees`, or
+ * in `top_levels` one listing only its direct children. The part returned
+ * is the innermost such root's.
+ *
+ * @param path - a normalized file path, or a folder's with a trailing `/`
+ * @param trees - the roots whose filers index their whole trees, each with a trailing `/`
+ * @param top_levels - the roots whose filers index their top level alone, each with a trailing `/`
+ * @param rules - the roots on git's rule, by root; any other is on fixed names
+ * @returns the innermost root's skipped part, `null` when some filer holding
+ * `path` indexes it or none holds it
+ */
+export const to_innermost_unindexed_part = (
+	path: string,
+	trees: ReadonlyArray<string>,
+	top_levels: ReadonlyArray<string>,
+	rules: ReadonlyMap<string, FileIndexIgnoreRule>
+): FileIndexUnindexedPart | null => {
+	let found: FileIndexUnindexedPart | null = null;
+	let found_root = '';
+	for (const root of [...trees, ...top_levels]) {
+		if (path.length <= root.length || !path.startsWith(root)) continue;
+		// a top-level filer lists only the root's own children
+		const slash = path.indexOf('/', root.length);
+		if (!trees.includes(root) && slash !== -1 && slash !== path.length - 1) continue;
+		const part = to_unindexed_part(path, root, rules.get(root) ?? FILE_INDEX_FIXED_NAMES_RULE);
+		// some filer holding the path indexes it
+		if (part === null) return null;
+		if (root.length > found_root.length) {
+			found = part;
+			found_root = root;
+		}
+	}
+	return found;
 };
 
 /**

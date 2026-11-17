@@ -5,13 +5,12 @@ import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import { DiskfilePath, type DiskfileDirectoryPath } from './diskfile_types.ts';
 import {
-	is_file_index_ignored_name,
 	normalize_path,
 	parse_new_diskfile_name,
 	to_file_directories,
 	to_innermost_root,
 	to_relative_path,
-	to_unindexed_segment
+	to_unindexed_reason
 } from './diskfile_helpers.ts';
 
 /**
@@ -323,11 +322,11 @@ export interface DiskfileTreeSource {
 	 */
 	is_expanded: (path: string, kind: 'root' | 'dir') => boolean;
 	/**
-	 * Whether `child`, a folder in `dir`, is one the file index never enters
-	 * from the root around it — so its files can only come from a root nested
-	 * inside it, which shows as its own root.
+	 * Whether the folder `child` is one the file index never enters from the
+	 * root around it — so its files can only come from a root nested inside
+	 * it, which shows as its own root.
 	 */
-	is_ignored_dir: (child: string, dir: string) => boolean;
+	is_ignored_dir: (child: string) => boolean;
 	/**
 	 * The registry repo whose checkout `dir` is, if any. A repo's folder never
 	 * joins a compact row, so its row is always its own, and an unfocused one
@@ -401,7 +400,7 @@ const push_children = (
 	depth: number
 ): void => {
 	const children = source.get_children(dir);
-	const dirs = children.dirs.filter((child) => !source.is_ignored_dir(child, dir));
+	const dirs = children.dirs.filter((child) => !source.is_ignored_dir(child));
 	const { files } = children;
 	const setsize = dirs.length + files.length;
 	let posinset = 0;
@@ -427,7 +426,7 @@ const push_children = (
 		const chain = [child];
 		for (
 			let only = repo ? null : source.get_only_child_dir(path);
-			only && !source.is_ignored_dir(only, path) && !source.get_repo(only);
+			only && !source.is_ignored_dir(only) && !source.get_repo(only);
 			only = source.get_only_child_dir(path)
 		) {
 			label += '/' + only.slice(path.length, -1);
@@ -511,7 +510,7 @@ export class DiskfileTreeState {
 
 	/**
 	 * A note on the last inline create, when what it made won't show — the
-	 * file index skips it (`to_unindexed_segment`) — or on a repo focus or
+	 * file index skips it (`Diskfiles.to_unindexed`) — or on a repo focus or
 	 * unfocus that failed (`focus_repo`, `unfocus_repo`). Cleared by the next
 	 * create, focus, or unfocus, and by the tree on the next key or the note's
 	 * dismiss button.
@@ -562,10 +561,10 @@ export class DiskfileTreeState {
 		},
 		is_expanded: (path, kind) =>
 			kind === 'root' ? !this.collapsed_roots.has(path) : this.expanded.has(path),
-		// the filer's rule for names, and the app directory by its path — which only
-		// another root's walk can reach
-		is_ignored_dir: (child, dir) =>
-			is_file_index_ignored_name(child.slice(dir.length, -1)) || child === this.app.zzz_dir,
+		// the innermost root's rule — git's answer for a focused git root, else fixed
+		// names — and the app directory by its path, which only another root's walk can reach
+		is_ignored_dir: (child) =>
+			child === this.app.zzz_dir || this.app.diskfiles.to_unindexed(child) !== null,
 		get_repo: (dir) => {
 			const project = this.app.projects.repos.get(dir);
 			return project
@@ -723,7 +722,7 @@ export class DiskfileTreeState {
 		while (stack.length) {
 			const dir = stack.pop()!;
 			for (const child of this.get_children(dir).dirs) {
-				if (this.#source.is_ignored_dir(child, dir)) continue;
+				if (this.#source.is_ignored_dir(child)) continue;
 				// an unfocused repo's row has nothing to expand, and expanding one focuses it
 				if (this.#source.get_repo(child)?.focused === false) continue;
 				this.expanded.add(child);
@@ -825,9 +824,9 @@ export class DiskfileTreeState {
 			}
 		}
 		const skipped =
-			root && to_unindexed_segment(creating.kind === 'folder' ? created + '/' : created, root);
+			root && diskfiles.to_unindexed(creating.kind === 'folder' ? created + '/' : created);
 		if (skipped && !replaced) {
-			this.notice = `created ${to_relative_path(created, root)}, which the tree doesn’t show: the file index skips "${skipped}"`;
+			this.notice = `created ${to_relative_path(created, root)}, which the tree doesn’t show: ${to_unindexed_reason(skipped, root)}`;
 		}
 		return true;
 	}
@@ -1017,7 +1016,7 @@ export class DiskfileTreeState {
 		// each folder from `path` (if a folder) up to the root's child before changing anything
 		const folders = path.endsWith('/') ? [path, ...dirs] : dirs;
 		for (let i = 0; i + 1 < folders.length; i++) {
-			if (this.#source.is_ignored_dir(folders[i]!, folders[i + 1]!)) return false;
+			if (this.#source.is_ignored_dir(folders[i]!)) return false;
 		}
 		const siblings = this.get_children(parent);
 		if (!(path.endsWith('/') ? siblings.dirs : siblings.files).includes(path)) return false;

@@ -359,10 +359,11 @@ impl FilerState {
         }
     }
 
-    /// Remove every index entry under `path/`, and the watches there — the
-    /// path is no longer a directory.
+    /// Remove every index entry under `path/`, and the watches and nested
+    /// repos there — the path is no longer a directory.
     async fn remove_children(&mut self, path: &str) {
         self.unwatch_tree(path).await;
+        self.rule.set_nested_under(&dir_prefix(path), &[], &[]);
         let removed = {
             let mut index = self.files.write().await;
             apply_subtree(&mut index, &dir_prefix(path), ScanIndex::new())
@@ -420,9 +421,16 @@ impl FilerState {
         )
         .await;
         let (mut fresh, kept) = match scanned {
-            Ok(scanned) => scanned,
+            Ok(scan) => {
+                self.rule
+                    .set_nested_under(&prefix, &scan.nested, &scan.kept);
+                (scan.files, scan.kept)
+            }
             Err(e) if is_transient_list_error(&e) => return vec![],
-            Err(_) => (ScanIndex::new(), vec![]),
+            Err(_) => {
+                self.rule.set_nested_under(&prefix, &[], &[]);
+                (ScanIndex::new(), vec![])
+            }
         };
         let vetting = match (self.git.is_some(), self.vetted.remove(&prefix)) {
             (false, _) => Vetting::Off,

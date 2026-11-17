@@ -27,7 +27,7 @@
 use crate::scoped_fs::ZZZ_DIR_NAME;
 use fuz_git::{CallOptions, Git, GitError};
 use parking_lot::RwLock;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -196,6 +196,28 @@ impl IgnoredSet {
     }
 }
 
+impl IgnoredSet {
+    /// The dirs a git root's filer leaves unindexed as repos of their own,
+    /// as the wire carries them: `nested` (the repos its walks stopped at)
+    /// and the set's unpopulated submodules, relative to `source_dir` (the
+    /// root, [`dir_prefix`](super::dir_prefix) form), sorted, each with a
+    /// trailing `/`.
+    pub(super) fn nested_on_wire(
+        &self,
+        nested: &BTreeSet<String>,
+        source_dir: &str,
+    ) -> Vec<String> {
+        let dirs: BTreeSet<String> = nested
+            .iter()
+            .chain(&self.submodules)
+            .filter_map(|dir| dir.strip_prefix(source_dir))
+            .filter(|dir| !dir.is_empty())
+            .map(|dir| format!("{dir}/"))
+            .collect();
+        dirs.into_iter().collect()
+    }
+}
+
 impl IgnoreRule {
     pub(super) const fn is_git(&self) -> bool {
         matches!(self, Self::Git(_))
@@ -341,44 +363,72 @@ pub(super) fn is_in_nested_repo(path: &Path, source_dir: &Path) -> bool {
 /// so reads only what's already computed. Readers take an `Arc` snapshot
 /// and drop the lock at once; a writer replaces the snapshot, so a walk in
 /// flight keeps the rule it started with.
+///
+/// Beside the rule it holds the nested repos the walks stopped at
+/// ([`is_nested_repo`]) under a git root — not part of the rule, which
+/// already skips them by their `.git`, but part of what the wire says the
+/// filer leaves unindexed, so a change to them bumps the version too.
 #[derive(Debug, Clone)]
 pub(super) struct SharedRule {
-    current: Arc<RwLock<Arc<IgnoreRule>>>,
-    /// Bumped on every change to the rule — the hook a publisher of the
-    /// ignored paths watches.
+    current: Arc<RwLock<RuleState>>,
+    /// Bumped on every change to the rule or the nested repos — the hook a
+    /// publisher of the ignored paths watches.
     version: Arc<AtomicU64>,
+}
+
+/// What a [`SharedRule`] holds under its one lock.
+#[derive(Debug)]
+struct RuleState {
+    rule: Arc<IgnoreRule>,
+    /// The dirs (absolute, no trailing `/`) the walks stopped at, each
+    /// holding a repo of its own.
+    nested: Arc<BTreeSet<String>>,
 }
 
 impl SharedRule {
     pub(super) fn new(rule: IgnoreRule) -> Self {
         Self {
-            current: Arc::new(RwLock::new(Arc::new(rule))),
+            current: Arc::new(RwLock::new(RuleState {
+                rule: Arc::new(rule),
+                nested: Arc::default(),
+            })),
             version: Arc::new(AtomicU64::new(0)),
         }
     }
 
     /// The rule as it stands.
     pub(super) fn get(&self) -> Arc<IgnoreRule> {
-        Arc::clone(&self.current.read())
+        Arc::clone(&self.current.read().rule)
     }
 
-    /// How many times the rule has changed.
+    /// How many times the rule or the nested repos have changed.
     pub(super) fn version(&self) -> u64 {
         self.version.load(Ordering::Acquire)
     }
 
-    /// The rule and its version, read together: every change bumps the
-    /// version under the write lock, so the two always agree.
-    pub(super) fn get_versioned(&self) -> (Arc<IgnoreRule>, u64) {
+    /// The rule, the nested repos, and their version, read together: every
+    /// change bumps the version under the write lock, so the three always
+    /// agree.
+    pub(super) fn get_versioned(&self) -> (Arc<IgnoreRule>, Arc<BTreeSet<String>>, u64) {
         let current = self.current.read();
-        (Arc::clone(&current), self.version.load(Ordering::Acquire))
+        (
+            Arc::clone(&current.rule),
+            Arc::clone(&current.nested),
+            self.version.load(Ordering::Acquire),
+        )
+    }
+
+    /// The nested repos the walks stopped at, sorted.
+    #[cfg(test)]
+    pub(super) fn nested(&self) -> Vec<String> {
+        self.current.read().nested.iter().cloned().collect()
     }
 
     /// Replace the rule, bumping the version when it differs.
     pub(super) fn set(&self, rule: IgnoreRule) {
         let mut current = self.current.write();
-        if **current != rule {
-            *current = Arc::new(rule);
+        if *current.rule != rule {
+            current.rule = Arc::new(rule);
             self.version.fetch_add(1, Ordering::AcqRel);
         }
     }
@@ -387,7 +437,7 @@ impl SharedRule {
     /// the version when any entry is new. Returns how many were.
     pub(super) fn extend(&self, more: &IgnoredSet) -> usize {
         let mut current = self.current.write();
-        let IgnoreRule::Git(set) = &**current else {
+        let IgnoreRule::Git(set) = &*current.rule else {
             return 0;
         };
         let new = more.added_since(set);
@@ -396,7 +446,7 @@ impl SharedRule {
             return 0;
         }
         // clones the set only while a walk holds the old snapshot
-        if let IgnoreRule::Git(set) = Arc::make_mut(&mut current) {
+        if let IgnoreRule::Git(set) = Arc::make_mut(&mut current.rule) {
             set.dirs.extend(new.dirs);
             set.files.extend(new.files);
             set.submodules.extend(new.submodules);
@@ -409,13 +459,50 @@ impl SharedRule {
     /// bumping the version when it was there.
     pub(super) fn forget_dir(&self, dir: &str) {
         let mut current = self.current.write();
-        if !current.prunes_dir(Path::new(dir)) {
+        if !current.rule.prunes_dir(Path::new(dir)) {
             return;
         }
-        if let IgnoreRule::Git(set) = Arc::make_mut(&mut current) {
+        if let IgnoreRule::Git(set) = Arc::make_mut(&mut current.rule) {
             set.dirs.remove(dir);
             set.submodules.remove(dir);
         }
+        self.version.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Replace the nested repos at and under `prefix` (a dir,
+    /// [`dir_prefix`](super::dir_prefix) form) with `found`, what a walk of
+    /// it stopped at — keeping those under `kept`, the dirs it couldn't
+    /// list this time — bumping the version when that changes them. With
+    /// nothing found and nothing kept, it drops those under a dir that's gone
+    /// or no longer a dir.
+    pub(super) fn set_nested_under(&self, prefix: &str, found: &[String], kept: &[String]) {
+        let dir = super::prefix_dir(prefix);
+        let dropped = |nested: &str| {
+            Path::new(nested).starts_with(dir)
+                && !kept.iter().any(|kept| nested.starts_with(kept.as_str()))
+        };
+        // a read first: every file event clears what was under its path, and
+        // the event loop, the one writer, can't race itself
+        let unchanged = {
+            let current = self.current.read();
+            found.iter().all(|found| current.nested.contains(found))
+                && current
+                    .nested
+                    .iter()
+                    .all(|nested| !dropped(nested) || found.contains(nested))
+        };
+        if unchanged {
+            return;
+        }
+        let mut current = self.current.write();
+        let next: BTreeSet<String> = current
+            .nested
+            .iter()
+            .filter(|nested| !dropped(nested))
+            .chain(found)
+            .cloned()
+            .collect();
+        current.nested = Arc::new(next);
         self.version.fetch_add(1, Ordering::AcqRel);
     }
 }
@@ -685,7 +772,7 @@ mod tests {
     use crate::filer::core::FilerConfig;
     use crate::filer::dir_prefix;
     use crate::filer::test_support::{
-        TempDir, checkout, keys_of, run_git, start, start_git, test_git, wait_for_keys,
+        TempDir, checkout, keys_of, lock_dir, run_git, start, start_git, test_git, wait_for_keys,
         watched_dirs,
     };
 
@@ -804,10 +891,47 @@ mod tests {
         );
         // the root ignored whole
         assert_eq!(IgnoredSet::of(&["/w"], &[]).relative_sorted("/w/"), ["./"]);
-        let shared = SharedRule::new(IgnoreRule::Git(set));
-        let (rule, version) = shared.get_versioned();
+        let shared = SharedRule::new(IgnoreRule::Git(set.clone()));
+        let (rule, nested, version) = shared.get_versioned();
         assert_eq!(version, 0);
         assert!(rule.is_git());
+        assert!(nested.is_empty());
+        // the nested repos and the submodules ride beside the paths
+        let nested = BTreeSet::from(["/w/a/repo".to_owned(), "/w/vendor/sub".to_owned()]);
+        assert_eq!(
+            set.nested_on_wire(&nested, "/w/"),
+            ["a/repo/", "vendor/sub/"]
+        );
+    }
+
+    #[test]
+    fn the_nested_repos_are_replaced_by_subtree_and_versioned() {
+        let shared = SharedRule::new(git_rule(&[], &[]));
+        let owned = |paths: &[&str]| paths.iter().map(|p| (*p).to_owned()).collect::<Vec<_>>();
+        shared.set_nested_under("/w/", &owned(&["/w/a", "/w/b/c"]), &[]);
+        assert_eq!(shared.version(), 1);
+        assert_eq!(shared.nested(), ["/w/a", "/w/b/c"]);
+        shared.set_nested_under("/w/", &owned(&["/w/a", "/w/b/c"]), &[]);
+        assert_eq!(shared.version(), 1, "nothing new");
+        // a walk of `b/` finds `c` gone and `d` new, leaving `a` alone
+        shared.set_nested_under("/w/b/", &owned(&["/w/b/d"]), &[]);
+        assert_eq!(shared.nested(), ["/w/a", "/w/b/d"]);
+        assert_eq!(shared.version(), 2);
+        // a sibling sharing a prefix isn't under it
+        shared.set_nested_under("/w/a2/", &[], &[]);
+        assert_eq!(shared.nested(), ["/w/a", "/w/b/d"]);
+        // a dir the walk couldn't list keeps what was found under it
+        shared.set_nested_under("/w/", &owned(&["/w/a"]), &owned(&["/w/b/"]));
+        assert_eq!(shared.nested(), ["/w/a", "/w/b/d"]);
+        assert_eq!(shared.version(), 2);
+        // the prefix itself is the repo
+        shared.set_nested_under("/w/a/", &[], &[]);
+        assert_eq!(shared.nested(), ["/w/b/d"]);
+        assert_eq!(shared.version(), 3);
+        // a repo whose name extends the walked dir's isn't under it
+        shared.set_nested_under("/w/", &owned(&["/w/ab", "/w/b/d"]), &[]);
+        shared.set_nested_under("/w/a/", &[], &[]);
+        assert_eq!(shared.nested(), ["/w/ab", "/w/b/d"]);
     }
 
     // -- Filers on git roots --------------------------------------------------
@@ -995,9 +1119,50 @@ mod tests {
         for dir in ["inner", "sub", "linked"] {
             assert!(!watched.contains(&dir_prefix(&tmp.key(dir))), "{dir}");
         }
-        // a repo made in a watched dir leaves the index
+        // the wire names each as a repo of its own
+        let nested =
+            |filer: &crate::filer::core::Filer| filer.ignored_on_wire(&tmp.root()).unwrap().nested;
+        assert_eq!(*nested(&filer), ["inner/", "linked/", "sub/"]);
+        // a repo made in a watched dir leaves the index, and joins the list
+        let version = filer.ignored_version();
         run_git(&tmp.path("plain"), &["init", "-q"]);
         wait_for_keys(&filer, &tmp.keys(&[".gitmodules", "a.txt"])).await;
+        assert_eq!(*nested(&filer), ["inner/", "linked/", "plain/", "sub/"]);
+        assert!(filer.ignored_version() > version, "a change the wire sees");
+        // a `.git` removed is seen at the next rescan
+        std::fs::remove_dir_all(tmp.path("inner/.git")).unwrap();
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        filer.rescan_tx.send(reply_tx).await.unwrap();
+        reply_rx.await.unwrap();
+        wait_for_keys(&filer, &tmp.keys(&[".gitmodules", "a.txt", "inner/b.txt"])).await;
+        assert_eq!(*nested(&filer), ["linked/", "plain/", "sub/"]);
+        // one removed leaves the list with it
+        std::fs::remove_dir_all(tmp.path("linked")).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while *nested(&filer) != ["plain/", "sub/"] {
+            assert!(std::time::Instant::now() < deadline, "{:?}", nested(&filer));
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    /// A dir that can't be listed any more indexes nothing below it, its
+    /// nested repos included.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_unreadable_dir_drops_its_nested_repos() {
+        let tmp = checkout(&[
+            ("a.txt", "a"),
+            ("outer/b.txt", "b"),
+            ("outer/inner/c.txt", "c"),
+        ]);
+        run_git(&tmp.path("outer/inner"), &["init", "-q"]);
+        let filer = start_git(&tmp).await;
+        let nested = || filer.ignored_on_wire(&tmp.root()).unwrap().nested;
+        assert_eq!(*nested(), ["outer/inner/"]);
+        let Some(_unlock) = lock_dir(&tmp.path("outer")) else {
+            return;
+        };
+        wait_for_keys(&filer, &tmp.keys(&["a.txt"])).await;
+        assert!(nested().is_empty(), "{:?}", nested());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

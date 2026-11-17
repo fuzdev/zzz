@@ -13,6 +13,7 @@ import {
 	type MarkdownLinkIndex,
 	type MarkdownLinkTarget
 } from '#lib/markdown_links.ts';
+import type { FileIndexIgnoreRule } from '#lib/diskfile_helpers.ts';
 
 const FILE = '/w/docs/guide.md';
 const OPTIONS = { file_path: FILE, root_dir: '/w/' };
@@ -112,7 +113,8 @@ const create_index = (
 	files: Array<string>,
 	roots: Array<string> = ['/w/'],
 	top_level_roots: Array<string> = [],
-	unfocused_dirs: Array<string> = []
+	unfocused_dirs: Array<string> = [],
+	ignore_rules: ReadonlyMap<string, FileIndexIgnoreRule> = new Map()
 ): MarkdownLinkIndex => {
 	const file_set = new Set(files);
 	return {
@@ -120,7 +122,8 @@ const create_index = (
 		has_directory: (path) => files.some((f) => f.startsWith(path)),
 		roots,
 		top_level_roots,
-		unfocused_dirs
+		unfocused_dirs,
+		ignore_rules
 	};
 };
 
@@ -171,6 +174,84 @@ describe('to_markdown_link_status', () => {
 		);
 	});
 
+	describe('under a focused git root', () => {
+		// `/dev/` is a registry root on fixed names, `/dev/app/` a focused repo on git's rule
+		const git = create_index(
+			['/dev/app/a.md', '/dev/app/dist/x.js'],
+			['/dev/app/'],
+			['/dev/'],
+			[],
+			new Map([
+				[
+					'/dev/app/',
+					{
+						kind: 'git',
+						paths: new Set(['out/', 'x.log', 'docs/build/']),
+						nested: new Set(['vendor/lib/'])
+					}
+				]
+			])
+		);
+		const status_in = (href: string): string => {
+			const target = resolve_markdown_link(href, { file_path: '/dev/app/a.md' });
+			assert.strictEqual(target.kind, 'path');
+			return to_markdown_link_status(target as Extract<MarkdownLinkTarget, { kind: 'path' }>, git);
+		};
+
+		test('a link into what git ignores is not indexed, never broken', () => {
+			assert.strictEqual(status_in('./out/gen.js'), 'skipped');
+			assert.strictEqual(status_in('./out/'), 'skipped');
+			assert.strictEqual(status_in('./out'), 'skipped', 'a folder entry without its slash');
+			assert.strictEqual(status_in('./x.log'), 'skipped', 'a file entry');
+			assert.strictEqual(status_in('./docs/build/a/b.html'), 'skipped');
+		});
+
+		test('git, not the fixed names, decides', () => {
+			assert.strictEqual(status_in('./dist/x.js'), 'file', 'a tracked dist is indexed');
+			assert.strictEqual(status_in('./dist/gone.js'), 'broken');
+			assert.strictEqual(
+				status_in('./node_modules/x/README.md'),
+				'broken',
+				'git doesn’t ignore it'
+			);
+			assert.strictEqual(status_in('./x.log/'), 'broken', 'a file entry names no folder');
+			assert.strictEqual(status_in('./docs/gone.md'), 'broken');
+		});
+
+		test('the names ignored under every rule still are', () => {
+			assert.strictEqual(status_in('./.git/config'), 'skipped');
+			assert.strictEqual(status_in('./.zzz-tmp-a'), 'skipped');
+		});
+
+		test('a repo nested in the git root is not indexed, never broken', () => {
+			assert.strictEqual(status_in('./vendor/lib/README.md'), 'skipped');
+			assert.strictEqual(status_in('./vendor/lib'), 'skipped');
+			assert.strictEqual(status_in('./vendor/gone.md'), 'broken');
+		});
+	});
+
+	test('a path an outer filer indexes is broken where the inner one skips it', () => {
+		// a plain dir `/s/` around a checkout `/s/repo/` whose `build/` git ignores
+		const overlapping = create_index(
+			['/s/repo/a.md'],
+			['/s/', '/s/repo/'],
+			[],
+			[],
+			new Map([['/s/repo/', { kind: 'git', paths: new Set(['build/']), nested: new Set() }]])
+		);
+		const status_of = (href: string): string => {
+			const target = resolve_markdown_link(href, { file_path: '/s/repo/a.md' });
+			assert.strictEqual(target.kind, 'path');
+			return to_markdown_link_status(
+				target as Extract<MarkdownLinkTarget, { kind: 'path' }>,
+				overlapping
+			);
+		};
+		assert.strictEqual(status_of('./build/x.js'), 'broken');
+		// every filer skips `.git`
+		assert.strictEqual(status_of('./.git/config'), 'skipped');
+	});
+
 	test('a root-relative miss is unconfirmed, a hit is found', () => {
 		assert.strictEqual(status('/nope.md'), 'root_relative');
 		assert.strictEqual(status('/docs/x.md'), 'file');
@@ -213,6 +294,11 @@ describe('to_markdown_link_status', () => {
 		test('a loose file at the root is indexed, so a missing one is broken', () => {
 			assert.strictEqual(status_from('../README.md', '/dev/app/a.md'), 'file');
 			assert.strictEqual(status_from('../GONE.md', '/dev/app/a.md'), 'broken');
+		});
+
+		test('a loose file the root’s fixed names skip is not indexed, never broken', () => {
+			assert.strictEqual(status_from('./dist', '/dev/README.md'), 'skipped');
+			assert.strictEqual(status_from('../node_modules', '/dev/app/a.md'), 'skipped');
 		});
 
 		test('a focused repo is covered whole', () => {
@@ -339,11 +425,35 @@ describe('to_markdown_link_title', () => {
 			[
 				'not found: /w/docs/gone.md',
 				'outside the open projects: /far.md',
-				'in a folder the file index skips: /w/docs/node_modules/x',
+				'not indexed, skipped by name: /w/docs/node_modules/x',
 				'not found from the project root: /w/nope.md',
 				"opens the folder's readme: /w/docs/sub/README.md",
 				'a folder, which zzz has no view for: /w/docs/empty/',
 				null
+			]
+		);
+	});
+});
+
+describe('to_markdown_link_title for what the index skips', () => {
+	test('says why: git, or a repo of its own', () => {
+		const index = create_index(
+			[],
+			['/w/'],
+			[],
+			[],
+			new Map([['/w/', { kind: 'git', paths: new Set(['out/']), nested: new Set(['lib/']) }]])
+		);
+		const links = to_markdown_links(mdz_parse('[a](./out/x) [b](./lib/y) [c](./.git/z)'), {
+			file_path: '/w/a.md',
+			index
+		});
+		assert.deepEqual(
+			links.map((link) => to_markdown_link_title(link)),
+			[
+				'not indexed, ignored by git: /w/out/x',
+				'not indexed, in a repo of its own: /w/lib/y',
+				'not indexed, skipped by name: /w/.git/z'
 			]
 		);
 	});

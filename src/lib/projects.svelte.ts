@@ -24,6 +24,7 @@ import {
 	type ProjectJsonInput
 } from './project.svelte.ts';
 import type { DiskfileDirectoryPath, DiskfilePath } from './diskfile_types.ts';
+import type { FileIndexIgnoreRule } from './diskfile_helpers.ts';
 import type { ProjectFocusRefusal } from './action_specs.ts';
 import { ERROR_PROJECT_NOT_OPEN, ERROR_REPO_NOT_FOCUSED } from './project_helpers.ts';
 
@@ -136,6 +137,19 @@ export class Projects extends Cell<typeof ProjectsJson> {
 			}
 		}
 		return repos;
+	});
+
+	/**
+	 * Every open project's `Project.ignore_rules` in one map, by focused
+	 * directory: the roots whose filers index by git's answer. Two projects
+	 * focusing one directory share its filer, so either's entry is its rule.
+	 */
+	readonly ignore_rules: ReadonlyMap<string, FileIndexIgnoreRule> = $derived.by(() => {
+		const rules: Map<string, FileIndexIgnoreRule> = new Map();
+		for (const project of this.items.values) {
+			for (const [dir, rule] of project.ignore_rules) rules.set(dir, rule);
+		}
+		return rules;
 	});
 
 	/** The repos with a `focus_repo` or `unfocus_repo` in flight from this client, by dir. */

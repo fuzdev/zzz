@@ -25,6 +25,7 @@ import { type Datetime } from './datetime.ts';
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { DiskfileDirectoryPath, DiskfilePath } from './diskfile_types.ts';
+import type { FileIndexIgnoreRule } from './diskfile_helpers.ts';
 
 /**
  * Which rule rooted a project: a registry (`repos.toml`) at its root, the
@@ -92,8 +93,8 @@ export const ProjectRev = pipe(number, safe_integer, min_value(0));
 export type ProjectRev = Infer<typeof ProjectRev>;
 
 /**
- * What git ignores under one focused directory on git's rule: the daemon's
- * answer, which replaces the client's fixed names there.
+ * What the file index leaves out under one focused directory on git's rule:
+ * the daemon's answer, which replaces the client's fixed names there.
  */
 export const ProjectIgnoredJson = object({
 	/**
@@ -102,11 +103,18 @@ export const ProjectIgnoredJson = object({
 	 * file it skips alone without one.
 	 *
 	 * The daemon sorts by Rust's byte order, which differs from JS string
-	 * order (UTF-16 code units) for non-BMP characters.
-	 * TODO step 5's ignore predicate must not binary-search `paths` on the
-	 * daemon's order — sort it here, or look up without relying on order.
+	 * order (UTF-16 code units) for non-BMP characters, so the client looks
+	 * paths up in a set (`Project.ignore_rules`, read by
+	 * `to_unindexed_part`), never by binary search on this order.
 	 */
 	paths: array(string),
+	/**
+	 * The directories holding a repo of their own — a nested repo, a
+	 * submodule, populated or not — which the daemon doesn't index and git's
+	 * paths never name: relative to the directory, sorted, each with a
+	 * trailing `/`. Read by `to_unindexed_part` as a `nested` part.
+	 */
+	nested: array(string),
 	/**
 	 * Bumped each time the daemon re-pruned the directory without sending a
 	 * `filer_change` per file — too many changed at once (a `node_modules/`
@@ -230,6 +238,20 @@ export class Project extends Cell<typeof ProjectJson> {
 	readonly new_files_dir: DiskfileDirectoryPath = $derived(
 		this.last_focus !== null && this.focused.includes(this.last_focus) ? this.last_focus : this.root
 	);
+
+	/**
+	 * The git rule of each focused directory the daemon indexes by git's
+	 * answer (`ignored`), by directory — rebuilt when a refresh replaces
+	 * `ignored`, so the links, the tree, and the create notice that read it
+	 * follow. A focused directory without an entry is on fixed names.
+	 */
+	readonly ignore_rules: ReadonlyMap<string, FileIndexIgnoreRule> = $derived.by(() => {
+		const rules: Map<string, FileIndexIgnoreRule> = new Map();
+		for (const [dir, { paths, nested }] of Object.entries(this.ignored)) {
+			rules.set(dir, { kind: 'git', paths: new Set(paths), nested: new Set(nested) });
+		}
+		return rules;
+	});
 
 	/**
 	 * What a reopen restores after a daemon restart: each focused directory,

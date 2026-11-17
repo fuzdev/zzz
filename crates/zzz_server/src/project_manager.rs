@@ -22,8 +22,9 @@
 //! exactly the state its rev names. The counter starts at the clock
 //! ([`rev_seed`]), so revs keep increasing across restarts.
 //!
-//! Each commit also refreshes what git ignores under every focused dir on
-//! git's rule ([`OpenProject::ignored`]), read from the filers under the
+//! Each commit also refreshes what git ignores, and the repos of their own
+//! the filer leaves unindexed, under every focused dir on git's rule
+//! ([`OpenProject::ignored`]), read from the filers under the
 //! lock: a change there is a change of the project's state, stamped and
 //! broadcast like any other. A filer whose set changes on its own (an edit
 //! to a `.gitignore`, a live-vetted file) asks for that commit

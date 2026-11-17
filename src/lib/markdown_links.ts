@@ -18,7 +18,11 @@
 import type { MdzNode, MdzNodeHeading } from '@fuzdev/mdz/mdz.ts';
 import { mdz_is_safe_reference } from '@fuzdev/mdz/mdz_helpers.ts';
 
-import { is_file_index_ignored_name } from './diskfile_helpers.ts';
+import {
+	to_innermost_unindexed_part,
+	type FileIndexIgnoreRule,
+	type FileIndexUnindexedPart
+} from './diskfile_helpers.ts';
 
 /**
  * Where a link in a markdown file leads:
@@ -189,6 +193,11 @@ export interface MarkdownLinkIndex {
 	 * a missing loose file.
 	 */
 	readonly unfocused_dirs: ReadonlyArray<string>;
+	/**
+	 * The rule of each root in `roots` the daemon indexes by git's answer, by
+	 * root; every other root is on fixed names (`FileIndexIgnoreRule`).
+	 */
+	readonly ignore_rules: ReadonlyMap<string, FileIndexIgnoreRule>;
 }
 
 /**
@@ -201,8 +210,10 @@ export interface MarkdownLinkIndex {
  *   - `outside` — outside every root the index covers
  *   - `unfocused` — under a registry project's root, below its top level and
  *     in no focused repo, where the index doesn't look
- *   - `skipped` — a path part the index never enters or lists
- *     (`is_file_index_ignored_name`)
+ *   - `skipped` — a path part no filer holding it enters or lists, by its
+ *     name, because git ignores it, or as a repo of its own nested in a git
+ *     root (`to_innermost_unindexed_part`, `MarkdownLink.unindexed`) —
+ *     shown as not indexed
  *   - `root_relative` — written `/…` and not found from the project's
  *     root, which may not be the repository's
  */
@@ -220,31 +231,37 @@ export type MarkdownLinkStatus =
 export const to_markdown_link_status = (
 	target: Extract<MarkdownLinkTarget, { kind: 'path' }>,
 	index: MarkdownLinkIndex
-): MarkdownLinkStatus => {
+): MarkdownLinkStatus => check_markdown_link(target, index).status;
+
+/** A path link's status, and for a `skipped` one the part the index skips. */
+const check_markdown_link = (
+	target: Extract<MarkdownLinkTarget, { kind: 'path' }>,
+	index: MarkdownLinkIndex
+): { status: MarkdownLinkStatus; unindexed: FileIndexUnindexedPart | null } => {
+	const found = (status: MarkdownLinkStatus) => ({ status, unindexed: null });
 	const { path } = target;
-	if (!target.directory && index.has_file(path)) return 'file';
+	if (!target.directory && index.has_file(path)) return found('file');
 	const dir_path = path.endsWith('/') ? path : path + '/';
-	if (index.has_directory(dir_path)) return 'directory';
-	if (target.root_relative) return 'root_relative';
-	const tree_root = to_root_dir(dir_path, index.roots);
-	let root = tree_root;
-	if (root === null) {
+	if (index.has_directory(dir_path)) return found('directory');
+	if (target.root_relative) return found('root_relative');
+	if (to_root_dir(dir_path, index.roots) === null) {
 		const top = to_root_dir(dir_path, index.top_level_roots);
-		if (top === null) return 'outside';
-		if (index.unfocused_dirs.some((dir) => dir_path.startsWith(dir))) return 'unfocused';
+		if (top === null) return found('outside');
+		if (index.unfocused_dirs.some((dir) => dir_path.startsWith(dir))) return found('unfocused');
 		// only a file directly in a top-level root is where the index looks
 		// TODO an unregistered directory linked without a trailing slash
 		// (`./scratch`) reads as a missing loose file, so broken: the honest fix
 		// is for the top-level filer to report the root's child directory names,
 		// a wire change
 		const name = path.slice(top.length);
-		if (target.directory || name.includes('/')) return 'unfocused';
-		root = top;
+		if (target.directory || name.includes('/')) return found('unfocused');
 	}
-	for (const segment of dir_path.slice(root.length).split('/')) {
-		if (is_file_index_ignored_name(segment)) return 'skipped';
-	}
-	return 'broken';
+	// skipped only where every filer holding it skips it; a link without a
+	// trailing slash may name a file or a folder, which git's paths tell apart
+	const unindexed_part = (p: string) =>
+		to_innermost_unindexed_part(p, index.roots, index.top_level_roots, index.ignore_rules);
+	const unindexed = unindexed_part(dir_path) ?? (target.directory ? null : unindexed_part(path));
+	return unindexed ? { status: 'skipped', unindexed } : found('broken');
 };
 
 /**
@@ -377,6 +394,8 @@ export interface MarkdownLink {
 	target: MarkdownLinkTarget;
 	/** For a path link checked against an index, how it stands; else `null`. */
 	status: MarkdownLinkStatus | null;
+	/** For a `skipped` link, the part of its path the file index skips; else `null`. */
+	unindexed: FileIndexUnindexedPart | null;
 }
 
 export interface ToMarkdownLinksOptions {
@@ -410,13 +429,15 @@ export const to_markdown_links = (
 	walk_rendered(nodes, (node) => {
 		if (node.type !== 'Link' || !mdz_is_safe_reference(node.reference)) return;
 		const target = resolve_markdown_link(node.reference, { file_path, root_dir });
+		const checked = target.kind === 'path' && index ? check_markdown_link(target, index) : null;
 		links.push({
 			reference: node.reference,
 			text: to_mdz_plain_text(node.children).trim(),
 			start: node.start,
 			end: node.end,
 			target,
-			status: target.kind === 'path' && index ? to_markdown_link_status(target, index) : null
+			status: checked?.status ?? null,
+			unindexed: checked?.unindexed ?? null
 		});
 	});
 	return links;
@@ -472,6 +493,18 @@ const to_markdown_anchor_key = (anchor: Element): string | null => {
 	return start === null || end === null ? null : `${start}:${end}`;
 };
 
+/** Why the file index skips a link's target, for its title. */
+const to_unindexed_cause = (part: FileIndexUnindexedPart | null): string => {
+	switch (part?.by) {
+		case 'git':
+			return 'ignored by git';
+		case 'nested':
+			return 'in a repo of its own';
+		default:
+			return 'skipped by name';
+	}
+};
+
 /**
  * The title a link shows on hover to say how it stands, or `null` for a link
  * that needs none.
@@ -493,7 +526,7 @@ export const to_markdown_link_title = (
 		case 'unfocused':
 			return `in a repo that isn't focused, which the file index doesn't cover: ${target.path}`;
 		case 'skipped':
-			return `in a folder the file index skips: ${target.path}`;
+			return `not indexed, ${to_unindexed_cause(link.unindexed)}: ${target.path}`;
 		case 'root_relative':
 			return `not found from the project root: ${target.path}`;
 		case 'directory':

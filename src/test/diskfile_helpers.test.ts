@@ -9,8 +9,13 @@ import {
 	to_diskfile_copy_paths,
 	to_file_directories,
 	to_innermost_root,
+	to_innermost_unindexed_part,
 	to_relative_path,
-	to_unindexed_segment
+	to_unindexed_part,
+	to_unindexed_reason,
+	FILE_INDEX_FIXED_NAMES_RULE,
+	type FileIndexIgnoreRule,
+	type FileIndexUnindexedPart
 } from '#lib/diskfile_helpers.ts';
 import type { Diskfiles } from '#lib/diskfiles.svelte.ts';
 import { DiskfilePath } from '#lib/diskfile_types.ts';
@@ -295,23 +300,208 @@ describe('to_diskfile_copy_paths', () => {
 	});
 });
 
-describe('to_unindexed_segment', () => {
-	const cases: Array<[label: string, path: string, expected: string | null]> = [
-		['a plain file', '/w/a/b.ts', null],
-		['a file in an ignored folder', '/w/node_modules/x.js', 'node_modules'],
-		['a folder deep in one', '/w/p/node_modules/q/', 'node_modules'],
-		['an ignored folder itself', '/w/.git/', '.git'],
-		['a file with an ignored name', '/w/target', 'target'],
-		['a staging-named file', '/w/a/.zzz-tmp-x', '.zzz-tmp-x'],
-		['a staging-named folder', '/w/.zzz-tmp-x/a.md', '.zzz-tmp-x'],
-		['the first skipped part', '/w/dist/node_modules/x', 'dist'],
-		['a path outside the root', '/elsewhere/node_modules/x', null]
-	];
-	test.each(cases)('%s', (_label, path, expected) => {
-		assert.strictEqual(to_unindexed_segment(path, '/w/'), expected);
+describe('to_unindexed_part', () => {
+	const git = (...paths: Array<string>): FileIndexIgnoreRule => ({
+		kind: 'git',
+		paths: new Set(paths),
+		nested: new Set()
 	});
 
-	test('only what’s below the root counts', () => {
-		assert.isNull(to_unindexed_segment('/w/node_modules/pkg/x.js', '/w/node_modules/pkg/'));
+	describe('names ignored under every rule', () => {
+		const cases: Array<[label: string, path: string, expected: string]> = [
+			['a file in .git', '/w/.git/config', '/w/.git/'],
+			['.zzz deep down', '/w/p/.zzz/run/x', '/w/p/.zzz/'],
+			['a credential folder', '/w/.ssh/id', '/w/.ssh/'],
+			['a staging-named file', '/w/a/.zzz-tmp-x', '/w/a/.zzz-tmp-x'],
+			['a staging-named folder', '/w/.zzz-tmp-x/a.md', '/w/.zzz-tmp-x/']
+		];
+		test.each(cases)('%s', (_label, path, expected) => {
+			for (const rule of [FILE_INDEX_FIXED_NAMES_RULE, git()]) {
+				assert.deepEqual(to_unindexed_part(path, '/w/', rule), { by: 'name', path: expected });
+			}
+		});
+
+		test('even where git’s paths don’t say so', () => {
+			assert.deepEqual(to_unindexed_part('/w/.git/', '/w/', git('a/')), {
+				by: 'name',
+				path: '/w/.git/'
+			});
+		});
+	});
+
+	describe('fixed names', () => {
+		const cases: Array<[label: string, path: string, expected: string | null]> = [
+			['a plain file', '/w/a/b.ts', null],
+			['a file in an ignored folder', '/w/node_modules/x.js', '/w/node_modules/'],
+			['a folder deep in one', '/w/p/node_modules/q/', '/w/p/node_modules/'],
+			['an ignored folder itself', '/w/dist/', '/w/dist/'],
+			['a file with an ignored name', '/w/target', '/w/target'],
+			['a name only containing one', '/w/target.md', null],
+			['the first skipped part', '/w/dist/node_modules/x', '/w/dist/'],
+			['a path outside the root', '/elsewhere/node_modules/x', null]
+		];
+		test.each(cases)('%s', (_label, path, expected) => {
+			assert.deepEqual(
+				to_unindexed_part(path, '/w/', FILE_INDEX_FIXED_NAMES_RULE),
+				expected === null ? null : { by: 'name', path: expected }
+			);
+		});
+
+		test('only what’s below the root counts', () => {
+			assert.isNull(
+				to_unindexed_part('/w/node_modules/pkg/x.js', '/w/node_modules/pkg/', {
+					kind: 'fixed'
+				})
+			);
+		});
+	});
+
+	describe('git', () => {
+		const rule = git('out/', 'a/b/cache/', 'x.log', 'a/notes.txt');
+		const cases: Array<[label: string, path: string, expected: string | null]> = [
+			['a file in an ignored folder', '/w/out/x.js', '/w/out/'],
+			['the ignored folder itself', '/w/out/', '/w/out/'],
+			['deep in a nested ignored folder', '/w/a/b/cache/c/d', '/w/a/b/cache/'],
+			['above a nested ignored folder', '/w/a/b/y.ts', null],
+			['an ignored file', '/w/x.log', '/w/x.log'],
+			['an ignored file in a folder', '/w/a/notes.txt', '/w/a/notes.txt'],
+			['a file entry names no folder', '/w/x.log/', null],
+			['below a file entry', '/w/x.log/y', null],
+			['a folder entry names no file', '/w/out', null],
+			['a sibling sharing a prefix', '/w/outer/x', null],
+			['fixed names are git’s call', '/w/dist/x.js', null],
+			['node_modules too', '/w/node_modules/x.js', null],
+			['a path outside the root', '/v/out/x', null]
+		];
+		test.each(cases)('%s', (_label, path, expected) => {
+			assert.deepEqual(
+				to_unindexed_part(path, '/w/', rule),
+				expected === null ? null : { by: 'git', path: expected }
+			);
+		});
+
+		test('`./` is the root ignored whole', () => {
+			const whole = git('./');
+			assert.deepEqual(to_unindexed_part('/w/a/b.ts', '/w/', whole), { by: 'git', path: '/w/' });
+			assert.deepEqual(to_unindexed_part('/w/', '/w/', whole), { by: 'git', path: '/w/' });
+			assert.isNull(to_unindexed_part('/v/a.ts', '/w/', whole));
+		});
+
+		test('a repo of its own is a nested part', () => {
+			const with_nested: FileIndexIgnoreRule = {
+				kind: 'git',
+				paths: new Set(['vendor/lib/out/', 'x/']),
+				nested: new Set(['vendor/lib/', 'x/'])
+			};
+			const nested = (path: string) => to_unindexed_part(path, '/w/', with_nested);
+			assert.deepEqual(nested('/w/vendor/lib/a.md'), { by: 'nested', path: '/w/vendor/lib/' });
+			assert.deepEqual(nested('/w/vendor/lib/'), { by: 'nested', path: '/w/vendor/lib/' });
+			assert.deepEqual(nested('/w/vendor/lib/out/a'), { by: 'nested', path: '/w/vendor/lib/' });
+			assert.isNull(nested('/w/vendor/a.md'));
+			assert.isNull(nested('/w/vendor/lib'), 'a folder entry names no file');
+			assert.isNull(nested('/w/vendor/libs/a.md'));
+			// git's answer first, as the walk checks it
+			assert.deepEqual(nested('/w/x/a'), { by: 'git', path: '/w/x/' });
+			// a fixed rule has none
+			assert.isNull(to_unindexed_part('/w/vendor/lib/a.md', '/w/', FILE_INDEX_FIXED_NAMES_RULE));
+		});
+
+		test('not relying on the order of `paths`', () => {
+			assert.deepEqual(
+				to_unindexed_part('/w/z/\u{1F600}/a', '/w/', git('z/\u{1F600}/', 'z/\uFFFF/')),
+				{
+					by: 'git',
+					path: '/w/z/\u{1F600}/'
+				}
+			);
+		});
+	});
+});
+
+describe('to_innermost_unindexed_part', () => {
+	const rules: ReadonlyMap<string, FileIndexIgnoreRule> = new Map([
+		['/w/repo/', { kind: 'git', paths: new Set(['build/']), nested: new Set(['sub/']) }]
+	]);
+	const roots = ['/w/', '/w/repo/', '/w/repo/vendor/'];
+
+	test('a path is skipped only where every filer holding it skips it', () => {
+		// `/w/` is on fixed names, `/w/repo/` on git's, which tracks its `dist/`
+		assert.isNull(to_innermost_unindexed_part('/w/repo/dist/x.js', roots, [], rules));
+		// git ignores `build/`, but `/w/`'s filer indexes it
+		assert.isNull(to_innermost_unindexed_part('/w/repo/build/x.js', roots, [], rules));
+		assert.isNull(to_innermost_unindexed_part('/w/repo/sub/x.js', roots, [], rules));
+		assert.deepEqual(to_innermost_unindexed_part('/w/repo/build/x.js', ['/w/repo/'], [], rules), {
+			by: 'git',
+			path: '/w/repo/build/'
+		});
+		assert.deepEqual(to_innermost_unindexed_part('/w/repo/sub/x.js', ['/w/repo/'], [], rules), {
+			by: 'nested',
+			path: '/w/repo/sub/'
+		});
+		// fixed names skip `vendor/dist/` under `/w/repo/vendor/`, git's answer doesn't
+		assert.isNull(to_innermost_unindexed_part('/w/repo/vendor/dist/x', roots, [], rules));
+		assert.deepEqual(to_innermost_unindexed_part('/w/dist/x.js', roots, [], rules), {
+			by: 'name',
+			path: '/w/dist/'
+		});
+	});
+
+	test('the part is the innermost skipping root’s', () => {
+		// every root holding it skips `.git`, the innermost from its own
+		assert.deepEqual(to_innermost_unindexed_part('/w/repo/vendor/.git/x', roots, [], rules), {
+			by: 'name',
+			path: '/w/repo/vendor/.git/'
+		});
+		assert.deepEqual(to_innermost_unindexed_part('/w/repo/.git/x', roots, [], rules), {
+			by: 'name',
+			path: '/w/repo/.git/'
+		});
+	});
+
+	test('a top-level root holds only its direct children', () => {
+		assert.deepEqual(to_innermost_unindexed_part('/w/dist', [], ['/w/'], rules), {
+			by: 'name',
+			path: '/w/dist'
+		});
+		assert.deepEqual(to_innermost_unindexed_part('/w/dist/', [], ['/w/'], rules), {
+			by: 'name',
+			path: '/w/dist/'
+		});
+		// deeper, no filer holds it
+		assert.isNull(to_innermost_unindexed_part('/w/dist/x.js', [], ['/w/'], rules));
+		// so a focused repo's rule alone decides below it
+		assert.deepEqual(to_innermost_unindexed_part('/w/repo/build/x', ['/w/repo/'], ['/w/'], rules), {
+			by: 'git',
+			path: '/w/repo/build/'
+		});
+	});
+
+	test('a root’s own path is judged from the root around it', () => {
+		assert.isNull(to_innermost_unindexed_part('/w/repo/', roots, [], rules));
+	});
+
+	test('a path under no root', () => {
+		assert.isNull(to_innermost_unindexed_part('/v/node_modules/x', roots, [], rules));
+	});
+});
+
+describe('to_unindexed_reason', () => {
+	const cases: Array<[label: string, part: FileIndexUnindexedPart, expected: string]> = [
+		[
+			'a folder name',
+			{ by: 'name', path: '/w/a/node_modules/' },
+			'the file index skips "node_modules"'
+		],
+		['a file name', { by: 'name', path: '/w/a/.zzz-tmp-x' }, 'the file index skips ".zzz-tmp-x"'],
+		['a git folder', { by: 'git', path: '/w/a/out/' }, 'git ignores "a/out/"'],
+		['a git file', { by: 'git', path: '/w/x.log' }, 'git ignores "x.log"'],
+		[
+			'a nested repo',
+			{ by: 'nested', path: '/w/vendor/lib/' },
+			'"vendor/lib/" is a repo of its own'
+		]
+	];
+	test.each(cases)('%s', (_label, part, expected) => {
+		assert.strictEqual(to_unindexed_reason(part, '/w/'), expected);
 	});
 });

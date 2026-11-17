@@ -852,6 +852,8 @@ async fn an_unpopulated_submodule_is_left_unindexed_without_a_re_prune() {
     assert_eq!(git.calls(GitCall::LsFiles), listed, "no re-prune");
     assert!(!watches_under(&filer, &tmp, "sub"));
     assert!(!ignores(&filer, &tmp, "sub"), "not published as ignored");
+    let wire = filer.ignored_on_wire(&tmp.root()).unwrap();
+    assert_eq!(*wire.nested, ["sub/"], "published as a repo of its own");
 }
 
 /// A burst touching several unpopulated submodules asks again once per

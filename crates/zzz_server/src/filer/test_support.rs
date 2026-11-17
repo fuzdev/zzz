@@ -108,7 +108,7 @@ pub(super) async fn scan_into(
     .await
     .expect("scan must terminate")
     .expect("the root is listable")
-    .0;
+    .files;
     let mut files = FileIndex::new();
     apply_subtree(&mut files, root, fresh);
     files
@@ -320,7 +320,7 @@ pub(super) async fn git_state(tmp: &TempDir, git: Arc<fuz_git::Git>) -> FilerSta
     let git_root = git_root.expect("a checkout on git's rule");
     let rule = Arc::new(rule);
     let watches = watches_for(&root, None);
-    let fresh = scan_directory(
+    let scan = scan_directory(
         &root,
         &root,
         &[],
@@ -332,15 +332,15 @@ pub(super) async fn git_state(tmp: &TempDir, git: Arc<fuz_git::Git>) -> FilerSta
         None,
     )
     .await
-    .expect("the root is listable")
-    .0;
+    .expect("the root is listable");
     let mut files = FileIndex::new();
-    apply_subtree(&mut files, &root, fresh);
+    apply_subtree(&mut files, &root, scan.files);
     let mut state = state_for(tmp).await;
     *state.files.write().await = files;
     state.watches = watches;
     state.unwatched_count = Arc::clone(&state.watches.lock().unwatched_count);
     state.rule = SharedRule::new(Arc::unwrap_or_clone(rule));
+    state.rule.set_nested_under(&root, &scan.nested, &scan.kept);
     state.git = Some(GitIgnore {
         exclude: git_root.info_exclude(),
         root: git_root,

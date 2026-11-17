@@ -17,14 +17,16 @@
  * registry for a path in none of its entries or under a refused registry in
  * a checkout (`fallback`, on the reply and `project_changed`), what git
  * ignores under a focused checkout (`ignored`, on the reply and refreshed by
- * a `.gitignore` edit), and the scope a close releases.
+ * a `.gitignore` edit) and the repos of their own it leaves unindexed
+ * (`nested`), the client's predicate (`to_unindexed_part`) agreeing with
+ * what the daemon indexes, and the scope a close releases.
  *
  * @module
  */
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { chmod, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { describe, test, assert, onTestFinished } from 'vitest';
@@ -46,6 +48,11 @@ import {
 	RepoFocusOutput,
 	RepoUnfocusOutput
 } from '#lib/action_specs.ts';
+import {
+	to_innermost_unindexed_part,
+	to_unindexed_part,
+	type FileIndexIgnoreRule
+} from '#lib/diskfile_helpers.ts';
 
 const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
@@ -131,6 +138,9 @@ const create_registry_root = async (): Promise<{ dev: string; outside: string }>
 	await symlink(outside, join(dev, 'escape'));
 	return { dev, outside };
 };
+
+/** Runs git in `cwd`. */
+const git = (args: Array<string>, cwd: string) => promisify(execFile)('git', args, { cwd });
 
 const file_ids = (output: ProjectOpenOutput): Array<string> =>
 	output.files.map((f) => f.id as string).sort();
@@ -632,5 +642,152 @@ describe('project registry cross-backend', () => {
 		} finally {
 			await ws.close();
 		}
+	});
+
+	test('the client predicate agrees with what the daemon indexes under a focused checkout', async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		const app = join(dev, 'app');
+		const app_dir = `${app}/`;
+		await git(['init', '-q'], app);
+		const gitignore = [
+			'*.log',
+			'build/',
+			'logs/*',
+			'!logs/keep.log',
+			'target/',
+			'.claude/settings.local.json',
+			'only_ignored/',
+			'deep/**/gen/',
+			'Case.txt',
+			'é.tmp',
+			'sp ace/',
+			'dist_ignored/'
+		].join('\n');
+		const files: Array<string> = [
+			'.gitignore',
+			'x.log',
+			'a/b/c/y.log',
+			'x.log.d/keep.txt', // a dir `*.log` doesn't name
+			'dirlog.log/inner.txt', // a dir `*.log` names
+			'build/out.js',
+			'src/build/out.js',
+			'logs/a.log',
+			'logs/keep.log',
+			'logs/other.txt',
+			'target/debug/bin',
+			'.claude/settings.local.json',
+			'.claude/other.json',
+			'only_ignored/x',
+			'deep/a/gen/x.ts',
+			'deep/gen/y.ts',
+			'Case.txt',
+			'case.txt',
+			'CASE.TXT',
+			'é.tmp',
+			'e\u0301.tmp',
+			'sp ace/f',
+			'tab\there',
+			'quo"te/f',
+			'back\\slash',
+			'nl\nname',
+			'😀/f.log',
+			'😀/g',
+			'node_modules/pkg/index.js', // untracked and not ignored: indexed under git
+			'dist/tracked.js',
+			'.svelte-kit/gen.js',
+			'pkg/node_modules/x.js',
+			'node_modules_file_dir/node_modules', // a file named `node_modules`
+			'dist_ignored/x',
+			'.ssh/id',
+			'sub/.aws/creds',
+			'.zzz-tmp-foo',
+			'sub/.zzz-tmp-bar',
+			'.zzz/state',
+			'nested/.git/HEAD', // a repo of its own, by a `.git` dir
+			'nested/inner.txt',
+			'gitfile/.git', // a repo of its own, by a gitfile
+			'gitfile/f.txt',
+			'NODE_MODULES/x.js',
+			'Dist/x.js'
+		];
+		for (const rel of files) {
+			const path = join(app, rel);
+			await mkdir(join(path, '..'), { recursive: true });
+			await writeFile(path, rel === '.gitignore' ? gitignore : 'x', 'utf-8');
+		}
+		await git(['add', '.gitignore', 'dist/tracked.js'], app);
+		const opened = await open_project(fixture, join(app, 'a', 'b'));
+		const entry = opened.project.ignored[app_dir];
+		assert.ok(entry, 'a focused checkout has an `ignored` entry');
+		assert.deepEqual(entry.nested, ['gitfile/', 'nested/']);
+		const rule: FileIndexIgnoreRule = {
+			kind: 'git',
+			paths: new Set(entry.paths),
+			nested: new Set(entry.nested)
+		};
+		const indexed = new Set(file_ids(opened));
+		const disk_files: Array<string> = [];
+		const disk_dirs: Array<string> = [];
+		const walk = async (dir: string): Promise<void> => {
+			for (const name of await readdir(dir)) {
+				const path = join(dir, name);
+				const stat = await lstat(path);
+				if (stat.isDirectory()) {
+					disk_dirs.push(path + '/');
+					await walk(path);
+				} else if (stat.isFile()) {
+					disk_files.push(path);
+				}
+			}
+		};
+		await walk(app);
+		const disagreements: Array<string> = [];
+		for (const file of disk_files) {
+			const skipped = to_unindexed_part(file, app_dir, rule) !== null;
+			if (skipped === indexed.has(file)) {
+				disagreements.push(`${JSON.stringify(file)}: skipped ${skipped}, indexed ${!skipped}`);
+			}
+		}
+		// a folder the client skips holds no indexed file
+		for (const dir of disk_dirs) {
+			if (to_unindexed_part(dir, app_dir, rule) === null) continue;
+			for (const file of indexed) {
+				if (file.startsWith(dir)) disagreements.push(`${dir} skipped, but holds ${file}`);
+			}
+		}
+		assert.deepEqual(disagreements, []);
+	});
+
+	test('a plain dir holding a focused checkout indexes what git ignores in it', async () => {
+		const fixture = await setup_test();
+		const { dev } = await create_registry_root();
+		const scratch = join(dev, 'scratch');
+		const inner = join(scratch, 'inner');
+		await mkdir(join(inner, 'build'), { recursive: true });
+		await git(['init', '-q'], inner);
+		await writeFile(join(inner, '.gitignore'), 'build/\n', 'utf-8');
+		await writeFile(join(inner, 'build', 'x.js'), 'x', 'utf-8');
+		await writeFile(join(inner, 'a.ts'), 'a', 'utf-8');
+		const checkout = await open_project(fixture, join(inner, 'a.ts'));
+		const plain = await open_project(fixture, scratch);
+		assert.strictEqual(checkout.project.kind, 'git_repo');
+		assert.strictEqual(plain.project.kind, 'plain_dir');
+		const built = join(inner, 'build', 'x.js');
+		assert.notInclude(file_ids(checkout), built);
+		assert.include(file_ids(plain), built, 'the plain dir’s filer indexes it');
+		// the client reads it as indexed by the union of the filers, not the innermost
+		const rules: ReadonlyMap<string, FileIndexIgnoreRule> = new Map(
+			Object.entries(checkout.project.ignored).map(([dir, { paths, nested }]) => [
+				dir,
+				{ kind: 'git', paths: new Set(paths), nested: new Set(nested) }
+			])
+		);
+		const roots = [checkout.project.root, plain.project.root];
+		assert.isNull(to_innermost_unindexed_part(built, roots, [], rules));
+		assert.deepEqual(to_innermost_unindexed_part(built, [checkout.project.root], [], rules), {
+			by: 'git',
+			path: `${inner}/build/`
+		});
 	});
 });

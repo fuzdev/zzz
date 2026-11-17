@@ -41,8 +41,10 @@
 //!   staging files are ignored under both, and a git root indexes no repo
 //!   of its own below it (nested repos, populated submodules).
 //! - **On the wire.** A git root's set goes out on each open project that
-//!   focuses it (`IgnoredPaths`, read by every `ProjectManager` commit). When
-//!   it changes, the event loop signals a publisher that asks the projects
+//!   focuses it (`IgnoredPaths`, read by every `ProjectManager` commit),
+//!   with the repos of its own its walks stopped at and its unpopulated
+//!   submodules (`nested`), so a client tells them from a missing path. When
+//!   either changes, the event loop signals a publisher that asks the projects
 //!   for a refresh at most once a second ([`FilerIgnoredChange`]); a
 //!   re-prune past [`REPRUNE_BROADCAST_MAX`] changes on the wire sends none
 //!   and bumps the set's resync count instead, so each client pulls the
@@ -232,13 +234,17 @@ impl SerializableDisknode {
 /// carries it for each focused dir on git's rule — twin of
 /// `ProjectIgnoredJson`.
 ///
-/// `paths` is shared (`Arc`), so cloning a project's state — every commit
-/// does — copies no path.
+/// `paths` and `nested` are shared (`Arc`), so cloning a project's state —
+/// every commit does — copies no path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IgnoredPaths {
     /// Relative to the root, sorted, each dir with a trailing `/`
     /// (`IgnoredSet::relative_sorted`).
     pub paths: Arc<Vec<String>>,
+    /// The dirs the filer leaves unindexed as repos of their own — nested
+    /// repos and submodules, populated or not — relative to the root,
+    /// sorted, each with a trailing `/` (`IgnoredSet::nested_on_wire`).
+    pub nested: Arc<Vec<String>>,
     /// How many of the root's re-prunes sent no `filer_change` per file
     /// (more than [`REPRUNE_BROADCAST_MAX`] changes) — a client that sees it
     /// move pulls the dir's files whole (`repo_files`) instead.
@@ -248,8 +254,9 @@ pub struct IgnoredPaths {
 impl Serialize for IgnoredPaths {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("IgnoredPaths", 2)?;
+        let mut state = serializer.serialize_struct("IgnoredPaths", 3)?;
         state.serialize_field("paths", &*self.paths)?;
+        state.serialize_field("nested", &*self.nested)?;
         state.serialize_field("resyncs", &self.resyncs)?;
         state.end()
     }

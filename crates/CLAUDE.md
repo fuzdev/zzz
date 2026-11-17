@@ -404,12 +404,12 @@ crates/zzz_server/src/
 ├── file_bytes.rs     # Byte routes for files (`/api/files/bytes`): ranged read with a response-header lockdown, exclusive create, offset-checked append — hand-written axum handlers with their own auth + scope gates
 ├── file_trust.rs     # Whether discovered config is the daemon user's alone to write — Debian sshd's rule: owned by the user or root, never `o+w`, `g+w` only by the user's private group (`TrustedOwner`, NSS read once by `current`)
 ├── filer/            # File index + watcher (notify crate) — level-triggered, stat-only (events are hints, `lstat` decides; no file is read), change by `lstat` stamp with git's racily-clean rule, per-directory watches from the filer's own walk (degraded polling past the watch limit), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped; a whole tree, or a registry root's top level alone (`FilerDepth`); git's ignore rule under a checkout root, fixed names elsewhere
-│   ├── mod.rs        # Module docs (the filer's design), re-exports of the public API, the indexing limits (`REPRUNE_BROADCAST_MAX`, the flood guard; `IGNORED_REFRESH_INTERVAL`), the `filer_change` notification params, `SerializableDisknode`, `IgnoredPaths` (a focused dir's `ignored` entry), `WatchStatus`, and the dir-prefix helpers
+│   ├── mod.rs        # Module docs (the filer's design), re-exports of the public API, the indexing limits (`REPRUNE_BROADCAST_MAX`, the flood guard; `IGNORED_REFRESH_INTERVAL`), the `filer_change` notification params, `SerializableDisknode`, `IgnoredPaths` (a focused dir's `ignored` entry: git's paths and the nested repos), `WatchStatus`, and the dir-prefix helpers
 │   ├── core.rs       # `Filer` (the running handle, its ignored set as the wire carries it: `ignored_on_wire`), `FilerConfig`, `FilerDepth`, `start_filer`, the notify callback's `watcher_factory`, `RescanSignal`, the `FilerIgnoredChange` hook and its coalescing publisher (`publish_ignored_changes`)
 │   ├── index.rs      # The index's file metadata: `FileStat` and its racily-clean rule (`reusable_stat`, `is_unchanged`), disknodes, and `apply_subtree`, the diff of a scanned subtree
 │   ├── watches.rs    # `DirWatches` (the per-directory watch bookkeeping, degraded mode) and `classify_event`
-│   ├── ignore.rs     # What a filer ignores (`IgnoreRule`: fixed names, or git's `IgnoredSet` under a checkout root; `ALWAYS_IGNORED_DIRS`, `PLAIN_DIR_IGNORED_DIRS`, `is_ignored`), the shared rule (`SharedRule`), the git calls (`GitRoot`: prune, check, re-confine), nested repos, the `.git/info/` dir the filer's watcher watches
-│   ├── walk.rs       # The blocking `walk_blocking` + `scan_directory`/`scan_file` (pruned by the rule, nested repos skipped under git), the orphaned-staging-file sweep
+│   ├── ignore.rs     # What a filer ignores (`IgnoreRule`: fixed names, or git's `IgnoredSet` under a checkout root; `ALWAYS_IGNORED_DIRS`, `PLAIN_DIR_IGNORED_DIRS`, `is_ignored`), the shared rule (`SharedRule`, with the nested repos the walks found), the git calls (`GitRoot`: prune, check, re-confine), nested repos, the `.git/info/` dir the filer's watcher watches
+│   ├── walk.rs       # The blocking `walk_blocking` + `scan_directory`/`scan_file` (pruned by the rule, nested repos skipped under git and reported, `DirScan`), the orphaned-staging-file sweep
 │   ├── event_loop.rs # `FilerState` + `filer_event_loop`: events resolved against the disk, a git root's burst vetting and re-prunes (a big one on the wire resynced rather than broadcast, `queue_or_resync`), the ignored-set signal, the debounce / coalesce, `flush_ready`, `filer_change_notification`
 │   ├── git_rule_tests.rs # `#[cfg(test)]` tests of a git root's rule live: a listing racing its walk (a `HookedGit` acting between git's answer and the walk), re-prunes and their failures, the `info/exclude` watch, vetting
 │   ├── manager.rs    # `FilerManager`: lifetimes (permanent / project), depths, dedup of concurrent starts, snapshots, `hold_index`, a `#[cfg(test)]` seam that holds an index for writing (`project_manager`'s tests use it)
@@ -579,7 +579,8 @@ joined after the drain, before PTY teardown.
   answer (`.gitignore`, `info/exclude`, global excludes — listed at start,
   each listing taken again after its walk, each burst's adds vetted,
   re-pruned once a `.gitignore` / `info/exclude` change settles or at once
-  on an overflow; nested repos and populated submodules not indexed;
+  on an overflow; nested repos and submodules not indexed, and named on
+  the wire as `nested` so a client tells them from a missing path;
   ../docs/backend.md § Known Issues → Filer ignore rule), elsewhere
   `node_modules`/`.svelte-kit`/`target`/`dist` by name too; `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes
   orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files over an hour

@@ -5,15 +5,18 @@ import {
 	ERROR_DISK_CHANGED,
 	ERROR_INVALID_PATH,
 	ERROR_PATH_NOT_FOUND,
-	FILE_INDEX_IGNORED_DIR_NAMES,
+	FILE_INDEX_ALWAYS_IGNORED_NAMES,
+	FILE_INDEX_PLAIN_DIR_IGNORED_NAMES,
 	FILE_INDEX_TEMP_FILE_PREFIX
 } from '#lib/diskfile_helpers.ts';
 
 /**
- * The TS copy of what the backend filer never indexes, held to the Rust
- * source it copies — a link into an ignored folder reads `skipped` and the
- * file tree hides one, so a drift would mark links there `broken` or show or
- * hide the wrong folders.
+ * The TS copy of the names the backend filer never indexes, held to the Rust
+ * source it copies — the names every root ignores, and those only a root on
+ * fixed names does (under a git root the daemon sends git's answer instead).
+ * A link into an ignored folder reads `skipped` and the file tree hides one,
+ * so a drift would mark links there `broken` or show or hide the wrong
+ * folders.
  */
 
 const read_crate_source = (name: string): string =>
@@ -52,14 +55,12 @@ const parse_str_list_const = (source: string, name: string): Array<string> => {
 };
 
 describe('the file index ignores what the backend filer ignores', () => {
-	test("ignored directory names match the names a plain root's filer ignores", () => {
+	test('the names every root ignores match `ALWAYS_IGNORED_DIRS` and the credential directories', () => {
 		const filer = read_crate_source('filer/ignore.rs');
 		const scoped_fs = read_crate_source('scoped_fs.rs');
-		// a constant is the filer's own or one it imports from `scoped_fs.rs`;
-		// a plain root ignores both of the filer's lists
+		// a constant is the filer's own or one it imports from `scoped_fs.rs`
 		const names = [
 			...parse_str_list_const(`${filer}\n${scoped_fs}`, 'ALWAYS_IGNORED_DIRS'),
-			...parse_str_list_const(`${filer}\n${scoped_fs}`, 'PLAIN_DIR_IGNORED_DIRS'),
 			...parse_str_list_const(scoped_fs, 'CREDENTIAL_DIR_NAMES')
 		];
 		assert.match(
@@ -72,7 +73,20 @@ describe('the file index ignores what the backend filer ignores', () => {
 			'crate::scoped_fs::is_credential_dir_name(name)',
 			'the filer ignores credential directories by that check'
 		);
-		assert.deepEqual([...FILE_INDEX_IGNORED_DIR_NAMES].sort(), names.sort());
+		assert.deepEqual([...FILE_INDEX_ALWAYS_IGNORED_NAMES].sort(), names.sort());
+	});
+
+	test('the names only a root on fixed names ignores match `PLAIN_DIR_IGNORED_DIRS`', () => {
+		const filer = read_crate_source('filer/ignore.rs');
+		assert.deepEqual(
+			[...FILE_INDEX_PLAIN_DIR_IGNORED_NAMES].sort(),
+			parse_str_list_const(filer, 'PLAIN_DIR_IGNORED_DIRS').sort()
+		);
+		assert.match(
+			filer,
+			/matches!\(self,\s*Self::FixedNames\)\s*&&\s*PLAIN_DIR_IGNORED_DIRS\.contains\(&name\)/,
+			'`ignores_name` applies them under fixed names alone, as the TS side assumes'
+		);
 	});
 
 	test('the staging-file prefix matches `TEMP_FILE_PREFIX` in scoped_fs.rs', () => {

@@ -239,6 +239,7 @@ mod tests {
                             "/w/".to_owned(),
                             crate::filer::IgnoredPaths {
                                 paths: Arc::new(vec!["build/".to_owned(), "a.log".to_owned()]),
+                                nested: Arc::new(vec!["vendor/lib/".to_owned()]),
                                 resyncs: 2,
                             },
                         )]),
@@ -279,7 +280,11 @@ mod tests {
                         "reason": "registry_invalid",
                     },
                     "focused": ["/w/"],
-                    "ignored": {"/w/": {"paths": ["build/", "a.log"], "resyncs": 2}},
+                    "ignored": {"/w/": {
+                        "paths": ["build/", "a.log"],
+                        "nested": ["vendor/lib/"],
+                        "resyncs": 2,
+                    }},
                     "rev": 7,
                 }],
                 "projects_rev": 9,

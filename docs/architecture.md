@@ -1222,12 +1222,15 @@ Ctrl/Cmd-click in a kept tab instead — and a fragment on a markdown file
 reveals that heading once its view shows (`markdown_pending_fragment` on the
 target's `DiskfileEditorState`). A link to a folder opens the folder's README
 if the index has one. A link the file index says is missing — inside a root
-it covers and outside the folders it skips (`FILE_INDEX_IGNORED_DIR_NAMES`,
-mirroring a plain root's filer — § Filer) — is marked broken, and one outside every root, in a
+it covers and outside what it skips (`to_innermost_unindexed_part`, each
+holding root's rule — § Projects) — is marked broken, and one outside every root, in a
 registry project's unfocused repo (the index covers a registry's root at
 its top level and its focused repos only; a link to an entry's dir counts
 with or without its trailing slash, while an unregistered directory
-linked without one reads as a missing loose file), in a skipped folder, or
+linked without one reads as a missing loose file), in what the index skips
+(titled "not indexed" with why: an ignored name, or under a focused git
+root what git ignores or a repo of its own — so a link into a tracked
+`dist/` there can be broken), or
 root-relative and not found is marked unknown, never broken, since the
 index can't see there; each mark has a title saying why,
 and follows the index and the content as they change. Everything else —
@@ -1236,9 +1239,7 @@ protocol-relative, other schemes, same-origin absolute URLs, a root-relative
 without a `path` — is inert (a relative `..` climbing out of the root
 reads as outside it, so unknown). The index lists only files, so what it never
 indexes reads as missing — an empty folder, a symlink, a file in an
-unreadable subdirectory, or a path that isn't UTF-8 is marked broken. A test
-holds `FILE_INDEX_IGNORED_DIR_NAMES` and the staging-file prefix to the
-filer's Rust source. The preview pairs each link with its rendered anchor by
+unreadable subdirectory, or a path that isn't UTF-8 is marked broken. The preview pairs each link with its rendered anchor by
 their source offsets, not the `href`, since mdz can rewrite a root-relative
 `href` (SvelteKit's `resolve`) — an anchor matching no link node, like one an
 injected component renders, is left alone — and follows a click from the
@@ -1635,9 +1636,12 @@ which it keeps until a reload (`DiskfileTreeState.created_dirs`; one deleted
 meanwhile by another program lingers until then too); a root nested in another
 shows under it as a folder holding the same files, once it holds any, and those
 files stay in the outer root after the nested one closes — unless the outer
-root's walk never enters it (the app directory, whatever its name; a `.git`,
-`node_modules`, or other ignored name; a `.zzz-tmp-` staging name), where it
-shows only as its own root. A file deleted on disk but kept for its draft stays in its folder,
+root's walk never enters it (the app directory, whatever its name; what the
+root's rule skips — `to_unindexed_part`: a `.git` or other always-ignored
+name, a `.zzz-tmp-` staging name, and `node_modules` and the other fixed
+names, or under a focused git root what git ignores or a repo of its own
+(`nested`)), where it shows only as
+its own root. Under a focused git root a tracked `dist/` shows. A file deleted on disk but kept for its draft stays in its folder,
 marked like in the list. The expanded folders live on `DiskfilesEditor.tree`
 (`DiskfileTreeState`), so they survive a switch to the list and back. The tree
 is one flat, windowed list of its visible rows, and deriving them walks only the
@@ -1690,10 +1694,12 @@ over the rows below — they keep one height for windowing — and lets clicks
 through. A `/` in the name creates the folders on the way. A new file opens in
 a permanent tab and is revealed in the tree, now or when its `filer_change`
 arrives, unless another input has opened meanwhile; a new folder is revealed
-and expanded. What the file index skips (any part with an ignored name, such
-as a folder `node_modules` on the way or a file named `dist`, or a `.zzz-tmp-`
-name — `to_unindexed_segment`, over the filer's own rule) is created but never
-shows, so a note says why, kept in view at the top of the tree until it's
+and expanded. What the file index skips (`Diskfiles.to_unindexed`, by every
+holding root's rule: any part with an ignored name, such as a folder
+`node_modules` on the way under fixed names, or a `.zzz-tmp-` name; under a
+focused git root a path git ignores or a repo of its own) is created but
+never shows, so a note says why — the name it skips, the path git ignores,
+or the repo — kept in view at the top of the tree until it's
 dismissed, the next key in the tree, or the next create — not a click, which
 would shift the rows under a double click — and a file there isn't waited for. Any file this client creates
 (`Diskfiles.create_file_at`) is revealed the same way, an audio or transcript
@@ -1882,8 +1888,10 @@ under, so they're the index of exactly the state its rev names.
 directory whose filer is on git's rule (§ Filer), what git ignores there
 (`ProjectInfoJson.ignored`, keyed by the directory): `paths`, relative to
 it and sorted — a directory git prunes whole with a trailing `/` (the
-directory itself as `./`), a file it skips alone without — and `resyncs`,
-a count. A focused directory on fixed names has no entry, and neither has
+directory itself as `./`), a file it skips alone without — `nested`, the
+directories the filer leaves unindexed as repos of their own (a nested
+repo, a submodule, populated or not — git's paths never name them),
+relative, sorted, each with a trailing `/`, and `resyncs`, a count. A focused directory on fixed names has no entry, and neither has
 a registry's root (indexed at its top level, on fixed names); a permanent
 filer's set (the app directory, a scoped dir) is on the wire only while an
 open project focuses its directory. Every
@@ -1891,7 +1899,8 @@ commit reads the sets from the filers under the lock, so a set that moved
 is a change of its project like any other, stamping a new rev, and a
 reply carries the set its rev names. A filer whose set changes on its
 own — a `.gitignore` or `info/exclude` edit re-pruning it, a new file
-vetted as ignored — asks for that commit itself (`refresh_ignored`, from a
+vetted as ignored, a `.git` appearing in a directory (one removed is seen
+at the next rescan) — asks for that commit itself (`refresh_ignored`, from a
 task of its own, at most once a second per filer, since each refresh
 resends every changed project's whole set to every client), once the step
 that changed it is done, so a refresh after a re-prune reads the index
@@ -1899,6 +1908,22 @@ that re-prune left. A re-prune that would send more than 1024
 `filer_change`s for one focused directory (un-ignoring a `node_modules/`
 would be tens of MB to every socket) sends none and bumps `resyncs`
 instead, dropping their pending changes too.
+
+The client reads the sets as each root's rule (`Project.ignore_rules`,
+merged in `Projects.ignore_rules`): one predicate, `to_unindexed_part` in
+`diskfile_helpers.ts`, decides what the index skips for markdown links, the
+file tree, the create notice, and whether a created file is waited for.
+The daemon indexes the union of its filers, so a path is skipped only
+where every root holding it skips it (`to_innermost_unindexed_part`; a
+registry's root holds only its direct children), each by its own rule —
+git's paths and nested repos for a focused directory with an entry (each
+folder prefix and the path itself looked up in a set, never by the
+daemon's sort order), fixed names for every other root — and the
+always-ignored names under both: a `build/` git ignores in a checkout
+that a plain directory around it also indexes reads as indexed. The names are copies of the filer's (`FILE_INDEX_ALWAYS_IGNORED_NAMES`,
+`FILE_INDEX_PLAIN_DIR_IGNORED_NAMES`), which a test holds to its Rust
+source. A refresh replaces `ignored`, so links, the tree, and the notice
+follow it.
 
 `Projects` applies project state from the daemon by one rule, whatever
 order replies and notifications arrive in — this client's own
@@ -2327,12 +2352,16 @@ Population, per capability:
   waits out the 5 s with the filer blocked; polls back off to about 50 s
   apart (ten times their own duration, roughly a 10% duty cycle).
   Any `.git` entry — even one git wouldn't read as a repo — makes its
-  directory a repo of its own here, so its files aren't indexed. The
-  frontend's own copy of the rule is still the fixed names — the daemon
-  sends each focused checkout's ignored paths (`ProjectInfoJson.ignored`),
-  but nothing reads them yet but the resync — so in a
-  checkout a link into a tracked `dist/` reads as skipped, and a link to a
-  file git ignores reads as broken. What the wire says is ignored can lag
+  directory a repo of its own here, so its files aren't indexed; the wire
+  names it (`nested`), so a link into one reads "not indexed" and a file
+  created there isn't waited for. A `.git` removed from a nested repo is
+  seen only at the next rescan (no watch is inside it), so until then its
+  files stay unindexed and it stays `nested`. A permanent filer on a
+  checkout (the app directory, a scoped dir) runs git's rule, but its set
+  is off the wire unless a project focuses it, so the frontend holds it to
+  fixed names — a tracked `dist/` in it is indexed but hidden in the tree,
+  and a file git ignores there reads as broken in a link, and is waited
+  for, without a notice, when created. What the wire says is ignored can lag
   a second behind the filer (refreshes are coalesced), and a re-prune
   resynced while its project closes and a permanent filer stays on the
   directory leaves clients' permanent copy of it stale until the next

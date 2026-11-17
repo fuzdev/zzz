@@ -647,7 +647,14 @@ commands):
   the walks, and the event loop, its only writer. The walk also skips a dir
   holding a repo of its own (`is_nested_repo`: any `.git` entry — a dir,
   gitfile, or symlink, even one git wouldn't read as a repo — makes the dir
-  a repo of its own here). Live, the event loop drains each burst and vets
+  a repo of its own here), and reports each one it stopped at
+  (`DirScan::nested`): the `SharedRule` keeps them beside the rule, each
+  sync replacing those at and under the dir it walked
+  (`set_nested_under`) — so the start's walk, a rescan, and the sync a
+  `.git` appearing triggers (`RuleMarker::RepoDir`) keep the list current,
+  a dir gone or no longer a dir drops those under it (`remove_children`),
+  and a nested `.git` removed is seen at the next rescan (no watch is in the
+  repo) — under the same version, so a change is one the wire sees. Live, the event loop drains each burst and vets
   its adds of paths not yet indexed (`FilerState::vet_adds`: one
   `check_ignore`, a missing path asked about as a file, a path that turned
   into a dir re-asked, an ignored dir's path that's a file now asked about
@@ -709,8 +716,10 @@ commands):
   rescan.
 - **Ignored paths on the wire** — `Filer::ignored_on_wire` is the set as
   an open project carries it (`filer::IgnoredPaths`: the paths relative to
-  the root, sorted, dirs with a trailing `/`, cached per rule version; and
-  the resync count, `resyncs` on the wire), `None` on fixed names. Every `ProjectManager` commit,
+  the root, sorted, dirs with a trailing `/`; `nested`, the repos of their
+  own the walks stopped at and the unpopulated submodules, relative,
+  sorted, each with a trailing `/` (`IgnoredSet::nested_on_wire`) — both
+  cached per rule version; and the resync count, `resyncs` on the wire), `None` on fixed names. Every `ProjectManager` commit,
   after ensuring its filers and under the lock, reads it for every focused
   dir of every project in the next state (`refresh_ignored_of`, through
   `FilerManager::ignored_on_wire`, which also marks each filer on or off the
