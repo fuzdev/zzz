@@ -7,13 +7,13 @@ import {
 	type SchemaNode,
 	type SchemaResult
 } from '@fuzdev/fuz_schema/schema.ts';
-import { get_schema_entries } from '@fuzdev/fuz_schema/introspect.ts';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { get_datetime_now, type Datetime } from './datetime.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import {
-	get_schema_class_info,
+	get_cell_schema_introspection,
+	type CellSchemaIntrospection,
 	type SchemaClassInfo,
 	HANDLED,
 	type CellValueDecoder
@@ -85,27 +85,18 @@ export abstract class Cell<TSchema extends AnySchema = AnySchema> implements Cel
 	// the `!` is needed for `$derived(` to work over `$derived.by(`
 	readonly schema!: TSchema;
 
-	readonly field_schemas: Map<SchemaKeys<TSchema>, SchemaNode> = $derived(
-		new Map(
-			Object.entries(get_schema_entries(this.schema) ?? {}) as Array<
-				[SchemaKeys<TSchema>, SchemaNode]
-			>
-		)
-	);
-	readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(
-		Array.from(this.field_schemas.keys())
-	);
-	readonly field_schema_info: Map<SchemaKeys<TSchema>, SchemaClassInfo | null> = $derived(
-		new Map(
-			this.schema_keys.map((key) => {
-				const field_schema = this.field_schemas.get(key);
-				if (!field_schema) {
-					return [key, null];
-				}
-				return [key, get_schema_class_info(field_schema)];
-			})
-		)
-	);
+	/** The schema's introspection, shared by every cell of the schema. */
+	readonly #introspection: CellSchemaIntrospection;
+
+	get field_schemas(): ReadonlyMap<SchemaKeys<TSchema>, SchemaNode> {
+		return this.#introspection.field_schemas;
+	}
+	get schema_keys(): ReadonlyArray<SchemaKeys<TSchema>> {
+		return this.#introspection.schema_keys;
+	}
+	get field_schema_info(): ReadonlyMap<SchemaKeys<TSchema>, SchemaClassInfo | null> {
+		return this.#introspection.field_schema_info;
+	}
 
 	readonly json: Infer<TSchema> = $derived(this.to_json());
 	readonly json_serialized: string = $derived(JSON.stringify(this.json));
@@ -144,6 +135,7 @@ export abstract class Cell<TSchema extends AnySchema = AnySchema> implements Cel
 
 	constructor(schema: TSchema, options: CellOptions<TSchema>) {
 		this.schema = schema;
+		this.#introspection = get_cell_schema_introspection(schema);
 		this.app = options.app;
 		this.#initial_json = options.json;
 

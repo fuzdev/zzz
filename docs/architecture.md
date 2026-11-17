@@ -202,7 +202,7 @@ export abstract class Cell<TSchema extends AnySchema = AnySchema> implements Cel
   updated: Datetime = $state.raw()!;
 
   readonly schema!: TSchema;
-  readonly schema_keys: Array<SchemaKeys<TSchema>> = $derived(...); // via `get_schema_entries`
+  get schema_keys(): ReadonlyArray<SchemaKeys<TSchema>>; // shared per schema (`get_cell_schema_introspection`)
   readonly json: Infer<TSchema> = $derived(this.to_json());
   readonly json_serialized: string = $derived(JSON.stringify(this.json));
 

@@ -1,5 +1,9 @@
-import type { AnySchema, Infer, SchemaKind } from '@fuzdev/fuz_schema/schema.ts';
-import { get_schema_meta, unwrap_schema } from '@fuzdev/fuz_schema/introspect.ts';
+import type { AnySchema, Infer, SchemaKind, SchemaNode } from '@fuzdev/fuz_schema/schema.ts';
+import {
+	get_schema_entries,
+	get_schema_meta,
+	unwrap_schema
+} from '@fuzdev/fuz_schema/introspect.ts';
 
 /** Sentinel value to indicate a parser has completely handled a property. */
 export const HANDLED = Symbol('HANDLED_BY_PARSER');
@@ -95,4 +99,37 @@ export const get_schema_class_info = (
 	}
 
 	return { kind: unwrapped.kind, is_array: false };
+};
+
+/**
+ * What `Cell` reads from its schema: the field schemas, their keys in order,
+ * and each field's `SchemaClassInfo`. Shared by every cell of a schema,
+ * so never mutate it.
+ */
+export interface CellSchemaIntrospection {
+	field_schemas: ReadonlyMap<string, SchemaNode>;
+	schema_keys: ReadonlyArray<string>;
+	field_schema_info: ReadonlyMap<string, SchemaClassInfo | null>;
+}
+
+const cell_schema_introspections: WeakMap<AnySchema, CellSchemaIntrospection> = new WeakMap();
+
+/**
+ * Gets the `CellSchemaIntrospection` of `schema`, computed once per schema
+ * object — a schema is immutable, so every cell built from it shares the result.
+ */
+export const get_cell_schema_introspection = (schema: AnySchema): CellSchemaIntrospection => {
+	let introspection = cell_schema_introspections.get(schema);
+	if (!introspection) {
+		const field_schemas: Map<string, SchemaNode> = new Map(
+			Object.entries(get_schema_entries(schema) ?? {})
+		);
+		const schema_keys = Array.from(field_schemas.keys());
+		const field_schema_info: Map<string, SchemaClassInfo | null> = new Map(
+			schema_keys.map((key) => [key, get_schema_class_info(field_schemas.get(key))])
+		);
+		introspection = { field_schemas, schema_keys, field_schema_info };
+		cell_schema_introspections.set(schema, introspection);
+	}
+	return introspection;
 };

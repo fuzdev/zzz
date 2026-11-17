@@ -15,7 +15,12 @@ import {
 import { get_meta, meta } from '@fuzdev/fuz_schema/meta.ts';
 import { describe, test, assert } from 'vitest';
 
-import { create_collection_decoder, get_schema_class_info, HANDLED } from '#lib/cell_helpers.ts';
+import {
+	create_collection_decoder,
+	get_cell_schema_introspection,
+	get_schema_class_info,
+	HANDLED
+} from '#lib/cell_helpers.ts';
 
 describe('get_schema_class_info', () => {
 	test('handles null or undefined schemas', () => {
@@ -244,5 +249,33 @@ describe('create_collection_decoder', () => {
 			assert.strictEqual(decode(value), HANDLED);
 		}
 		assert.deepEqual(log, []);
+	});
+});
+
+describe('get_cell_schema_introspection', () => {
+	const Schema = strip_object({
+		name: with_default(string, ''),
+		tags: with_default_fn(array(string), () => [])
+	});
+
+	test('reads the fields, their keys in order, and their class info', () => {
+		const { field_schemas, schema_keys, field_schema_info } = get_cell_schema_introspection(Schema);
+		assert.deepEqual(schema_keys, ['name', 'tags']);
+		assert.deepEqual([...field_schemas.keys()], ['name', 'tags']);
+		assert.strictEqual(field_schema_info.get('name')?.kind, 'string');
+		assert.ok(field_schema_info.get('tags')?.is_array);
+	});
+
+	test('is computed once per schema object', () => {
+		assert.strictEqual(
+			get_cell_schema_introspection(Schema),
+			get_cell_schema_introspection(Schema)
+		);
+
+		const Other = strip_object({ name: with_default(string, '') });
+		assert.notStrictEqual(
+			get_cell_schema_introspection(Other),
+			get_cell_schema_introspection(Schema)
+		);
 	});
 });

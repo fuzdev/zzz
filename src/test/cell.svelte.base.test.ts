@@ -127,6 +127,22 @@ describe('Cell initialization', () => {
 		assert.ok(!text_info?.is_array);
 		assert.strictEqual(text_info?.kind, 'string');
 	});
+
+	test('cells of a schema share its introspection', () => {
+		const a = new BasicTestCell({ app, json: { text: 'a' } });
+		const b = new BasicTestCell({ app, json: { text: 'b', number: 2 } });
+
+		assert.strictEqual(a.field_schemas, b.field_schemas);
+		assert.strictEqual(a.schema_keys, b.schema_keys);
+		assert.strictEqual(a.field_schema_info, b.field_schema_info);
+
+		// sharing leaves each cell's own state apart
+		assert.strictEqual(a.text, 'a');
+		assert.strictEqual(b.text, 'b');
+		assert.strictEqual(a.number, 0);
+		assert.strictEqual(b.number, 2);
+		assert.deepEqual(Object.keys(a.json), [...a.schema_keys]);
+	});
 });
 
 describe('Cell registry lifecycle', () => {
