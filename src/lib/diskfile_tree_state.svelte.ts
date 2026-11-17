@@ -19,7 +19,7 @@ import {
  * visible rows derived from them. Lives on `DiskfilesEditor`, so the expanded
  * set outlives a switch to the list and back, and any remount of the tree.
  *
- * The rows come from `Diskfiles.tree_index`, kept in step as files come and go,
+ * The rows come from `DiskfileIndex.tree_index`, kept in step as files come and go,
  * and only expanded folders are walked: deriving the rows costs what they show,
  * never the size of the index.
  *
@@ -518,7 +518,7 @@ export class DiskfileTreeState {
 	notice: string | null = $state.raw(null);
 
 	/**
-	 * What the tree shows that `Diskfiles.tree_index` lacks, merged into the
+	 * What the tree shows that `DiskfileIndex.tree_index` lacks, merged into the
 	 * children it lists: files deleted on disk or out of the index but kept for
 	 * a draft or a tab (`Diskfiles.listed_unindexed`), the folders in `created_dirs`, and the
 	 * open registries' repos (`Projects.repos` — an unfocused one has no
@@ -555,7 +555,7 @@ export class DiskfileTreeState {
 	readonly #source: DiskfileTreeSource = {
 		get_children: (dir) => this.get_children(dir),
 		get_only_child_dir: (dir) => {
-			if (!this.#extra.has(dir)) return this.app.diskfiles.tree_index.get_only_child_dir(dir);
+			if (!this.#extra.has(dir)) return this.app.diskfiles.index.tree_index.get_only_child_dir(dir);
 			const { dirs, files } = this.get_children(dir);
 			return files.length === 0 && dirs.length === 1 ? dirs[0]! : null;
 		},
@@ -651,7 +651,7 @@ export class DiskfileTreeState {
 
 	/** The children of folder `dir`, sorted, with what `#extra` adds. */
 	get_children(dir: string): DiskfileTreeChildren {
-		const children = this.app.diskfiles.tree_index.get_children(dir);
+		const children = this.app.diskfiles.index.tree_index.get_children(dir);
 		const extra = this.#extra.get(dir);
 		if (!extra) return children;
 		return sort_diskfile_tree_children(dir, new Set([...children.dirs, ...extra.dirs]), [
@@ -706,7 +706,7 @@ export class DiskfileTreeState {
 
 	/** How many files are below the folder at `path` — see `DiskfileTreeIndex.count_files_below`. */
 	count_files_below(path: string): number {
-		return this.app.diskfiles.tree_index.count_files_below(path);
+		return this.app.diskfiles.index.tree_index.count_files_below(path);
 	}
 
 	/**

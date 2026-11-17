@@ -1514,7 +1514,7 @@ describe('directory_paths', () => {
 		source_dir: parse_or_throw(SerializableDisknode.def.source_dir, source_dir)
 	});
 
-	const dirs = (): Array<string> => [...app.diskfiles.directory_paths].sort();
+	const dirs = (): Array<string> => [...app.diskfiles.index.directory_paths].sort();
 
 	/** The directories a from-scratch walk of the files on disk finds. */
 	const rebuilt = (): Array<string> => {

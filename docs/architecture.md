@@ -1632,6 +1632,21 @@ The explorer lists either for its draft or tab
 sends the draft, marked deleted only when it's deleted on disk. Tabs, history, and editor state are
 UI-session-only — a reload restores only what `session_load` provides.
 
+The index's metadata lives in `DiskfileIndex` (`Diskfiles.index`): one
+record per file on disk the index reports (its disknode, keyed by path) —
+not the files kept for a draft or a tab after leaving it. It owns what
+derives from the records: the folder tree (`tree_index`), how many files
+each directory holds and which hold any (`directory_paths`), and so the
+markdown link checks (`Diskfiles.link_index`). Reactivity is two counters
+and per-path watches: `membership` moves when a file is added or removed,
+`meta` when a record changes in place, each at most once per write or
+batch, so a whole snapshot moves each once; `get` and `has` subscribe a
+reactive reader to that one path, and a write to a path no reader holds
+notifies nothing. A `$derived` read outside any effect leaves its path's
+watch behind for good, so read `get` and `has` per path only in component
+effects or deriveds that live in one, and anything bulk or imperative from
+the counters.
+
 The explorer and the file picker stay responsive with tens of thousands of
 files: their `SortableList`s are `windowed`, rendering only the rows in or near
 the scroll viewport (every row the same, measured height) with padding standing
@@ -1654,7 +1669,7 @@ each hold only the next shows as one row, `a/b/c`, expanded or collapsed as one,
 and expanded only while every folder in it is, so a row that joins a folder
 below it (`x` and `a/b` become `x/a/b` when `x`'s other files go) never opens
 one the user didn't.
-Folders come from the files (`Diskfiles.tree_index`, kept in step as files come
+Folders come from the files (`DiskfileIndex`, kept in step as files come
 and go), so an empty folder doesn't show — except one created from the tree,
 which it keeps until a reload (`DiskfileTreeState.created_dirs`; one deleted
 meanwhile by another program lingers until then too); a root nested in another

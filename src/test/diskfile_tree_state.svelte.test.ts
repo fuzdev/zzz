@@ -437,7 +437,7 @@ describe('DiskfileTreeState', () => {
 
 	test('the index agrees with a from-scratch walk through a long mixed sequence', () => {
 		const paths = ['/w/a.md', '/w/a/b.md', '/w/a/b/c.md', '/w/a/b/d.md', '/w/e/f.md'];
-		const { tree_index } = app.diskfiles;
+		const { tree_index } = app.diskfiles.index;
 		for (let step = 0; step < 60; step++) {
 			const path = paths[(step * 7) % paths.length]!;
 			if (step % 3 === 2) {

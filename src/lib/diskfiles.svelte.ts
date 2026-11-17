@@ -8,7 +8,8 @@ import {
 	type InferInput
 } from '@fuzdev/fuz_schema/schema.ts';
 import { untrack } from 'svelte';
-import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { SvelteMap } from 'svelte/reactivity';
+import { DEV } from 'esm-env';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
@@ -31,9 +32,9 @@ import {
 	disknode_to_diskfile_json,
 	normalize_path,
 	parse_new_diskfile_name,
-	to_file_directories,
 	to_diskfile_unloaded_message,
 	to_innermost_unindexed_part,
+	to_file_directories,
 	to_relative_path,
 	type FileIndexUnindexedPart
 } from './diskfile_helpers.ts';
@@ -47,7 +48,7 @@ import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
-import { DiskfileTreeIndex } from './diskfile_tree_state.svelte.ts';
+import { DiskfileIndex } from './diskfile_index.svelte.ts';
 import type { ActionInputs, ActionOutputs } from './action_collections.ts';
 import { TaskQueue } from './task_queue.ts';
 
@@ -107,10 +108,18 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/** The files' app-level editing states, by path — see `get_editor_state`. */
 	readonly #editor_states: SvelteMap<DiskfilePath, DiskfileEditorState> = new SvelteMap();
 
+	/**
+	 * The metadata of the files on disk the index reports — every cell in
+	 * `items` but those kept after leaving it (`deleted_on_disk`,
+	 * `uncovered`). Written beside the cells by every write here.
+	 */
+	readonly index: DiskfileIndex = new DiskfileIndex();
+
 	readonly items: IndexedCollection<Diskfile> = new IndexedCollection({
 		dispose_item: (diskfile) => {
-			// every way out of the collection passes here - `remove`, `remove_many`, and `clear`
-			this.#sync_directories(diskfile);
+			// every way out of the collection passes here - `remove`, `remove_many`, and `clear`;
+			// unchecked, since `remove_many` and `clear` dispose after removing every item
+			this.#sync_index(diskfile);
 			this.#remove_editor_state(diskfile);
 			diskfile.dispose();
 		},
@@ -174,7 +183,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 		this.decoders = {
 			diskfiles: create_collection_decoder(
-				() => this.items.clear(),
+				() => this.#write(() => this.items.clear()),
 				(json) => this.add(json)
 			)
 		};
@@ -232,9 +241,16 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * opens a tab. Only `create_file` selects the file it creates.
 	 */
 	add(json: DiskfileJsonInput): Diskfile {
+		return this.#add(json);
+	}
+
+	/** Adds a diskfile — with `disknode`, the record that reported it, for the index. */
+	#add(json: DiskfileJsonInput, disknode?: SerializableDisknode): Diskfile {
 		const diskfile = new Diskfile({ app: this.app, json });
-		this.items.add(diskfile);
-		this.#sync_directories(diskfile);
+		this.#write(() => {
+			this.items.add(diskfile);
+			this.#sync_index(diskfile, disknode);
+		});
 		if (diskfile.path === this.#select_on_arrival) {
 			this.#select_on_arrival = null;
 			this.select(diskfile.path, true);
@@ -313,7 +329,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	upsert(disknode: SerializableDisknode): Diskfile {
 		const existing = this.items.by_optional('by_path', disknode.id);
 		if (!existing) {
-			const diskfile = this.add(disknode_to_diskfile_json(disknode));
+			const diskfile = this.#add(disknode_to_diskfile_json(disknode), disknode);
 			if (this.#is_held_eagerly(diskfile)) void this.#start_load(diskfile);
 			return diskfile;
 		}
@@ -329,7 +345,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			}
 		}
 		// back on disk, and its root may have changed with a snapshot from another filer
-		this.#sync_directories(existing);
+		this.#write(() => this.#sync_index(existing, disknode));
 		this.#follow_disk_change(existing);
 		return existing;
 	}
@@ -610,7 +626,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * flight (see `track_changes`)
 	 */
 	add_initial(files: Array<SerializableDisknode>, changes?: DiskfileSnapshotChanges): void {
-		this.#upsert_snapshot(files, changes?.paths);
+		this.#write(() => this.#upsert_snapshot(files, changes?.paths));
 	}
 
 	#upsert_snapshot(files: Array<SerializableDisknode>, skip_paths?: ReadonlySet<string>): void {
@@ -650,8 +666,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	): void {
 		const skip_paths = options?.changes?.paths;
 		const skip_dirs = options?.skip_dirs ?? [];
-		this.#upsert_snapshot(files, skip_paths);
-		this.#prune_unlisted(files, roots, skip_paths, skip_dirs);
+		this.#write(() => {
+			this.#upsert_snapshot(files, skip_paths);
+			this.#prune_unlisted(files, roots, skip_paths, skip_dirs);
+		});
 	}
 
 	#prune_unlisted(
@@ -689,12 +707,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const diskfile = this.items.by_optional('by_path', path);
 		if (!diskfile) return;
 
-		if (this.#is_held(diskfile)) {
-			this.set_deleted_on_disk(diskfile, true);
-			return;
-		}
-
-		this.#forget(diskfile);
+		this.#write(() => {
+			if (this.#is_held(diskfile)) {
+				this.set_deleted_on_disk(diskfile, true);
+			} else {
+				this.#forget(diskfile);
+			}
+		});
 	}
 
 	/**
@@ -719,11 +738,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	release_uncovered(dirs: ReadonlyArray<string>): void {
 		if (!dirs.length) return;
-		for (const diskfile of this.items.values) {
-			const { path } = diskfile;
-			if (!is_under_any(path, dirs) || this.is_indexed(path)) continue;
-			this.#release(diskfile);
-		}
+		this.#write(() => {
+			for (const diskfile of this.items.values) {
+				const { path } = diskfile;
+				if (!is_under_any(path, dirs) || this.is_indexed(path)) continue;
+				this.#release(diskfile);
+			}
+		});
 	}
 
 	/**
@@ -789,7 +810,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 */
 	#forget(diskfile: Diskfile): void {
 		// remove first, so closing its tabs re-entering `handle_diskfile_detached` is a no-op
-		this.items.remove(diskfile.id);
+		this.#write(() => this.items.remove(diskfile.id));
 		this.editor.remove_diskfile(diskfile.path);
 
 		if (this.selected_path === diskfile.path) {
@@ -864,12 +885,14 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * an unfocused repo, as `release_uncovered` keeps it.
 	 */
 	settle_recreated(diskfile: Diskfile): void {
-		this.set_deleted_on_disk(diskfile, false);
-		const { path } = diskfile;
-		if (this.is_in_unfocused_repo(path)) return;
-		if (!this.is_indexed(path) || this.to_unindexed(path) !== null) {
-			this.set_uncovered(diskfile, true);
-		}
+		this.#write(() => {
+			this.set_deleted_on_disk(diskfile, false);
+			const { path } = diskfile;
+			if (this.is_in_unfocused_repo(path)) return;
+			if (!this.is_indexed(path) || this.to_unindexed(path) !== null) {
+				this.set_uncovered(diskfile, true);
+			}
+		});
 	}
 
 	/**
@@ -1000,27 +1023,6 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	});
 
 	/**
-	 * How many files on disk each directory holds, at any depth, by its path
-	 * with a trailing `/` — every ancestor of each file up to its root (see
-	 * `to_file_directories`). Kept in step as files come and go
-	 * (`#sync_directories`), never rebuilt. Not reactive: `directory_paths` is.
-	 */
-	readonly #directory_counts: Map<string, number> = new Map();
-
-	/** What each counted diskfile contributed to `#directory_counts`, by id. Not reactive. */
-	readonly #counted_files: Map<Uuid, { path: string; source_dir: string }> = new Map();
-
-	readonly #directory_paths: SvelteSet<string> = new SvelteSet();
-
-	/**
-	 * Each folder's children among the files on disk, every file linked up to
-	 * `/` — not its `source_dir`, which is whichever root's filer reported it
-	 * last — so any root's folder shows it. Kept in step with
-	 * `directory_paths`; the file tree reads it (see `DiskfileTreeState`).
-	 */
-	readonly tree_index: DiskfileTreeIndex = new DiskfileTreeIndex();
-
-	/**
 	 * The files in the collection that are deleted on disk or uncovered, by id
 	 * — see `listed_unindexed`.
 	 */
@@ -1028,7 +1030,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 
 	/**
 	 * The files `listed` holds that are deleted on disk or uncovered — kept
-	 * for a draft or a tab, so missing from `tree_index`. Tracks only those
+	 * for a draft or a tab, so missing from `index`. Tracks only those
 	 * few files, not the whole collection.
 	 */
 	readonly listed_unindexed: Array<Diskfile> = $derived(
@@ -1036,17 +1038,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	);
 
 	/**
-	 * The directories holding a file on disk, each with a trailing `/` —
-	 * changing only as a directory gains its first file or loses its last.
-	 */
-	readonly directory_paths: ReadonlySet<string> = this.#directory_paths;
-
-	/**
 	 * Marks `diskfile` gone from disk, or back — the one writer of
-	 * `Diskfile.deleted_on_disk` besides `upsert`, so `directory_paths` stays
-	 * in step. A delete clears `uncovered`, and ends any showing of the disk
-	 * version (`DiskfileEditorState.showing_disk`), so the file reappearing
-	 * shows the draft, not the disk.
+	 * `Diskfile.deleted_on_disk` besides `upsert`, so `index` stays in step. A delete clears `uncovered`, and ends any
+	 * showing of the disk version (`DiskfileEditorState.showing_disk`), so the
+	 * file reappearing shows the draft, not the disk.
 	 */
 	set_deleted_on_disk(diskfile: Diskfile, deleted_on_disk: boolean): void {
 		if (diskfile.deleted_on_disk === deleted_on_disk) return;
@@ -1055,66 +1050,74 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 			diskfile.uncovered = false;
 			this.#editor_states.get(diskfile.path)?.set_showing_disk(false);
 		}
-		this.#sync_directories(diskfile);
+		this.#write(() => this.#sync_index(diskfile));
 	}
 
 	/**
 	 * Marks `diskfile` out of the index though not seen deleted, or back — the
-	 * one writer of `Diskfile.uncovered` besides `upsert`, so `directory_paths`
-	 * stays in step. Never set on a file deleted on disk.
+	 * one writer of `Diskfile.uncovered` besides `upsert`, so `index` stays
+	 * in step. Never set on a file deleted on disk.
 	 */
 	set_uncovered(diskfile: Diskfile, uncovered: boolean): void {
 		if (diskfile.uncovered === uncovered || (uncovered && diskfile.deleted_on_disk)) return;
 		diskfile.uncovered = uncovered;
-		this.#sync_directories(diskfile);
+		this.#write(() => this.#sync_index(diskfile));
 	}
 
 	/**
-	 * Brings `#directory_counts` and `tree_index` in step with the file
-	 * `diskfile`'s id names: it counts while it's in the collection and on
-	 * disk, under its current path and root. Called after every change to any
-	 * of those. Reads the collection's own object for the id when there is one,
-	 * so a stale or rejected object (an `add` of an id already present) can't
-	 * uncount the file that's there. Also keeps `#unindexed_files`.
+	 * Brings the index's record for `diskfile`'s path in step with the cell
+	 * there: held while that cell is on disk (neither `deleted_on_disk` nor
+	 * `uncovered`), absent otherwise. Called after every change to any of
+	 * those, and as a cell leaves the collection. Reads the collection's own
+	 * cell for the path, so a stale or rejected object (an `add` of an id
+	 * already present) can't drop the file that's there. `disknode` is the
+	 * record that just reported the cell, kept as is; without one the record
+	 * is made from the cell. Also keeps `#unindexed_files`.
 	 */
-	#sync_directories(diskfile: Diskfile): void {
+	#sync_index(diskfile: Diskfile, disknode?: SerializableDisknode): void {
 		untrack(() => {
-			const counted = this.#counted_files.get(diskfile.id);
 			const live = this.items.by_id.get(diskfile.id);
-			const unindexed = !!live && (live.deleted_on_disk || live.uncovered);
-			const counts = !!live && !unindexed;
-			if (live && unindexed) {
+			if (live && (live.deleted_on_disk || live.uncovered)) {
 				if (!this.#unindexed_files.has(diskfile.id)) this.#unindexed_files.set(diskfile.id, live);
 			} else if (this.#unindexed_files.has(diskfile.id)) {
 				this.#unindexed_files.delete(diskfile.id);
 			}
-			const { path, source_dir } = live ?? diskfile;
-			if (counted && counts && counted.path === path && counted.source_dir === source_dir) return;
-			if (counted) {
-				this.#counted_files.delete(diskfile.id);
-				const dirs = to_file_directories(counted.path, counted.source_dir);
-				this.tree_index.remove_file(counted.path, to_file_directories(counted.path, '/'));
-				for (const dir of dirs) {
-					const count = this.#directory_counts.get(dir)! - 1;
-					if (count > 0) {
-						this.#directory_counts.set(dir, count);
-					} else {
-						this.#directory_counts.delete(dir);
-						this.#directory_paths.delete(dir);
-					}
-				}
-			}
-			if (counts) {
-				this.#counted_files.set(diskfile.id, { path, source_dir });
-				const dirs = to_file_directories(path, source_dir);
-				this.tree_index.add_file(path, to_file_directories(path, '/'));
-				for (const dir of dirs) {
-					const count = this.#directory_counts.get(dir) ?? 0;
-					this.#directory_counts.set(dir, count + 1);
-					if (count === 0) this.#directory_paths.add(dir);
-				}
+			const { path } = diskfile;
+			const at_path = this.items.by_optional('by_path', path);
+			if (at_path && !at_path.deleted_on_disk && !at_path.uncovered) {
+				this.index.set(disknode && at_path === diskfile ? disknode : diskfile_to_disknode(at_path));
+			} else {
+				this.index.delete(path);
 			}
 		});
+	}
+
+	/** How deep `#write` calls are nested — the outermost checks the index in DEV. */
+	#write_depth = 0;
+
+	/**
+	 * Runs a write of cells and the index as one batch of the index
+	 * (`DiskfileIndex.batch`). In DEV, the outermost checks that the index is
+	 * in step with the cells (`to_diskfile_index_mismatches`) while the
+	 * collection is small enough to scan on every write.
+	 */
+	#write<T>(fn: () => T): T {
+		this.#write_depth++;
+		let result: T;
+		try {
+			result = this.index.batch(fn);
+		} finally {
+			this.#write_depth--;
+		}
+		// Only after `fn` returns, so a write that throws surfaces its own error.
+		if (
+			DEV &&
+			this.#write_depth === 0 &&
+			untrack(() => this.items.by_id.size) <= DISKFILE_INDEX_CHECK_LIMIT
+		) {
+			assert_diskfile_index_in_step(this);
+		}
+		return result;
 	}
 
 	/**
@@ -1127,11 +1130,8 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		const get_coverage = () => this.index_coverage;
 		const get_ignore_rules = () => this.app.projects.ignore_rules;
 		return {
-			has_file: (path) => {
-				const diskfile = this.get_by_path(path as DiskfilePath);
-				return !!diskfile && !diskfile.deleted_on_disk && !diskfile.uncovered;
-			},
-			has_directory: (path) => this.#directory_paths.has(path),
+			has_file: (path) => this.index.has(path),
+			has_directory: (path) => this.index.directory_paths.has(path),
 			get ignore_rules() {
 				return get_ignore_rules();
 			},
@@ -1351,6 +1351,107 @@ const unindexed_location_error = (path: string): Error =>
 	new Error(
 		`not created: ${path} isn't in a focused repo, so it would never show — create it inside a focused repo, or register and open the repo first`
 	);
+
+/**
+ * The most cells `Diskfiles` checks its index against after every write in
+ * DEV (`assert_diskfile_index_in_step`) — a scan of every cell, so a large
+ * tree skips it.
+ */
+export const DISKFILE_INDEX_CHECK_LIMIT = 2000;
+
+/**
+ * The index record a cell on disk implies. The cell keeps no `ctime`, so the
+ * record has none — what reported the cell, when there was one, is kept
+ * instead (`Diskfiles.upsert`).
+ */
+const diskfile_to_disknode = (diskfile: Diskfile): SerializableDisknode => ({
+	id: diskfile.path,
+	source_dir: diskfile.source_dir,
+	size: diskfile.size,
+	ctime: null,
+	mtime: diskfile.mtime
+});
+
+/**
+ * How `diskfiles.index` differs from its cells, each difference described —
+ * empty when they agree: the index holds exactly the paths of the cells on
+ * disk (neither `deleted_on_disk` nor `uncovered`), each with the cell's
+ * root, size, and mtime. A cell keeps no `ctime`, so that isn't compared.
+ * Within `DISKFILE_INDEX_CHECK_LIMIT` cells, also rebuilds the directories
+ * and their counts from the records and compares them with
+ * `DiskfileIndex.directory_paths` and `DiskfileIndex.directory_counts`.
+ * Untracked. A scan of every cell and record — for tests and DEV checks.
+ */
+export const to_diskfile_index_mismatches = (diskfiles: Diskfiles): Array<string> =>
+	untrack(() => {
+		const mismatches: Array<string> = [];
+		const { index } = diskfiles;
+		const on_disk: Set<string> = new Set();
+		for (const diskfile of diskfiles.items.values) {
+			const { path } = diskfile;
+			const record = index.get(path);
+			if (diskfile.deleted_on_disk || diskfile.uncovered) {
+				if (record) mismatches.push(`${path}: held off disk, but in the index`);
+				continue;
+			}
+			on_disk.add(path);
+			if (!record) {
+				mismatches.push(`${path}: on disk, but missing from the index`);
+			} else if (
+				record.source_dir !== diskfile.source_dir ||
+				record.size !== diskfile.size ||
+				record.mtime !== diskfile.mtime
+			) {
+				mismatches.push(
+					`${path}: index has ${record.source_dir} ${record.size} ${record.mtime}, cell has ${diskfile.source_dir} ${diskfile.size} ${diskfile.mtime}`
+				);
+			}
+		}
+		if (index.size !== on_disk.size) {
+			for (const record of index.values()) {
+				if (!diskfiles.get_by_path(record.id))
+					mismatches.push(`${record.id}: in the index, no cell`);
+			}
+		}
+		if (diskfiles.items.by_id.size <= DISKFILE_INDEX_CHECK_LIMIT) {
+			const expected: Map<string, number> = new Map();
+			for (const record of index.values()) {
+				for (const dir of to_file_directories(record.id, record.source_dir)) {
+					expected.set(dir, (expected.get(dir) ?? 0) + 1);
+				}
+			}
+			const { directory_counts, directory_paths } = index;
+			for (const [dir, count] of expected) {
+				const held = directory_counts.get(dir);
+				if (held !== count)
+					mismatches.push(`${dir}: index counts ${held ?? 0} files, records hold ${count}`);
+				if (!directory_paths.has(dir))
+					mismatches.push(`${dir}: holds files, but missing from \`directory_paths\``);
+			}
+			for (const [dir, count] of directory_counts) {
+				if (!expected.has(dir))
+					mismatches.push(`${dir}: index counts ${count} files, records hold none`);
+			}
+			for (const dir of directory_paths) {
+				if (!expected.has(dir))
+					mismatches.push(`${dir}: in \`directory_paths\`, but holds no files`);
+			}
+		}
+		return mismatches;
+	});
+
+/**
+ * Throws when `diskfiles.index` differs from its cells — see
+ * `to_diskfile_index_mismatches`.
+ *
+ * @throws Error listing the differences
+ */
+export const assert_diskfile_index_in_step = (diskfiles: Diskfiles): void => {
+	const mismatches = to_diskfile_index_mismatches(diskfiles);
+	if (mismatches.length) {
+		throw new Error(`diskfile index out of step:\n${mismatches.join('\n')}`);
+	}
+};
 
 /** Whether `path` is inside one of `dirs` (each with a trailing `/`). */
 const is_under_any = (path: string, dirs: ReadonlyArray<string>): boolean =>
