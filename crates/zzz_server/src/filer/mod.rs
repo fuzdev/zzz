@@ -113,6 +113,7 @@ mod git_rule_tests;
 mod ignore;
 mod index;
 mod manager;
+mod snapshot;
 #[cfg(test)]
 mod test_support;
 mod walk;
@@ -123,6 +124,7 @@ pub use self::core::{
 };
 pub(crate) use self::index::system_time_to_ms;
 pub use self::manager::{FilerEntry, FilerLifetime, FilerManager, FilerSnapshot};
+pub use self::snapshot::SnapshotFiles;
 
 // -- Indexing limits ----------------------------------------------------------
 
@@ -201,8 +203,10 @@ pub struct SerializableDisknode {
     /// The file's size in bytes, from the `lstat` the node was made from.
     /// `None` for a `delete`'s node, which is identity only.
     pub size: Option<u64>,
-    pub ctime: Option<f64>,
-    pub mtime: Option<f64>,
+    /// The file's birth time, in whole milliseconds since the epoch.
+    pub ctime: Option<u64>,
+    /// The file's modification time, in whole milliseconds since the epoch.
+    pub mtime: Option<u64>,
     /// The stamp of the `lstat` the node was made from, when it's trusted
     /// ([`reusable_stat`](index::reusable_stat)) — a later `lstat` with the same stamp means the
     /// file is unchanged ([`is_unchanged`](index::is_unchanged)). Not part of the wire shape.
@@ -210,25 +214,11 @@ pub struct SerializableDisknode {
     stat: Option<FileStat>,
 }
 
-/// An estimate of the serialized size in bytes of `nodes` as a JSON array.
-///
-/// Counts every node's paths plus its keys, for sizing a response buffer up
-/// front (`session_load`, `project_open`). A path JSON escapes (quotes,
-/// backslashes, control characters) renders longer, and the buffer grows past
-/// the estimate as needed.
-pub fn disknodes_json_size_hint(nodes: &[SerializableDisknode]) -> usize {
-    /// The keys, punctuation, size, and two timestamps of a node.
-    const NODE_OVERHEAD: usize = 96;
-    nodes.iter().fold(2, |total, node| {
-        total + NODE_OVERHEAD + node.id.len() + node.source_dir.len()
-    })
-}
-
 #[cfg(test)]
 impl SerializableDisknode {
     /// A node with the given identity, size, and timestamps — for tests
     /// outside this module, which can't name `stat`.
-    pub(crate) fn for_test(id: &str, size: Option<u64>, mtime: Option<f64>) -> Self {
+    pub(crate) fn for_test(id: &str, size: Option<u64>, mtime: Option<u64>) -> Self {
         make_disknode(id.to_owned(), "/w/", size, mtime, mtime, None)
     }
 }
@@ -353,15 +343,15 @@ mod tests {
 
     #[test]
     fn disknode_serializes_to_its_wire_shape() {
-        let node = SerializableDisknode::for_test("/w/a.txt", Some(9), Some(2.5));
+        let node = SerializableDisknode::for_test("/w/a.txt", Some(9), Some(2_500));
         assert_eq!(
             serde_json::to_value(&node).unwrap(),
             serde_json::json!({
                 "id": "/w/a.txt",
                 "source_dir": "/w/",
                 "size": 9,
-                "ctime": 2.5,
-                "mtime": 2.5,
+                "ctime": 2_500,
+                "mtime": 2_500,
             })
         );
         let big = SerializableDisknode::for_test("/w/big.bin", Some(5_000_000), None);
@@ -375,25 +365,5 @@ mod tests {
                 "mtime": null,
             })
         );
-    }
-
-    #[test]
-    fn disknodes_size_hint_tracks_the_rendered_size() {
-        let nodes: Vec<SerializableDisknode> = (0..10)
-            .map(|i| {
-                SerializableDisknode::for_test(
-                    &format!("/w/dir/file_{i}.txt"),
-                    Some(10_000),
-                    Some(1_700_000_000_000.25),
-                )
-            })
-            .collect();
-        let rendered = serde_json::to_string(&nodes).unwrap().len();
-        let hint = disknodes_json_size_hint(&nodes);
-        assert!(
-            hint.abs_diff(rendered) * 10 <= rendered,
-            "hint {hint} off rendered {rendered} by over 10%"
-        );
-        assert_eq!(disknodes_json_size_hint(&[]), "[]".len());
     }
 }

@@ -24,6 +24,8 @@ import { is_notification } from '@fuzdev/fuz_app/testing/transports/ws_client.ts
 
 import { ERROR_PROJECT_NOT_OPEN } from '#lib/project_helpers.ts';
 
+import { parse_snapshot_files } from '../diskfile_test_helpers.ts';
+
 const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 
@@ -177,9 +179,9 @@ describe('project cross-backend', () => {
 
 			const open_files = async (): Promise<Map<string, unknown>> => {
 				const result = result_of(await call(fixture, 'project_open', { path: tmp_dir }), 'open');
-				const files = result.files as Array<Record<string, unknown>>;
-				for (const file of files) assert.notProperty(file, 'contents', String(file.id));
-				return new Map(files.map((f) => [f.id as string, f.size]));
+				// metadata only: the strict schema admits a file's tuple and nothing more
+				const files = parse_snapshot_files(result.files);
+				return new Map(files.map((f): [string, unknown] => [f.id, f.size]));
 			};
 
 			// metadata only: each file's size, no contents
@@ -232,7 +234,7 @@ describe('project cross-backend', () => {
 			assert.equal(project.root, `${tmp_dir}/`);
 			assert.equal(project.kind, 'git_repo');
 			assert.deepEqual(project.focused, [`${tmp_dir}/`]);
-			const ids = (result.files as Array<Record<string, unknown>>).map((f) => f.id);
+			const ids = parse_snapshot_files(result.files).map((f) => f.id);
 			assert.deepEqual(ids, [join(tmp_dir, 'src', 'a.ts')], '.git is never indexed');
 		} finally {
 			await call(fixture, 'project_close', { root: `${tmp_dir}/` }).catch(() => undefined);
@@ -278,9 +280,9 @@ describe('project cross-backend', () => {
 			if (!(await lock_dir(locked))) return;
 
 			const result = result_of(await call(fixture, 'project_open', { path: tmp_dir }), 'open');
-			const files = result.files as Array<Record<string, unknown>>;
+			const files = parse_snapshot_files(result.files);
 			assert.deepEqual(
-				new Map(files.map((f) => [f.id as string, f.size])),
+				new Map(files.map((f): [string, number | null] => [f.id, f.size])),
 				new Map([
 					[join(tmp_dir, 'a.txt'), 'alpha'.length],
 					[join(tmp_dir, 'open', 'b.txt'), 'beta'.length]
@@ -335,8 +337,8 @@ describe('project cross-backend', () => {
 
 			// its parent opens, with the `.zzz` directory skipped
 			const result = result_of(await call(fixture, 'project_open', { path: tmp_dir }), 'open');
-			const files = result.files as Array<Record<string, unknown>>;
-			assert.ok(!files.some((f) => (f.id as string).startsWith(home)), 'home not indexed');
+			const files = parse_snapshot_files(result.files);
+			assert.ok(!files.some((f) => f.id.startsWith(home)), 'home not indexed');
 		} finally {
 			await call(fixture, 'project_close', { root: `${tmp_dir}/` }).catch(() => undefined);
 		}
@@ -370,8 +372,8 @@ describe('project cross-backend', () => {
 			// its parent opens, with the credential directories skipped and
 			// `.env` files indexed
 			const result = result_of(await call(fixture, 'project_open', { path: tmp_dir }), 'open');
-			const ids = (result.files as Array<Record<string, unknown>>)
-				.map((f) => f.id as string)
+			const ids = parse_snapshot_files(result.files)
+				.map((f) => f.id)
 				.sort();
 			assert.deepEqual(ids, [join(tmp_dir, 'project', '.env')]);
 		} finally {

@@ -49,7 +49,9 @@ import {
 	DiskfileDirectoryPath,
 	DiskfilePath,
 	DiskfileUnloadedReason,
-	SerializableDisknode
+	SerializableDisknode,
+	SnapshotFiles,
+	WireTime
 } from './diskfile_types.ts';
 import { ERROR_INVALID_PATH, is_path_absolute } from './diskfile_helpers.ts';
 import { ERROR_TERMINAL_COMMAND_NOT_FOUND } from './terminal_helpers.ts';
@@ -96,7 +98,8 @@ export type PingOutput = Infer<typeof PingOutput>;
 export const SessionLoadData = object({
 	zzz_dir: DiskfileDirectoryPath,
 	scoped_dirs: array(DiskfileDirectoryPath),
-	files: array(SerializableDisknode),
+	/** Every indexed file's metadata, grouped by filer dir (`decode_snapshot_files`). */
+	files: SnapshotFiles,
 	/**
 	 * The roots of the backend's permanent filers and the ones the open
 	 * projects keep, each covered by `files` as deep as its filer indexes — a
@@ -164,7 +167,7 @@ export type DiskfileReadInput = Infer<typeof DiskfileReadInput>;
  * they're loaded, the bytes read when they aren't UTF-8, and for a file too
  * large, its size when opened — or the limit plus one byte, a lower bound,
  * for one that grew past the limit during the read. `ctime` /
- * `mtime` are a disknode's (milliseconds since the epoch, `null` when the
+ * `mtime` are a disknode's (whole milliseconds since the epoch, `null` when the
  * backend couldn't say), taken before the read, so a write racing it leaves
  * them older than the contents, never newer.
  */
@@ -173,8 +176,8 @@ export const DiskfileReadOutput = object({
 	unloaded_reason: nullable(DiskfileUnloadedReason),
 	hash: nullable(Blake3Hash),
 	size: number,
-	ctime: nullable(number),
-	mtime: nullable(number)
+	ctime: WireTime,
+	mtime: WireTime
 });
 export type DiskfileReadOutput = Infer<typeof DiskfileReadOutput>;
 
@@ -443,7 +446,7 @@ export const ProjectOpenOutput = object({
 	/** The directory the open focused, or `null` — a registry's root, or a directory in no entry. */
 	focus: nullable(DiskfileDirectoryPath),
 	/** The index of every filer of the project: the root's and each focused directory's. */
-	files: array(SerializableDisknode),
+	files: SnapshotFiles,
 	watch_status: ProjectWatchStatus,
 	/** Each requested `focus` that didn't land. */
 	refused: array(ProjectFocusRefusal),
@@ -482,7 +485,7 @@ export type RepoFocusInput = Infer<typeof RepoFocusInput>;
 export const RepoFocusOutput = object({
 	project: ProjectInfoJson,
 	/** The focused repo's index alone — the rest of the project is the client's already. */
-	files: array(SerializableDisknode),
+	files: SnapshotFiles,
 	/** Over every indexed directory of the project, as `project_open`'s. */
 	watch_status: ProjectWatchStatus
 });
@@ -514,7 +517,7 @@ export type RepoFilesInput = Infer<typeof RepoFilesInput>;
 /** Output for `repo_files`. */
 export const RepoFilesOutput = object({
 	/** The focused repo's index. */
-	files: array(SerializableDisknode),
+	files: SnapshotFiles,
 	/** Over every indexed directory of the project, as `project_open`'s. */
 	watch_status: ProjectWatchStatus,
 	/**

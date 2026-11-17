@@ -17,7 +17,7 @@ import type {
 import type { ProjectInfoJson } from '#lib/project.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { content_hash } from './diskfile_test_helpers.ts';
+import { content_hash, encode_snapshot_files } from './diskfile_test_helpers.ts';
 
 const DEV = parse_or_throw(DiskfileDirectoryPath, '/dev/');
 const APP = parse_or_throw(DiskfileDirectoryPath, '/dev/app/');
@@ -180,7 +180,7 @@ const reply_open = (i: number, project: ProjectInfoJson, files: Array<DiskfilePa
 			project,
 			focus: SITE,
 			watch_status: 'full',
-			files: files.map(node),
+			files: encode_snapshot_files(files.map(node)),
 			refused: [],
 			opened: true
 		}
@@ -197,7 +197,7 @@ describe('Projects.focus_repo', () => {
 			ok: true,
 			value: {
 				project: registry_info([SITE], 2),
-				files: [node(README), node(SITE_A)],
+				files: encode_snapshot_files([node(README), node(SITE_A)]),
 				watch_status: 'degraded'
 			}
 		});
@@ -218,7 +218,11 @@ describe('Projects.focus_repo', () => {
 		assert.strictEqual(files_calls.length, 0, 'deferred while the focus is in flight');
 		focus_calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([SITE], 2), files: [node(SITE_A)], watch_status: 'full' }
+			value: {
+				project: registry_info([SITE], 2),
+				files: encode_snapshot_files([node(SITE_A)]),
+				watch_status: 'full'
+			}
 		});
 		assert.ok((await focused).ok);
 		await flush();
@@ -234,7 +238,11 @@ describe('Projects.focus_repo', () => {
 		receive_update(registry_info([APP, SITE], 3)); // another client's, after it
 		focus_calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([SITE], 2), files: [node(SITE_A)], watch_status: 'full' }
+			value: {
+				project: registry_info([SITE], 2),
+				files: encode_snapshot_files([node(SITE_A)]),
+				watch_status: 'full'
+			}
 		});
 		const result = await focused;
 		assert.ok(result.ok);
@@ -262,7 +270,11 @@ describe('Projects.focus_repo', () => {
 		const focused = app.projects.focus_repo(DEV, SITE);
 		focus_calls[0]!.resolve({
 			ok: true,
-			value: { project: registry_info([SITE], 3), files: [node(SITE_A)], watch_status: 'full' }
+			value: {
+				project: registry_info([SITE], 3),
+				files: encode_snapshot_files([node(SITE_A)]),
+				watch_status: 'full'
+			}
 		});
 		assert.ok((await focused).ok);
 		assert.strictEqual(app.diskfiles.get_by_path(SITE_B), b);
@@ -369,7 +381,7 @@ describe('Projects.unfocus_repo', () => {
 		);
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(APP_A)], watch_status: 'full', rev: 3 }
+			value: { files: encode_snapshot_files([node(APP_A)]), watch_status: 'full', rev: 3 }
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(APP_A));
@@ -414,7 +426,7 @@ describe('a remote unfocus', () => {
 			value: {
 				project: registry_info([APP, SITE], 1),
 				focus: APP,
-				files: [node(APP_A), node(SITE_A)],
+				files: encode_snapshot_files([node(APP_A), node(SITE_A)]),
 				watch_status: 'full',
 				refused: [],
 				opened: false
@@ -459,7 +471,11 @@ describe('a remote focus', () => {
 		});
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A), node(SITE_B)], watch_status: 'degraded', rev: 2 }
+			value: {
+				files: encode_snapshot_files([node(SITE_A), node(SITE_B)]),
+				watch_status: 'degraded',
+				rev: 2
+			}
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(SITE_A));
@@ -499,7 +515,7 @@ describe('a remote focus', () => {
 		receive_update(registry_info([], 3));
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A)], watch_status: 'full', rev: 2 }
+			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 2 }
 		});
 		await flush();
 		assert.ok(!app.diskfiles.get_by_path(SITE_A));
@@ -516,13 +532,17 @@ describe('a remote focus', () => {
 		const created = parse_or_throw(DiskfilePath, '/dev/site/new.txt');
 		files_calls[1]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A), node(created)], watch_status: 'full', rev: 4 }
+			value: {
+				files: encode_snapshot_files([node(SITE_A), node(created)]),
+				watch_status: 'full',
+				rev: 4
+			}
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(created));
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A)], watch_status: 'full', rev: 2 }
+			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 2 }
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(created), 'not pruned by the read of the earlier focus');
@@ -542,7 +562,7 @@ describe('a remote focus', () => {
 		// `site`'s pull read the index at its own focus, before `app`'s
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A)], watch_status: 'full', rev: 2 }
+			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 2 }
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(SITE_A), 'the focus it read is the one held');
@@ -567,7 +587,7 @@ describe('a remote focus', () => {
 			ok: true,
 			value: {
 				project: registry_info([APP, SITE], 3),
-				files: [node(APP_A)],
+				files: encode_snapshot_files([node(APP_A)]),
 				watch_status: 'full'
 			}
 		});
@@ -579,7 +599,7 @@ describe('a remote focus', () => {
 		);
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A)], watch_status: 'full', rev: 3 }
+			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 3 }
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(SITE_A));
@@ -602,7 +622,7 @@ describe('a remote focus', () => {
 			ok: true,
 			value: {
 				project: registry_info([APP, SITE], 3),
-				files: [node(APP_A)],
+				files: encode_snapshot_files([node(APP_A)]),
 				watch_status: 'full'
 			}
 		});
@@ -613,7 +633,7 @@ describe('a remote focus', () => {
 		);
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A)], watch_status: 'full', rev: 3 }
+			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 3 }
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(APP_A));
@@ -647,7 +667,11 @@ describe('a resync of a focused repo', () => {
 		);
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A), node(SITE_C)], watch_status: 'full', rev: 2 }
+			value: {
+				files: encode_snapshot_files([node(SITE_A), node(SITE_C)]),
+				watch_status: 'full',
+				rev: 2
+			}
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(SITE_A));
@@ -690,13 +714,17 @@ describe('a resync of a focused repo', () => {
 		assert.strictEqual(files_calls.length, 2);
 		files_calls[1]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A)], watch_status: 'full', rev: 3 }
+			value: { files: encode_snapshot_files([node(SITE_A)]), watch_status: 'full', rev: 3 }
 		});
 		await flush();
 		// the first pull, larger, lands last
 		files_calls[0]!.resolve({
 			ok: true,
-			value: { files: [node(SITE_A), node(SITE_B)], watch_status: 'full', rev: 2 }
+			value: {
+				files: encode_snapshot_files([node(SITE_A), node(SITE_B)]),
+				watch_status: 'full',
+				rev: 2
+			}
 		});
 		await flush();
 		assert.ok(app.diskfiles.get_by_path(SITE_A));
@@ -713,7 +741,7 @@ describe('a resync of a focused repo', () => {
 			ok: true,
 			value: {
 				project: with_ignored(registry_info([APP, SITE], 2), [], 1),
-				files: [node(APP_A)],
+				files: encode_snapshot_files([node(APP_A)]),
 				watch_status: 'full'
 			}
 		});
@@ -748,7 +776,7 @@ describe('a resync of a focused repo', () => {
 				project,
 				focus: SITE,
 				watch_status: 'full',
-				files: [node(SITE_A), node(SITE_B)],
+				files: encode_snapshot_files([node(SITE_A), node(SITE_B)]),
 				refused: [],
 				opened: false
 			}

@@ -1,4 +1,5 @@
 import {
+	array,
 	brand,
 	check,
 	message,
@@ -7,10 +8,15 @@ import {
 	object,
 	one_of,
 	pipe,
+	safe_integer,
+	integer,
+	min_value,
 	string,
+	unknown,
 	with_default,
 	type Infer,
-	type InferInput
+	type InferInput,
+	type Schema
 } from '@fuzdev/fuz_schema/schema.ts';
 
 import { cell_json_schema } from './cell_types.ts';
@@ -67,22 +73,90 @@ export type DiskfileChange = Infer<typeof DiskfileChange>;
 export const DiskfileUnloadedReason = one_of(['too_large', 'not_utf8']);
 export type DiskfileUnloadedReason = Infer<typeof DiskfileUnloadedReason>;
 
+/**
+ * A file's size in bytes as the backend sends it, `null` when it can't say —
+ * any whole number: a sparse file can pass 2^53 bytes, which reads imprecisely
+ * but must never refuse the whole reply it's in.
+ */
+export const WireSize = nullable(pipe(number, integer, min_value(0)));
+
+/**
+ * A timestamp the backend sends, whole milliseconds since the epoch, `null`
+ * when it can't say — the backend sends `null` for one before the epoch or
+ * past 9999-12-31 (the last RFC 3339 year, which `Datetime` requires), so a
+ * valid one always converts.
+ */
+export const WireTime = nullable(pipe(number, safe_integer, min_value(0)));
+
 // TODO hacky, uses the serializable form of the Gro `Disknode` (which uses maps)
 /**
  * A file the backend indexes — its metadata, never its contents, which the
  * frontend reads when it needs them (`diskfile_read`). `size` is the file's
  * size in bytes — `null` when the backend can't say (a deleted file's node).
- * `ctime` / `mtime` are milliseconds since the epoch, `null` when the
- * backend can't say.
+ * `ctime` (the birth time) / `mtime` are whole milliseconds since the epoch,
+ * `null` when the backend can't say.
  */
 export const SerializableDisknode = object({
 	id: DiskfilePath,
 	source_dir: DiskfileDirectoryPath,
-	size: nullable(number),
-	ctime: nullable(number),
-	mtime: nullable(number)
+	size: WireSize,
+	ctime: WireTime,
+	mtime: WireTime
 });
 export type SerializableDisknode = Infer<typeof SerializableDisknode>;
+
+/**
+ * A file of a snapshot, relative to its group's `dir` (`SnapshotFileGroup`):
+ * `[rel, size, mtime, ctime?]` — the path below `dir`, then
+ * `SerializableDisknode`'s `size`, `mtime`, and `ctime`, the last left off
+ * when it equals `mtime`. `decode_snapshot_files` turns it back into a
+ * `SerializableDisknode`.
+ */
+export type SnapshotFile =
+	| [rel: string, size: number | null, mtime: number | null]
+	| [rel: string, size: number | null, mtime: number | null, ctime: number | null];
+
+const is_wire_size = (v: unknown): boolean =>
+	v === null || (Number.isInteger(v) && (v as number) >= 0);
+const is_wire_time = (v: unknown): boolean =>
+	v === null || (Number.isSafeInteger(v) && (v as number) >= 0);
+
+/**
+ * Whether `v` is a `SnapshotFile`: a 3- or 4-tuple whose `rel` is a
+ * non-empty path that doesn't start with `/`, whose size is a non-negative
+ * whole number and whose times are non-negative safe integers, each or `null`.
+ */
+export const is_snapshot_file = (v: unknown): v is SnapshotFile =>
+	Array.isArray(v) &&
+	(v.length === 3 || v.length === 4) &&
+	typeof v[0] === 'string' &&
+	v[0] !== '' &&
+	!v[0].startsWith('/') &&
+	is_wire_size(v[1]) &&
+	is_wire_time(v[2]) &&
+	(v.length === 3 || is_wire_time(v[3]));
+
+/** The schema of a `SnapshotFile` — fuz_schema has no tuple, so it's a checked `unknown`. */
+export const SnapshotFile = pipe(
+	unknown,
+	message(check(is_snapshot_file), 'expected [rel, size, mtime, ctime?]')
+) as Schema<SnapshotFile>;
+
+/** The files of one filer dir in a snapshot, each relative to `dir`. */
+export const SnapshotFileGroup = object({
+	dir: DiskfileDirectoryPath,
+	files: array(SnapshotFile)
+});
+export type SnapshotFileGroup = Infer<typeof SnapshotFileGroup>;
+
+/**
+ * The files of a snapshot reply (`session_load`, `project_open`,
+ * `repo_focus`, `repo_files`), one group per filer dir — the compact form of
+ * an array of `SerializableDisknode`, which a large tree would make several
+ * times larger. `decode_snapshot_files` turns it into one.
+ */
+export const SnapshotFiles = array(SnapshotFileGroup);
+export type SnapshotFiles = Infer<typeof SnapshotFiles>;
 
 /**
  * Where a diskfile's content stands — see `Diskfile.content_status`:

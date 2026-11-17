@@ -5,12 +5,19 @@
  */
 
 import { join } from 'node:path';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { describe, test, assert } from 'vitest';
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
 import { default_cross_process_setup } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 import { rpc_call } from '@fuzdev/fuz_app/testing/rpc_helpers.ts';
+import { parse } from '@fuzdev/fuz_schema/schema.ts';
+
+import type { SerializableDisknode, SnapshotFile } from '#lib/diskfile_types.ts';
+import { SessionLoadOutput } from '#lib/action_specs.ts';
+import { decode_snapshot_files } from '#lib/diskfile_helpers.ts';
+
+import { parse_snapshot_files } from '../diskfile_test_helpers.ts';
 
 const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
@@ -82,7 +89,7 @@ describe('provider + session cross-backend', () => {
 		const file_roots = data.file_roots as Array<string>;
 		assert.include(file_roots, zzz_dir_out, 'zzz_dir is a file root');
 		for (const dir of scoped_dirs) assert.include(file_roots, dir, `${dir} is a file root`);
-		for (const file of data.files as Array<{ id: string }>) {
+		for (const file of parse_snapshot_files(data.files)) {
 			assert.ok(
 				file_roots.some((root) => file.id.startsWith(root)),
 				`${file.id} is under a file root`
@@ -125,7 +132,7 @@ describe('provider + session cross-backend', () => {
 			// so a fixed single call is flaky; the poll makes it deterministic.
 			// (Cross-process analog of `wait_for_audit_row`; mirrors
 			// `session_load_returns_nested_files` below.)
-			let test_file: Record<string, unknown> | undefined;
+			let test_file: SerializableDisknode | undefined;
 			const deadline = Date.now() + 5_000;
 			for (;;) {
 				const res = await rpc_call({
@@ -136,8 +143,8 @@ describe('provider + session cross-backend', () => {
 				});
 				assert.ok(res.ok);
 				const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
-				const files = data.files as Array<Record<string, unknown>>;
-				test_file = files.find((f) => (f.id as string).endsWith(`/${file_name}`));
+				const files = parse_snapshot_files(data.files);
+				test_file = files.find((f) => f.id.endsWith(`/${file_name}`));
 				if (test_file?.size === Buffer.byteLength(content)) break;
 				if (Date.now() > deadline) {
 					if (!test_file) {
@@ -149,16 +156,13 @@ describe('provider + session cross-backend', () => {
 				await new Promise((resolve) => setTimeout(resolve, 50));
 			}
 			assert.equal(test_file.size, Buffer.byteLength(content), 'size in bytes');
-			// metadata only — the contents come by a read
-			assert.notProperty(test_file, 'contents');
-			assert.equal(await read_contents(fixture, test_file.id as string), content);
-			assert.ok((test_file.source_dir as string).startsWith('/'), 'source_dir absolute');
-			assert.ok((test_file.source_dir as string).endsWith('/'), 'source_dir trailing slash');
-			assert.ok((test_file.id as string).startsWith('/'), 'file id absolute');
-			// the vestigial edge lists are gone from the wire
-			assert.notProperty(test_file, 'dependents');
-			assert.notProperty(test_file, 'dependencies');
-			assert.equal(typeof test_file.mtime, 'number');
+			// metadata only — the strict schema admits a file's tuple and nothing
+			// more, and the contents come by a read
+			assert.equal(await read_contents(fixture, test_file.id), content);
+			assert.ok(test_file.source_dir.startsWith('/'), 'source_dir absolute');
+			assert.ok(test_file.source_dir.endsWith('/'), 'source_dir trailing slash');
+			assert.ok(test_file.id.startsWith('/'), 'file id absolute');
+			assert.ok(Number.isSafeInteger(test_file.mtime), 'mtime in whole ms');
 		} finally {
 			await rm(file_path, { force: true });
 		}
@@ -178,7 +182,7 @@ describe('provider + session cross-backend', () => {
 			// written size (or time out). The exact timing is nondeterministic
 			// (async watcher), so a fixed single call is flaky; the poll makes
 			// it deterministic. (Cross-process analog of `wait_for_audit_row`.)
-			let nested: Record<string, unknown> | undefined;
+			let nested: SerializableDisknode | undefined;
 			const deadline = Date.now() + 5_000;
 			for (;;) {
 				const res = await rpc_call({
@@ -189,8 +193,8 @@ describe('provider + session cross-backend', () => {
 				});
 				assert.ok(res.ok);
 				const data = (res.result as Record<string, unknown>).data as Record<string, unknown>;
-				const files = data.files as Array<Record<string, unknown>>;
-				nested = files.find((f) => (f.id as string).endsWith('/deep.txt'));
+				const files = parse_snapshot_files(data.files);
+				nested = files.find((f) => f.id.endsWith('/deep.txt'));
 				if (nested?.size === 'nested content'.length) break;
 				if (Date.now() > deadline) {
 					if (!nested) {
@@ -202,10 +206,73 @@ describe('provider + session cross-backend', () => {
 				await new Promise((resolve) => setTimeout(resolve, 50));
 			}
 			assert.equal(nested.size, 'nested content'.length);
-			assert.notProperty(nested, 'contents');
-			assert.equal(await read_contents(fixture, nested.id as string), 'nested content');
+			assert.equal(await read_contents(fixture, nested.id), 'nested content');
 		} finally {
 			await rm(sub_dir, { recursive: true, force: true });
+		}
+	});
+
+	test('session_load_sends_ctime_only_when_it_differs_from_mtime', async () => {
+		const fixture = await setup_test();
+		const dir = join(zzz_dir, 'state', `ctime_${randomUUID()}`);
+		await mkdir(dir, { recursive: true });
+		const same = join(dir, 'same.txt');
+		const older = join(dir, 'older.txt');
+		try {
+			await writeFile(same, 'same', 'utf-8');
+			await writeFile(older, 'older', 'utf-8');
+			const { birthtimeMs } = await stat(same);
+			// no birth time here (`statx` unsupported): the wire `ctime` is null, never equal
+			const has_birth_time = birthtimeMs > 0;
+			// mtime moved onto the birth time's millisecond, and well before it
+			await utimes(same, new Date(), (Math.floor(birthtimeMs) + 0.5) / 1000);
+			await utimes(older, new Date(), 1_000_000);
+
+			// a rescan before every snapshot picks the moved stamps up
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'session_load',
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(res.ok);
+			const parsed = parse(SessionLoadOutput, res.result);
+			assert.ok(parsed.ok, JSON.stringify(parsed));
+			const { files } = parsed.value.data;
+			/** `path`'s tuple, and its path relative to the tuple's group. */
+			const tuple_of = (path: string): { rel: string; tuple: SnapshotFile | undefined } => {
+				const group = files.find(({ dir }) => path.startsWith(dir));
+				assert.ok(group, `no group holds ${path}`);
+				const rel = path.slice(group.dir.length);
+				return { rel, tuple: group.files.find((file) => file[0] === rel) };
+			};
+			const older_birth = has_birth_time ? Math.floor((await stat(older)).birthtimeMs) : null;
+			const older_tuple = tuple_of(older);
+			assert.deepEqual(
+				older_tuple.tuple,
+				[older_tuple.rel, 'older'.length, 1_000_000_000, older_birth],
+				'ctime sent where it differs'
+			);
+			if (has_birth_time) {
+				const same_tuple = tuple_of(same);
+				assert.deepEqual(
+					same_tuple.tuple,
+					[same_tuple.rel, 'same'.length, Math.floor(birthtimeMs)],
+					'ctime left off where it equals mtime'
+				);
+			}
+			// and decoded, each has its own ctime again
+			const decoded = new Map(
+				decode_snapshot_files(files).map((f): [string, SerializableDisknode] => [f.id, f])
+			);
+			assert.strictEqual(decoded.get(older)?.mtime, 1_000_000_000);
+			assert.strictEqual(decoded.get(older)?.ctime, older_birth);
+			if (has_birth_time) {
+				assert.strictEqual(decoded.get(same)?.ctime, Math.floor(birthtimeMs));
+				assert.strictEqual(decoded.get(same)?.mtime, Math.floor(birthtimeMs));
+			}
+		} finally {
+			await rm(dir, { recursive: true, force: true });
 		}
 	});
 

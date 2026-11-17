@@ -16,7 +16,7 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 
-pub(super) fn node(path: &str, size: u64, mtime: f64) -> SerializableDisknode {
+pub(super) fn node(path: &str, size: u64, mtime: u64) -> SerializableDisknode {
     make_disknode(path.to_owned(), "/w/", Some(size), None, Some(mtime), None)
 }
 

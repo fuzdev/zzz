@@ -1279,7 +1279,7 @@ mod tests {
         // every change sends the node's metadata — never a `contents` key
         for (change_type, wire) in [(ChangeType::Add, "add"), (ChangeType::Change, "change")] {
             assert_eq!(
-                notification_params(change_type, node("/w/f", 4, 2.0)),
+                notification_params(change_type, node("/w/f", 4, 2)),
                 serde_json::json!({
                     "change": { "type": wire, "path": "/w/f" },
                     "disknode": {
@@ -1287,7 +1287,7 @@ mod tests {
                         "source_dir": "/w/",
                         "size": 4,
                         "ctime": null,
-                        "mtime": 2.0,
+                        "mtime": 2,
                     },
                 }),
                 "{change_type:?}"
@@ -1295,7 +1295,7 @@ mod tests {
         }
         // a delete's node is identity only
         assert_eq!(
-            notification_params(ChangeType::Delete, deleted_disknode(node("/w/f", 4, 2.0))),
+            notification_params(ChangeType::Delete, deleted_disknode(node("/w/f", 4, 2))),
             serde_json::json!({
                 "change": { "type": "delete", "path": "/w/f" },
                 "disknode": {
@@ -1441,22 +1441,22 @@ mod tests {
             frames[0]["change"],
             serde_json::json!({ "type": "change", "path": key })
         );
-        assert_eq!(metadata(&frames[0]), (3.into(), 2_000_000.0.into()));
-        assert_eq!(state.files.read().await[&key].mtime, Some(2_000_000.0));
+        assert_eq!(metadata(&frames[0]), (3.into(), 2_000_000.into()));
+        assert_eq!(state.files.read().await[&key].mtime, Some(2_000_000));
 
         // rewritten with the same bytes: also a change
         std::fs::write(&path, "one").unwrap();
         set_mtime(&path, 3000);
         let frames = modified(&mut state, &path).await;
         assert_eq!(frames[0]["change"]["type"], "change");
-        assert_eq!(metadata(&frames[0]), (3.into(), 3_000_000.0.into()));
+        assert_eq!(metadata(&frames[0]), (3.into(), 3_000_000.into()));
 
         // changed: the same shape
         std::fs::write(&path, "three").unwrap();
         set_mtime(&path, 4000);
         let frames = modified(&mut state, &path).await;
         assert_eq!(frames[0]["change"]["type"], "change");
-        assert_eq!(metadata(&frames[0]), (5.into(), 4_000_000.0.into()));
+        assert_eq!(metadata(&frames[0]), (5.into(), 4_000_000.into()));
 
         // nothing moved, and the stamp is trusted: no broadcast
         assert!(modified(&mut state, &path).await.is_empty());
@@ -1467,7 +1467,7 @@ mod tests {
         set_mtime(&new_path, 1000);
         let frames = modified(&mut state, &new_path).await;
         assert_eq!(frames[0]["change"]["type"], "add");
-        assert_eq!(metadata(&frames[0]), (3.into(), 1_000_000.0.into()));
+        assert_eq!(metadata(&frames[0]), (3.into(), 1_000_000.into()));
     }
 
     #[tokio::test]
@@ -1490,7 +1490,7 @@ mod tests {
         assert_eq!(frames.len(), 1);
         assert_eq!(frames[0]["change"]["type"], "change");
         assert_eq!(frames[0]["disknode"]["size"], 4);
-        assert_eq!(frames[0]["disknode"]["mtime"], 3_000_000.0);
+        assert_eq!(frames[0]["disknode"]["mtime"], 3_000_000);
 
         // touched twice: one change, with the latest timestamp
         set_mtime(&path, 4000);
@@ -1500,7 +1500,7 @@ mod tests {
         let frames = flushed(&mut state).await;
         assert_eq!(frames.len(), 1);
         assert_eq!(frames[0]["change"]["type"], "change");
-        assert_eq!(frames[0]["disknode"]["mtime"], 5_000_000.0);
+        assert_eq!(frames[0]["disknode"]["mtime"], 5_000_000);
 
         // a file added and touched before its add went out is still an add
         let new_path = tmp.path("new.txt");
@@ -1512,7 +1512,7 @@ mod tests {
         let frames = flushed(&mut state).await;
         assert_eq!(frames.len(), 1);
         assert_eq!(frames[0]["change"]["type"], "add");
-        assert_eq!(frames[0]["disknode"]["mtime"], 2_000_000.0);
+        assert_eq!(frames[0]["disknode"]["mtime"], 2_000_000);
     }
 
     #[tokio::test]
@@ -1818,7 +1818,7 @@ mod tests {
     async fn take_ready_respects_deadlines() {
         let tmp = TempDir::new();
         let mut state = state_for(&tmp).await;
-        state.queue(tmp.key("x"), ChangeType::Add, node(&tmp.key("x"), 1, 1.0));
+        state.queue(tmp.key("x"), ChangeType::Add, node(&tmp.key("x"), 1, 1));
         assert!(state.take_ready(Instant::now()).is_empty());
         let ready = state.take_ready(Instant::now() + DEBOUNCE_DURATION);
         assert_eq!(ready.len(), 1);
@@ -1865,7 +1865,7 @@ mod tests {
         let name = "x".repeat(NAME_BYTES - 16);
         for i in 0..CHANGES {
             let key = format!("{}{i}/{name}", tmp.root());
-            state.queue_at(now, key.clone(), ChangeType::Add, node(&key, 1, 1.0));
+            state.queue_at(now, key.clone(), ChangeType::Add, node(&key, 1, 1));
         }
         let (registry, connection, mut rx, broadcast) = one_connection(BUDGET);
         // the connection's writer — takes a frame whenever it gets a turn,
@@ -1898,7 +1898,7 @@ mod tests {
         // a file far over what a frame could carry, and a tiny one
         for (rel, size) in [("big.bin", u64::MAX / 2), ("small.txt", 1)] {
             let key = tmp.key(rel);
-            state.queue_at(now, key.clone(), ChangeType::Change, node(&key, size, 1.0));
+            state.queue_at(now, key.clone(), ChangeType::Change, node(&key, size, 1));
         }
         // nothing takes a frame during the flush, as when the writer is busy
         // with an earlier one
@@ -1937,7 +1937,7 @@ mod tests {
         // written every 50ms — never quiet for a full debounce window
         let mut t = t0;
         while t < t0 + DEBOUNCE_MAX_WAIT {
-            state.queue_at(t, key.clone(), ChangeType::Change, node(&key, 1, 1.0));
+            state.queue_at(t, key.clone(), ChangeType::Change, node(&key, 1, 1));
             assert!(state.take_ready(t).is_empty(), "not ready at {:?}", t - t0);
             t += Duration::from_millis(50);
         }
@@ -1945,7 +1945,7 @@ mod tests {
         assert_eq!(ready.len(), 1, "flushed by the max wait");
         // the next run starts fresh
         let t1 = t0 + DEBOUNCE_MAX_WAIT;
-        state.queue_at(t1, key.clone(), ChangeType::Change, node(&key, 1, 2.0));
+        state.queue_at(t1, key.clone(), ChangeType::Change, node(&key, 1, 2));
         assert_eq!(state.next_deadline(), Some(t1 + DEBOUNCE_DURATION));
         assert_eq!(
             debounce_deadline(t0 + Duration::from_millis(10), t0),
@@ -2078,7 +2078,7 @@ mod tests {
             .files
             .write()
             .await
-            .insert(tmp.key("x"), node(&tmp.key("x"), 5, 1.0));
+            .insert(tmp.key("x"), node(&tmp.key("x"), 5, 1));
         state.pending.clear();
         state
             .handle_event(event(EventKind::Modify(ModifyKind::Any), &[tmp.path("x")]))
@@ -2096,10 +2096,10 @@ mod tests {
         assert!(state.files.read().await[&key].stat.is_some());
 
         // a trusted, unmoved stamp keeps the indexed node as it is
-        state.files.write().await.get_mut(&key).unwrap().mtime = Some(-1.0);
+        state.files.write().await.get_mut(&key).unwrap().mtime = Some(1);
         state.rescan(false).await;
         assert!(state.pending.is_empty());
-        assert_eq!(state.files.read().await[&key].mtime, Some(-1.0));
+        assert_eq!(state.files.read().await[&key].mtime, Some(1));
 
         // a same-size rewrite that restores the mtime still moves the ctime
         // (past the timestamp tick, so the settled clock can't hide it)
@@ -2220,12 +2220,12 @@ mod tests {
             state.wire.on_wire.store(on_wire, Ordering::Release);
             let outside = format!("{root}outside.txt");
             let inside = format!("{root}big/0.js");
-            state.queue(outside.clone(), ChangeType::Change, node(&outside, 1, 1.0));
-            state.queue(inside.clone(), ChangeType::Add, node(&inside, 1, 1.0));
+            state.queue(outside.clone(), ChangeType::Change, node(&outside, 1, 1));
+            state.queue(inside.clone(), ChangeType::Add, node(&inside, 1, 1));
             let changes: Vec<Change> = (0..=REPRUNE_BROADCAST_MAX)
                 .map(|i| {
                     let p = format!("{root}big/{i}.js");
-                    (p.clone(), ChangeType::Delete, node(&p, 1, 1.0))
+                    (p.clone(), ChangeType::Delete, node(&p, 1, 1))
                 })
                 .collect();
             state.queue_or_resync(changes);

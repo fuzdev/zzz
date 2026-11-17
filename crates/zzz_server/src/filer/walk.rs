@@ -204,8 +204,8 @@ fn sweep_orphaned_temp_file(entry: &std::fs::DirEntry) {
 #[derive(Debug)]
 struct FileJob {
     path_str: String,
-    ctime: Option<f64>,
-    mtime: Option<f64>,
+    ctime: Option<u64>,
+    mtime: Option<u64>,
     stat: FileStat,
     /// The clock's reading just before the `lstat` (see [`reusable_stat`]).
     observed_at: SystemTime,

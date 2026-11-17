@@ -40,6 +40,8 @@ import { hash_blake3 } from '@fuzdev/fuz_util/hash_blake3.ts';
 import { DiskfileReadOutput, DiskfileUpdateOutput, FilerChangeInput } from '#lib/action_specs.ts';
 import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
+import { parse_snapshot_files } from '../diskfile_test_helpers.ts';
+
 const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
 
@@ -1019,13 +1021,10 @@ describe('filesystem cross-backend', () => {
 				headers: fixture.create_session_headers()
 			});
 			assert.ok(open.ok);
-			// the project's files: metadata, and no contents key
-			const opened_files = (open.result as Record<string, unknown>).files as Array<
-				Record<string, unknown>
-			>;
+			// the project's files: metadata, a tuple the strict schema admits nothing past
+			const opened_files = parse_snapshot_files((open.result as Record<string, unknown>).files);
 			const opened_file = opened_files.find((f) => f.id === path);
 			assert.ok(opened_file);
-			assert.notProperty(opened_file, 'contents');
 			assert.equal(opened_file.size, 'unchanged'.length);
 
 			const ws = await create_ws_transport({
@@ -1099,7 +1098,7 @@ describe('filesystem cross-backend', () => {
 				const read = await ws.request('read_changed', 'diskfile_read', { path });
 				assert.equal((read as Record<string, unknown>).contents, CHANGED);
 
-				// a snapshot has the file's latest metadata, and no contents key
+				// a snapshot has the file's latest metadata, and no contents
 				const session = await rpc_call({
 					app: fixture.transport,
 					path: handle.config.rpc_path,
@@ -1107,13 +1106,12 @@ describe('filesystem cross-backend', () => {
 					headers: fixture.create_session_headers()
 				});
 				assert.ok(session.ok);
-				const files = ((session.result as Record<string, unknown>).data as Record<string, unknown>)
-					.files as Array<Record<string, unknown>>;
+				const files = parse_snapshot_files(
+					((session.result as Record<string, unknown>).data as Record<string, unknown>).files
+				);
 				const snapshot_file = files.find((f) => f.id === path);
 				assert.ok(snapshot_file);
-				assert.notProperty(snapshot_file, 'contents');
 				assert.equal(snapshot_file.size, Buffer.byteLength(CHANGED));
-				for (const file of files) assert.notProperty(file, 'contents', String(file.id));
 			} finally {
 				await ws.close();
 			}

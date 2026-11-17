@@ -5,7 +5,12 @@ import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 
 import { Datetime, DatetimeNow } from './datetime.ts';
-import { SerializableDisknode, type DiskfileJson } from './diskfile_types.ts';
+import {
+	SerializableDisknode,
+	type DiskfileJson,
+	type DiskfilePath,
+	type SnapshotFiles
+} from './diskfile_types.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 import type { Diskfiles } from './diskfiles.svelte.ts';
 
@@ -415,6 +420,29 @@ export const disknode_to_diskfile_json = (
 				? created
 				: parse_or_throw(Datetime, new Date(disknode.mtime).toISOString())
 	};
+};
+
+/**
+ * Decodes a snapshot reply's files (`SnapshotFiles`) into the disknodes
+ * `Diskfiles.reconcile` and `add_initial` take: each file's `id` is its
+ * group's `dir` plus its relative path, its `source_dir` the `dir`, and its
+ * `ctime` its `mtime` where the tuple leaves it off.
+ */
+export const decode_snapshot_files = (groups: SnapshotFiles): Array<SerializableDisknode> => {
+	const disknodes: Array<SerializableDisknode> = [];
+	for (const { dir, files } of groups) {
+		for (const file of files) {
+			const mtime = file[2];
+			disknodes.push({
+				id: (dir + file[0]) as DiskfilePath,
+				source_dir: dir,
+				size: file[1],
+				ctime: file.length === 4 ? file[3] : mtime,
+				mtime
+			});
+		}
+	}
+	return disknodes;
 };
 
 /**

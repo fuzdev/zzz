@@ -16,7 +16,7 @@ use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params, parse_s
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::filer::{FilerSnapshot, SerializableDisknode, disknodes_json_size_hint};
+use crate::filer::{FilerSnapshot, SnapshotFiles};
 use crate::handlers::{App, caller_account_id};
 use crate::job_manager::JobSnapshot;
 use crate::project_manager::{OpenProject, ProjectInfo};
@@ -43,7 +43,8 @@ struct TestingEmitNotificationsResult {
 /// Twin of `SessionLoadData` in `action_specs.ts`.
 #[derive(Serialize)]
 struct SessionLoadData {
-    files: Vec<SerializableDisknode>,
+    /// Every indexed file's metadata, grouped by filer dir ([`SnapshotFiles`]).
+    files: SnapshotFiles,
     /// The filer roots `files` covers, so a client can drop the files it has
     /// under them that `files` lacks.
     file_roots: Vec<String>,
@@ -154,7 +155,8 @@ pub async fn session_load(
         }
     }
 
-    let size_hint = disknodes_json_size_hint(&files) + SESSION_LOAD_OVERHEAD;
+    let files = SnapshotFiles::new(files);
+    let size_hint = files.json_size_hint() + SESSION_LOAD_OVERHEAD;
     let result = SessionLoadResult {
         data: SessionLoadData {
             files,
@@ -209,6 +211,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::filer::SerializableDisknode;
 
     /// A `session_load` result, serialized straight from the structs, has the
     /// shape `SessionLoadData` declares — its files' metadata, no contents.
@@ -216,11 +219,11 @@ mod tests {
     fn session_load_result_serializes_to_its_wire_shape() {
         let result = SessionLoadResult {
             data: SessionLoadData {
-                files: vec![SerializableDisknode::for_test(
-                    "/s/a.txt",
+                files: SnapshotFiles::new(vec![SerializableDisknode::for_test(
+                    "/w/a.txt",
                     Some(1),
-                    Some(1.5),
-                )],
+                    Some(1_500),
+                )]),
                 file_roots: vec!["/s/".to_owned()],
                 zzz_dir: "/z".to_owned(),
                 scoped_dirs: vec!["/s".to_owned()],
@@ -256,13 +259,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&result).unwrap(),
             json!({"data": {
-                "files": [{
-                    "id": "/s/a.txt",
-                    "source_dir": "/w/",
-                    "size": 1,
-                    "ctime": 1.5,
-                    "mtime": 1.5,
-                }],
+                "files": [{"dir": "/w/", "files": [["a.txt", 1, 1_500]]}],
                 "file_roots": ["/s/"],
                 "zzz_dir": "/z",
                 "scoped_dirs": ["/s"],

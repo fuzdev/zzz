@@ -6,8 +6,11 @@ import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import {
 	DiskfilePath,
 	SerializableDisknode,
-	type DiskfileDirectoryPath
+	SnapshotFiles,
+	type DiskfileDirectoryPath,
+	type SnapshotFile
 } from '#lib/diskfile_types.ts';
+import { decode_snapshot_files } from '#lib/diskfile_helpers.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
 import type { Frontend } from '#lib/frontend.svelte.ts';
 
@@ -36,6 +39,32 @@ export const answer_update = (
 	result: HeldUpdateResult
 ): { ok: true; value: { hash: string } } | { ok: false; error: JsonrpcErrorObject } =>
 	result.ok ? update_ok(content) : result;
+
+/**
+ * Encodes `disknodes` as a snapshot reply carries them (`SnapshotFiles`), as
+ * the backend does: grouped by `source_dir` in sorted order, each path
+ * relative to it, `ctime` left off when it equals `mtime`.
+ */
+export const encode_snapshot_files = (disknodes: Array<SerializableDisknode>): SnapshotFiles => {
+	const groups: Map<DiskfileDirectoryPath, Array<SnapshotFile>> = new Map();
+	for (const { id, source_dir, size, ctime, mtime } of disknodes) {
+		if (!id.startsWith(source_dir)) throw Error(`${id} is outside ${source_dir}`);
+		let files = groups.get(source_dir);
+		if (!files) groups.set(source_dir, (files = []));
+		const rel = id.slice(source_dir.length);
+		files.push(ctime === mtime ? [rel, size, mtime] : [rel, size, mtime, ctime]);
+	}
+	return Array.from(groups, ([dir, files]) => ({ dir, files })).sort((a, b) =>
+		a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0
+	);
+};
+
+/**
+ * A snapshot reply's `files` as the app reads them: parsed by the strict
+ * `SnapshotFiles` schema, then decoded (`decode_snapshot_files`).
+ */
+export const parse_snapshot_files = (files: unknown): Array<SerializableDisknode> =>
+	decode_snapshot_files(parse_or_throw(SnapshotFiles, files));
 
 /** Lets queued content reads start and landed ones apply. */
 export const flush_reads = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));

@@ -15,7 +15,7 @@ import type { SessionLoadData, ProjectOpenOutput } from '#lib/action_specs.ts';
 import type { ProjectInfoJson } from '#lib/project.svelte.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { content_hash } from './diskfile_test_helpers.ts';
+import { content_hash, encode_snapshot_files } from './diskfile_test_helpers.ts';
 
 const WS_DIR = parse_or_throw(DiskfileDirectoryPath, '/ws/');
 const PATH_A = parse_or_throw(DiskfilePath, '/ws/a.txt');
@@ -145,7 +145,10 @@ describe('Projects.open', () => {
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/ws/./'));
 		assert.strictEqual(calls[0]!.path, '/ws/./');
 		calls[0]!.resolve(
-			reply(WS_INFO, { files: [create_disknode(PATH_A, 5)], watch_status: 'degraded' })
+			reply(WS_INFO, {
+				files: encode_snapshot_files([create_disknode(PATH_A, 5)]),
+				watch_status: 'degraded'
+			})
 		);
 
 		const result = await opened;
@@ -166,7 +169,11 @@ describe('Projects.open', () => {
 		filer_change('change', PATH_B, 3);
 		calls[0]!.resolve(
 			reply(WS_INFO, {
-				files: [create_disknode(PATH_A, 2), create_disknode(PATH_B, 2), create_disknode(PATH_C, 2)]
+				files: encode_snapshot_files([
+					create_disknode(PATH_A, 2),
+					create_disknode(PATH_B, 2),
+					create_disknode(PATH_C, 2)
+				])
 			})
 		);
 		assert.ok((await opened).ok);
@@ -228,7 +235,7 @@ describe('Projects.open', () => {
 		// another client closes it, the notification ahead of this open's reply
 		receive_change({ ...WS_INFO, rev: 2 }, 'close');
 		assert.ok(!app.projects.get_by_root(WS_DIR));
-		calls[0]!.resolve(reply(WS_INFO, { files: [create_disknode(PATH_A)] }));
+		calls[0]!.resolve(reply(WS_INFO, { files: encode_snapshot_files([create_disknode(PATH_A)]) }));
 		const result = await opened;
 		assert.ok(result.ok);
 		assert.isNull(result.value.project, 'closed here, so not held');
@@ -315,7 +322,7 @@ describe('Projects.receive_remote_change', () => {
 	test('a project opened elsewhere gets its files by a resync and is not activated', async () => {
 		session.projects = [WS_INFO];
 		session.file_roots = [...session.file_roots, WS_DIR];
-		session.files = [create_disknode(PATH_A, 5)];
+		session.files = encode_snapshot_files([create_disknode(PATH_A, 5)]);
 
 		receive_change(WS_INFO);
 		const project = app.projects.get_by_root(WS_DIR);
@@ -340,7 +347,9 @@ describe('Projects.receive_remote_change', () => {
 		const opened = app.projects.open(parse_or_throw(DiskfilePath, '/ws/./'));
 		receive_change(WS_INFO); // the broadcast lands first, under the canonical root
 		assert.strictEqual(session_loads, 0);
-		calls[0]!.resolve(reply(WS_INFO, { files: [create_disknode(PATH_A, 5)] }));
+		calls[0]!.resolve(
+			reply(WS_INFO, { files: encode_snapshot_files([create_disknode(PATH_A, 5)]) })
+		);
 		const result = await opened;
 		assert.ok(result.ok);
 		assert.strictEqual(result.value.project, app.projects.get_by_root(WS_DIR));
@@ -440,7 +449,10 @@ describe('a registry project', () => {
 		app.diskfiles.add_initial([node('/dev/README.md'), node('/dev/scratch/x.txt')]);
 		const opened = app.projects.open(DEV);
 		calls[0]!.resolve(
-			reply(registry_info([], 2), { files: [node('/dev/README.md')], opened: false })
+			reply(registry_info([], 2), {
+				files: encode_snapshot_files([node('/dev/README.md')]),
+				opened: false
+			})
 		);
 		const result = await opened;
 		assert.ok(result.ok);
@@ -522,7 +534,7 @@ describe('a registry project', () => {
 		calls[0]!.resolve(
 			reply(registry_info([APP]), {
 				focus: APP,
-				files: [node('/dev/README.md', 2), node('/dev/app/a.ts')]
+				files: encode_snapshot_files([node('/dev/README.md', 2), node('/dev/app/a.ts')])
 			})
 		);
 		const result = await opened;

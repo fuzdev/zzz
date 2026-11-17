@@ -30,7 +30,7 @@ use fuz_http::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::filer::{SerializableDisknode, WatchStatus, disknodes_json_size_hint};
+use crate::filer::{SnapshotFiles, WatchStatus};
 use crate::handlers::filesystem::{ERROR_INVALID_PATH, ERROR_PERMISSION_DENIED};
 use crate::handlers::{App, not_found_error};
 use crate::project::{
@@ -117,7 +117,7 @@ struct ProjectOpenResult {
     focus: Option<String>,
     /// The index of every filer of the project — the frontend seeds its file
     /// tree from this, since a filer's initial scan broadcasts nothing.
-    files: Vec<SerializableDisknode>,
+    files: SnapshotFiles,
     /// Whether every indexed directory of the project has a file watch —
     /// `degraded` when the OS watch limit left some to periodic rescans.
     watch_status: WatchStatus,
@@ -147,7 +147,7 @@ struct RepoFocusResult {
     project: ProjectInfo,
     /// The focused repo's index alone — the rest of the project the client
     /// already holds, and its focus changes nothing there.
-    files: Vec<SerializableDisknode>,
+    files: SnapshotFiles,
     /// Over every indexed directory of the project, as `project_open`'s.
     watch_status: WatchStatus,
 }
@@ -155,7 +155,7 @@ struct RepoFocusResult {
 #[derive(Serialize)]
 struct RepoFilesResult {
     /// The focused repo's index.
-    files: Vec<SerializableDisknode>,
+    files: SnapshotFiles,
     /// Over every indexed directory of the project, as `project_open`'s.
     watch_status: WatchStatus,
     /// The project's rev when the index was read ([`FocusedFiles::rev`]).
@@ -578,7 +578,8 @@ async fn open_project(
             reason: focus_refusal_reason(error),
         })
         .collect::<Vec<_>>();
-    let size_hint = disknodes_json_size_hint(&landed.files)
+    let files = SnapshotFiles::new(landed.files);
+    let size_hint = files.json_size_hint()
         + PROJECT_OPEN_OVERHEAD
         + refused
             .iter()
@@ -587,7 +588,7 @@ async fn open_project(
     let result = ProjectOpenResult {
         project: landed.project.to_info(),
         focus,
-        files: landed.files,
+        files,
         watch_status: landed.watch_status,
         refused,
         opened,
@@ -696,10 +697,11 @@ async fn focus_repo(
         .focus(&app, &root, &dir)
         .await
         .map_err(|e| lifecycle_error(FOCUS_REPO, &e, Some(&dir)))?;
-    let size_hint = disknodes_json_size_hint(&landed.files) + PROJECT_OPEN_OVERHEAD;
+    let files = SnapshotFiles::new(landed.files);
+    let size_hint = files.json_size_hint() + PROJECT_OPEN_OVERHEAD;
     let result = RepoFocusResult {
         project: landed.project.to_info(),
-        files: landed.files,
+        files,
         watch_status: landed.watch_status,
     };
     Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
@@ -748,7 +750,8 @@ async fn read_repo_files(app: &App, root: &str, dir: &str) -> Result<ActionOutpu
         .focused_files(app, root, dir)
         .await
         .map_err(|e| lifecycle_error("read repo files", &e, None))?;
-    let size_hint = disknodes_json_size_hint(&files) + PROJECT_OPEN_OVERHEAD;
+    let files = SnapshotFiles::new(files);
+    let size_hint = files.json_size_hint() + PROJECT_OPEN_OVERHEAD;
     Ok(ActionOutput::serialize(RepoFilesResult {
         files,
         watch_status,
@@ -1221,12 +1224,21 @@ purpose = "a reference"
         serde_json::from_slice(&out).unwrap()
     }
 
-    fn file_ids(result: &Value) -> Vec<&str> {
+    /// The paths of a result's files, each its group's dir plus its relative
+    /// path ([`SnapshotFiles`]).
+    fn file_ids(result: &Value) -> Vec<String> {
         result["files"]
             .as_array()
             .unwrap()
             .iter()
-            .map(|f| f["id"].as_str().unwrap())
+            .flat_map(|group| {
+                let dir = group["dir"].as_str().unwrap();
+                group["files"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(move |file| format!("{dir}{}", file[0].as_str().unwrap()))
+            })
             .collect()
     }
 

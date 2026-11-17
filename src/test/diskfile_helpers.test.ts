@@ -1,8 +1,10 @@
-import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
+import { parse, parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, assert, vi, afterEach } from 'vitest';
 
 import {
+	decode_snapshot_files,
 	delete_diskfile,
+	disknode_to_diskfile_json,
 	normalize_path,
 	parse_new_diskfile_name,
 	prompt_create_diskfile,
@@ -18,8 +20,99 @@ import {
 	type FileIndexUnindexedPart
 } from '#lib/diskfile_helpers.ts';
 import type { Diskfiles } from '#lib/diskfiles.svelte.ts';
-import { DiskfilePath } from '#lib/diskfile_types.ts';
+import {
+	DiskfileDirectoryPath,
+	DiskfilePath,
+	SerializableDisknode,
+	SnapshotFiles
+} from '#lib/diskfile_types.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
+
+describe('SnapshotFiles', () => {
+	test('a file is [rel, size, mtime] or [rel, size, mtime, ctime], whole numbers or null', () => {
+		const files = [
+			{
+				dir: '/w/',
+				files: [
+					['a.txt', 9, 1_700_000_000_000],
+					['b/c.txt', null, null, 1_690_000_000_000],
+					// a sparse file past 2^53 bytes: imprecise, never refused
+					['huge.img', 2 ** 60, 1_700_000_000_000]
+				]
+			}
+		];
+		assert.ok(parse(SnapshotFiles, files).ok);
+	});
+
+	test('anything else is refused', () => {
+		for (const file of [
+			[],
+			['a.txt', 9],
+			['a.txt', 9, 1, 1, 1],
+			['', 9, 1],
+			['/a.txt', 9, 1],
+			[1, 9, 1],
+			['a.txt', 9.5, 1],
+			['a.txt', 9, 1.5],
+			['a.txt', 9, 1, '1'],
+			['a.txt', -1, 1],
+			['a.txt', 9, -1],
+			['a.txt', 9, 2 ** 53],
+			['a.txt', 9, Number.NaN],
+			['a.txt', 9, 1, 2 ** 53],
+			['a.txt', 9, 1, -1],
+			{ rel: 'a.txt', size: 9, mtime: 1 }
+		]) {
+			assert.ok(!parse(SnapshotFiles, [{ dir: '/w/', files: [file] }]).ok, JSON.stringify(file));
+		}
+		assert.ok(!parse(SnapshotFiles, [{ dir: '/w/', files: [], extra: 1 }]).ok, 'strict');
+		assert.ok(!parse(SnapshotFiles, [{ dir: 'w/', files: [] }]).ok, 'an absolute dir');
+	});
+
+	test('a disknode takes any whole size and refuses a time no RFC 3339 string holds', () => {
+		const node = { id: '/w/a.txt', source_dir: '/w/', size: 9, ctime: null, mtime: 1 };
+		assert.ok(parse(SerializableDisknode, { ...node, size: 2 ** 60 }).ok, 'a huge size');
+		assert.ok(parse(SerializableDisknode, { ...node, mtime: 253_402_300_799_999 }).ok);
+		for (const bad of [{ size: -1 }, { mtime: 2 ** 53 }, { mtime: -1 }, { ctime: -1 }]) {
+			assert.ok(!parse(SerializableDisknode, { ...node, ...bad }).ok, JSON.stringify(bad));
+		}
+	});
+
+	test('the latest time the backend sends converts to a cell', () => {
+		const max = 253_402_300_799_999;
+		const json = disknode_to_diskfile_json({
+			id: parse_or_throw(DiskfilePath, '/w/a.txt'),
+			source_dir: parse_or_throw(DiskfileDirectoryPath, '/w/'),
+			size: 1,
+			ctime: max,
+			mtime: max
+		});
+		assert.strictEqual(json.created, '9999-12-31T23:59:59.999Z');
+	});
+});
+
+describe('decode_snapshot_files', () => {
+	test("each file joins its group's dir, and takes mtime as ctime where it's left off", () => {
+		const groups = parse_or_throw(SnapshotFiles, [
+			{ dir: '/w/', files: [['a.txt', 9, 20]] },
+			{
+				dir: '/w/b/',
+				files: [
+					['c/d.txt', 1, 30, 10],
+					['e.txt', 2, null, null],
+					['f.txt', 3, 40, null]
+				]
+			}
+		]);
+		assert.deepEqual<Array<unknown>>(decode_snapshot_files(groups), [
+			{ id: '/w/a.txt', source_dir: '/w/', size: 9, ctime: 20, mtime: 20 },
+			{ id: '/w/b/c/d.txt', source_dir: '/w/b/', size: 1, ctime: 10, mtime: 30 },
+			{ id: '/w/b/e.txt', source_dir: '/w/b/', size: 2, ctime: null, mtime: null },
+			{ id: '/w/b/f.txt', source_dir: '/w/b/', size: 3, ctime: null, mtime: 40 }
+		]);
+		assert.deepEqual(decode_snapshot_files([]), []);
+	});
+});
 
 describe('to_relative_path', () => {
 	test('a path inside the parent is relative to it', () => {

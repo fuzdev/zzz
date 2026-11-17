@@ -24,7 +24,7 @@ import {
 	type ProjectJsonInput
 } from './project.svelte.ts';
 import type { DiskfileDirectoryPath, DiskfilePath } from './diskfile_types.ts';
-import type { FileIndexIgnoreRule } from './diskfile_helpers.ts';
+import { decode_snapshot_files, type FileIndexIgnoreRule } from './diskfile_helpers.ts';
 import type { ProjectFocusRefusal } from './action_specs.ts';
 import { ERROR_PROJECT_NOT_OPEN, ERROR_REPO_NOT_FOCUSED } from './project_helpers.ts';
 
@@ -442,7 +442,7 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		const project = this.get_by_root(root);
 		if (!project || since === undefined || result.value.rev < since) return;
 		project.watch_status = result.value.watch_status;
-		this.app.diskfiles.reconcile(result.value.files, [dir], { changes });
+		this.app.diskfiles.reconcile(decode_snapshot_files(result.value.files), [dir], { changes });
 	}
 
 	/**
@@ -519,10 +519,11 @@ export class Projects extends Cell<typeof ProjectsJson> {
 				if (project.rev === json.rev) {
 					this.#settle(json.root, covered, json.rev);
 					project.watch_status = watch_status;
+					const disknodes = decode_snapshot_files(files);
 					if (options?.reconcile_files) {
-						this.app.diskfiles.reconcile(files, json.focused, { changes });
+						this.app.diskfiles.reconcile(disknodes, json.focused, { changes });
 					} else {
-						this.app.diskfiles.add_initial(files, changes);
+						this.app.diskfiles.add_initial(disknodes, changes);
 					}
 				}
 			}
@@ -570,7 +571,7 @@ export class Projects extends Cell<typeof ProjectsJson> {
 			if (project?.rev === json.rev) {
 				this.#settle(json.root, [dir], json.rev);
 				project.watch_status = watch_status;
-				this.app.diskfiles.reconcile(files, [dir], { changes });
+				this.app.diskfiles.reconcile(decode_snapshot_files(files), [dir], { changes });
 			}
 			return { ok: true, value: project ?? null };
 		} finally {

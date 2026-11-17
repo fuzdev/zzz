@@ -25,6 +25,7 @@ import {
 	press,
 	row_texts
 } from './diskfile_tree_test_helpers.ts';
+import { encode_snapshot_files } from './diskfile_test_helpers.ts';
 
 /**
  * A registry project's repos in the file tree: focused ones as folders,
@@ -123,7 +124,7 @@ const focus_site = async (): Promise<void> => {
 		ok: true,
 		value: {
 			project: registry_info([APP, SITE], 2),
-			files: [
+			files: encode_snapshot_files([
 				{
 					id: parse_or_throw(DiskfilePath, '/dev/site/s.md'),
 					source_dir: SITE,
@@ -131,7 +132,7 @@ const focus_site = async (): Promise<void> => {
 					ctime: 1,
 					mtime: 1
 				}
-			],
+			]),
 			watch_status: 'full'
 		}
 	});

@@ -412,6 +412,7 @@ crates/zzz_server/src/
 │   ├── walk.rs       # The blocking `walk_blocking` + `scan_directory`/`scan_file` (pruned by the rule, nested repos skipped under git and reported, `DirScan`), the orphaned-staging-file sweep
 │   ├── event_loop.rs # `FilerState` + `filer_event_loop`: events resolved against the disk, a git root's burst vetting and re-prunes (a big one on the wire resynced rather than broadcast, `queue_or_resync`), the ignored-set signal, the debounce / coalesce, `flush_ready`, `filer_change_notification`
 │   ├── git_rule_tests.rs # `#[cfg(test)]` tests of a git root's rule live: a listing racing its walk (a `HookedGit` acting between git's answer and the walk), re-prunes and their failures, the `info/exclude` watch, vetting
+│   ├── snapshot.rs   # `SnapshotFiles`: a snapshot reply's files on the wire, grouped by filer dir as `[rel, size, mtime, ctime?]` tuples, and its size hint
 │   ├── manager.rs    # `FilerManager`: lifetimes (permanent / project), depths, dedup of concurrent starts, snapshots, `hold_index`, a `#[cfg(test)]` seam that holds an index for writing (`project_manager`'s tests use it)
 │   └── test_support.rs # `#[cfg(test)]` helpers shared across the filer's test modules (`TempDir`, scan and state builders, checkouts, `HookedGit`)
 ├── project_manager.rs # The open projects and the one path that changes them (`ProjectManager`): an open, close, focus, or unfocus computes the next state and `commit`s it under the state's lock — ensuring the filers it needs (`desired_filers`: each directory at the deepest any open project indexes it), stopping or narrowing the ones it doesn't (`release`), setting the runtime `ScopedFs` roots, publishing the snapshot `project_list` and `session_load` read, and broadcasting `project_changed` — every commit reads each focused dir's ignored paths from its filer (`OpenProject::ignored`, a change like any other), and a filer whose set changes asks for one (`refresh_ignored`); a commit that changes anything bumps the lifecycle rev (seeded from the clock at boot, `rev_seed`) and stamps it on what changed, which every reply, notification, and `session_load`'s `projects_rev` carry; an open's and a focus's reply read their files under that lock; an open's requested focuses land or are refused one by one (`Opened::refused`), its own filers required; scans run before the lock
@@ -444,9 +445,13 @@ round trip: a snapshot clones the index's nodes (metadata only — the index
 holds no file text), the handler returns its typed result as a
 `fuz_actions::ActionOutput` (registered with `ActionSpec::new_output`, sized
 up front from the nodes' paths), and the spine serializes it once, straight
-into the response body — so an
-HTTP response costs about its own size in memory, and a WebSocket one about
-twice that (tungstenite copies each outgoing frame into its write buffer).
+into the response body. The files go out as `filer::SnapshotFiles`: one
+`{dir, files}` group per filer dir, each file `[rel, size, mtime, ctime?]`
+relative to `dir`, `ctime` left off when it equals `mtime` — about half the
+bytes of the disknode objects `filer_change` still sends; timestamps are
+whole milliseconds since the epoch (../docs/backend.md § Design Decisions →
+Large responses). An HTTP response costs about its own size in memory, and a
+WebSocket one about twice that (tungstenite copies each outgoing frame into its write buffer).
 Keys come out in struct declaration order rather than the sorted order of a
 `Value` rendering — the same JSON, which no client may depend on the key
 order of. Responses aren't capped: a project of many indexed files is a large
@@ -564,7 +569,7 @@ joined after the drain, before PTY teardown.
   bare `delete`), every event resolved by `lstat` so late or reordered removes
   can't drop an existing file, rename-aware (old path `delete`, new path
   `add`), metadata only — each `disknode` is `{id, source_dir, size, ctime,
-  mtime}`, never contents, which clients read with `diskfile_read`; the
+  mtime}` (timestamps in whole milliseconds), never contents, which clients read with `diskfile_read`; the
   index is stat-only — it reads no file — and a file whose `lstat` stamp
   moved, or whose indexed stamp was too fresh to trust (git's racily-clean
   rule, ../docs/backend.md § Known Issues → Filer watches), is a `change`, a

@@ -11,16 +11,33 @@ pub(super) type FileIndex = BTreeMap<String, SerializableDisknode>;
 
 // -- File metadata helpers ----------------------------------------------------
 
-/// Convert a `SystemTime` to milliseconds since epoch (matching JS `Date` format).
+/// A `SystemTime` as whole milliseconds since the epoch, the sub-millisecond
+/// part dropped (JS `Date`'s resolution) — `None` before the epoch or past
+/// [`MAX_WIRE_TIME_MS`].
+///
+/// Whole, since nothing reads finer: whether a file changed is its `lstat`
+/// stamp's to say ([`FileStat`], to the nanosecond, never on the wire), and a
+/// client compares a timestamp only for equality. As an integer it renders in
+/// 13 digits rather than a float's 17 or so, which every file of a snapshot
+/// pays.
 #[expect(
     clippy::redundant_pub_crate,
     reason = "re-exported as `pub(crate)` from `filer`; the module itself is private"
 )]
-pub(crate) fn system_time_to_ms(t: SystemTime) -> Option<f64> {
+pub(crate) fn system_time_to_ms(t: SystemTime) -> Option<u64> {
     t.duration_since(std::time::UNIX_EPOCH)
         .ok()
-        .map(|d| d.as_secs_f64() * 1000.0)
+        .and_then(|d| u64::try_from(d.as_millis()).ok())
+        .filter(|ms| *ms <= MAX_WIRE_TIME_MS)
 }
+
+/// The latest time sent, in ms since the epoch: `9999-12-31T23:59:59.999Z`,
+/// the last whose ISO string is RFC 3339 (four-digit years), which the
+/// client's `Datetime` schema requires. A later one (a file `touch`ed far
+/// into the future on a filesystem that keeps it) reads as `None`, "can't
+/// say", rather than a time whose conversion throws and aborts the whole
+/// snapshot it's in.
+const MAX_WIRE_TIME_MS: u64 = 253_402_300_799_999;
 
 /// A regular file's identity and change stamps from `lstat`.
 ///
@@ -111,8 +128,8 @@ pub(super) fn make_disknode(
     id: String,
     source_dir: &str,
     size: Option<u64>,
-    ctime: Option<f64>,
-    mtime: Option<f64>,
+    ctime: Option<u64>,
+    mtime: Option<u64>,
     stat: Option<FileStat>,
 ) -> SerializableDisknode {
     SerializableDisknode {
@@ -204,6 +221,30 @@ pub(super) fn apply_subtree(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_time_to_ms_floors_to_whole_ms_and_none_out_of_range() {
+        use std::time::{Duration, UNIX_EPOCH};
+        assert_eq!(system_time_to_ms(UNIX_EPOCH), Some(0));
+        assert_eq!(
+            system_time_to_ms(UNIX_EPOCH + Duration::from_nanos(1_999_999)),
+            Some(1)
+        );
+        assert_eq!(
+            system_time_to_ms(UNIX_EPOCH - Duration::from_millis(1)),
+            None
+        );
+        // 9999-12-31T23:59:59.999Z, the last RFC 3339 time, then the next ms
+        assert_eq!(MAX_WIRE_TIME_MS, 253_402_300_799_999);
+        assert_eq!(
+            system_time_to_ms(UNIX_EPOCH + Duration::from_millis(253_402_300_799_999)),
+            Some(253_402_300_799_999)
+        );
+        assert_eq!(
+            system_time_to_ms(UNIX_EPOCH + Duration::from_millis(MAX_WIRE_TIME_MS + 1)),
+            None
+        );
+    }
     use crate::filer::test_support::node;
     use std::time::Duration;
 
@@ -243,21 +284,21 @@ mod tests {
     fn apply_subtree_diffs_only_under_prefix() {
         let mut index = FileIndex::new();
         for n in [
-            node("/w/d/same", 1, 1.0),
-            node("/w/d/touched", 1, 1.0),
-            node("/w/d/gone", 1, 1.0),
-            node("/w/d2/sibling", 1, 1.0),
-            node("/w/top", 1, 1.0),
+            node("/w/d/same", 1, 1),
+            node("/w/d/touched", 1, 1),
+            node("/w/d/gone", 1, 1),
+            node("/w/d2/sibling", 1, 1),
+            node("/w/top", 1, 1),
         ] {
             index.insert(n.id.clone(), n);
         }
         let mut fresh = ScanIndex::new();
         fresh.insert("/w/d/same".to_owned(), ScannedFile::Unchanged);
-        for n in [node("/w/d/touched", 1, 2.0), node("/w/d/new", 1, 1.0)] {
+        for n in [node("/w/d/touched", 1, 2), node("/w/d/new", 1, 1)] {
             fresh.insert(n.id.clone(), ScannedFile::Updated(Box::new(n)));
         }
 
-        let mut changes: Vec<(String, ChangeType, Option<f64>)> =
+        let mut changes: Vec<(String, ChangeType, Option<u64>)> =
             apply_subtree(&mut index, "/w/d/", fresh)
                 .into_iter()
                 .map(|(path, change, node)| (path, change, node.mtime))
@@ -268,8 +309,8 @@ mod tests {
             changes,
             vec![
                 ("/w/d/gone".to_owned(), ChangeType::Delete, None),
-                ("/w/d/new".to_owned(), ChangeType::Add, Some(1.0)),
-                ("/w/d/touched".to_owned(), ChangeType::Change, Some(2.0)),
+                ("/w/d/new".to_owned(), ChangeType::Add, Some(1)),
+                ("/w/d/touched".to_owned(), ChangeType::Change, Some(2)),
             ]
         );
         let keys: Vec<&str> = index.keys().map(String::as_str).collect();
@@ -283,7 +324,7 @@ mod tests {
                 "/w/top"
             ]
         );
-        assert_eq!(index["/w/d/touched"].mtime, Some(2.0), "the index moved");
+        assert_eq!(index["/w/d/touched"].mtime, Some(2), "the index moved");
     }
 
     #[test]

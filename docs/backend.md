@@ -482,9 +482,10 @@ commands):
   path + `add` of the new; an mtime-only change, a rewrite of the same
   bytes (with and without a `utimes`), and new contents each → a `change`
   with the new metadata, each
-  parsed against the TS spec, no disknode — broadcast, `project_open`, or
-  `session_load` — carrying a `contents` key, each disknode's `size` the
-  file's bytes, and the contents read back with `diskfile_read`).
+  parsed against the TS spec, no disknode — broadcast, or a file of a
+  `project_open` or `session_load` snapshot — carrying contents, each
+  file's `size` its bytes, and the contents read back with
+  `diskfile_read`).
 - **`file_bytes.cross.test.ts`** — the byte routes (`/api/files/bytes`),
   which sit outside the action system, so this suite is what pins their
   posture: reads (whole, `Range` → 206 / 416, HEAD), the response-header
@@ -567,7 +568,8 @@ commands):
   (zzz_dir file listing with size and no contents, the contents read with
   `diskfile_read` + recursive subdirectory walk; `file_roots`
   covering `zzz_dir`, the scoped dirs, and every file; a stable
-  `server_instance_id`).
+  `server_instance_id`; a file's tuple sent without its `ctime` where it
+  equals the `mtime`, and with it where a `utimes` moved them apart).
 - **`completion.cross.test.ts`** — `completion_create` on a provider with no
   API key (`ai_provider_error`, -32020 / 502) and blank-prompt rejection.
 - **`static.cross.test.ts`** — built-frontend serving through the full
@@ -831,6 +833,25 @@ commands):
   password hashing are `fuz_auth`'s, byte-compatible with fuz_app's formats;
   `zzz_server` holds no credential crypto of its own (its one direct hash is
   the transcription `blake3`).
+- **Large responses**: `session_load`, `project_open`, `repo_focus`, and
+  `repo_files` carry indexed files' metadata, never contents, so a large
+  tree is a large reply. Each returns a typed `fuz_actions::ActionOutput`
+  (`ActionSpec::new_output`) that the spine serializes once, straight into
+  the response body, sized up front (`SnapshotFiles::json_size_hint`) —
+  no `serde_json::Value` copy. The files go out compactly
+  (`filer::SnapshotFiles`, twin of `SnapshotFiles` in `diskfile_types.ts`):
+  one `{dir, files}` group per filer dir (`source_dir`), each file a tuple
+  `[rel, size, mtime, ctime?]` with its path relative to `dir`, and
+  `ctime` (the birth time) left off when it equals `mtime`, as it is for
+  nearly every file. Typescript's checkout (about 81k files) focuses in a
+  7.2 MiB reply rather than the 16.5 MiB of disknode objects. Timestamps
+  everywhere — snapshots, `filer_change`, `diskfile_read` — are whole
+  milliseconds since the epoch: nothing reads finer, since whether a file
+  changed is its `lstat` stamp's call (to the nanosecond, never on the
+  wire), and a client compares a timestamp only for equality. The frontend
+  decodes a reply's groups back to disknodes (`decode_snapshot_files`)
+  before `Diskfiles.reconcile` / `add_initial`; `filer_change` keeps the
+  disknode object.
 - **Strict inputs**: every zzz handler decodes `params` through
   `fuz_http::parse_strict_params` into a `#[serde(deny_unknown_fields)]`
   struct mirroring its strict `object` TS input (unknown keys and explicit

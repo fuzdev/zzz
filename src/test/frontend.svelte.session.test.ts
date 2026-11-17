@@ -17,6 +17,7 @@ import {
 import type { SessionLoadData } from '#lib/action_specs.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { encode_snapshot_files } from './diskfile_test_helpers.ts';
 
 const ZZZ_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/zzz/');
 const PATH_A = parse_or_throw(DiskfilePath, '/zzz/a.txt');
@@ -37,7 +38,7 @@ const SERVER_INSTANCE_ID = create_uuid();
 const create_session = (files: Array<SerializableDisknode> = []): SessionLoadData => ({
 	zzz_dir: ZZZ_DIR,
 	scoped_dirs: [],
-	files,
+	files: encode_snapshot_files(files),
 	file_roots: [ZZZ_DIR],
 	provider_status: [],
 	projects: [],

@@ -318,8 +318,8 @@ struct DiskfileReadOutput {
     /// [`content_hash_hex`] of the bytes read — the `contents`, exactly.
     hash: Option<String>,
     size: u64,
-    ctime: Option<f64>,
-    mtime: Option<f64>,
+    ctime: Option<u64>,
+    mtime: Option<u64>,
 }
 
 /// `diskfile_read` — a file's contents as text, with its size and

@@ -9,7 +9,8 @@ import {
 	DiskfileDirectoryPath,
 	DiskfilePath,
 	SerializableDisknode,
-	type DiskfileChangeType
+	type DiskfileChangeType,
+	type SnapshotFiles
 } from '#lib/diskfile_types.ts';
 import { Frontend, SESSION_BOOT_FALLBACK_DELAY } from '#lib/frontend.svelte.ts';
 import type { ProjectFocusRefusal, RepoFocusOutput, SessionLoadData } from '#lib/action_specs.ts';
@@ -22,7 +23,7 @@ import {
 } from '#lib/terminal_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
-import { content_hash } from './diskfile_test_helpers.ts';
+import { content_hash, encode_snapshot_files } from './diskfile_test_helpers.ts';
 
 const ZZZ_DIR = parse_or_throw(DiskfileDirectoryPath, '/zzz/');
 const WS_DIR = parse_or_throw(DiskfileDirectoryPath, '/ws/');
@@ -36,7 +37,7 @@ const OTHER_A = parse_or_throw(DiskfilePath, '/other/a.txt');
 /** A disknode as the backend sends it — metadata only, `mtime` telling versions apart. */
 const create_disknode = (path: DiskfilePath, mtime = 1): SerializableDisknode => ({
 	id: path,
-	source_dir: path.startsWith(WS_DIR) ? WS_DIR : ZZZ_DIR,
+	source_dir: [WS_DIR, OTHER_DIR].find((dir) => path.startsWith(dir)) ?? ZZZ_DIR,
 	size: 1,
 	ctime: 1,
 	mtime
@@ -82,7 +83,7 @@ type ProjectOpenResult =
 			value: {
 				project: ProjectInfoJson;
 				focus: DiskfileDirectoryPath | null;
-				files: Array<SerializableDisknode>;
+				files: SnapshotFiles;
 				watch_status: 'full';
 				refused: Array<ProjectFocusRefusal>;
 				opened: boolean;
@@ -376,17 +377,17 @@ describe('reconnect detection', () => {
 
 describe('file reconcile', () => {
 	test('prunes files under the snapshot roots that it lacks', async () => {
-		await load({ files: [create_disknode(ZZZ_A), create_disknode(ZZZ_B)] });
+		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A), create_disknode(ZZZ_B)]) });
 		assert.ok(app.diskfiles.get_by_path(ZZZ_B));
 
-		await load({ files: [create_disknode(ZZZ_A, 2)] });
+		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A, 2)]) });
 		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_A)?.mtime, 2);
 		assert.ok(!app.diskfiles.get_by_path(ZZZ_B), 'deleted while disconnected');
 	});
 
 	test('never prunes files outside the snapshot roots', async () => {
 		app.diskfiles.add_initial([create_disknode(OTHER_A)]);
-		await load({ files: [create_disknode(ZZZ_A)] });
+		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
 		assert.ok(app.diskfiles.get_by_path(OTHER_A));
 
 		// no roots at all prunes nothing
@@ -395,7 +396,7 @@ describe('file reconcile', () => {
 	});
 
 	test('keeps a pruned file open with unsaved edits, flagged deleted on disk', async () => {
-		await load({ files: [create_disknode(ZZZ_A)] });
+		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
 		await load_content(ZZZ_A);
 		const a = app.diskfiles.get_by_path(ZZZ_A);
 		assert.ok(a);
@@ -409,18 +410,18 @@ describe('file reconcile', () => {
 		assert.ok(app.diskfiles.editor.tabs.by_diskfile_id.get(a.id));
 
 		// and reattaches it when a later snapshot has the file again
-		await load({ files: [create_disknode(ZZZ_A)] });
+		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
 		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_A), a);
 		assert.isFalse(a.deleted_on_disk);
 	});
 
 	test('a `filer_change` during the request is neither pruned nor reverted', async () => {
-		await load({ files: [create_disknode(ZZZ_A)] });
+		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
 
 		const loaded = app.load_session();
 		filer_change('add', ZZZ_B, 3);
 		filer_change('change', ZZZ_A, 3);
-		await succeed(1, { files: [create_disknode(ZZZ_A, 2)] });
+		await succeed(1, { files: encode_snapshot_files([create_disknode(ZZZ_A, 2)]) });
 		assert.ok(await loaded);
 
 		assert.strictEqual(app.diskfiles.get_by_path(ZZZ_B)?.mtime, 3, 'created after the snapshot');
@@ -430,7 +431,7 @@ describe('file reconcile', () => {
 	test('a reconnect reads the files held eagerly again, the shown first, and drops the rest', async () => {
 		const ZZZ_C = parse_or_throw(DiskfilePath, '/zzz/c.txt');
 		const files = [create_disknode(ZZZ_A), create_disknode(ZZZ_B), create_disknode(ZZZ_C)];
-		await load({ files });
+		await load({ files: encode_snapshot_files(files) });
 		for (const path of [ZZZ_A, ZZZ_B, ZZZ_C]) await load_content(path);
 		const a = app.diskfiles.get_by_path(ZZZ_A)!;
 		const b = app.diskfiles.get_by_path(ZZZ_B)!;
@@ -443,7 +444,7 @@ describe('file reconcile', () => {
 		// missed while disconnected: b changed on disk, and a was rewritten with the same text
 		disk.set(ZZZ_B, 'b changed');
 
-		await load({ files });
+		await load({ files: encode_snapshot_files(files) });
 		assert.strictEqual(c.content_status, 'unrequested', 'dropped, to be read when next needed');
 		assert.strictEqual(a.content, 'contents', 'kept while it reads again');
 		await new Promise((resolve) => setTimeout(resolve, 0));
@@ -461,7 +462,7 @@ describe('project reconcile', () => {
 	test('replaces the open projects with the snapshot', async () => {
 		await load({
 			projects: [create_project_info(WS_DIR)],
-			files: [create_disknode(WS_A)],
+			files: encode_snapshot_files([create_disknode(WS_A)]),
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		assert.ok(app.projects.get_by_root(WS_DIR));
@@ -481,11 +482,11 @@ describe('project reconcile', () => {
 		const nested_b = parse_or_throw(DiskfilePath, '/zzz/nested/b.txt');
 		await load({
 			projects: [create_project_info(nested_dir)],
-			files: [create_disknode(nested_a), create_disknode(nested_b)],
+			files: encode_snapshot_files([create_disknode(nested_a), create_disknode(nested_b)]),
 			file_roots: [ZZZ_DIR, nested_dir]
 		});
 
-		await load({ files: [create_disknode(nested_a)] });
+		await load({ files: encode_snapshot_files([create_disknode(nested_a)]) });
 		assert.ok(app.diskfiles.get_by_path(nested_a), 'still under the zzz dir root');
 		assert.ok(!app.diskfiles.get_by_path(nested_b));
 	});
@@ -516,7 +517,7 @@ describe('project reconcile', () => {
 		await succeed(2, {
 			projects: [create_project_info(OTHER_DIR, 4)],
 			projects_rev: 4,
-			files: [create_disknode(OTHER_A)],
+			files: encode_snapshot_files([create_disknode(OTHER_A)]),
 			file_roots: [ZZZ_DIR, OTHER_DIR]
 		});
 		assert.ok(app.projects.get_by_root(OTHER_DIR));
@@ -530,7 +531,7 @@ describe('project reconcile', () => {
 	test('a held project newer than the snapshot is neither removed nor pruned', async () => {
 		await load({
 			projects: [create_project_info(WS_DIR)],
-			files: [create_disknode(WS_A)],
+			files: encode_snapshot_files([create_disknode(WS_A)]),
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		// a reopen applied after the daemon read the next snapshot, which saw it closed
@@ -548,7 +549,7 @@ describe('project reconcile', () => {
 	test("a close releases the project's files, and no later snapshot brings them back", async () => {
 		await load({
 			projects: [create_project_info(WS_DIR, 1)],
-			files: [create_disknode(WS_A)],
+			files: encode_snapshot_files([create_disknode(WS_A)]),
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		assert.ok(app.diskfiles.get_by_path(WS_A));
@@ -569,7 +570,7 @@ describe('project reconcile', () => {
 		await succeed(before - 1, {
 			projects: [create_project_info(WS_DIR, 2)],
 			projects_rev: 2,
-			files: [create_disknode(WS_A), create_disknode(ZZZ_A)],
+			files: encode_snapshot_files([create_disknode(WS_A), create_disknode(ZZZ_A)]),
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		assert.ok(await loaded);
@@ -589,7 +590,7 @@ describe('project reconcile', () => {
 			scoped_dirs: [WS_DIR],
 			projects: [create_project_info(WS_DIR, 2)],
 			projects_rev: 2,
-			files: [create_disknode(WS_A)],
+			files: encode_snapshot_files([create_disknode(WS_A)]),
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		assert.ok(await loaded);
@@ -616,7 +617,7 @@ describe('projects after a restart', () => {
 	const setup = async (): Promise<void> => {
 		await load({
 			projects: [create_project_info(WS_DIR)],
-			files: [create_disknode(WS_A), create_disknode(WS_B)],
+			files: encode_snapshot_files([create_disknode(WS_A), create_disknode(WS_B)]),
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		await load_content(WS_B);
@@ -650,7 +651,7 @@ describe('projects after a restart', () => {
 			value: {
 				project: create_project_info(WS_DIR, 2),
 				focus: WS_DIR,
-				files: [create_disknode(WS_A)],
+				files: encode_snapshot_files([create_disknode(WS_A)]),
 				watch_status: 'full',
 				refused: [],
 				opened: true
@@ -667,7 +668,7 @@ describe('projects after a restart', () => {
 		await load({
 			projects: [create_project_info(WS_DIR, 2)],
 			projects_rev: 2,
-			files: [create_disknode(WS_A)],
+			files: encode_snapshot_files([create_disknode(WS_A)]),
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		assert.strictEqual(open_calls.length, 1);
@@ -676,7 +677,7 @@ describe('projects after a restart', () => {
 	test('a reopen refused because the directory is gone drops it and its files', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 		await setup();
-		await load_restarted({ files: [create_disknode(ZZZ_A)] });
+		await load_restarted({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
 
 		open_calls[0]!.resolve({
 			ok: false,
@@ -689,7 +690,7 @@ describe('projects after a restart', () => {
 		assert.ok(app.diskfiles.get_by_path(ZZZ_A), 'other roots untouched');
 		assert.ok(vi.mocked(console.error).mock.calls.length > 0, 'the failure is logged');
 
-		await load({ files: [create_disknode(ZZZ_A)] });
+		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
 		assert.strictEqual(open_calls.length, 1, 'not retried');
 	});
 
@@ -720,7 +721,7 @@ describe('projects after a restart', () => {
 		// the restarted daemon still watches a scoped dir inside the project
 		await load_restarted({
 			scoped_dirs: [nested_dir],
-			files: [create_disknode(nested_a)],
+			files: encode_snapshot_files([create_disknode(nested_a)]),
 			file_roots: [ZZZ_DIR, nested_dir]
 		});
 		open_calls[0]!.resolve({
@@ -758,7 +759,7 @@ describe('projects after a restart', () => {
 		value: {
 			project: create_project_info(WS_DIR, 2),
 			focus: WS_DIR,
-			files: [create_disknode(WS_A)],
+			files: encode_snapshot_files([create_disknode(WS_A)]),
 			watch_status: 'full',
 			refused: [],
 			opened: true
@@ -822,7 +823,7 @@ describe('projects after a restart', () => {
 		await load({
 			projects: [create_project_info(WS_DIR, 2)],
 			projects_rev: 2,
-			files: [create_disknode(WS_A)],
+			files: encode_snapshot_files([create_disknode(WS_A)]),
 			file_roots: [ZZZ_DIR, WS_DIR]
 		});
 		open_calls[0]!.resolve({
@@ -926,7 +927,7 @@ describe('a registry project after a restart', () => {
 	const setup_restarted = async (): Promise<void> => {
 		await load({
 			projects: [registry_info([APP, SITE])],
-			files: [node(APP_A), node(SITE_A)],
+			files: encode_snapshot_files([node(APP_A), node(SITE_A)]),
 			file_roots: [ZZZ_DIR, DEV, APP, SITE]
 		});
 		server_instance_id = create_uuid();
@@ -949,7 +950,7 @@ describe('a registry project after a restart', () => {
 		value: {
 			project: registry_info(focused, rev),
 			focus: null,
-			files: focused.includes(APP) ? [node(APP_A)] : [],
+			files: encode_snapshot_files(focused.includes(APP) ? [node(APP_A)] : []),
 			watch_status: 'full',
 			refused,
 			opened: true
@@ -980,7 +981,7 @@ describe('a registry project after a restart', () => {
 	test('a repo focused from the tree reopens with the rest of the focus', async () => {
 		await load({
 			projects: [registry_info([APP])],
-			files: [node(APP_A)],
+			files: encode_snapshot_files([node(APP_A)]),
 			file_roots: [ZZZ_DIR, DEV, APP]
 		});
 		const focused = app.projects.focus_repo(DEV, SITE);
@@ -988,7 +989,7 @@ describe('a registry project after a restart', () => {
 			ok: true,
 			value: {
 				project: registry_info([APP, SITE], 2),
-				files: [node(APP_A), node(SITE_A)],
+				files: encode_snapshot_files([node(APP_A), node(SITE_A)]),
 				watch_status: 'full'
 			}
 		});
@@ -1166,7 +1167,7 @@ describe('a registry project after a restart', () => {
 	test("a snapshot older than a narrower state held adds none of the dropped repo's files", async () => {
 		await load({
 			projects: [registry_info([APP, SITE])],
-			files: [node(APP_A), node(SITE_A)],
+			files: encode_snapshot_files([node(APP_A), node(SITE_A)]),
 			file_roots: [ZZZ_DIR, DEV, APP, SITE]
 		});
 		const loaded = app.load_session();
@@ -1179,7 +1180,7 @@ describe('a registry project after a restart', () => {
 			projects: [registry_info([APP, SITE], 2)],
 			projects_rev: 2,
 			// `b.txt` is new here — the snapshot is first to carry it
-			files: [node(APP_A), node(APP_B), node(SITE_A)],
+			files: encode_snapshot_files([node(APP_A), node(APP_B), node(SITE_A)]),
 			file_roots: [ZZZ_DIR, DEV, APP, SITE]
 		});
 		assert.ok(await loaded);
@@ -1381,7 +1382,7 @@ describe('a registry project after a restart', () => {
 			value: {
 				project: create_project_info(DEV, 2),
 				focus: DEV,
-				files: [node(APP_A), node(SITE_A)],
+				files: encode_snapshot_files([node(APP_A), node(SITE_A)]),
 				watch_status: 'full',
 				refused: [
 					{ dir: APP, reason: 'project_not_registry' },
@@ -1413,7 +1414,7 @@ describe('a registry project after a restart', () => {
 			value: {
 				project: { ...create_project_info(UPPER, 2), kind: 'git_repo' },
 				focus: UPPER,
-				files: [node(APP_A)],
+				files: encode_snapshot_files([node(APP_A)]),
 				watch_status: 'full',
 				// another project's refusals say nothing of this one's focus
 				refused: [{ dir: SITE, reason: ERROR_REPO_INDEX_FAILED }],

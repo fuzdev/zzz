@@ -43,6 +43,7 @@ import {
 import type { ZzzOptions } from './config_helpers.ts';
 import { BOTS_DEFAULT } from './config_defaults.ts';
 import { DiskfileDirectoryPath } from './diskfile_types.ts';
+import { decode_snapshot_files } from './diskfile_helpers.ts';
 import { cell_classes } from './cell_classes.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { Ui, UiJson } from './ui.svelte.ts';
@@ -701,12 +702,13 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		// newer state that may index less (an unfocus applied meanwhile): its
 		// files the index no longer covers aren't added back
 		const stale = [...refused, ...newer];
+		const snapshot_files = decode_snapshot_files(data.files);
 		const files = stale.length
-			? data.files.filter(
+			? snapshot_files.filter(
 					(file) =>
 						!stale.some((root) => file.id.startsWith(root)) || this.diskfiles.is_indexed(file.id)
 				)
-			: data.files;
+			: snapshot_files;
 		// a removed project's files are gone from the backend's view unless
 		// another root covers them — then they're in the snapshot or pruned there
 		this.diskfiles.reconcile(files, [...data.file_roots, ...removed], {

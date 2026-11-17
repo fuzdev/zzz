@@ -46,9 +46,12 @@ import {
 	ProjectOpenOutput,
 	RepoFilesOutput,
 	RepoFocusOutput,
-	RepoUnfocusOutput
+	RepoUnfocusOutput,
+	SessionLoadOutput
 } from '#lib/action_specs.ts';
+import type { SnapshotFiles } from '#lib/diskfile_types.ts';
 import {
+	decode_snapshot_files,
 	to_innermost_unindexed_part,
 	to_unindexed_part,
 	type FileIndexIgnoreRule
@@ -142,8 +145,10 @@ const create_registry_root = async (): Promise<{ dev: string; outside: string }>
 /** Runs git in `cwd`. */
 const git = (args: Array<string>, cwd: string) => promisify(execFile)('git', args, { cwd });
 
-const file_ids = (output: ProjectOpenOutput): Array<string> =>
-	output.files.map((f) => f.id as string).sort();
+const file_ids = (output: { files: SnapshotFiles }): Array<string> =>
+	decode_snapshot_files(output.files)
+		.map((f) => f.id as string)
+		.sort();
 
 describe('project registry cross-backend', () => {
 	test('opening a path in a repo opens the registry root, focused on that repo', async () => {
@@ -269,7 +274,7 @@ describe('project registry cross-backend', () => {
 			assert.ok(focused.ok, JSON.stringify(focused));
 			assert.deepEqual(focused.value.project.focused, [app_dir]);
 			assert.deepEqual(
-				focused.value.files.map((f) => f.id as string).sort(),
+				file_ids(focused.value),
 				[join(dev, 'app', 'a.ts'), join(dev, 'app', 'src', 'b.ts')],
 				"the focused repo alone — the root's loose files are the client's already"
 			);
@@ -282,7 +287,7 @@ describe('project registry cross-backend', () => {
 				await ws.request('pull', 'repo_files', { root, dir: app_dir })
 			);
 			assert.ok(pulled.ok, JSON.stringify(pulled));
-			assert.deepEqual(pulled.value.files.map((f) => f.id as string).sort(), [
+			assert.deepEqual(file_ids(pulled.value), [
 				join(dev, 'app', 'a.ts'),
 				join(dev, 'app', 'src', 'b.ts')
 			]);
@@ -305,12 +310,12 @@ describe('project registry cross-backend', () => {
 			assert.deepEqual(late.error.data, { reason: 'repo_not_focused' });
 
 			// another client's snapshot no longer has the repo's files
-			const session = await ws.request<{ data: { files: Array<{ id: string }> } }>(
-				'snapshot',
-				'session_load',
-				undefined
+			const session = parse(
+				SessionLoadOutput,
+				await ws.request('snapshot', 'session_load', undefined)
 			);
-			const ids = session.data.files.map((f) => f.id);
+			assert.ok(session.ok, JSON.stringify(session));
+			const ids = file_ids(session.value.data);
 			assert.include(ids, join(dev, 'README.md'));
 			assert.notInclude(ids, join(dev, 'app', 'a.ts'));
 			assert.notInclude(ids, join(dev, 'app', 'src', 'b.ts'));
