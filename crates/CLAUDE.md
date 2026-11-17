@@ -577,10 +577,14 @@ joined after the drain, before PTY teardown.
   keeps the CLI daemon home's `.env` / `bootstrap_token` out of a root that
   covers it); under a checkout root indexed whole, everything else is git's
   answer (`.gitignore`, `info/exclude`, global excludes — listed at start,
-  each listing taken again after its walk, each burst's adds vetted,
-  re-pruned once a `.gitignore` / `info/exclude` change settles or at once
-  on an overflow; nested repos and submodules not indexed, and named on
-  the wire as `nested` so a client tells them from a missing path;
+  each listing taken again after its walk, each burst's adds vetted (at
+  most `VET_MAX_PATHS`, past which it re-prunes), re-pruned once a
+  `.gitignore` / `info/exclude` change settles or at once on an overflow;
+  nested repos and submodules not indexed; the set on the wire per focused
+  checkout as `ignored` — `paths`, `nested` (so a client tells a repo of
+  its own from a missing path), and `resyncs`, bumped by a re-prune past
+  `REPRUNE_BROADCAST_MAX` that sends no `filer_change`s, so clients pull
+  the repo; git unusable or failing falls back to fixed names;
   ../docs/backend.md § Known Issues → Filer ignore rule), elsewhere
   `node_modules`/`.svelte-kit`/`target`/`dist` by name too; `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also deletes
   orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files over an hour

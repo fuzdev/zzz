@@ -524,9 +524,13 @@ const LIST_TIMEOUT: Duration = Duration::from_secs(5);
 /// of them, then up to `VET_MAX_NEW_DIRS` scoped prunes (each listed twice,
 /// around its walk: up to four calls under [`LIST_TIMEOUT`]), so a git that
 /// answers slowly but in time stalls the loop well past this; the first
-/// timeout ends the vetting with a re-prune. A check answers in tens of
-/// milliseconds even on wpt; the index git reads is most of that.
-const CHECK_TIMEOUT: Duration = Duration::from_secs(2);
+/// timeout ends the vetting with a re-prune. A check costs about 1.8 µs
+/// per path asked per index entry: one path answers in tens of
+/// milliseconds even on wpt (160k entries), but each further path adds
+/// about 1.8 ms there, which is why
+/// [`VET_MAX_PATHS`](super::event_loop::VET_MAX_PATHS) keeps a check far
+/// below this.
+pub(super) const CHECK_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// The most unpopulated submodules one live `check_ignore` drops and asks
 /// again without ([`GitRoot::check`]): git names one per refusal, so a

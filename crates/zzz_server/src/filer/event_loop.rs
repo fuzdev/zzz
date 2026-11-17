@@ -75,10 +75,19 @@ pub(super) const fn coalesce_change(prev: Option<ChangeType>, next: ChangeType) 
 
 // -- Git's ignore rule, live --------------------------------------------------
 
-/// Most paths one burst (or one scan) vets with a `check_ignore`; more is a
-/// tree arriving wholesale (an unpacked archive, a checkout), cheaper to
-/// re-prune from one listing than to vet path by path.
-pub(super) const VET_MAX_PATHS: usize = 1024;
+/// Most paths one burst ([`FilerState::vet_adds`]) or one rescan
+/// ([`FilerState::vet_scanned`]) vets with a `check_ignore`; past it the
+/// filer re-prunes instead. git's check costs about 1.8 µs per path per
+/// index entry, so a vet grows with the paths times the index. Measured
+/// 2026-11-17 on a 160k-entry index (sparse wpt): about 1.8 ms per path,
+/// 1024 paths in 1.8 s against the 2 s
+/// [`CHECK_TIMEOUT`](super::ignore::CHECK_TIMEOUT), while a re-prune of
+/// that tree took about 0.3 s — cheaper past about 150 paths (on an
+/// 81k-entry index, past about 500). At 128 a full vet stays near a quarter
+/// second on the largest trees measured, well inside the timeout; a burst
+/// past it is a tree arriving wholesale (an unpacked archive, a checkout),
+/// which one listing answers sooner than path by path.
+pub(super) const VET_MAX_PATHS: usize = 128;
 
 /// Most new directories one burst lists the ignored paths of, one
 /// `ls_ignored` each, before a re-prune is cheaper.

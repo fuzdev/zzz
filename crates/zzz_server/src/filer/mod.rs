@@ -35,7 +35,10 @@
 //!   a git root — its ignored set listed at start, each listing taken again
 //!   after its walk (so what was created in between isn't indexed
 //!   unvetted), each live add of a path not yet indexed vetted with one
-//!   `check-ignore` per burst, and the set rebuilt (re-pruned) once a
+//!   `check-ignore` per burst (a burst past
+//!   [`VET_MAX_PATHS`](event_loop::VET_MAX_PATHS) re-prunes instead, since
+//!   git's check costs per path what its index costs to read), and the set
+//!   rebuilt (re-pruned) once a
 //!   `.gitignore` or `info/exclude` change settles, or at once when events
 //!   were lost. `.git`, `.zzz`, the credential directories, and the
 //!   staging files are ignored under both, and a git root indexes no repo
@@ -284,8 +287,7 @@ struct IgnoredWire {
 /// `repo_files` reply of a repo of a few thousand files costs, so past it a
 /// pull is the cheaper of the two. It also sits far below where a burst
 /// threatens a socket: `WS_OUTBOUND_QUEUE_BYTES` (32 MiB) holds about 95,000
-/// of them, which un-ignoring one `node_modules/` can pass. Matches
-/// `VET_MAX_PATHS`, the point a burst stops being vetted path by path.
+/// of them, which un-ignoring one `node_modules/` can pass.
 const REPRUNE_BROADCAST_MAX: usize = 1024;
 
 /// Shortest interval between two refreshes a filer asks of the open

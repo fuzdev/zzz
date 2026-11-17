@@ -665,7 +665,12 @@ commands):
   the next re-prune. A scan's new files no event vetted (a `session_load`
   rescan, a degraded poll) get one `check_ignore` too (`vet_scanned`),
   re-pruning when one of them sits in a watched dir — a dir no event vetted,
-  such as one a `.git` left, which a listing would prune whole. A
+  such as one a `.git` left, which a listing would prune whole. Both vet at
+  most `VET_MAX_PATHS` (128) paths and re-prune past it: git's check costs
+  about 1.8 µs per path per index entry, so on a 160k-entry index (sparse
+  wpt) 1024 paths took 1.8 s against the 2 s `CHECK_TIMEOUT`, while a
+  re-prune of that tree takes about 0.3 s — the cheaper past about 150
+  paths. A
   `.gitignore` event (passed through the callback's filter even when ignored
   itself, `rule_marker`) or an `info/exclude` change (the filer's own
   watcher keeps a fixed watch on `<root>/.git/info/`,
@@ -674,7 +679,9 @@ commands):
   the changes settle (`REPRUNE_SETTLE` 400 ms of quiet, at most
   `REPRUNE_SETTLE_MAX_WAIT` 5 s), bursts dropped meanwhile (the watches
   their removes and renames took dropped with them, as applying them would);
-  a failed or oversized vetting (a failed one dropping those watches too),
+  a failed or oversized vetting — more than `VET_MAX_PATHS` (128) paths,
+  more than `VET_MAX_NEW_DIRS` (8) new dirs, or paths still turning into
+  dirs after `VET_ROUNDS` (3) asks; a failed one drops those watches too —
   an overflow, and the set outgrowing `LIVE_ADDED_MAX` request one at once.
   A re-prune runs inline on the event loop after the current step
   (`FilerState::reprune`): it relists, swaps the set, rescans the root

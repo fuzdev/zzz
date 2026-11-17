@@ -276,6 +276,18 @@ Details: ./docs/development.md § Adding a New Action.
   root regardless: opening a path in a registry puts all of it (say all
   of `~/dev`) in scope, unfocused repos and unregistered directories
   included.
+- **A focused checkout is indexed by git's ignore rule** (`.gitignore`,
+  `info/exclude`, global excludes): listed at start, new paths vetted
+  live with `check-ignore` (a burst past `VET_MAX_PATHS` re-prunes), the
+  set re-pruned when a rule file changes; nested repos and submodules
+  aren't indexed. Everything else skips fixed names (`node_modules`,
+  `.svelte-kit`, `target`, `dist`), and `.git`, `.zzz`, and the credential
+  directories are skipped everywhere. Each project carries git's set per
+  focused checkout (`ignored`: `paths`, `nested`, `resyncs`), which the
+  client reads through one predicate (`to_unindexed_part`); a re-prune
+  past `REPRUNE_BROADCAST_MAX` changes sends none and bumps `resyncs`, and
+  clients pull the repo instead. When git is unusable or keeps failing, the
+  filer falls back to fixed names (./docs/architecture.md § Filer).
 - **Roots are strictly inside `$HOME`** (the daemon's, canonicalized at
   boot) unless `ZZZ_ROOTS_OUTSIDE_HOME` names them, and never `/`, `$HOME`
   or an ancestor of it, or under `/proc`, `/sys`, or `/dev`, allowlisted or
@@ -403,6 +415,9 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
   from the disk) to show, send, or copy it; files over 4 MiB or not UTF-8
   don't load and are read-only. A moved `lstat` stamp is a change, so a
   `touch` makes clients holding the file read it again.
+- **Big repos are slow to focus** — the client builds a cell per indexed
+  file, about 50 µs each, so a big clone takes seconds, and its focus
+  reply can pass the 16 MiB message size.
 - **No persistent undo**; symlinks are invisible; file watching can degrade
   to polling past `max_user_watches`.
 - **The terminal emulator** lacks scrollback scrolling, IME, and mouse
