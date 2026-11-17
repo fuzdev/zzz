@@ -245,6 +245,91 @@ describe('immutable_key indexes', () => {
 		assert.strictEqual(collection.single_index('by_name').size, 0);
 		assert.strictEqual(collection.indexes.by_group.size, 0);
 	});
+
+	test('removing a shadowed item keeps the holder, and is never a fallback after', () => {
+		const collection = create_immutable_collection();
+		const a = new Item('k');
+		const b = new Item('k');
+		const c = new Item('k');
+		collection.add_many([a, b, c]);
+
+		collection.remove(b.id);
+		assert.strictEqual(collection.by_optional('by_name', 'k'), c);
+
+		collection.remove(c.id);
+		assert.strictEqual(collection.by_optional('by_name', 'k'), a);
+
+		collection.remove(a.id);
+		assert.strictEqual(collection.single_index('by_name').size, 0);
+	});
+
+	test('a key added again after its holders left starts fresh', () => {
+		const collection = create_immutable_collection();
+		const a = new Item('k');
+		const b = new Item('k');
+		collection.add_many([a, b]);
+		collection.remove_many([a.id, b.id]);
+
+		const c = new Item('k');
+		collection.add(c);
+		assert.strictEqual(collection.by_optional('by_name', 'k'), c);
+		collection.remove(c.id);
+		assert.isUndefined(collection.by_optional('by_name', 'k'));
+	});
+
+	test('`clear` resets the shadowed items of shared keys', () => {
+		const collection = create_immutable_collection();
+		collection.add_many([new Item('k'), new Item('k')]);
+		collection.clear();
+
+		const c = new Item('k');
+		const d = new Item('k');
+		collection.add_many([c, d]);
+		collection.remove(d.id);
+		assert.strictEqual(collection.by_optional('by_name', 'k'), c);
+		collection.remove(c.id);
+		assert.isUndefined(collection.by_optional('by_name', 'k'));
+	});
+
+	test('a removal reads only the removed item, never the rest of the collection', () => {
+		const read: Array<Item> = [];
+		const collection: IndexedCollection<Item> = new IndexedCollection({
+			indexes: [
+				create_single_index({
+					key: 'by_name',
+					extractor: (item) => {
+						read.push(item);
+						return item.name;
+					},
+					matches: (item) => {
+						read.push(item);
+						return true;
+					},
+					immutable_key: true
+				})
+			]
+		});
+		const items = Array.from(
+			{ length: 1000 },
+			(_, i) => new Item(i % 10 === 0 ? 'shared' : 'k' + i)
+		);
+		collection.add_many(items);
+
+		const removed = items.slice(0, 500);
+		read.length = 0;
+		for (const item of removed.slice(0, 250)) collection.remove(item.id);
+		collection.remove_many(removed.slice(250).map((item) => item.id));
+
+		const removed_set = new Set(removed);
+		assert.ok(read.length > 0);
+		assert.ok(
+			read.every((item) => removed_set.has(item)),
+			'a removal read an item it did not remove'
+		);
+		// the last 'shared' item added among the remaining half holds the key
+		assert.strictEqual(collection.by_optional('by_name', 'shared'), items[990]);
+		assert.strictEqual(collection.single_index('by_name').size, 1 + 500 - 50);
+	});
 });
 
 describe('incremental derived indexes', () => {

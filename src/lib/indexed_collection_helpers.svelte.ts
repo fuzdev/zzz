@@ -40,8 +40,10 @@ export interface KeyedIndexOptions<T extends IndexedItem> extends IndexOptions<T
 	 * Declares that the extracted key(s) of an item never change while it's in
 	 * the collection, so the index is maintained incrementally on add and remove
 	 * (O(1) per change, reactive per key through a `SvelteMap`).
-	 * If a key does change, lookups go stale — only use it for identity-like fields
-	 * (like a diskfile's `path`).
+	 * `matches` must likewise give the same answer for an item for as long as it's in
+	 * the collection. If a key or a match does change, lookups go stale, and a single
+	 * index can fall back to an item that has left — only use it for identity-like
+	 * fields (like a diskfile's `path`).
 	 *
 	 * By default the index is `reactive`: a `$derived` rebuilt in O(n) on the next read
 	 * after the collection or any reactive field the extractor (or `matches`) reads changes,
@@ -68,7 +70,9 @@ export interface SingleIndexOptions<T extends IndexedItem, K> extends KeyedIndex
 
 /**
  * Create a single-value index (one key maps to one item).
- * When several items share a key, the last one added wins.
+ * When several items share a key, the last one added wins, and removing it
+ * falls back to the last remaining one. An `immutable_key` index tracks the
+ * shadowed items of each shared key, so a removal never scans the collection.
  */
 export const create_single_index = <T extends IndexedItem, K>(
 	options: SingleIndexOptions<T, K>
@@ -85,48 +89,73 @@ export const create_single_index = <T extends IndexedItem, K>(
 		};
 	}
 
+	// Each map's shadowed holders — the earlier items sharing a key with the
+	// indexed one, oldest first — tracked only for keys held by several items,
+	// so a removal finds its fallback without scanning the collection.
+	// Keyed by the map, so one definition can serve several collections.
+	const shadowed_by_map: WeakMap<Map<K, T>, Map<K, Array<T>>> = new WeakMap();
+
+	const get_shadowed = (map: Map<K, T>): Map<K, Array<T>> => {
+		let shadowed = shadowed_by_map.get(map);
+		if (!shadowed) shadowed_by_map.set(map, (shadowed = new Map()));
+		return shadowed;
+	};
+
+	const add_item = (map: Map<K, T>, item: T): void => {
+		if (!should_include_item(item, matches)) return;
+		const extract_key = extractor(item);
+		if (extract_key === undefined) return;
+		const current = map.get(extract_key);
+		if (current) {
+			const shadowed = get_shadowed(map);
+			const holders = shadowed.get(extract_key);
+			if (holders) {
+				holders.push(current);
+			} else {
+				shadowed.set(extract_key, [current]);
+			}
+		}
+		map.set(extract_key, item);
+	};
+
 	return {
 		key,
 		type: 'single',
 		matches,
-		compute: (collection) =>
-			fill_single_map(new SvelteMap<K, T>(), collection.by_id.values(), options),
-		onadd: (map, item) => {
-			if (!should_include_item(item, matches)) return map;
-
-			const extract_key = extractor(item);
-			if (extract_key !== undefined) {
-				map.set(extract_key, item);
-			}
+		compute: (collection) => {
+			const map = new SvelteMap<K, T>();
+			for (const item of collection.by_id.values()) add_item(map, item);
 			return map;
 		},
-		onremove: (map, item, collection) => {
+		onadd: (map, item) => {
+			add_item(map, item);
+			return map;
+		},
+		onremove: (map, item) => {
 			if (!should_include_item(item, matches)) return map;
 
 			const extract_key = extractor(item);
 			if (extract_key === undefined) return map;
 
-			// Check if this item is currently indexed for this key
-			const current = map.get(extract_key);
-			if (!current || current.id !== item.id) {
-				// This item isn't the one indexed for this key, so nothing to do
-				return map;
-			}
+			const shadowed = shadowed_by_map.get(map);
+			const holders = shadowed?.get(extract_key);
 
-			// Find the last remaining item with the same key, matching `compute` —
-			// `by_id` no longer has any item removed in this call
-			let item_with_same_key;
-			for (const other of collection.by_id.values()) {
-				if (should_include_item(other, matches) && extractor(other) === extract_key) {
-					item_with_same_key = other;
+			if (map.get(extract_key)?.id === item.id) {
+				// the indexed item leaves — the last remaining holder takes over, matching `compute`
+				const fallback = holders?.pop();
+				if (fallback) {
+					map.set(extract_key, fallback);
+					if (!holders!.length) shadowed!.delete(extract_key);
+				} else {
+					map.delete(extract_key);
 				}
-			}
-
-			if (item_with_same_key) {
-				map.set(extract_key, item_with_same_key);
-			} else {
-				// No other items with this key - delete the entry
-				map.delete(extract_key);
+			} else if (holders) {
+				// a shadowed item leaves — the indexed one stays
+				const index = holders.findIndex((h) => h.id === item.id);
+				if (index !== -1) {
+					holders.splice(index, 1);
+					if (!holders.length) shadowed!.delete(extract_key);
+				}
 			}
 
 			return map;
