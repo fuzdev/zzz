@@ -57,18 +57,23 @@ type Reply = { ok: true; value: unknown } | { ok: false; error: { code: number; 
 
 let app: Frontend;
 let calls: Array<{ method: string; input: unknown; resolve: (result: Reply) => void }>;
+/** The status polls, apart from `calls`: the page starts one per registry. */
+let status_calls: Array<{ input: unknown; resolve: (result: Reply) => void }>;
 let target: HTMLElement;
 let mounted: ReturnType<typeof mount>;
 
 beforeEach(() => {
 	app = monkeypatch_zzz_for_tests(new Frontend());
 	calls = [];
+	status_calls = [];
 	const pending = (method: string) => (input: unknown) =>
 		new Promise<Reply>((resolve) => calls.push({ method, input, resolve }));
 	(app as unknown as { api: unknown }).api = {
 		repo_focus: pending('repo_focus'),
 		repo_unfocus: pending('repo_unfocus'),
-		project_open: pending('project_open')
+		project_open: pending('project_open'),
+		project_status: (input: unknown) =>
+			new Promise<Reply>((resolve) => status_calls.push({ input, resolve }))
 	};
 	app.projects.add(registry_info([APP]));
 	target = document.createElement('div');
@@ -107,11 +112,88 @@ const tick = async (): Promise<void> => {
 describe('a registry project on the projects page', () => {
 	test('lists each entry: present ones with a focus toggle, the rest with why not', () => {
 		assert.deepEqual(entry_texts(), [
-			'app/ unfocus',
-			'site/ focus',
+			'app/ unfocus …',
+			'site/ focus …',
 			'gone/ not cloned',
 			'keys/ reference refused: entry_not_confined'
 		]);
+	});
+
+	test("polls each present entry's git status and shows what differs from rest", async () => {
+		assert.deepEqual(
+			status_calls.map((c) => c.input),
+			[{ root: DEV }]
+		);
+		const at_rest = {
+			state: 'ok',
+			probing: false,
+			probed_at: 1,
+			branch: 'main',
+			detached: false,
+			on_branch: true,
+			uncommitted: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+			in_progress: null,
+			followed: { kind: 'in_sync', ahead: 0, behind: 0 },
+			stashes: 0,
+			fetched_at: null,
+			needs_human: [],
+			error: null
+		};
+		status_calls[0]!.resolve({
+			ok: true,
+			value: {
+				entries: [
+					{ ...at_rest, key: 'app', uncommitted: { ...at_rest.uncommitted, unstaged: 2 } },
+					{ ...at_rest, key: 'site' },
+					{ ...at_rest, key: 'gone', state: 'missing', probed_at: null }
+				]
+			}
+		});
+		await tick();
+		assert.deepEqual(entry_texts().slice(0, 3), [
+			'app/ unfocus 2 modified',
+			'site/ focus clean',
+			'gone/ not cloned'
+		]);
+	});
+
+	test('a status says gone, needs you, or failed, and marks a probe beside a known status', async () => {
+		const base = {
+			probed_at: 1,
+			branch: 'main',
+			detached: false,
+			on_branch: true,
+			uncommitted: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
+			in_progress: null,
+			followed: null,
+			stashes: 0,
+			fetched_at: null,
+			error: null
+		};
+		status_calls[0]!.resolve({
+			ok: true,
+			value: {
+				entries: [
+					{
+						...base,
+						key: 'app',
+						state: 'ok',
+						probing: true,
+						needs_human: ['operation_in_progress']
+					},
+					{ ...base, key: 'site', state: 'missing', probing: false, needs_human: [] }
+				]
+			}
+		});
+		await tick();
+		assert.deepEqual(entry_texts().slice(0, 2), [
+			'app/ unfocus clean — needs you …',
+			'site/ focus gone'
+		]);
+		const needs = Array.from(target.querySelectorAll('li li small')).find((el) =>
+			el.textContent?.includes('needs you')
+		);
+		assert.strictEqual(needs?.getAttribute('title'), 'operation in progress');
 	});
 
 	test('focus and unfocus buttons call the daemon, disabled while in flight', async () => {
@@ -128,7 +210,7 @@ describe('a registry project on the projects page', () => {
 			value: { project: registry_info([APP, SITE], 2), files: [], watch_status: 'full' }
 		});
 		await tick();
-		assert.deepEqual(entry_texts().slice(0, 2), ['app/ unfocus', 'site/ unfocus']);
+		assert.deepEqual(entry_texts().slice(0, 2), ['app/ unfocus …', 'site/ unfocus …']);
 
 		entry_button('app/').click();
 		flushSync();
@@ -136,7 +218,7 @@ describe('a registry project on the projects page', () => {
 		assert.strictEqual(to_visible_text(entry_button('app/')), 'unfocusing…');
 		calls[1]!.resolve({ ok: true, value: { project: registry_info([SITE], 3) } });
 		await tick();
-		assert.deepEqual(entry_texts().slice(0, 2), ['app/ focus', 'site/ unfocus']);
+		assert.deepEqual(entry_texts().slice(0, 2), ['app/ focus …', 'site/ unfocus …']);
 	});
 
 	test('a failure says why', async () => {

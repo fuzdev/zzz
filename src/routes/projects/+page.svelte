@@ -14,6 +14,7 @@
 	} from '#lib/project_helpers.ts';
 	import { icon_add, icon_delete, icon_directory, icon_project } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from '#lib/Icon.svelte';
+	import ProjectRegistryEntries from '#lib/ProjectRegistryEntries.svelte';
 	import PageFooter from '#routes/PageFooter.svelte';
 
 	const app = frontend_context.get();
@@ -124,10 +125,6 @@
 			error_message = `failed to ${unfocus ? 'unfocus' : 'focus'} ${dir}: ${result.error.message}`;
 		}
 	};
-
-	/** `dir` relative to `root` when under it, for a shorter listing. */
-	const to_relative = (dir: string, root: string): string =>
-		dir.startsWith(root) && dir !== root ? dir.slice(root.length) : dir;
 </script>
 
 <div class="projects_page p_xl">
@@ -215,44 +212,10 @@
 							</button>
 						</div>
 						{#if project.kind === 'registry'}
-							<p class="font_size_sm text_50 mb_0">
-								{project.entries.length}
-								{project.entries.length === 1 ? 'entry' : 'entries'} in
-								<span class="font_family_mono">{project.registry_path}</span>
-								— {project.focused.length || 'none'} focused
-							</p>
-							<ul class="unstyled font_size_sm">
-								{#each project.entries as entry (`${entry.kind}:${entry.key}`)}
-									{@const focused = project.focused.includes(entry.dir)}
-									<li class="row gap_sm">
-										<span class="font_family_mono" class:text_50={!focused}>
-											{to_relative(entry.dir, project.root)}
-										</span>
-										{#if entry.kind === 'reference'}<small class="text_50">reference</small>{/if}
-										{#if entry.state === 'present'}
-											<button
-												type="button"
-												class="sized_sm plain"
-												disabled={app.projects.pending_repos.has(entry.dir)}
-												title={focused ? 'stop indexing its files' : 'index and watch its files'}
-												onclick={() => void toggle_focus(project, entry.dir)}
-											>
-												{app.projects.pending_repos.has(entry.dir)
-													? focused
-														? 'unfocusing…'
-														: 'focusing…'
-													: focused
-														? 'unfocus'
-														: 'focus'}
-											</button>
-										{:else if entry.state === 'missing'}
-											<small class="text_50">not cloned</small>
-										{:else}
-											<small class="text_50">refused: {entry.reason}</small>
-										{/if}
-									</li>
-								{/each}
-							</ul>
+							<ProjectRegistryEntries
+								{project}
+								ontoggle={(dir) => void toggle_focus(project, dir)}
+							/>
 						{/if}
 					</li>
 				{/each}
