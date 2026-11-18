@@ -112,6 +112,11 @@ export interface FakeDisk {
 	 */
 	fail_reads: (count: number, message?: string) => void;
 	/**
+	 * Moves `from`'s bytes to `to` here, as a rename on disk does — reporting
+	 * nothing, so a test sends the filer's delete and add when it chooses.
+	 */
+	move: (from: string, to: string) => void;
+	/**
 	 * Every `diskfile_update` the app sent, in order. The fake answers it as
 	 * the backend does — with `expected_hash`, only if the file still holds
 	 * those bytes (else `conflict` / `disk_changed`) — and writes `files`
@@ -273,6 +278,15 @@ export const install_fake_disk = (
 				held_updates = null;
 				deferred.resolve();
 			};
+		},
+		move: (from, to) => {
+			if (!files.has(from)) return;
+			files.set(to, files.get(from)!);
+			files.delete(from);
+			for (const meta of [mtimes, sizes]) {
+				if (meta.has(from)) meta.set(to, meta.get(from)!);
+				meta.delete(from);
+			}
 		},
 		fail_reads: (count, message = 'read failed') => {
 			for (let i = 0; i < count; i++) failures.push(message);

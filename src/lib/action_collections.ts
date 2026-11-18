@@ -54,6 +54,7 @@ export const ActionSpecs: ActionSpecs = {
 	path_open: specs.path_open_action_spec,
 	project_activate: specs.project_activate_action_spec,
 	view_show: specs.view_show_action_spec,
+	file_rename: specs.file_rename_action_spec,
 	provider_load_status: specs.provider_load_status_action_spec,
 	terminal_create: specs.terminal_create_action_spec,
 	terminal_data_send: specs.terminal_data_send_action_spec,
@@ -112,6 +113,7 @@ export type ActionSpecs = {
 	readonly path_open: typeof specs.path_open_action_spec;
 	readonly project_activate: typeof specs.project_activate_action_spec;
 	readonly view_show: typeof specs.view_show_action_spec;
+	readonly file_rename: typeof specs.file_rename_action_spec;
 	readonly provider_load_status: typeof specs.provider_load_status_action_spec;
 	readonly terminal_create: typeof specs.terminal_create_action_spec;
 	readonly terminal_data_send: typeof specs.terminal_data_send_action_spec;
@@ -177,6 +179,7 @@ export interface ActionInputs {
 	path_open: Infer<typeof specs.path_open_action_spec.input>;
 	project_activate: Infer<typeof specs.project_activate_action_spec.input>;
 	view_show: Infer<typeof specs.view_show_action_spec.input>;
+	file_rename: Infer<typeof specs.file_rename_action_spec.input>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.input>;
@@ -240,6 +243,7 @@ export interface ActionCallInputs {
 	path_open: InferInput<typeof specs.path_open_action_spec.input>;
 	project_activate: InferInput<typeof specs.project_activate_action_spec.input>;
 	view_show: InferInput<typeof specs.view_show_action_spec.input>;
+	file_rename: InferInput<typeof specs.file_rename_action_spec.input>;
 	provider_load_status: InferInput<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: InferInput<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: InferInput<typeof specs.terminal_data_send_action_spec.input>;
@@ -303,6 +307,7 @@ export interface ActionOutputs {
 	path_open: Infer<typeof specs.path_open_action_spec.output>;
 	project_activate: Infer<typeof specs.project_activate_action_spec.output>;
 	view_show: Infer<typeof specs.view_show_action_spec.output>;
+	file_rename: Infer<typeof specs.file_rename_action_spec.output>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.output>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.output>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.output>;
@@ -504,6 +509,11 @@ export interface ActionEventDatas {
 		'view_show',
 		ActionInputs['view_show'],
 		ActionOutputs['view_show']
+	>;
+	file_rename: ActionEventLocalCallData<
+		'file_rename',
+		ActionInputs['file_rename'],
+		ActionOutputs['file_rename']
 	>;
 	provider_load_status: ActionEventRequestResponseData<
 		'provider_load_status',

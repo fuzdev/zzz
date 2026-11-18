@@ -89,6 +89,18 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	}
 
 	/**
+	 * Follows a renamed file in the editor's own state: its tab and history
+	 * (`DiskfileTabs.move_path`) and the tree's active row
+	 * (`DiskfileTreeState.move_path`). Called by `Diskfiles.rename`.
+	 *
+	 * @mutates this - the tabs and the tree
+	 */
+	move_path(from: DiskfilePath, to: DiskfilePath): void {
+		this.tabs.move_path(from, to);
+		this.tree.move_path(from, to);
+	}
+
+	/**
 	 * Opens a diskfile in preview mode.
 	 */
 	preview_diskfile(path: DiskfilePath): void {

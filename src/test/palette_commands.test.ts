@@ -93,6 +93,7 @@ describe('create_palette_commands', () => {
 		assert.includeMembers(all, [
 			'keep the preview tab open',
 			'close the tab',
+			'rename the file',
 			'reveal the file in the tree',
 			'show the markdown preview',
 			'show the markdown source'

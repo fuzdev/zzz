@@ -50,6 +50,7 @@ export const ActionMethod = one_of([
 	'path_open',
 	'project_activate',
 	'view_show',
+	'file_rename',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -142,7 +143,8 @@ export const LocalCallActionMethod = one_of([
 	'tab_close_resolve',
 	'path_open',
 	'project_activate',
-	'view_show'
+	'view_show',
+	'file_rename'
 ]);
 export type LocalCallActionMethod = Infer<typeof LocalCallActionMethod>;
 
@@ -190,6 +192,7 @@ export const FrontendActionMethod = one_of([
 	'path_open',
 	'project_activate',
 	'view_show',
+	'file_rename',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -436,6 +439,10 @@ export interface FrontendActionsApi {
 		input: ActionCallInputs['project_activate']
 	) => ActionOutputs['project_activate'];
 	view_show: (input: ActionCallInputs['view_show']) => ActionOutputs['view_show'];
+	file_rename: (
+		input: ActionCallInputs['file_rename'],
+		options?: RpcClientCallOptions
+	) => Promise<Result<{ value: ActionOutputs['file_rename'] }, { error: JsonrpcErrorObject }>>;
 	provider_load_status: (
 		input: ActionCallInputs['provider_load_status'],
 		options?: RpcClientCallOptions

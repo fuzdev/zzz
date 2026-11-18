@@ -493,6 +493,21 @@ export class DiskfileTreeState {
 	active_key: string | null = $state.raw(null);
 
 	/**
+	 * Follows a renamed file: when its row is the active one (under any root),
+	 * the active row is its new path's, so the keyboard stays on it rather
+	 * than falling back to the folder.
+	 *
+	 * @mutates this.active_key
+	 */
+	move_path(from: string, to: string): void {
+		const { active_key } = this;
+		if (active_key === null) return;
+		const separator = active_key.indexOf('\0');
+		if (active_key.slice(separator + 1) !== from) return;
+		this.active_key = to_diskfile_tree_row_key(active_key.slice(0, separator), to);
+	}
+
+	/**
 	 * Bumped when the active row should scroll into view: by keyboard moves and
 	 * `reveal`, not by clicks, so it never fights the user's own scrolling.
 	 */

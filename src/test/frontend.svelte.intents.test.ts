@@ -41,7 +41,9 @@ describe('the intent roster', () => {
 			// only an intent waiting on the daemon or the disk is async
 			assert.strictEqual(
 				spec.async,
-				spec.method === 'path_open' || spec.method === 'tab_close_resolve',
+				spec.method === 'path_open' ||
+					spec.method === 'tab_close_resolve' ||
+					spec.method === 'file_rename',
 				spec.method
 			);
 			assert.ok(spec.label.length && spec.label === spec.label.toLowerCase(), spec.method);

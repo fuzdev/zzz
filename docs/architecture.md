@@ -1658,6 +1658,26 @@ content back to `unrequested`, to load again on next access. A re-read
 of unchanged text changes nothing (`check_disk_changes` compares
 strings), so a resync raises no spurious conflict.
 
+### Renaming a file
+
+The `file_rename` intent (`Diskfiles.rename`) renames a file within its
+folder through `diskfile_rename` (§ Renaming Files) and moves everything
+here that follows the file, for the file and each sidecar the daemon moved
+with it: the same cell, editing state, and draft (its id kept), the tab
+with its place, preview state, selection, back / forward history, and
+reopen entry, the tree's active row, the markdown view mode, and every chat
+turn's and prompt's file part. The filer reports the rename as a delete and
+an add, which can arrive before the reply: a delete of the file, or of a
+sidecar named for it, changes nothing until the reply moves it, so nothing
+reads it as deleted, and is applied if the rename fails. A save started
+meanwhile waits for the rename to settle, then writes at wherever the file
+is. Refused here, before the daemon, for a name that isn't one plain path
+component, a file that's saving, being recorded, dormant, or deleted on
+disk, and a new name — the file's or a sidecar's — with a draft or a tab
+here. A new name the index skips (git-ignored in a focused checkout) keeps
+the file as uncovered. The file's menu ("rename file", a prompt for now) and the palette
+("rename the file", for the selected tab) call it.
+
 ### Disk changes and drafts
 
 `Diskfiles` records every content change

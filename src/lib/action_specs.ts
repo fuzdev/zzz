@@ -423,6 +423,14 @@ export type PathOpenInput = Infer<typeof PathOpenInput>;
 export const PathOpenOutput = object({ root: nullable(DiskfileDirectoryPath), file: boolean });
 export type PathOpenOutput = Infer<typeof PathOpenOutput>;
 
+/** Input for `file_rename`: the file, and its new name in its own directory. */
+export const FileRenameInput = object({ path: DiskfilePath, name: string });
+export type FileRenameInput = Infer<typeof FileRenameInput>;
+
+/** Output for `file_rename`: the file's new path. */
+export const FileRenameOutput = object({ path: DiskfilePath });
+export type FileRenameOutput = Infer<typeof FileRenameOutput>;
+
 /** Input for `project_activate`: the open project's root. */
 export const ProjectActivateInput = object({ root: DiskfileDirectoryPath });
 export type ProjectActivateInput = Infer<typeof ProjectActivateInput>;
@@ -1279,6 +1287,22 @@ export const path_open_action_spec = {
 		'Open the project holding a path and make it the active one, then a file the open indexed in a tab on the files page.'
 } satisfies IntentActionSpec;
 
+export const file_rename_action_spec = {
+	method: 'file_rename',
+	kind: 'local_call',
+	label: 'rename the file',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: FileRenameInput,
+	output: FileRenameOutput,
+	async: true,
+	version: 1,
+	history: 'none',
+	description:
+		"Rename a file within its folder (`diskfile_rename`, carrying its transcripts), its tab, draft, history, and file parts following — refused for a file that's saving, recording, or not on disk, and onto a name open here."
+} satisfies IntentActionSpec;
+
 export const project_activate_action_spec = {
 	method: 'project_activate',
 	kind: 'local_call',
@@ -1556,7 +1580,8 @@ export const all_intent_specs: Array<IntentActionSpec> = [
 	tab_close_resolve_action_spec,
 	path_open_action_spec,
 	project_activate_action_spec,
-	view_show_action_spec
+	view_show_action_spec,
+	file_rename_action_spec
 ];
 
 /**

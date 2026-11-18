@@ -357,6 +357,11 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'view_show', 'execute', 'handling'>
 		) => ActionOutputs['view_show'];
 	};
+	file_rename?: {
+		execute?: (
+			action_event: TypedActionEvent<'file_rename', 'execute', 'handling'>
+		) => ActionOutputs['file_rename'] | Promise<ActionOutputs['file_rename']>;
+	};
 	provider_load_status?: {
 		send_request?: (
 			action_event: TypedActionEvent<'provider_load_status', 'send_request', 'handling'>

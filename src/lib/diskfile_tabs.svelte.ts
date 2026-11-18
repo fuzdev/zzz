@@ -569,6 +569,37 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	}
 
 	/**
+	 * Follows a renamed file from `from` to `to`: its tab keeps its id, place,
+	 * preview state, and selection with the new path, its hold moving with it
+	 * (the new path held before the old let go, so the cell is never
+	 * unheld); the reopen stack and back / forward history name the new
+	 * path. The caller (`Diskfiles`) refuses a rename onto a path that has a
+	 * tab already.
+	 *
+	 * @mutates this - the tab's path, `recently_closed_tabs`, `back_paths`, `forward_paths`
+	 */
+	move_path(from: DiskfilePath, to: DiskfilePath): void {
+		const tab = this.by_path.get(from);
+		// never two tabs on one path — the caller refuses this, so it's a guard: the tab already
+		// there shows the file
+		if (tab && this.by_path.has(to)) {
+			this.close_tab(tab.id);
+		} else if (tab) {
+			tab.path = to;
+			const { diskfiles } = this.app;
+			diskfiles.acquire(to, tab);
+			diskfiles.release(from, tab);
+		}
+		for (const closed of this.recently_closed_tabs) {
+			if (closed.path === from) closed.path = to;
+		}
+		const follow = (p: DiskfilePath): DiskfilePath => (p === from ? to : p);
+		if (this.back_paths.includes(from)) this.back_paths = this.back_paths.map(follow);
+		if (this.forward_paths.includes(from)) this.forward_paths = this.forward_paths.map(follow);
+		if (this.#history_current === from) this.#history_current = to;
+	}
+
+	/**
 	 * Closes all tabs. Like VS Code's "close all editors", they join the
 	 * reopen stack on top of the earlier closed tabs — pushed last-to-first,
 	 * so reopening them one by one restores their order.

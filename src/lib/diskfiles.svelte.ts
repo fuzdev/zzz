@@ -10,9 +10,13 @@ import { SvelteMap } from 'svelte/reactivity';
 import { DEV } from 'esm-env';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
+import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
-import { jsonrpc_error_messages } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import {
+	JSONRPC_ERROR_CODES,
+	jsonrpc_error_messages
+} from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import { Datetime } from './datetime.ts';
 import { Diskfile } from './diskfile.svelte.ts';
@@ -51,6 +55,7 @@ import { DiskfileIndex } from './diskfile_index.svelte.ts';
 import type { ActionInputs, ActionOutputs } from './action_collections.ts';
 import { TaskQueue } from './task_queue.ts';
 import { find_transcript_candidate_paths } from './transcript_helpers.ts';
+import { is_plain_file_name } from './transcript_types.ts';
 
 /**
  * How many `diskfile_read` requests `Diskfiles` keeps in flight — reads
@@ -436,19 +441,30 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		}
 		existing.deleted_on_disk = false;
 		existing.uncovered = false;
-		if (existing.source_dir !== disknode.source_dir) existing.source_dir = disknode.source_dir;
-		if (existing.size !== disknode.size) existing.size = disknode.size;
-		if (existing.mtime !== disknode.mtime) {
-			existing.mtime = disknode.mtime;
-			// as a new file's is (`disknode_to_diskfile_json`)
-			if (disknode.mtime !== null) {
-				existing.updated = parse_or_throw(Datetime, new Date(disknode.mtime).toISOString());
-			}
-		}
+		this.#adopt_disknode(existing, disknode);
 		// back on disk, and its root may have changed with a snapshot from another filer
 		this.#write(() => this.#sync_index(existing, disknode));
 		this.#follow_disk_change(existing);
 		return existing;
+	}
+
+	/**
+	 * Takes what the filer reported for `diskfile`'s path onto the cell — its
+	 * root, size, and mtime — so the cell and the record agree
+	 * (`#sync_index`). `upsert` and a rename's `#move_path` share it.
+	 *
+	 * @mutates diskfile - its `source_dir`, `size`, `mtime`, `updated`
+	 */
+	#adopt_disknode(diskfile: Diskfile, disknode: SerializableDisknode): void {
+		if (diskfile.source_dir !== disknode.source_dir) diskfile.source_dir = disknode.source_dir;
+		if (diskfile.size !== disknode.size) diskfile.size = disknode.size;
+		if (diskfile.mtime !== disknode.mtime) {
+			diskfile.mtime = disknode.mtime;
+			// as a new file's is (`disknode_to_diskfile_json`)
+			if (disknode.mtime !== null) {
+				diskfile.updated = parse_or_throw(Datetime, new Date(disknode.mtime).toISOString());
+			}
+		}
 	}
 
 	/**
@@ -896,11 +912,20 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * anywhere) or a tab — it's kept, flagged `deleted_on_disk` with its tab and
 	 * editing state intact, so the user can save it back (recreating the file),
 	 * or close the tab and discard the draft (see `release_if_unneeded`). A
-	 * rename arrives as a delete plus an add, so its tab stays on the old path.
+	 * rename made elsewhere arrives as a delete plus an add, so its tab stays
+	 * on the old path; zzz's own (`rename`) holds a delete of a pending
+	 * rename's old path until the reply moves the file, and applies it if the
+	 * rename fails.
 	 * If the path comes back on disk, `upsert` reattaches the same cell.
 	 * Otherwise it's removed along with its editing state.
 	 */
 	remove_by_path(path: string): void {
+		const pending = this.#pending_renames.get(path as DiskfilePath);
+		if (pending) {
+			// moving, not gone — `rename` moves the cell and its record once the daemon replies
+			pending.deleted = true;
+			return;
+		}
 		const diskfile = untrack(() => this.#cells.get(path as DiskfilePath));
 		if (!diskfile) {
 			this.#write(() => this.index.delete(path as DiskfilePath));
@@ -1125,6 +1150,215 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	async delete(path: DiskfilePath): Promise<void> {
 		const result = await this.app.api.diskfile_delete({ path });
 		if (!result.ok) throw new Error(result.error.message);
+	}
+
+	/**
+	 * The renames in flight (`rename`), by each old path that may move — the
+	 * file's and its transcript sidecars' — so a delete of one the filer
+	 * reports before the reply changes nothing yet (the file is moving, not
+	 * gone, and `#move_path` moves its cell and record), and is remembered,
+	 * so a rename that fails applies it. `done` resolves once the rename
+	 * settles, moved or not — a save waits on it (`pending_rename`).
+	 */
+	readonly #pending_renames: Map<DiskfilePath, { deleted: boolean; done: Promise<void> }> =
+		new Map();
+
+	/**
+	 * Resolves once a rename of the file at `path` settles, `null` when none
+	 * is in flight. A save waits on it (`DiskfileEditorState.save_changes`),
+	 * then saves at wherever the file is, so it never writes to the name the
+	 * file is leaving.
+	 */
+	pending_rename(path: DiskfilePath): Promise<void> | null {
+		return this.#pending_renames.get(path)?.done ?? null;
+	}
+
+	/**
+	 * Renames the file at `path` to `name` in its own directory
+	 * (`diskfile_rename`), the daemon carrying its transcript sidecars, and
+	 * moves everything here that follows a file (`#move_path`) for each file
+	 * it moved — its cell, editing state, draft, tab, history, tree row, and
+	 * file parts — so nothing reads it as deleted. Refused here, before the
+	 * daemon, for a name that isn't one plain path component or is the
+	 * file's own, a file that's dormant, deleted on disk, saving, or being
+	 * recorded, and a new path with a file kept here (a draft or a tab).
+	 *
+	 * @returns the file's new path, or the refusal — the daemon's error, or
+	 * one of these as a `conflict` / `invalid_params`
+	 */
+	async rename(
+		path: DiskfilePath,
+		name: string
+	): Promise<Result<{ value: { path: DiskfilePath } }, { error: JsonrpcErrorObject }>> {
+		const refuse = (
+			code: JsonrpcErrorObject['code'],
+			message: string,
+			reason?: string
+		): { ok: false; error: JsonrpcErrorObject } => ({
+			ok: false,
+			error: { code, message, ...(reason === undefined ? {} : { data: { reason } }) }
+		});
+		const current = path.slice(path.lastIndexOf('/') + 1);
+		if (!is_plain_file_name(name) || name === current) {
+			return refuse(
+				JSONRPC_ERROR_CODES.invalid_params,
+				name === current ? 'that is already its name' : `not a file name: ${JSON.stringify(name)}`
+			);
+		}
+		const to = parse_or_throw(DiskfilePath, path.slice(0, path.length - current.length) + name);
+		const diskfile = untrack(() => this.#cells.get(path));
+		const editor_state = untrack(() => this.#editor_states.get(path));
+		if (this.is_dormant(path) || diskfile?.deleted_on_disk) {
+			return refuse(JSONRPC_ERROR_CODES.conflict, "the file isn't on disk to rename");
+		}
+		if (editor_state && (editor_state.saving || editor_state.save_pending)) {
+			return refuse(JSONRPC_ERROR_CODES.conflict, 'the file is being saved — rename it after');
+		}
+		if (this.app.recorder.path === path) {
+			return refuse(JSONRPC_ERROR_CODES.conflict, 'the file is being recorded');
+		}
+		// the paths that may move — the file, and each sidecar named for it — and where to
+		const sidecars = this.to_transcript_candidate_paths(path);
+		const moving: Array<[DiskfilePath, DiskfilePath]> = [
+			[path, to],
+			...sidecars.map((sidecar): [DiskfilePath, DiskfilePath] => [
+				sidecar,
+				parse_or_throw(DiskfilePath, to + sidecar.slice(path.length))
+			])
+		];
+		for (const [, target] of moving) {
+			if (
+				this.drafts.has(target) ||
+				untrack(() => this.editor.tabs.by_path.has(target)) ||
+				untrack(() => this.#cells.get(target))?.deleted_on_disk
+			) {
+				const target_name = target.slice(target.lastIndexOf('/') + 1);
+				return refuse(
+					JSONRPC_ERROR_CODES.conflict,
+					`${target_name} is open here with unsaved changes or a tab — close it first`,
+					ERROR_ALREADY_EXISTS
+				);
+			}
+		}
+		if (this.#pending_renames.has(path)) {
+			return refuse(JSONRPC_ERROR_CODES.conflict, 'the file is already being renamed');
+		}
+
+		const settled = create_deferred<void>();
+		const pendings = moving.map(([from]) => {
+			const pending = { deleted: false, done: settled.promise };
+			this.#pending_renames.set(from, pending);
+			return [from, pending] as const;
+		});
+		let result: Awaited<ReturnType<typeof this.app.api.diskfile_rename>>;
+		try {
+			result = await this.app.api.diskfile_rename({ path, name });
+		} catch (error) {
+			result = {
+				ok: false,
+				error: { code: JSONRPC_ERROR_CODES.internal_error, message: to_error_message(error) }
+			};
+		}
+		for (const [from] of pendings) this.#pending_renames.delete(from);
+		try {
+			if (!result.ok) {
+				// a delete the filer reported meanwhile, for a rename that didn't happen
+				for (const [from, pending] of pendings) {
+					if (pending.deleted) this.remove_by_path(from);
+				}
+				return { ok: false, error: result.error };
+			}
+			const moved_paths = new Set<string>();
+			this.#write(() => {
+				for (const moved of result.value.renamed) {
+					if (this.#move_path(moved.path, moved.new_path)) moved_paths.add(moved.path);
+				}
+			});
+			// a candidate the daemon didn't move (not a sidecar after all), or one whose move gave
+			// up for a file kept at its new name, deleted meanwhile — shown deleted, never a ghost
+			for (const [from, pending] of pendings) {
+				if (pending.deleted && !moved_paths.has(from)) this.remove_by_path(from);
+			}
+			return { ok: true, value: { path: result.value.renamed[0]?.new_path ?? to } };
+		} finally {
+			settled.resolve();
+		}
+	}
+
+	/**
+	 * Moves everything here that follows the file at `from` to `to`, which a
+	 * rename put it at (`rename`): the same cell, unflagged deleted on disk
+	 * (a delete the filer reported first) and with its record at the new path
+	 * — a cell made there meanwhile for a hold (the filer's add, first) is
+	 * dropped for it, unless it has something to keep; a read in flight reads
+	 * again at the new path; the editing state, the markdown view mode (when
+	 * the new name is still markdown), the draft (its id kept), the tab and
+	 * its history, the tree's active row, and every file part at `from`.
+	 * A path with no cell moves its record (unless the new name is one the
+	 * index skips) and the rest.
+	 *
+	 * @returns whether it moved — `false` when a file edited at `to`
+	 * meanwhile is kept there instead
+	 */
+	#move_path(from: DiskfilePath, to: DiskfilePath): boolean {
+		const diskfile = untrack(() => this.#cells.get(from));
+		if (diskfile) {
+			const there = untrack(() => this.#cells.get(to));
+			if (there && there !== diskfile) {
+				const there_state = untrack(() => this.#editor_states.get(to));
+				// edited there meanwhile (the filer's add came first, and it was opened): keep that,
+				// and leave this one where it was — the caller applies its delete
+				if (there_state && !there_state.can_drop) return false;
+				this.#remove_cell(there, true);
+			}
+			this.#cells.delete(from);
+			this.index.delete(from);
+			diskfile.path = to;
+			this.#cells.set(to, diskfile);
+			if (diskfile.deleted_on_disk) diskfile.deleted_on_disk = false;
+			// a new name the index skips (git-ignored in a focused checkout — coverage is otherwise
+			// the folder's, the same for both names) gets no filer events: kept, as uncovered; one
+			// the filer already reported (its add came first) is on disk and covered
+			// — its record taken, metadata and all, as `upsert` takes one: the filer's report is
+			// the file now, a change after the rename included
+			const skipped = this.to_unindexed(to) !== null;
+			const reported = skipped ? undefined : untrack(() => this.index.get(to));
+			if (skipped) {
+				diskfile.uncovered = true;
+			} else if (reported) {
+				diskfile.uncovered = false;
+				this.#adopt_disknode(diskfile, reported);
+			}
+			this.#sync_index(diskfile, reported);
+		} else {
+			const record = untrack(() => this.index.get(from));
+			if (record) {
+				this.index.delete(from);
+				if (!untrack(() => this.index.get(to)) && this.to_unindexed(to) === null) {
+					this.index.set({ ...record, id: to });
+				}
+			}
+		}
+		const editor_state = untrack(() => this.#editor_states.get(from));
+		if (editor_state) {
+			this.#editor_states.delete(from);
+			this.#editor_states.set(to, editor_state);
+		}
+		const mode = untrack(() => this.markdown_view_modes.get(from));
+		if (mode !== undefined) {
+			this.markdown_view_modes.delete(from);
+			if (to_diskfile_content_kind(to) === 'markdown') this.markdown_view_modes.set(to, mode);
+		}
+		if (this.#select_on_arrival === from) this.#select_on_arrival = to;
+		this.drafts.move(from, to);
+		this.editor.move_path(from, to);
+		this.app.parts.move_path(from, to);
+		this.app.prompts.move_path(from, to);
+		// a read of the old path in flight, or one that failed there, reads again here — last,
+		// once the editing state and the tab hold the new path, so a held file keeps its content
+		// meanwhile rather than dropping it
+		if (diskfile) this.#follow_disk_change(diskfile);
+		return true;
 	}
 
 	/**

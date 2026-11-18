@@ -3,6 +3,7 @@ import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { Part, PartJson, type PartJsonInput, type PartUnion } from './part.svelte.ts';
+import type { DiskfilePath } from './diskfile_types.ts';
 import { create_collection_decoder } from './cell_helpers.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
 import { create_single_index } from './indexed_collection_helpers.svelte.ts';
@@ -58,6 +59,19 @@ export class Parts extends Cell<typeof PartsJson> {
 		const part = Part.create(this.app, j);
 		this.items.add(part);
 		return part;
+	}
+
+	/**
+	 * Follows a renamed file: every file part here at `from` moves to `to`
+	 * (its hold with it), sent turns' included.
+	 *
+	 * @mutates this - the moved parts' `path`
+	 */
+	move_path(from: DiskfilePath, to: DiskfilePath): void {
+		for (const part of this.items.values) {
+			// `by_diskfile_path` is reactive, so it follows
+			if (part.type === 'diskfile' && part.path === from) part.path = to;
+		}
 	}
 
 	/**

@@ -9,6 +9,7 @@
 	import {
 		icon_checkmark,
 		icon_delete,
+		icon_edit,
 		icon_directory,
 		icon_file,
 		icon_remove,
@@ -16,7 +17,7 @@
 		icon_view
 	} from '@fuzdev/fuz_ui/icons.ts';
 	import { frontend_context } from './frontend.svelte.ts';
-	import { delete_diskfile } from './diskfile_helpers.ts';
+	import { delete_diskfile, prompt_rename_diskfile } from './diskfile_helpers.ts';
 	import ContextmenuEntryCopyToClipboard from './ContextmenuEntryCopyToClipboard.svelte';
 	import DiskfileCopyPathEntries from './DiskfileCopyPathEntries.svelte';
 	import DiskfileHold from './DiskfileHold.svelte';
@@ -159,7 +160,18 @@
 						<span>delete file</span>
 					</ContextmenuEntry>
 
-					<!-- TODO rename and move, once the backend has actions for them -->
+					{#if !diskfile?.deleted_on_disk && !diskfiles.is_dormant(path)}
+						<ContextmenuEntry
+							icon={icon_edit}
+							run={async () => {
+								await prompt_rename_diskfile(app.intents, path);
+							}}
+						>
+							<span>rename file</span>
+						</ContextmenuEntry>
+					{/if}
+
+					<!-- TODO move, once the backend has an action for it -->
 				{/snippet}
 			</ContextmenuSubmenu>
 			{#if to_diskfile_content_kind(path) === 'markdown'}

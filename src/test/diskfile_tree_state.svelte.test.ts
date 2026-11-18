@@ -678,3 +678,20 @@ describe('DiskfileTreeState', () => {
 		assert.isFalse(tree.expanded.has('/w/a/'));
 	});
 });
+
+describe('DiskfileTreeState.move_path', () => {
+	test("a renamed file's active row follows it, any other active row stays", () => {
+		const app = monkeypatch_zzz_for_tests(new Frontend());
+		const tree = app.diskfiles.editor.tree;
+		tree.active_key = to_diskfile_tree_row_key('/w/', '/w/a/x.txt');
+		tree.move_path('/w/a/x.txt', '/w/a/y.txt');
+		assert.strictEqual(tree.active_key, to_diskfile_tree_row_key('/w/', '/w/a/y.txt'));
+
+		tree.move_path('/w/a/other.txt', '/w/a/z.txt');
+		assert.strictEqual(tree.active_key, to_diskfile_tree_row_key('/w/', '/w/a/y.txt'));
+
+		tree.active_key = null;
+		tree.move_path('/w/a/y.txt', '/w/a/x.txt');
+		assert.isNull(tree.active_key);
+	});
+});

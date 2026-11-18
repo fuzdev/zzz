@@ -737,6 +737,10 @@ export class DiskfileEditorState {
 	 * it would have written
 	 */
 	save_changes(options?: DiskfileSaveOptions): Promise<boolean> {
+		// a rename in flight: save once it settles, wherever the file is then — never to the name
+		// it's leaving
+		const renaming = this.app.diskfiles.pending_rename(this.diskfile.path);
+		if (renaming) return renaming.then(() => this.save_changes(options));
 		// an overwrite is of the version shown now, whatever lands while it waits
 		const overwrite_base: OverwriteBase | null = options?.overwrite
 			? { hash: this.#save_base(options) }

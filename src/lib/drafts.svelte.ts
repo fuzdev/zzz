@@ -40,15 +40,18 @@ export interface DraftOptions {
 export class Draft {
 	/** New for each draft — a draft set aside and started again is another. */
 	readonly id: Uuid = create_uuid();
-	readonly path: DiskfilePath;
+
+	/** The file's path — moved only by a rename (`Drafts.move`), keeping the draft's `id`. */
+	path: DiskfilePath = $state.raw()!;
 
 	/**
 	 * The innermost root that held `path` when the draft was made
 	 * (`Diskfiles.indexed_roots`), `null` under none — recorded, not part of
 	 * the key: a path can sit under several open roots, and which is
-	 * innermost changes as nested projects open and close.
+	 * innermost changes as nested projects open and close. Recomputed when a
+	 * rename moves the draft (`Drafts.move`).
 	 */
-	readonly root: DiskfileDirectoryPath | null;
+	root: DiskfileDirectoryPath | null = $state.raw()!;
 
 	/** The edited text. */
 	text: string = $state.raw()!;
@@ -163,6 +166,25 @@ export class Drafts {
 		const draft = this.#by_path.get(path);
 		if (!draft || (id !== undefined && draft.id !== id)) return false;
 		return this.#by_path.delete(path);
+	}
+
+	/**
+	 * Follows a renamed file: its draft, the same one (its `id` is what the
+	 * editor's history and the close dialog track), moves from `from` to
+	 * `to`, its `root` recomputed for the new path. The caller (`Diskfiles`)
+	 * refuses a rename onto a path that has a draft.
+	 *
+	 * @returns whether a draft moved
+	 * @mutates this - re-keys the draft, and sets its `path` and `root`
+	 */
+	move(from: DiskfilePath, to: DiskfilePath): boolean {
+		const draft = this.#by_path.get(from);
+		if (!draft || this.#by_path.has(to)) return false;
+		this.#by_path.delete(from);
+		draft.path = to;
+		draft.root = this.#diskfiles.to_innermost_root(to);
+		this.#by_path.set(to, draft);
+		return true;
 	}
 
 	/**

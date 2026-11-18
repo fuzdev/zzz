@@ -126,3 +126,23 @@ describe('removal disposes', () => {
 		);
 	});
 });
+
+describe('a rename follows into parts', () => {
+	test("turns' and prompts' file parts move to the new path", () => {
+		const from = parse_or_throw(DiskfilePath, '/ws/a.txt');
+		const to = parse_or_throw(DiskfilePath, '/ws/b.txt');
+		const other = parse_or_throw(DiskfilePath, '/ws/c.txt');
+		const part = app.parts.add({ type: 'diskfile', path: from }) as DiskfilePart;
+		const untouched = app.parts.add({ type: 'diskfile', path: other }) as DiskfilePart;
+		const prompt = app.prompts.add({ parts: [{ type: 'diskfile', path: from }] });
+
+		app.parts.move_path(from, to);
+		app.prompts.move_path(from, to);
+
+		assert.strictEqual(part.path, to);
+		assert.strictEqual(app.parts.find_part_by_diskfile_path(to), part);
+		assert.strictEqual(untouched.path, other);
+		assert.strictEqual((prompt.parts[0] as DiskfilePart).path, to);
+		assert.deepEqual(app.prompts.filter_by_diskfile_path(to), [prompt]);
+	});
+});

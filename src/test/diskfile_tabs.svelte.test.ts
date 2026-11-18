@@ -982,6 +982,62 @@ describe('DiskfileTabs', () => {
 		});
 	});
 
+	describe('move_path', () => {
+		test('a renamed file keeps its tab, place, selection, and history under the new path', () => {
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_3);
+			const tab2 = tabs.preview_diskfile(TEST_PATH_2);
+			tabs.select_tab(tab1.id);
+			assert.ok(app.diskfiles.is_acquired(TEST_PATH_1));
+			const order = [...tabs.tab_order];
+
+			tabs.move_path(TEST_PATH_1, TEST_PATH_4);
+
+			assert.strictEqual(tab1.path, TEST_PATH_4);
+			assert.strictEqual(tabs.by_path.get(TEST_PATH_4), tab1);
+			assert.isFalse(tabs.by_path.has(TEST_PATH_1));
+			assert.deepEqual(tabs.tab_order, order, 'its place');
+			assert.strictEqual(tabs.selected_tab_id, tab1.id);
+			assert.strictEqual(tabs.selected_path, TEST_PATH_4);
+			assert.ok(app.diskfiles.is_acquired(TEST_PATH_4), 'the hold moved');
+			assert.isFalse(app.diskfiles.is_acquired(TEST_PATH_1));
+
+			// a moved preview stays the preview
+			tabs.move_path(TEST_PATH_2, TEST_PATH_5);
+			assert.strictEqual(tabs.preview_tab_id, tab2.id);
+			assert.strictEqual(tab2.path, TEST_PATH_5);
+
+			// the history names the new path, and stepping doesn't push the old one back
+			assert.deepEqual(tabs.back_paths, [TEST_PATH_5, TEST_PATH_3, TEST_PATH_4]);
+			assert.strictEqual(tabs.go_back(), TEST_PATH_5);
+			assert.include(tabs.forward_paths, TEST_PATH_4);
+			assert.notInclude([...tabs.back_paths, ...tabs.forward_paths], TEST_PATH_1);
+		});
+
+		test('a closed tab of a renamed file reopens at the new path', () => {
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
+			tabs.close_tab(tab1.id);
+
+			tabs.move_path(TEST_PATH_1, TEST_PATH_4);
+
+			assert.strictEqual(tabs.reopen_last_closed_tab()?.path, TEST_PATH_4);
+			assert.notInclude(tabs.back_paths, TEST_PATH_1);
+		});
+
+		test('a path with no tab moves only its history', () => {
+			tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
+			tabs.close_tab(tabs.by_path.get(TEST_PATH_1)!.id);
+			tabs.recently_closed_tabs = [];
+
+			tabs.move_path(TEST_PATH_1, TEST_PATH_4);
+
+			assert.deepEqual(tabs.back_paths, [TEST_PATH_4]);
+			assert.isFalse(tabs.by_path.has(TEST_PATH_4));
+		});
+	});
+
 	describe('back and forward', () => {
 		test('go back and forward through the files the selection visited', () => {
 			const tab1 = tabs.open_diskfile(TEST_PATH_1);

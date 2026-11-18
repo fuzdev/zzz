@@ -312,6 +312,17 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
+	file_rename: {
+		execute: async ({ data: { input } }) => {
+			const result = await frontend.diskfiles.rename(input.path, input.name);
+			if (!result.ok) {
+				const { code, message, data } = result.error;
+				throw new ThrownJsonrpcError(code, message, data);
+			}
+			return result.value;
+		}
+	},
+
 	project_activate: {
 		execute: ({ data: { input } }) => ({ found: frontend.projects.activate_root(input.root) })
 	},

@@ -114,6 +114,20 @@ export class Prompts extends Cell<typeof PromptsJson> {
 		);
 	}
 
+	/**
+	 * Follows a renamed file: every prompt's file part at `from` moves to
+	 * `to` (a prompt's parts are its own, not `Parts`').
+	 *
+	 * @mutates this - the moved parts' `path`
+	 */
+	move_path(from: DiskfilePath, to: DiskfilePath): void {
+		for (const prompt of this.items.values) {
+			for (const part of prompt.parts) {
+				if (part.type === 'diskfile' && part.path === from) part.path = to;
+			}
+		}
+	}
+
 	add(json?: PromptJsonInput): Prompt {
 		const j = !json?.name ? { ...json, name: this.generate_unique_name('new prompt') } : json;
 		const prompt = new Prompt({ app: this.app, json: j });

@@ -12,6 +12,7 @@
 import { all_intent_specs, type ViewName } from './action_specs.ts';
 import type { LocalCallActionMethod } from './action_metatypes.ts';
 import { to_diskfile_content_kind } from './diskfile_content_kind.ts';
+import { prompt_rename_diskfile } from './diskfile_helpers.ts';
 import type { DiskfilePath } from './diskfile_types.ts';
 import type { Frontend } from './frontend.svelte.ts';
 import type { FrontendIntentsApi } from './intent_spec.ts';
@@ -154,6 +155,12 @@ export const create_palette_commands = (
 	if (path) {
 		if (tabs.preview_tab?.path === path) add_intent('tab_pin', { path });
 		add_intent('tab_close', { path });
+		// the name is asked for, so the command runs the prompt, which calls the intent
+		if (!diskfiles.peek(path)?.deleted_on_disk && !diskfiles.is_dormant(path)) {
+			add_command('file_rename', intent_labels.get('file_rename') ?? 'rename the file', () => {
+				void prompt_rename_diskfile(app.intents, path);
+			});
+		}
 	}
 	if (tabs.recently_closed_tabs.length) add_intent('tab_reopen_closed', undefined);
 	// a history entry that's the selected file again is skipped by the step, so it doesn't count

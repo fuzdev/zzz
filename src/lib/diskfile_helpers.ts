@@ -13,6 +13,7 @@ import {
 } from './diskfile_types.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 import type { Diskfiles } from './diskfiles.svelte.ts';
+import type { FrontendIntentsApi } from './intent_spec.ts';
 
 /**
  * Why a diskfile's content can be missing: it loads only when it's a UTF-8
@@ -565,6 +566,30 @@ export const prompt_create_diskfile = async (
 		const display_name = name.trim() || JSON.stringify(name);
 		alert(`couldn't create ${kind} ${display_name}: ${to_error_message(error)}`); // eslint-disable-line no-alert
 	}
+};
+
+/**
+ * Asks for a new name for the file at `path`, its current name filled in,
+ * and renames it (the `file_rename` intent), alerting on failure with the
+ * name first (`couldn't rename a.txt: <reason>`). Cancelling, or leaving
+ * the name as it was or empty, does nothing. The tree renames inline
+ * instead; this is the list's, the tabs', and the palette's way.
+ *
+ * @param intents - the app's intents
+ * @param path - the file to rename
+ * @returns the new path, `null` when nothing was renamed
+ */
+export const prompt_rename_diskfile = async (
+	intents: Pick<FrontendIntentsApi, 'file_rename'>,
+	path: DiskfilePath
+): Promise<DiskfilePath | null> => {
+	const current = path.slice(path.lastIndexOf('/') + 1);
+	const name = prompt(`rename ${current} to:`, current); // eslint-disable-line no-alert
+	if (!name || name === current) return null;
+	const result = await intents.file_rename({ path, name });
+	if (result.ok) return result.value.path;
+	alert(`couldn't rename ${current}: ${result.error.message}`); // eslint-disable-line no-alert
+	return null;
 };
 
 /**

@@ -501,3 +501,30 @@ describe('a draft whose project closed', () => {
 		assert.strictEqual(app.diskfiles.drafts.get(PATH)?.status, 'bound');
 	});
 });
+
+describe('Drafts.move', () => {
+	test('a rename moves the same draft, its id kept, its root recomputed', () => {
+		const drafts = app.diskfiles.drafts;
+		const draft = drafts.create(PATH, 'mine', null);
+		const to = parse_or_throw(DiskfilePath, '/w/b.txt');
+
+		assert.isTrue(drafts.move(PATH, to));
+
+		assert.strictEqual(drafts.get(to), draft);
+		assert.isFalse(drafts.has(PATH));
+		assert.strictEqual(draft.path, to);
+		assert.strictEqual(draft.root, app.diskfiles.to_innermost_root(to));
+		assert.strictEqual(draft.text, 'mine');
+	});
+
+	test('nothing to move, or a draft already at the new path, moves nothing', () => {
+		const drafts = app.diskfiles.drafts;
+		const to = parse_or_throw(DiskfilePath, '/w/b.txt');
+		assert.isFalse(drafts.move(PATH, to));
+		const draft = drafts.create(PATH, 'mine', null);
+		const other = drafts.create(to, 'theirs', null);
+		assert.isFalse(drafts.move(PATH, to));
+		assert.strictEqual(drafts.get(PATH), draft);
+		assert.strictEqual(drafts.get(to), other);
+	});
+});
