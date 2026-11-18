@@ -719,38 +719,7 @@ wrap.
 
 ## What's Next
 
-**Spine consumption — complete.** The spine crates (`fuz_db`,
-`fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`) own auth, HTTP,
-realtime, and dispatch. A single `/api/rpc` + `/api/ws` (via
-`fuz_actions::create_rpc_router` / `register_action_ws`) serves the
-boot-compiled `ActionRegistry`; account / bootstrap / signup REST come
-from fuz_auth's routers; the admin audit-log SSE stream
-(`GET /api/admin/audit/stream`) comes from
-`fuz_realtime::audit_stream_router` + `register_audit_sse_listener`.
-Besides the handlers, `handlers/` holds `App` state + a `broadcast` shim
-over `App.realtime`.
-
-**AI providers** (Anthropic, OpenAI, and Gemini all complete):
-
-- [x] Provider system: enum-dispatched `Provider` with `ProviderManager`,
-  `ProviderStatus`, `CompletionOptions`
-- [x] Anthropic provider: full implementation with `reqwest` HTTP client, SSE
-  streaming, message format conversion
-- [x] `provider_load_status` handler (every provider reports status)
-- [x] `completion_create` handler with `completion_progress` streaming
-  notifications (targeted to requesting WS connection)
-- [x] `session_load` returns real provider status from all providers
-- [x] OpenAI provider: full completion implementation (Chat Completions API,
-  non-streaming + SSE streaming)
-- [x] Gemini provider: full completion implementation (Generative Language
-  API, non-streaming + SSE streaming)
-
-**Other remaining work**:
-
-1. Codegen from the TS specs (action input/output types)
-
-- [x] Trusted-proxy client-IP resolution (XFF + CIDR + strict-IP
-      validation), Origin allowlist (Origin-only, no Referer fallback), and
-      login-username canonicalization — all now provided by the spine
-      (`fuz_http` proxy/origin + `fuz_auth`); zzz wires them via config
-      (`ZZZ_TRUSTED_PROXIES`, `FUZ_ALLOWED_ORIGINS`).
+- Codegen from the TS specs (the action input/output types), so the Rust
+  handlers' wire types can't drift from `action_specs.ts` — today the
+  cross-backend `spec_schemas` and `action_manifest` suites catch drift
+  after the fact.

@@ -74,9 +74,10 @@ ready.
 ## Roadmap
 
 - [#7 integrate database](https://github.com/fuzdev/zzz/issues/7)
-- projects over a `repos.toml` registry (or a plain directory), with persisted
-  workspaces and a VS Code-like layout
-- a read-only reader for your local git repos
+- persisted workspaces and a VS Code-like layout over projects (a
+  `repos.toml` registry, a git repo, or a plain directory)
+- a read-only reader for your local git repos — each repo's status shows on
+  the projects page today
 - publish to npm
 - input welcome
 
