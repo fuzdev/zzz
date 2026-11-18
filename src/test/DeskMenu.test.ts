@@ -82,6 +82,10 @@ describe('the desk menu', () => {
 		flushSync();
 		assert.strictEqual(app.projects.active_id, b.id);
 		assert.deepEqual(
+			app.recent_intents.entries.map((entry) => [entry.method, entry.input]),
+			[['project_activate', { root: '/w/b/' }]]
+		);
+		assert.deepEqual(
 			project_buttons().map((button) => button.getAttribute('aria-pressed')),
 			['false', 'true']
 		);

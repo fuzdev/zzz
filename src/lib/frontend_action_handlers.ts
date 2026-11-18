@@ -1,4 +1,4 @@
-import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
+import { JSONRPC_ERROR_CODES, ThrownJsonrpcError } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import type { Frontend } from './frontend.svelte.ts';
 import type { FrontendActionHandlers } from './frontend_action_types.ts';
@@ -6,6 +6,7 @@ import { Turn } from './turn.svelte.ts';
 import { to_completion_response_text } from './response_helpers.ts';
 import { ERROR_DISK_CHANGED } from './diskfile_helpers.ts';
 import { ERROR_PROJECT_NOT_OPEN, ERROR_REPO_NOT_FOCUSED } from './project_helpers.ts';
+import { goto_unless_current, to_view_url } from './nav.ts';
 
 // TODO stubbing out a lot of these
 
@@ -298,6 +299,41 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		execute: ({ data: { input } }) => ({
 			markdown: frontend.diskfiles.set_markdown_view_mode(input.path, input.mode)
 		})
+	},
+
+	path_open: {
+		execute: async ({ data: { input } }) => {
+			const result = await frontend.projects.open_path(input.path);
+			if (!result.ok) {
+				const { code, message, data } = result.error;
+				throw new ThrownJsonrpcError(code, message, data);
+			}
+			return result.value;
+		}
+	},
+
+	project_activate: {
+		execute: ({ data: { input } }) => ({ found: frontend.projects.activate_root(input.root) })
+	},
+
+	view_show: {
+		execute: ({ data: { input } }) => {
+			void goto_unless_current(to_view_url(input.view, input.id));
+		}
+	},
+
+	tab_close_resolve: {
+		execute: async ({ data: { input } }) => {
+			const outcome = await frontend.diskfiles.editor.resolve_close(input.path, input.choice);
+			if (!outcome.ok) {
+				throw outcome.conflict
+					? new ThrownJsonrpcError(JSONRPC_ERROR_CODES.conflict, outcome.message, {
+							reason: ERROR_DISK_CHANGED
+						})
+					: new ThrownJsonrpcError(JSONRPC_ERROR_CODES.internal_error, outcome.message);
+			}
+			return { result: outcome.result };
+		}
 	},
 
 	diskfile_details_toggle: {

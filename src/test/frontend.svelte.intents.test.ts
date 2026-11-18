@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
+import { readdirSync } from 'node:fs';
 import { test, describe, afterEach, assert, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { jsonrpc_errors } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
-import { all_action_specs, all_intent_specs } from '#lib/action_specs.ts';
+import { all_action_specs, all_intent_specs, ViewName } from '#lib/action_specs.ts';
 import { is_intent_action_spec } from '#lib/intent_spec.ts';
 import { Frontend, type FrontendOptions } from '#lib/frontend.svelte.ts';
 import { RecentIntents } from '#lib/recent_intents.svelte.ts';
@@ -37,7 +38,13 @@ describe('the intent roster', () => {
 		for (const spec of local_calls) {
 			assert.ok(is_intent_action_spec(spec), spec.method);
 			assert.ok(Number.isInteger(spec.version) && spec.version >= 1, spec.method);
-			assert.strictEqual(spec.async, false, spec.method);
+			// only an intent waiting on the daemon or the disk is async
+			assert.strictEqual(
+				spec.async,
+				spec.method === 'path_open' || spec.method === 'tab_close_resolve',
+				spec.method
+			);
+			assert.ok(spec.label.length && spec.label === spec.label.toLowerCase(), spec.method);
 			assert.strictEqual(spec.initiator, 'frontend', spec.method);
 		}
 	});
@@ -281,5 +288,15 @@ describe('RecentIntents', () => {
 		assert.strictEqual(recent.entries.length, 0);
 		// seq keeps increasing across a clear
 		assert.strictEqual(recent.record(spec, undefined, 'applied').seq, 6);
+	});
+});
+
+describe('`view_show`', () => {
+	test('names every page under `src/routes`, and nothing else', () => {
+		const routes = readdirSync('src/routes', { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name)
+			.sort();
+		assert.deepEqual([...ViewName.def].filter((v) => v !== 'home').sort(), routes);
 	});
 });

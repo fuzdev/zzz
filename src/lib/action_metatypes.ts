@@ -45,6 +45,10 @@ export const ActionMethod = one_of([
 	'explorer_mode_set',
 	'file_reveal',
 	'markdown_mode_set',
+	'tab_close_resolve',
+	'path_open',
+	'project_activate',
+	'view_show',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -132,7 +136,11 @@ export const LocalCallActionMethod = one_of([
 	'tab_forward',
 	'explorer_mode_set',
 	'file_reveal',
-	'markdown_mode_set'
+	'markdown_mode_set',
+	'tab_close_resolve',
+	'path_open',
+	'project_activate',
+	'view_show'
 ]);
 export type LocalCallActionMethod = Infer<typeof LocalCallActionMethod>;
 
@@ -175,6 +183,10 @@ export const FrontendActionMethod = one_of([
 	'explorer_mode_set',
 	'file_reveal',
 	'markdown_mode_set',
+	'tab_close_resolve',
+	'path_open',
+	'project_activate',
+	'view_show',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -401,6 +413,20 @@ export interface FrontendActionsApi {
 	markdown_mode_set: (
 		input: ActionCallInputs['markdown_mode_set']
 	) => ActionOutputs['markdown_mode_set'];
+	tab_close_resolve: (
+		input: ActionCallInputs['tab_close_resolve'],
+		options?: RpcClientCallOptions
+	) => Promise<
+		Result<{ value: ActionOutputs['tab_close_resolve'] }, { error: JsonrpcErrorObject }>
+	>;
+	path_open: (
+		input: ActionCallInputs['path_open'],
+		options?: RpcClientCallOptions
+	) => Promise<Result<{ value: ActionOutputs['path_open'] }, { error: JsonrpcErrorObject }>>;
+	project_activate: (
+		input: ActionCallInputs['project_activate']
+	) => ActionOutputs['project_activate'];
+	view_show: (input: ActionCallInputs['view_show']) => ActionOutputs['view_show'];
 	provider_load_status: (
 		input: ActionCallInputs['provider_load_status'],
 		options?: RpcClientCallOptions

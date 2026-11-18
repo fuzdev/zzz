@@ -9,6 +9,7 @@ import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 import { DiskfileTreeState } from './diskfile_tree_state.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { DiskfileExplorerMode, type DiskfilePath } from './diskfile_types.ts';
+import type { TabCloseChoice } from './action_specs.ts';
 
 /**
  * A tab close waiting on the user — see `DiskfilesEditor.request_close_tab`.
@@ -151,6 +152,59 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 		}
 		this.close_tab(tab_id);
 		return true;
+	}
+
+	/**
+	 * Answers the pending close of the tab at `path` (`request_close_tab`):
+	 * `save` the draft and close — unless the question was cancelled while the
+	 * save was in flight — `discard` it and close, `keep` it and close (a file
+	 * whose project isn't open), or `cancel`. The `tab_close_resolve` intent's
+	 * implementation.
+	 *
+	 * @returns the outcome, or the failed save's message
+	 */
+	async resolve_close(
+		path: DiskfilePath,
+		choice: TabCloseChoice
+	): Promise<
+		| { ok: true; result: 'closed' | 'kept_open' | 'not_asked' }
+		| { ok: false; message: string; conflict: boolean }
+	> {
+		const request = this.pending_close_request;
+		const tab = this.pending_close_tab;
+		if (!request || !tab || tab.path !== path) return { ok: true, result: 'not_asked' };
+		if (choice === 'cancel') {
+			this.cancel_close_tab();
+			return { ok: true, result: 'kept_open' };
+		}
+		const tab_id = tab.id;
+		if (choice === 'keep') {
+			this.close_tab(tab_id);
+			return { ok: true, result: 'closed' };
+		}
+		// a draft outlives its editing state, so make one to discard or save it
+		const editor_state = this.app.diskfiles.get_editor_state_at(path);
+		if (!editor_state) return { ok: true, result: 'not_asked' };
+		if (choice === 'discard') {
+			editor_state.discard_draft();
+			this.close_tab(tab_id);
+			return { ok: true, result: 'closed' };
+		}
+		// the draft, even if the editor shows an older entry
+		const saved = await editor_state.save_draft();
+		// cancelled (or dismissed) while the save was in flight — the tab stays
+		if (request.cancelled) return { ok: true, result: 'kept_open' };
+		if (saved) {
+			this.close_tab(tab_id);
+			return { ok: true, result: 'closed' };
+		}
+		return {
+			ok: false,
+			conflict: editor_state.has_conflict,
+			message: editor_state.has_conflict
+				? 'changed on disk since you edited it — overwrite or keep the disk version in the editor first'
+				: (editor_state.save_error ?? 'not saved')
+		};
 	}
 
 	/** Cancels a pending tab close, marking its request `cancelled` — see `request_close_tab`. */

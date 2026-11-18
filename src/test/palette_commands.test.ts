@@ -4,7 +4,7 @@ import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
-import { DiskfilePath } from '#lib/diskfile_types.ts';
+import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
 import {
 	create_palette_commands,
 	filter_palette_commands,
@@ -15,6 +15,9 @@ import {
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import { write_diskfile } from './diskfile_tree_test_helpers.ts';
+
+const navigation = vi.hoisted(() => ({ goto: vi.fn((_url: string) => Promise.resolve()) }));
+vi.mock('$app/navigation', () => navigation);
 
 const MD = parse_or_throw(DiskfilePath, '/w/a/x.md');
 const TXT = parse_or_throw(DiskfilePath, '/w/b.txt');
@@ -70,7 +73,7 @@ describe('to_palette_recent_key', () => {
 
 describe('create_palette_commands', () => {
 	test('with no tab, only the commands that need none', () => {
-		const all = labels(create_palette_commands(app));
+		const all = labels(create_palette_commands(app)).filter((l) => !l.startsWith('go '));
 		assert.deepEqual(all, [
 			'show the files as a tree',
 			'hide the sidebar',
@@ -168,6 +171,37 @@ describe('create_palette_commands', () => {
 		app.intents.file_reveal({ path: MD });
 		const keys = create_palette_commands(app).map((c) => c.key);
 		assert.strictEqual(new Set(keys).size, keys.length);
+	});
+});
+
+describe('the page and project commands', () => {
+	test('every page but the one shown, each going there', () => {
+		const all = labels(create_palette_commands(app, '/files'));
+		assert.includeMembers(all, ['go home', 'go to chats', 'go to projects', 'go to settings']);
+		assert.notInclude(all, 'go to files', 'the page shown');
+		const command = create_palette_commands(app, '/files').find((c) => c.label === 'go to chats');
+		assert.ok(command);
+		command.run();
+		assert.deepEqual(app.recent_intents.entries.at(-1)?.input, { view: 'chats' });
+		assert.deepEqual(
+			navigation.goto.mock.calls.map((call) => call[0]),
+			['/chats']
+		);
+	});
+});
+
+describe('the project commands', () => {
+	test('the other open projects, by root where two share a name', () => {
+		const info = (root: string) => ({
+			root: parse_or_throw(DiskfileDirectoryPath, root),
+			name: 'zzz'
+		});
+		app.projects.add(info('/a/zzz/'));
+		app.projects.add(info('/b/zzz/'));
+		app.projects.add({ root: parse_or_throw(DiskfileDirectoryPath, '/c/other/'), name: 'other' });
+		const all = labels(create_palette_commands(app)).filter((l) => l.startsWith('switch'));
+		// the first added is active
+		assert.deepEqual(all, ['switch to the project /b/zzz/', 'switch to the project other']);
 	});
 });
 

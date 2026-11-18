@@ -35,7 +35,10 @@ import { encode_snapshot_files, seed_diskfile } from './diskfile_test_helpers.ts
 
 const navigation = vi.hoisted(() => ({ goto: vi.fn((_url: string) => Promise.resolve()) }));
 vi.mock('$app/navigation', () => navigation);
-vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/files') } }));
+vi.mock('$app/state', () => ({
+	page: { url: new URL('http://localhost/files') },
+	navigating: { complete: null as Promise<void> | null }
+}));
 
 const DEV = parse_or_throw(DiskfileDirectoryPath, '/dev/');
 const APP = parse_or_throw(DiskfileDirectoryPath, '/dev/app/');

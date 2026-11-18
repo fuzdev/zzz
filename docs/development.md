@@ -808,7 +808,9 @@ See ../crates/CLAUDE.md for the Rust handler patterns.
 A UI intent (./architecture.md § Intents) is a `local_call` spec:
 
 1. **Spec** in `src/lib/action_specs.ts`: `kind: 'local_call'`, `initiator:
-   'frontend'`, `auth: null`, `side_effects: true`, `async: false`, a
+   'frontend'`, `auth: null`, `side_effects: true`, `async` (`false`
+   unless it waits on the daemon or the disk — then the handler returns a
+   promise, and an expected failure is a thrown `ThrownJsonrpcError`), a
    lowercase `label` (what the UI calls it), `version: 1`, a `history`
    (`layout`, `navigation`, or `none`), input and output schemas, a
    `description`, `satisfies IntentActionSpec`; add it to
@@ -841,7 +843,10 @@ Create `src/routes/my_route/+page.svelte`:
 ```
 
 To list it in the main nav, add an entry to `main_nav_items_default` in
-`src/lib/nav.ts`.
+`src/lib/nav.ts`. Add its name to `ViewName` (`src/lib/action_specs.ts`),
+which `view_show` goes by (a test holds it to the routes), and to
+`PALETTE_VIEWS` (`src/lib/palette_commands.ts`) if the command palette
+should list it.
 
 ## Common Patterns
 

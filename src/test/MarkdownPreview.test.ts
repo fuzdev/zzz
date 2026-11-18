@@ -223,6 +223,10 @@ describe('MarkdownPreview in-zzz links', () => {
 		assert.isTrue(click_link(target, 'x'));
 		assert.strictEqual(app.diskfiles.selected_path, x.path);
 		assert.strictEqual(app.diskfiles.editor.tabs.preview_tab?.path, x.path);
+		assert.deepEqual(
+			app.recent_intents.entries.map((entry) => [entry.method, entry.input]),
+			[['tab_open', { path: x.path, permanent: false }]]
+		);
 	});
 
 	test('a middle click or Ctrl-click opens a kept tab, never a browser tab', async () => {

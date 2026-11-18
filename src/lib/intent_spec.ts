@@ -24,9 +24,13 @@ export type IntentHistory = 'layout' | 'navigation' | 'none';
  * `history`. Specs declare `satisfies IntentActionSpec`; the base type's
  * excess-property check would refuse the extra fields.
  *
- * Intents are sync: the handler applies the change before the call returns.
- * An expected no-op (the tab is already gone) is reported in the output; a
- * throw is a bug.
+ * Most intents are sync: the handler applies the change before the call
+ * returns, an expected no-op (the tab is already gone) is reported in the
+ * output, and a throw is a bug. An intent that waits on the daemon or the
+ * disk (`path_open`, `tab_close_resolve`) is `async`: it applies what it can
+ * before its first `await`, returns a `Result`, and is recorded when it
+ * settles — an expected failure (the daemon refused the path, the save
+ * failed) is the `Result`'s error, recorded `failed` with its message.
  */
 export interface IntentActionSpec extends LocalCallActionSpec {
 	/**
@@ -37,7 +41,6 @@ export interface IntentActionSpec extends LocalCallActionSpec {
 	readonly label: string;
 	readonly version: number;
 	readonly history: IntentHistory;
-	readonly async: false;
 }
 
 /** The typed intents surface, `app.intents`. */
@@ -50,7 +53,9 @@ export type FrontendRpcApi = Omit<FrontendActionsApi, LocalCallActionMethod>;
  * Wraps the intents client so every call runs untracked: an intent is a
  * user's action, never a derivation, so neither its handler's reads nor the
  * recent-intents record may become dependencies of an `$effect` that calls
- * it (`main_menu_toggle()` reads the flag it flips, and would loop one).
+ * it (`main_menu_toggle()` reads the flag it flips, and would loop one). An
+ * async intent's part after its first `await` runs outside any reaction
+ * anyway; the nesting warning covers only its sync part.
  *
  * Also warns in development when an intent is called while another runs:
  * a handler changes state through cell methods, never `app.intents`, or one

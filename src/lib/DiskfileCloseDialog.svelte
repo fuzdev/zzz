@@ -32,46 +32,33 @@
 	// set when a choice handles focus itself, so the lapse handling below stays out
 	let handled = false;
 
+	// each answer is the `tab_close_resolve` intent; the dialog keeps only the focus and the failure
 	const save = async (): Promise<void> => {
-		if (!tab || !editor_state || !request) return;
-		const tab_id = tab.id;
-		// held across the save, which lapses the pending request once the draft is saved
-		const this_request = request;
+		if (!tab || !request) return;
+		const { id: tab_id, path } = tab;
 		failure = null;
 		handled = true;
-		// the draft, even if the editor shows an older entry
-		const saved = await editor_state.save_draft();
-		// cancelled (or dismissed) while the save was in flight — the tab stays
-		if (this_request.cancelled) return;
-		if (saved) {
-			editor.close_tab(tab_id);
-			focus_selected_editor();
+		const result = await app.intents.tab_close_resolve({ path, choice: 'save' });
+		if (!result.ok) {
+			handled = false;
+			failure = { tab_id, message: result.error.message };
 			return;
 		}
-		handled = false;
-		failure = {
-			tab_id,
-			message: editor_state.has_conflict
-				? 'changed on disk since you edited it — overwrite or keep the disk version in the editor first'
-				: (editor_state.save_error ?? 'not saved')
-		};
+		if (result.value.result === 'closed') focus_selected_editor();
 	};
 
 	const dont_save = (): void => {
-		if (!tab || !editor_state) return;
-		const tab_id = tab.id;
+		if (!tab) return;
 		handled = true;
-		editor_state.discard_draft();
-		editor.close_tab(tab_id);
+		void app.intents.tab_close_resolve({ path: tab.path, choice: 'discard' });
 		focus_selected_editor();
 	};
 
 	// a dormant file can't be saved — closing keeps its draft for when its project is open again
 	const keep_draft = (): void => {
 		if (!tab) return;
-		const tab_id = tab.id;
 		handled = true;
-		editor.close_tab(tab_id);
+		void app.intents.tab_close_resolve({ path: tab.path, choice: 'keep' });
 		focus_selected_editor();
 	};
 
@@ -79,7 +66,7 @@
 	const cancel = (): void => {
 		failure = null;
 		handled = true;
-		editor.cancel_close_tab();
+		if (tab) void app.intents.tab_close_resolve({ path: tab.path, choice: 'cancel' });
 	};
 
 	// the question lapsed (its draft went away elsewhere) with the tab still

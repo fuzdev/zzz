@@ -83,7 +83,7 @@
 								title={project.id === app.projects.active_id
 									? `${project.root} is the active project`
 									: `make ${project.root} the active project`}
-								onclick={() => app.projects.activate(project.id)}
+								onclick={() => app.intents.project_activate({ root: project.root })}
 							>
 								<span class="flex:1 text-align:left">
 									<span class="block">{project.name}</span>

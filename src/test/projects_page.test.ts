@@ -16,7 +16,10 @@ import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
 /** The projects page's per-entry focus and unfocus buttons for a registry project. */
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn(() => Promise.resolve()) }));
-vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/projects') } }));
+vi.mock('$app/state', () => ({
+	page: { url: new URL('http://localhost/projects') },
+	navigating: { complete: null as Promise<void> | null }
+}));
 // the footer reads the site context, which isn't the page's concern here
 vi.mock('#routes/PageFooter.svelte', () => ({ default: () => undefined }));
 
@@ -105,7 +108,8 @@ const entry_button = (dir: string): HTMLButtonElement => {
 };
 
 const tick = async (): Promise<void> => {
-	for (let i = 0; i < 10; i++) await Promise.resolve();
+	// an open settles a few turns after its reply: the intent, then the navigation check
+	for (let i = 0; i < 20; i++) await Promise.resolve();
 	flushSync();
 };
 
@@ -304,6 +308,49 @@ describe('a project opened past a registry on the projects page', () => {
 		assert.include(
 			to_visible_text(target),
 			'Opened /dev/loose/src, rooted at /dev/loose/ — a git checkout; /dev/repos.toml lists no cloned repo holding it.'
+		);
+		const entry = app.recent_intents.entries.at(-1);
+		assert.ok(entry);
+		assert.strictEqual(entry.method, 'path_open');
+		assert.strictEqual(entry.outcome, 'applied', 'recorded once it settled');
+		assert.strictEqual(app.projects.active?.root, LOOSE);
+	});
+
+	test("a refused open shows the daemon's message, recorded as failed", async () => {
+		const input = target.querySelector('input');
+		assert.ok(input);
+		input.value = '/dev/nope';
+		input.dispatchEvent(new Event('input'));
+		flushSync();
+		target.querySelector('form')!.requestSubmit();
+		await tick();
+		calls[0]!.resolve({
+			ok: false,
+			error: { code: JSONRPC_ERROR_CODES.invalid_params, message: 'path not allowed' }
+		});
+		await tick();
+		assert.include(to_visible_text(target), 'path not allowed');
+		const entry = app.recent_intents.entries.at(-1);
+		assert.ok(entry);
+		assert.strictEqual(entry.method, 'path_open');
+		assert.strictEqual(entry.outcome, 'failed');
+		assert.strictEqual(entry.error, 'path not allowed');
+	});
+
+	test('a click makes a project the active one, by its root', () => {
+		app.projects.add(fallback_info({ kind: 'unregistered', registry_path: REGISTRY }));
+		flushSync();
+		const button = Array.from(
+			target.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+		).find((b) => b.textContent.includes('loose'));
+		assert.ok(button);
+		button.click();
+		flushSync();
+		assert.strictEqual(app.projects.active?.root, LOOSE);
+		assert.strictEqual(button.getAttribute('aria-pressed'), 'true');
+		assert.deepEqual(
+			app.recent_intents.entries.map((e) => [e.method, e.input]),
+			[['project_activate', { root: LOOSE }]]
 		);
 	});
 });

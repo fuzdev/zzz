@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
 	import { swallow } from '@fuzdev/fuz_util/dom.ts';
@@ -37,7 +38,9 @@
 	let query = $state('');
 	let active_index = $state(0);
 
-	const commands = $derived(app.ui.show_palette ? create_palette_commands(app) : []);
+	const commands = $derived(
+		app.ui.show_palette ? create_palette_commands(app, page.url.pathname) : []
+	);
 	const recency = $derived(to_palette_recency(app.recent_intents.entries));
 	const matches = $derived(filter_palette_commands(commands, query, recency));
 	// the matches can shrink under the active index (a command's state changed) — keep it on one

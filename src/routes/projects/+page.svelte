@@ -32,36 +32,19 @@
 	};
 
 	/**
-	 * Open what `path` names, as the form and the `?open=` param both do: the
-	 * project holding it, activated — by the project the daemon returns,
-	 * whose root may be far above `path` — saying where it landed and why;
-	 * then a file the open indexed in a tab on `/files`. A directory, or a
-	 * file the index skips (an ignored one), leaves the projects page showing
-	 * where it landed.
+	 * Open what `path` names, as the form and the `?open=` param both do (the
+	 * `path_open` intent), saying where it landed and why.
 	 *
-	 * @param before_file - settled before going on to `/files` (the param's
-	 * strip of itself from the URL)
 	 * @returns an error message, or `null` on success
 	 */
-	const open_path = async (
-		path: DiskfilePath,
-		before_file?: Promise<unknown>
-	): Promise<string | null> => {
+	const open_path = async (path: DiskfilePath): Promise<string | null> => {
 		opened_message = null;
-		// always opened, even under an open root: the path may focus another repo
-		const result = await app.projects.open(path);
+		const result = await app.intents.path_open({ path });
 		if (!result.ok) return result.error.message;
-		if (result.value.project) {
-			opened_message = format_project_opened(path, result.value.project);
-		}
+		const { root } = result.value;
 		// `null` when it's closed already — a close this client applied after the open landed
-		if (result.value.project) app.projects.activate(result.value.project.id);
-		await before_file?.catch(() => undefined);
-		// left the page while it opened: stay where the user went
-		if (page.url.pathname !== resolve('/projects')) return null;
-		if (app.diskfiles.open_path(path, { open_not_preview: true })) {
-			void goto(resolve('/files'));
-		}
+		const project = root ? app.projects.get_by_root(root) : undefined;
+		if (project) opened_message = format_project_opened(path, project);
 		return null;
 	};
 
@@ -91,16 +74,16 @@
 
 	const handle_open_param = async (param: string): Promise<void> => {
 		// strip first so a reload never re-opens a project the user has since
-		// closed; awaited before going on to `/files`, so the strip can't be
-		// overtaken and leave the param in history under it
-		const stripped = goto(resolve('/projects'), { replace: true, reset: false });
+		// closed; the open waits out the strip before going on to `/files`
+		// (`Projects.open_path`), so it can't leave the param in history under it
+		void goto(resolve('/projects'), { replace: true, reset: false });
 
 		const parsed = parse_project_path(param, app.home_dir);
 		if (!parsed.ok) {
 			error_message = `can't open from URL: ${parsed.message}`;
 			return;
 		}
-		const error = await open_path(parsed.path, stripped);
+		const error = await open_path(parsed.path);
 		if (error !== null) error_message = error;
 	};
 
@@ -205,7 +188,7 @@
 								class="flex:1 text-align:left gap_sm"
 								class:selected={project.id === app.projects.active_id}
 								aria-pressed={project.id === app.projects.active_id}
-								onclick={() => app.projects.activate(project.id)}
+								onclick={() => app.intents.project_activate({ root: project.root })}
 							>
 								<Icon data={icon_project} />
 								<span class="flex:1">

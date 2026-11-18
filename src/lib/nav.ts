@@ -23,6 +23,7 @@ import {
 import { logo_zzz } from './logos.ts';
 import { icon_microphone } from './media_icons.ts';
 import type { Frontend } from './frontend.svelte.ts';
+import type { ViewName } from './action_specs.ts';
 
 export interface NavLinkItem {
 	label: string;
@@ -96,6 +97,20 @@ export const to_chats_url = (chat_id: Uuid | null): string =>
 
 export const to_prompts_url = (prompt_id: Uuid | null): string =>
 	prompt_id ? resolve('/prompts/[prompt_id]', { prompt_id }) : resolve('/prompts');
+
+/** The URL of a page `view_show` goes to — a chat or prompt by `id`, ignored for other pages. */
+export const to_view_url = (view: ViewName, id?: Uuid): string => {
+	switch (view) {
+		case 'home':
+			return resolve('/');
+		case 'chats':
+			return to_chats_url(id ?? null);
+		case 'prompts':
+			return to_prompts_url(id ?? null);
+		default:
+			return resolve(`/${view}`);
+	}
+};
 
 /**
  * Navigate to a path only if we're not already on that path.

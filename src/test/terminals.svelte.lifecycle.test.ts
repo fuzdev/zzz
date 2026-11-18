@@ -19,7 +19,10 @@ import {
 // `open_shell` shows the terminals page from the files page
 const navigation = vi.hoisted(() => ({ goto: vi.fn((_url: string) => Promise.resolve()) }));
 vi.mock('$app/navigation', () => navigation);
-vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/files') } }));
+vi.mock('$app/state', () => ({
+	page: { url: new URL('http://localhost/files') },
+	navigating: { complete: null as Promise<void> | null }
+}));
 
 let app: Frontend;
 let calls: Array<StubbedTerminalCall>;

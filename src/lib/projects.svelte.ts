@@ -7,6 +7,8 @@ import {
 	type InferInput
 } from '@fuzdev/fuz_schema/schema.ts';
 import { SvelteSet } from 'svelte/reactivity';
+import { navigating, page } from '$app/state';
+import { resolve } from '$app/paths';
 import { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
@@ -27,6 +29,7 @@ import type { DiskfileDirectoryPath, DiskfilePath } from './diskfile_types.ts';
 import { decode_snapshot_files, type FileIndexIgnoreRule } from './diskfile_helpers.ts';
 import type { ProjectFocusRefusal } from './action_specs.ts';
 import { ERROR_PROJECT_NOT_OPEN, ERROR_REPO_NOT_FOCUSED } from './project_helpers.ts';
+import { goto_unless_current } from './nav.ts';
 
 export const ProjectsJson = cell_json_schema(
 	{
@@ -723,6 +726,66 @@ export class Projects extends Cell<typeof ProjectsJson> {
 		if (!project) return;
 		this.#closed.set(root, Math.max(this.#closed.get(root) ?? -1, project.rev));
 		this.#remove_closed(project);
+	}
+
+	/**
+	 * Opens what `path` names — the project holding it, made the active one
+	 * (the project the daemon returns, whose root may be far above `path`) —
+	 * then a file the open indexed in a tab, showing the files page. A
+	 * directory, or a file the index skips (an ignored one), opens no tab and
+	 * stays on the page. A page left while the open was in flight stays left:
+	 * no tab opens and nothing navigates — judged once any navigation still
+	 * under way when the open lands has settled (the projects page's strip of
+	 * its `?open=` param, or a click elsewhere during it), so the strip is
+	 * never overtaken. The `path_open` intent's implementation.
+	 *
+	 * @returns the root the open landed in (`null` when the project was closed
+	 * here meanwhile) and whether a file opened, or the RPC error
+	 */
+	async open_path(
+		path: DiskfilePath
+	): Promise<
+		Result<
+			{ value: { root: DiskfileDirectoryPath | null; file: boolean } },
+			{ error: JsonrpcErrorObject }
+		>
+	> {
+		const from = page.url.pathname;
+		// always opened, even under an open root: the path may focus another repo
+		const result = await this.open(path);
+		if (!result.ok) return result;
+		const { project } = result.value;
+		// `null` when it's closed already — a close this client applied after the open landed
+		if (project) this.activate(project.id);
+		const root = project?.root ?? null;
+		// every navigation under way, one after another, each waited on once: an aborted one (the
+		// strip, overtaken by a click) rejects before the one overtaking it commits. `goto` sets
+		// `navigating` a few microtasks in, so one issued in the reply's own tick isn't seen — no
+		// caller does that
+		let waited: Promise<void> | null = null;
+		while (navigating.complete && navigating.complete !== waited) {
+			waited = navigating.complete;
+			await waited.catch(() => undefined);
+		}
+		if (page.url.pathname !== from) return { ok: true, value: { root, file: false } };
+		if (!this.app.diskfiles.open_path(path, { open_not_preview: true })) {
+			return { ok: true, value: { root, file: false } };
+		}
+		void goto_unless_current(resolve('/files'));
+		return { ok: true, value: { root, file: true } };
+	}
+
+	/**
+	 * Makes the open project at `root` the active one. The `project_activate`
+	 * intent's implementation.
+	 *
+	 * @returns whether a project with that root is open here
+	 */
+	activate_root(root: DiskfileDirectoryPath): boolean {
+		const project = this.get_by_root(root);
+		if (!project) return false;
+		this.activate(project.id);
+		return true;
 	}
 
 	activate(id: Uuid): void {

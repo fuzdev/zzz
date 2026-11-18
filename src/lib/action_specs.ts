@@ -390,6 +390,79 @@ export type FileRevealInput = Infer<typeof FileRevealInput>;
 export const FileRevealOutput = object({ revealed: boolean });
 export type FileRevealOutput = Infer<typeof FileRevealOutput>;
 
+/** Input for `path_open`: the path to open, a file or a directory. */
+export const PathOpenInput = object({ path: DiskfilePath });
+export type PathOpenInput = Infer<typeof PathOpenInput>;
+
+/**
+ * Output for `path_open`: the root of the project the open landed in —
+ * `null` when it was closed here meanwhile — and whether a file opened in a
+ * tab, shown on the files page.
+ */
+export const PathOpenOutput = object({ root: nullable(DiskfileDirectoryPath), file: boolean });
+export type PathOpenOutput = Infer<typeof PathOpenOutput>;
+
+/** Input for `project_activate`: the open project's root. */
+export const ProjectActivateInput = object({ root: DiskfileDirectoryPath });
+export type ProjectActivateInput = Infer<typeof ProjectActivateInput>;
+
+/** Output for `project_activate`: whether a project with that root is open here. */
+export const ProjectActivateOutput = object({ found: boolean });
+export type ProjectActivateOutput = Infer<typeof ProjectActivateOutput>;
+
+/** The app's pages `view_show` goes to, by route — `home` is `/`. */
+export const ViewName = one_of([
+	'home',
+	'about',
+	'actions',
+	'bots',
+	'capabilities',
+	'chats',
+	'docs',
+	'feeds',
+	'files',
+	'jobs',
+	'models',
+	'projects',
+	'prompts',
+	'providers',
+	'recordings',
+	'repos',
+	'settings',
+	'tabs',
+	'terminals',
+	'views'
+]);
+export type ViewName = Infer<typeof ViewName>;
+
+/** Input for `view_show`: the page, and for `chats` or `prompts` the one to show (else ignored). */
+export const ViewShowInput = object({ view: ViewName, id: optional(Uuid) });
+export type ViewShowInput = Infer<typeof ViewShowInput>;
+
+/**
+ * The close dialog's answers: `save` the draft then close, `discard` it and
+ * close, `keep` it and close (a file whose project isn't open, so it can't be
+ * saved), or `cancel` — keep the tab open.
+ */
+export const TabCloseChoice = one_of(['save', 'discard', 'keep', 'cancel']);
+export type TabCloseChoice = Infer<typeof TabCloseChoice>;
+
+/** Input for `tab_close_resolve`: the asked-about tab, by its file's path, and the answer. */
+export const TabCloseResolveInput = object({ path: DiskfilePath, choice: TabCloseChoice });
+export type TabCloseResolveInput = Infer<typeof TabCloseResolveInput>;
+
+/**
+ * Output for `tab_close_resolve`: `closed`, `kept_open` (cancelled, or the
+ * question was cancelled while a save was in flight), or `not_asked` — no
+ * close is waiting on that tab. A failed save is the call's error:
+ * `conflict` (data `{reason: 'disk_changed'}`) when the file changed on
+ * disk, else `internal_error`.
+ */
+export const TabCloseResolveOutput = object({
+	result: one_of(['closed', 'kept_open', 'not_asked'])
+});
+export type TabCloseResolveOutput = Infer<typeof TabCloseResolveOutput>;
+
 /** Input for `desk_pin_toggle`. Optional — omit it to toggle, pass `{pinned}` to set. */
 export const DeskPinToggleInput = optional(object({ pinned: optional(boolean) }));
 export type DeskPinToggleInput = Infer<typeof DeskPinToggleInput>;
@@ -1156,6 +1229,69 @@ export const markdown_mode_set_action_spec = {
 		"Choose a markdown file's view: its source beside a preview, the preview alone, or the source alone."
 } satisfies IntentActionSpec;
 
+export const path_open_action_spec = {
+	method: 'path_open',
+	kind: 'local_call',
+	label: 'open a path',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: PathOpenInput,
+	output: PathOpenOutput,
+	async: true,
+	version: 1,
+	history: 'none',
+	description:
+		'Open the project holding a path and make it the active one, then a file the open indexed in a tab on the files page.'
+} satisfies IntentActionSpec;
+
+export const project_activate_action_spec = {
+	method: 'project_activate',
+	kind: 'local_call',
+	label: 'switch to the project',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: ProjectActivateInput,
+	output: ProjectActivateOutput,
+	async: false,
+	version: 1,
+	history: 'navigation',
+	description: 'Make an open project, by its root, the active one.'
+} satisfies IntentActionSpec;
+
+export const view_show_action_spec = {
+	method: 'view_show',
+	kind: 'local_call',
+	label: 'show a page',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: ViewShowInput,
+	output: fuz_void,
+	async: false,
+	version: 1,
+	history: 'navigation',
+	description:
+		"Go to one of the app's pages — a chat or prompt by its id — unless it's the one shown."
+} satisfies IntentActionSpec;
+
+export const tab_close_resolve_action_spec = {
+	method: 'tab_close_resolve',
+	kind: 'local_call',
+	label: 'answer the close dialog',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: TabCloseResolveInput,
+	output: TabCloseResolveOutput,
+	async: true,
+	version: 1,
+	history: 'none',
+	description:
+		"Answer the close dialog of a file's tab: save the draft and close, close without saving, close keeping the draft (a file whose project isn't open), or keep the tab."
+} satisfies IntentActionSpec;
+
 export const provider_load_status_action_spec = {
 	method: 'provider_load_status',
 	kind: 'request_response',
@@ -1382,7 +1518,11 @@ export const all_intent_specs: Array<IntentActionSpec> = [
 	tab_forward_action_spec,
 	explorer_mode_set_action_spec,
 	file_reveal_action_spec,
-	markdown_mode_set_action_spec
+	markdown_mode_set_action_spec,
+	tab_close_resolve_action_spec,
+	path_open_action_spec,
+	project_activate_action_spec,
+	view_show_action_spec
 ];
 
 /**

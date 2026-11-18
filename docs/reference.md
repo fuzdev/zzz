@@ -43,7 +43,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `transcription_create` — Queue a transcription of an audio file by the local speech model, and return its job. The transcript is written beside the file as `<name>.<model>.transcript.json`; fails with `conflict` (`already_exists`) if that model's transcript is already there. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `transcription_progress` — Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds. Kind: remote_notification. Initiator: backend. Auth: public
 
-## Intents (17)
+## Intents (21)
 
 UI intents — `local_call` specs called through `app.intents`, run in the
 page, never sent over the wire. History: what a later undo makes of them.
@@ -56,15 +56,19 @@ page, never sent over the wire. History: what a later undo makes of them.
 - `main_menu_toggle` (toggle the main menu) — Toggle or set the visibility of the main menu. Version: 1. History: layout
 - `markdown_mode_set` (choose the markdown view) — Choose a markdown file's view: its source beside a preview, the preview alone, or the source alone. Version: 1. History: layout
 - `palette_toggle` (toggle the command palette) — Toggle or set the visibility of the command palette. Version: 1. History: none
+- `path_open` (open a path) — Open the project holding a path and make it the active one, then a file the open indexed in a tab on the files page. Version: 1. History: none
+- `project_activate` (switch to the project) — Make an open project, by its root, the active one. Version: 1. History: navigation
 - `sidebar_toggle` (toggle the sidebar) — Toggle or set the visibility of the sidebar. Version: 1. History: layout
 - `tab_back` (go back) — Go back to the file the selection last left: select its tab, or preview it if its tab closed. Version: 1. History: navigation
 - `tab_close` (close the tab) — Close a file's tab — or, for a file with a draft, ask first: save, don't save, or cancel. Version: 1. History: layout
+- `tab_close_resolve` (answer the close dialog) — Answer the close dialog of a file's tab: save the draft and close, close without saving, close keeping the draft (a file whose project isn't open), or keep the tab. Version: 1. History: none
 - `tab_forward` (go forward) — Go forward again after going back. Version: 1. History: navigation
 - `tab_move` (move a tab) — Move a tab in front of another, or to the end. Version: 1. History: layout
 - `tab_open` (open a file in a tab) — Open a file in a tab and select it: a preview tab, which the next preview replaces, unless `permanent`. A file already in a tab selects that tab. Version: 1. History: layout
 - `tab_pin` (keep the preview tab open) — Make a file's preview tab permanent, and select it. Version: 1. History: layout
 - `tab_reopen_closed` (reopen the closed tab) — Reopen the most recently closed tab whose file is not open. Version: 1. History: layout
 - `tab_select` (select a tab) — Select a file's tab. Version: 1. History: navigation
+- `view_show` (show a page) — Go to one of the app's pages — a chat or prompt by its id — unless it's the one shown. Version: 1. History: navigation
 
 ## Cell classes (34)
 

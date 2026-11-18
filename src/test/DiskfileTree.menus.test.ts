@@ -32,7 +32,10 @@ import {
 const navigation = vi.hoisted(() => ({ goto: vi.fn((_url: string) => Promise.resolve()) }));
 vi.mock('$app/navigation', () => navigation);
 // `goto_unless_current` reads the page's path: the files page
-vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/files') } }));
+vi.mock('$app/state', () => ({
+	page: { url: new URL('http://localhost/files') },
+	navigating: { complete: null as Promise<void> | null }
+}));
 
 let app: Frontend;
 let copied: Array<string>;

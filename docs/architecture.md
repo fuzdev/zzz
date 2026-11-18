@@ -231,8 +231,9 @@ meaning changes; and `history` —
   tests call `app.intents.*` (typed
   `FrontendIntentsApi`). `app.api` is the RPC surface and resolves no
   intent; `app.intents` resolves nothing else.
-- **Sync.** The handler applies the change before the call returns. An
-  expected no-op is reported in the output; a call throws only on a bug —
+- **Sync, mostly.** The handler applies the change before the call
+  returns. An expected no-op is reported in the output; a call throws only
+  on a bug —
   input or output that fails its schema, or a handler that throws (an
   output failure comes after the handler's change applied). The call runs
   untracked, so an `$effect` that calls an intent doesn't depend on what
@@ -240,6 +241,15 @@ meaning changes; and `history` —
   expression, which the untrack would let through. A handler changes
   state through cell methods, never `app.intents` — a nested call would
   record one gesture twice (development builds warn).
+- **Async where it waits.** An intent that waits on the daemon or the
+  disk — `path_open`, and `tab_close_resolve`'s save — is `async`: it
+  applies what it can before its first `await` (the close dialog's
+  discard closes the tab at once), returns a `Result`, and is recorded
+  when it settles; an expected failure (the daemon refused the path, the
+  save failed) is the `Result`'s error, recorded `failed` with its
+  message. A bug in an async handler is the `Result`'s error too
+  (`internal_error`), never a throw — a caller that `void`s the call sees
+  it only in the recent intents.
 - **Recorded apart from the wire log.** Each call lands in
   `app.recent_intents` (`RecentIntents`, the newest 200), never in
   `app.actions`: `{seq, method, version, history, input, at, outcome,
@@ -257,20 +267,21 @@ Ctrl+K or Ctrl+Space opens the command palette (`CommandPalette`, the
 taking keys, which keep both chords (a shell's kill-line and NUL), and not
 over another modal dialog; inside it, either chord, Escape, or a click
 outside closes it. While a modal dialog is open, Escape is the dialog's,
-never the desk menu's behind it. It lists the commands the app's state can fill
-the input of (`create_palette_commands`): the selected tab's close, pin,
-reveal, and markdown modes, back / forward and reopen when there's
-somewhere to go, the explorer's other mode, the panels, and "collapse all
-folders", a tree command that isn't an intent (expanded folders are view
-state). A command that would do nothing is left out. Typing filters by the
-label — a match at its start first, then at a word's start, then inside a
-word — and the recently used lead (`recent_intents`). Focus stays in the
-input, which names the active command by `aria-activedescendant`; Up and
-Down move it, Enter or a click runs it, after closing the palette, so the
-command acts on the page as it was and lands in the recent intents after
-the close. Opening any file waits for the `path_open` intent. `Picker`'s
-filter input names its active item the same way (`SortableList`'s
-`listbox`).
+never the desk menu's behind it. It lists the commands the app's state
+can fill the input of (`create_palette_commands`): the selected tab's
+close, pin, reveal, and markdown modes, back / forward and reopen when
+there's somewhere to go, the explorer's other mode, the panels, "collapse
+all folders" (a tree command that isn't an intent — expanded folders are
+view state), the other open projects (`project_activate`), and the pages
+but the one shown (`view_show`). A command that would do nothing is left
+out. Typing filters by the label — a match at its start first, then at a
+word's start, then inside a word — and the recently used lead
+(`recent_intents`). Focus stays in the input, which names the active
+command by `aria-activedescendant`; Up and Down move it, Enter or a click
+runs it, after closing the palette, so the command acts on the page as it
+was and lands in the recent intents after the close. A "go to file" mode,
+over the index into `path_open`, is still to come. `Picker`'s filter
+input names its active item the same way (`SortableList`'s `listbox`).
 
 ## Cell System
 

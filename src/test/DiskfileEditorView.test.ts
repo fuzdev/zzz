@@ -1144,6 +1144,14 @@ describe('DiskfileCloseDialog', () => {
 	test("don't save discards the draft into the history and closes the tab", async () => {
 		const { a, tab, editor_state, view } = await setup_pending();
 		click_button(view.target, "don't save");
+		// closed at once; the async intent is recorded when it settles
+		await Promise.resolve();
+		await Promise.resolve();
+		assert.deepEqual(
+			app.recent_intents.entries.at(-1)?.input,
+			{ path: a.path, choice: 'discard' },
+			'through the intent'
+		);
 
 		assert.strictEqual(a.content, 'v1');
 		assert.isFalse(editor_state.has_unsaved_edits);
@@ -1169,6 +1177,9 @@ describe('DiskfileCloseDialog', () => {
 			) ?? null
 		);
 		click_button(view.target, 'keep draft');
+		await Promise.resolve();
+		await Promise.resolve();
+		assert.deepEqual(app.recent_intents.entries.at(-1)?.input, { path: a.path, choice: 'keep' });
 
 		assert.isFalse(app.diskfiles.editor.tabs.items.by_id.has(tab.id));
 		assert.strictEqual(app.diskfiles.drafts.get(a.path)?.text, 'draft');

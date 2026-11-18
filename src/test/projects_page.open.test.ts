@@ -16,7 +16,10 @@ import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn(() => Promise.resolve()) }));
-vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/projects') } }));
+vi.mock('$app/state', () => ({
+	page: { url: new URL('http://localhost/projects') },
+	navigating: { complete: null as Promise<void> | null }
+}));
 vi.mock('#routes/PageFooter.svelte', () => ({ default: () => undefined }));
 
 const HOME = parse_or_throw(DiskfileDirectoryPath, '/home/me/');
@@ -38,7 +41,8 @@ const mount_at = (search: string): void => {
 };
 
 const tick = async (): Promise<void> => {
-	for (let i = 0; i < 10; i++) await Promise.resolve();
+	// an open settles a few turns after its reply: the intent, then the navigation check
+	for (let i = 0; i < 20; i++) await Promise.resolve();
 	flushSync();
 };
 

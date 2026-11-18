@@ -322,17 +322,21 @@
 
 		if (target.kind !== 'path' || !index || !app) return;
 		// the in-zzz twin of a new browser tab is a kept tab rather than the preview tab
-		const options = {
-			fragment: target.fragment,
-			open_not_preview: aux || event.ctrlKey || event.metaKey
-		};
+		const permanent = aux || event.ctrlKey || event.metaKey;
 		const status = to_markdown_link_status(target, index);
-		if (status === 'file') {
-			app.diskfiles.open_path(target.path, options);
-		} else if (status === 'directory') {
-			const readme_path = to_directory_readme_path(target.path, index);
-			if (readme_path) app.diskfiles.open_path(readme_path, options);
-		}
+		const path =
+			status === 'file'
+				? target.path
+				: status === 'directory'
+					? to_directory_readme_path(target.path, index)
+					: null;
+		// on disk in the index — never a file kept off it for a draft or a tab
+		if (!path || !app.diskfiles.index.has(path)) return;
+		app.intents.tab_open({
+			path,
+			permanent,
+			...(target.fragment ? { fragment: target.fragment } : null)
+		});
 	};
 
 	// the `pointerType` of the last `pointerdown`, for a click some browsers send as a plain

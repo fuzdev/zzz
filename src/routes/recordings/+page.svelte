@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import ConfirmButton from '@fuzdev/fuz_app/ui/ConfirmButton.svelte';
 	import PendingButton from '@fuzdev/fuz_ui/PendingButton.svelte';
 	import { icon_delete, icon_pause, icon_stop } from '@fuzdev/fuz_ui/icons.ts';
@@ -71,7 +69,7 @@
 
 	const open = (path: DiskfilePath): void => {
 		app.intents.tab_open({ path, permanent: true });
-		void goto(resolve('/files'));
+		app.intents.view_show({ view: 'files' });
 	};
 
 	let error_message: string | null = $state.raw(null);

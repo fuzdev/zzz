@@ -49,6 +49,10 @@ export const ActionSpecs: ActionSpecs = {
 	explorer_mode_set: specs.explorer_mode_set_action_spec,
 	file_reveal: specs.file_reveal_action_spec,
 	markdown_mode_set: specs.markdown_mode_set_action_spec,
+	tab_close_resolve: specs.tab_close_resolve_action_spec,
+	path_open: specs.path_open_action_spec,
+	project_activate: specs.project_activate_action_spec,
+	view_show: specs.view_show_action_spec,
 	provider_load_status: specs.provider_load_status_action_spec,
 	terminal_create: specs.terminal_create_action_spec,
 	terminal_data_send: specs.terminal_data_send_action_spec,
@@ -102,6 +106,10 @@ export type ActionSpecs = {
 	readonly explorer_mode_set: typeof specs.explorer_mode_set_action_spec;
 	readonly file_reveal: typeof specs.file_reveal_action_spec;
 	readonly markdown_mode_set: typeof specs.markdown_mode_set_action_spec;
+	readonly tab_close_resolve: typeof specs.tab_close_resolve_action_spec;
+	readonly path_open: typeof specs.path_open_action_spec;
+	readonly project_activate: typeof specs.project_activate_action_spec;
+	readonly view_show: typeof specs.view_show_action_spec;
 	readonly provider_load_status: typeof specs.provider_load_status_action_spec;
 	readonly terminal_create: typeof specs.terminal_create_action_spec;
 	readonly terminal_data_send: typeof specs.terminal_data_send_action_spec;
@@ -162,6 +170,10 @@ export interface ActionInputs {
 	explorer_mode_set: Infer<typeof specs.explorer_mode_set_action_spec.input>;
 	file_reveal: Infer<typeof specs.file_reveal_action_spec.input>;
 	markdown_mode_set: Infer<typeof specs.markdown_mode_set_action_spec.input>;
+	tab_close_resolve: Infer<typeof specs.tab_close_resolve_action_spec.input>;
+	path_open: Infer<typeof specs.path_open_action_spec.input>;
+	project_activate: Infer<typeof specs.project_activate_action_spec.input>;
+	view_show: Infer<typeof specs.view_show_action_spec.input>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.input>;
@@ -220,6 +232,10 @@ export interface ActionCallInputs {
 	explorer_mode_set: InferInput<typeof specs.explorer_mode_set_action_spec.input>;
 	file_reveal: InferInput<typeof specs.file_reveal_action_spec.input>;
 	markdown_mode_set: InferInput<typeof specs.markdown_mode_set_action_spec.input>;
+	tab_close_resolve: InferInput<typeof specs.tab_close_resolve_action_spec.input>;
+	path_open: InferInput<typeof specs.path_open_action_spec.input>;
+	project_activate: InferInput<typeof specs.project_activate_action_spec.input>;
+	view_show: InferInput<typeof specs.view_show_action_spec.input>;
 	provider_load_status: InferInput<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: InferInput<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: InferInput<typeof specs.terminal_data_send_action_spec.input>;
@@ -278,6 +294,10 @@ export interface ActionOutputs {
 	explorer_mode_set: Infer<typeof specs.explorer_mode_set_action_spec.output>;
 	file_reveal: Infer<typeof specs.file_reveal_action_spec.output>;
 	markdown_mode_set: Infer<typeof specs.markdown_mode_set_action_spec.output>;
+	tab_close_resolve: Infer<typeof specs.tab_close_resolve_action_spec.output>;
+	path_open: Infer<typeof specs.path_open_action_spec.output>;
+	project_activate: Infer<typeof specs.project_activate_action_spec.output>;
+	view_show: Infer<typeof specs.view_show_action_spec.output>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.output>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.output>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.output>;
@@ -454,6 +474,26 @@ export interface ActionEventDatas {
 		'markdown_mode_set',
 		ActionInputs['markdown_mode_set'],
 		ActionOutputs['markdown_mode_set']
+	>;
+	tab_close_resolve: ActionEventLocalCallData<
+		'tab_close_resolve',
+		ActionInputs['tab_close_resolve'],
+		ActionOutputs['tab_close_resolve']
+	>;
+	path_open: ActionEventLocalCallData<
+		'path_open',
+		ActionInputs['path_open'],
+		ActionOutputs['path_open']
+	>;
+	project_activate: ActionEventLocalCallData<
+		'project_activate',
+		ActionInputs['project_activate'],
+		ActionOutputs['project_activate']
+	>;
+	view_show: ActionEventLocalCallData<
+		'view_show',
+		ActionInputs['view_show'],
+		ActionOutputs['view_show']
 	>;
 	provider_load_status: ActionEventRequestResponseData<
 		'provider_load_status',

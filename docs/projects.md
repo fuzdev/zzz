@@ -162,12 +162,15 @@ Directory scoping on top of the app directory and the scoped dirs
 One open project is the **active** one on each client (`Projects.active`):
 new files and folders default into it (`Project.new_files_dir` — its
 last open's focus while that's still focused, else its root).
-`DeskMenu.svelte` lists the open projects to switch it. Opening happens on
+`DeskMenu.svelte` and the projects page list the open projects to switch
+it (the `project_activate` intent, by root). Opening happens on
 `/projects`, the projects page, from its open form or the `?open=<path>`
 query param — this is how the CLI's `zzz <path>` lands the browser there.
-Both run `project_open`, activate the project it returns, and then open a
-file the open indexed in a tab on `/files`; a directory, or a file the
-index skips, leaves the page showing where it landed. Both take an
+Both call the `path_open` intent (`Projects.open_path`): `project_open`,
+activate the project it returns, and then open a file the open indexed in
+a tab on `/files`; a directory, or a file the index skips, leaves the page
+showing where it landed, and a page left while the open was in flight
+stays left. Both take an
 absolute path or one starting `~` or `~/`, expanded to the daemon's home
 (`session_load`'s `home_dir`; the param waits for the session) — `~user`
 is refused. The query param is handled once and then stripped from the

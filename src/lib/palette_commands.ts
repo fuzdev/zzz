@@ -9,7 +9,7 @@
  * @module
  */
 
-import { all_intent_specs } from './action_specs.ts';
+import { all_intent_specs, type ViewName } from './action_specs.ts';
 import type { LocalCallActionMethod } from './action_metatypes.ts';
 import { to_diskfile_content_kind } from './diskfile_content_kind.ts';
 import type { DiskfilePath } from './diskfile_types.ts';
@@ -21,6 +21,29 @@ import {
 	to_default_markdown_view_mode
 } from './markdown_view_mode.ts';
 import type { RecentIntent } from './recent_intents.svelte.ts';
+import { to_view_url } from './nav.ts';
+
+/**
+ * The pages the palette goes to (`view_show`), in its order — the dashboard's
+ * main ones, not the experimental pages behind futuremode.
+ */
+export const PALETTE_VIEWS: ReadonlyArray<ViewName> = [
+	'home',
+	'chats',
+	'prompts',
+	'files',
+	'projects',
+	'terminals',
+	'recordings',
+	'jobs',
+	'models',
+	'providers',
+	'capabilities',
+	'actions',
+	'settings',
+	'docs',
+	'about'
+];
 
 /** One entry in the command palette. */
 export interface PaletteCommand {
@@ -64,14 +87,18 @@ type IntentInput<TMethod extends LocalCallActionMethod> = Parameters<
 
 /**
  * Creates the commands the palette offers now, in roster order: tabs, the
- * explorer, the markdown view, the dashboard's panels. A command that would
+ * explorer, the markdown view, the dashboard's panels, the other open
+ * projects, and the pages but the one at `pathname`. A command that would
  * do nothing — no tab to close, nothing to go back to, the mode already
  * shown — is left out.
  *
  * Reads the app's state, so it re-runs inside a `$derived`; the commands'
  * `run`s call `app.intents` and must only run from an event handler.
  */
-export const create_palette_commands = (app: Frontend): Array<PaletteCommand> => {
+export const create_palette_commands = (
+	app: Frontend,
+	pathname: string | null = null
+): Array<PaletteCommand> => {
 	const commands: Array<PaletteCommand> = [];
 
 	const add_intent = <TMethod extends LocalCallActionMethod>(
@@ -156,6 +183,24 @@ export const create_palette_commands = (app: Frontend): Array<PaletteCommand> =>
 		ui.show_diskfile_details ? 'hide the file details' : 'show the file details'
 	);
 	if (!ui.show_main_dialog) add_intent('main_menu_toggle', { show: true }, 'show the main menu');
+
+	// the other open projects
+	const names: Map<string, number> = new Map();
+	for (const project of app.projects.items.values) {
+		names.set(project.name, (names.get(project.name) ?? 0) + 1);
+	}
+	for (const project of app.projects.items.values) {
+		if (project.id === app.projects.active_id) continue;
+		// by root where two share a name
+		const name = names.get(project.name)! > 1 ? project.root : project.name;
+		add_intent('project_activate', { root: project.root }, `switch to the project ${name}`);
+	}
+
+	// the pages, but the one shown
+	for (const view of PALETTE_VIEWS) {
+		if (to_view_url(view) === pathname) continue;
+		add_intent('view_show', { view }, view === 'home' ? 'go home' : `go to ${view}`);
+	}
 
 	return commands;
 };

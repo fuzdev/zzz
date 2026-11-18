@@ -323,6 +323,26 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'markdown_mode_set', 'execute', 'handling'>
 		) => ActionOutputs['markdown_mode_set'];
 	};
+	tab_close_resolve?: {
+		execute?: (
+			action_event: TypedActionEvent<'tab_close_resolve', 'execute', 'handling'>
+		) => ActionOutputs['tab_close_resolve'] | Promise<ActionOutputs['tab_close_resolve']>;
+	};
+	path_open?: {
+		execute?: (
+			action_event: TypedActionEvent<'path_open', 'execute', 'handling'>
+		) => ActionOutputs['path_open'] | Promise<ActionOutputs['path_open']>;
+	};
+	project_activate?: {
+		execute?: (
+			action_event: TypedActionEvent<'project_activate', 'execute', 'handling'>
+		) => ActionOutputs['project_activate'];
+	};
+	view_show?: {
+		execute?: (
+			action_event: TypedActionEvent<'view_show', 'execute', 'handling'>
+		) => ActionOutputs['view_show'];
+	};
 	provider_load_status?: {
 		send_request?: (
 			action_event: TypedActionEvent<'provider_load_status', 'send_request', 'handling'>
