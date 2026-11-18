@@ -440,7 +440,7 @@ project holding it (a file, its parent's) — a trusted `repos.toml` above
 it, else its git checkout, else the directory, with a path in none of the
 registry's repos opening as its checkout or directory — says where it
 rooted and why, and focuses the repo
-holding the path (./architecture.md § Projects). A file the
+holding the path (./projects.md § Projects). A file the
 open indexed then opens in a tab on `/files`; a directory, or a file the
 index skips (an ignored one), leaves the projects page showing where it
 landed. The daemon
@@ -712,10 +712,6 @@ export const cell_classes = {
 
 ### Adding a New Action
 
-The test-only `_testing_emit_notifications` and `_testing_notification`
-specs live in `src/lib/testing_action_specs.ts`, as TS twins of the methods
-`zzzd` registers only when `ZZZ_ENABLE_TEST_ACTIONS=1`.
-
 1. Define the spec in `src/lib/action_specs.ts`:
 
 ```typescript
@@ -763,6 +759,10 @@ my_action: {
    HTTP RPC and WebSocket paths dispatch through the same `ActionRegistry`,
    so the handler is picked up on both transports. See ../crates/CLAUDE.md.
 
+The test-only `_testing_emit_notifications` and `_testing_notification`
+specs live apart, in `src/lib/testing_action_specs.ts`, as TS twins of the
+methods `zzzd` registers only when `ZZZ_ENABLE_TEST_ACTIONS=1`.
+
 ### Streaming Handlers
 
 For actions that push progress notifications back to the requester while
@@ -808,7 +808,8 @@ See ../crates/CLAUDE.md for the Rust handler patterns.
 A UI intent (./architecture.md § Intents) is a `local_call` spec:
 
 1. **Spec** in `src/lib/action_specs.ts`: `kind: 'local_call'`, `initiator:
-   'frontend'`, `auth: null`, `async: false`, `version: 1`, a `history`
+   'frontend'`, `auth: null`, `side_effects: true`, `async: false`,
+   `version: 1`, a `history`
    (`layout`, `navigation`, or `none`), input and output schemas, a
    `description`, `satisfies IntentActionSpec`; add it to
    `all_intent_specs`. Name it domain-first (`tab_open`, `sidebar_toggle`);

@@ -1286,16 +1286,14 @@ export const all_intent_specs: Array<IntentActionSpec> = [
 
 /**
  * Canonical action spec list — fuz_app's protocol actions (`heartbeat`,
- * `cancel`) plus zzz-owned specs. Single source of truth for codegen and
- * runtime registries (`Frontend.action_registry`, `Backend.action_registry`).
+ * `cancel`, `peer/ping`) plus zzz-owned specs. Single source of truth for codegen and
+ * the frontend's registry (`Frontend.action_registry`); the Rust backend
+ * registers its own specs, held to these by the cross-backend suites.
  *
- * Codegen helpers default-filter protocol actions out of typed surfaces
- * (`FrontendActionsApi`, `BackendActionHandlers`, `ActionMethod`, etc.) since
- * they're dispatcher-owned. Server WS registration pairs protocol specs with
- * fuz_app-shipped handlers via `protocol_actions`; iteration over
- * `all_action_specs` skips them via `is_protocol_action_method` to avoid
- * double-registration. Adding a future protocol action requires no consumer
- * edit — fuz_app's `protocol_action_specs` is the upstream canonical bundle.
+ * Codegen keeps protocol actions out of the handler-driving surfaces, since
+ * the dispatcher owns them (`is_protocol_action_method`). A new protocol
+ * action needs no edit here — fuz_app's `protocol_action_specs` is the
+ * canonical bundle.
  */
 export const all_action_specs: Array<ActionSpecUnion> = [
 	...protocol_action_specs,

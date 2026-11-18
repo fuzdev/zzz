@@ -16,10 +16,10 @@ import { all_action_specs } from './action_specs.ts';
  * - **Open unions** (`ActionMethod`, `RequestResponseActionMethod`,
  *   `RemoteNotificationActionMethod`, `LocalCallActionMethod`,
  *   `FrontendActionMethod`, `BackendActionMethod`) include protocol actions
- *   (`heartbeat`, `cancel`) — they enumerate every dispatchable method.
+ *   (`heartbeat`, `cancel`, `peer/ping`) — they enumerate every dispatchable method.
  * - **Narrow handler-driving enums** (`FrontendRequestResponseMethod`,
  *   `BackendRequestResponseMethod`, `BroadcastActionMethod`) exclude protocol
- *   actions — they drive typed handler maps (`BackendActionHandlers` etc.)
+ *   actions — they drive typed handler maps (`FrontendActionHandlers` etc.)
  *   where protocol handlers don't belong (they ship dispatcher-owned via
  *   `protocol_actions`).
  *

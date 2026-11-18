@@ -15,8 +15,8 @@ export type IntentHistory = 'layout' | 'navigation' | 'none';
 /**
  * A UI intent: a user's action at the grain of open, close, move, select,
  * run, save — never a keystroke, cursor, scroll, or pointer move. Every
- * driver (a click, a shortcut, the command palette, tests) calls the same
- * spec through `app.intents`.
+ * driver (a click, a shortcut, a test) calls the same spec through
+ * `app.intents`.
  *
  * A `local_call` spec with two fields fuz_app doesn't know: `version`,
  * bumped when the input's meaning changes so a buffered or persisted entry

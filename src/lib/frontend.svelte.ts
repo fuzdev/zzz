@@ -188,7 +188,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 	readonly api: FrontendRpcApi;
 	/**
 	 * The UI intents (`IntentActionSpec`): every driver of a UI action — a
-	 * click, a shortcut, the command palette, a test — calls these. Each call
+	 * click, a shortcut, a test — calls these. Each call
 	 * lands in `recent_intents`, not in the `actions` wire log.
 	 */
 	readonly intents: FrontendIntentsApi;

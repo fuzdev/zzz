@@ -56,6 +56,8 @@ suites against `zzz_server` over real HTTP. See ./crates/CLAUDE.md, and
 - ./docs/architecture.md — actions, cells, content model, data flow,
   terminals, recording, filesystem and file editing, the app directory,
   security posture, known limitations
+- ./docs/projects.md — projects (registry, checkout, directory), focus,
+  root scope, and the filer
 - ./docs/development.md — setup, commands, production build, the `zzz`
   CLI, environment variables, extension points, patterns, testing
 - ./docs/fuz_terminal.md — the terminal emulator binding, renderer, and adapter
@@ -267,91 +269,53 @@ Details: ./docs/development.md § Adding a New Action.
 
 ## Files, scope, and the app directory
 
+The rules code most often trips on; the full ones are ./docs/projects.md
+(projects, root scope, the filer) and ./docs/architecture.md § Zzz App
+Directory, § Filesystem, § File Editing, § Recording.
+
 - **All filesystem access goes through `ScopedFs`** — path validation, no
-  symlinks, absolute paths only. Roots: the app directory, `PUBLIC_ZZZ_SCOPED_DIRS`,
-  and each open project's root.
-- **Projects**: `project_open` (and so `zzz <path>`) opens the project
-  holding a path (`project.rs`): a trusted `repos.toml` registry found
-  walking up (`file_trust.rs`: Debian sshd's ownership and mode rule), else
-  the git checkout holding it, else the directory. A path in no present
-  registry entry, or under a refused in-checkout registry, falls back to
-  its checkout or directory — never above the registry's root — and the
-  project's `fallback` says why. Opening a path **focuses** its repo;
-  `repo_focus` / `repo_unfocus` do it per entry, daemon-wide. A focused
-  directory is indexed whole, a registry's root at its top level only,
-  anything else not at all — but **file access is the whole root**: a path
-  in `~/dev`'s registry puts all of `~/dev` in scope. Full rules:
-  ./docs/architecture.md § Projects.
-- **A focused checkout is indexed by git's ignore rule** (`.gitignore`,
-  `info/exclude`, global excludes; nested repos and submodules aren't
-  indexed); everything else skips fixed names (`node_modules`,
-  `.svelte-kit`, `target`, `dist`), and `.git`, `.zzz`, and the credential
-  directories are skipped everywhere. The client reads git's set through
-  one predicate, `to_unindexed_part`. Mechanism and fallbacks:
-  ./docs/architecture.md § Filer.
-- **Roots are strictly inside `$HOME`** (the daemon's, canonicalized at
-  boot) unless `ZZZ_ROOTS_OUTSIDE_HOME` names them, and never `/`, `$HOME`
-  or an ancestor of it, or under `/proc`, `/sys`, or `/dev`, allowlisted or
-  not (`root_policy.rs`). `project_open` (and so `zzz <path>`) refuses
-  one (`root_not_allowed`, or `root_outside_home` where the allowlist would
-  admit it); a `PUBLIC_ZZZ_SCOPED_DIRS` entry refuses to boot. An unusable
-  `$HOME` admits only the allowlist. The app dir is exempt from the `$HOME`
-  rule, not from the rest.
-- **The app directory** (`PUBLIC_ZZZ_DIR`, default `.zzz` under the
-  daemon's working directory) holds `cache/`, `recordings/`, `run/`, and a
-  reserved `state/`. The CLI's daemon home `~/.zzz/` holds `.env` and
-  `bootstrap_token`.
+  symlinks, absolute paths only. Roots: the app directory,
+  `PUBLIC_ZZZ_SCOPED_DIRS`, and each open project's root.
+- **Projects**: `project_open` (and so `zzz <path>`) opens a trusted
+  `repos.toml` registry, else the git checkout, else the directory.
+  Opening a path **focuses** its repo. A focused directory is indexed
+  whole, a registry's root at its top level, anything else not at all —
+  but **file access is the whole root**: a path in `~/dev`'s registry puts
+  all of `~/dev` in scope.
+- **Roots are strictly inside `$HOME`** unless `ZZZ_ROOTS_OUTSIDE_HOME`
+  names them, and never `/`, `$HOME` or an ancestor, or under `/proc`,
+  `/sys`, `/dev` (`root_policy.rs`).
 - **Protected directories are off limits under every root**: credential
   directories (`.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`,
-  `.password-store`) and `.zzz` directories other than the app dir.
-  `ScopedFs` refuses every operation on a path in one, lexically, before
-  touching the filesystem (`protected_dir_not_allowed` — the file actions
-  and the byte routes alike), every filer skips them, and `project_open`
-  refuses one. `.env` files are ordinary files.
-- **Saves are atomic** (staged beside the target, fsynced, renamed),
-  falling back to a non-atomic in-place write only when the rename can't
-  happen; new files and folders are created exclusively. A save based on a
-  read sends that read's BLAKE3 `hash` as `expected_hash`, and `zzzd`
-  refuses it (`disk_changed`) if the file no longer holds those bytes — an
-  overwrite too, against the version it was shown. A save of a file
-  deleted on disk is an exclusive create, refused if anything is at the
-  path. Unchecked: an overwrite after a failed read, and a write landing
-  between the compare and the rename.
-- **Byte routes** (`/api/files/bytes`) read, create, and append file bytes
-  for media; serving never executes bytes.
-- **Local tools** (`ffmpeg`, whisper.cpp) are found once at boot and are
-  never given the audio file's path (`ffmpeg` reads and writes only handles
+  `.password-store`) and `.zzz` directories other than the app dir —
+  refused lexically, before touching the filesystem
+  (`protected_dir_not_allowed`). `.env` files are ordinary files.
+- **The index is metadata only**; the client reads a file's content on
+  demand (`diskfile_read`). A focused checkout is indexed by git's ignore
+  rule, everything else skips fixed names; the client reads git's set
+  through `to_unindexed_part`.
+- **Saves are atomic** and a save based on a read sends its BLAKE3 `hash`
+  as `expected_hash` (`disk_changed` if the file moved on); new files and
+  folders are created exclusively.
+- **The app directory** (`PUBLIC_ZZZ_DIR`, default `.zzz`) holds `cache/`,
+  `recordings/`, `run/`, and a reserved `state/`; the CLI's daemon home
+  `~/.zzz/` holds `.env` and `bootstrap_token`.
+- **Local tools** (`ffmpeg`, whisper.cpp) are found once at boot and never
+  given the audio file's path (`ffmpeg` reads and writes only handles
   `zzzd` opened); transcription is a daemon-side **job**.
-
-Detail: ./docs/architecture.md § Zzz App Directory, § Filesystem, § File
-Editing, § Recording; ./docs/backend.md § Design Decisions.
 
 ## Environment Variables
 
 `zzzd` reads only its process environment. The `zzz` CLI supplies it from
 `~/.zzz/.env` (the process env wins); `cargo xtask dev` from
-`.env.development` (the file wins). A blank value is unset — except that
-`zzzd` itself refuses a blank `FUZ_ALLOW_ORIGIN_WILDCARDS` or
-`FUZ_DB_*_CHECKOUT_TIMEOUT_MS` (the spine's rule), which the CLI drops.
-
-- Required: `DATABASE_URL`, `SECRET_FUZ_COOKIE_KEYS`, `FUZ_ALLOWED_ORIGINS`
-  (exact origins; wildcards refuse to boot unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true`)
-- Server: `ZZZ_PORT` (default 4460; dev 4461; loopback bind, no `HOST`),
-  `ZZZ_STATIC_DIR`, `ZZZ_TRUSTED_PROXIES`, `PUBLIC_ZZZ_DIR`,
-  `PUBLIC_ZZZ_SCOPED_DIRS`, `ZZZ_ROOTS_OUTSIDE_HOME`,
-  `FUZ_BOOTSTRAP_TOKEN_PATH`, `FUZ_DB_CHECKOUT_TIMEOUT_MS`,
-  `FUZ_DB_AUDIT_CHECKOUT_TIMEOUT_MS`
-- Tools: `ZZZ_FFMPEG_BIN`, `ZZZ_WHISPER_CPP_BIN`, `ZZZ_WHISPER_CPP_MODEL`
-- Providers: `SECRET_ANTHROPIC_API_KEY`, `SECRET_OPENAI_API_KEY`, `SECRET_GOOGLE_API_KEY`
-- Tests only: `ZZZ_ENABLE_TEST_ACTIONS` (never in prod; the CLI never passes it)
-- Frontend (baked in by `gro build`, `src/env.ts`): `PUBLIC_ZZZ_SERVER_*`
-  and `PUBLIC_ZZZ_WEBSOCKET_URL` — protocol, host, port, and the WebSocket
-  URL stay empty in production, so the UI uses the page's origin
-- CLI only: `ZZZ_SERVER_BIN`, `ZZZ_OPENER`
-
-PTY terminals don't get `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`,
-`DATABASE_URL`, or `PORT`. Every variable's rules: ./docs/development.md
-§ Environment Variables.
+`.env.development` (the file wins). Required: `DATABASE_URL`,
+`SECRET_FUZ_COOKIE_KEYS`, `FUZ_ALLOWED_ORIGINS` (exact origins; wildcards
+refuse to boot unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true`).
+`ZZZ_ENABLE_TEST_ACTIONS` is tests only — never in prod. The frontend's
+`PUBLIC_ZZZ_SERVER_*` and `PUBLIC_ZZZ_WEBSOCKET_URL` are baked in by
+`gro build` (`src/env.ts`). PTY terminals don't get `SECRET_*`, `FUZ_*`,
+`ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, or `PORT`. Every variable and its rules:
+./docs/development.md § Environment Variables.
 
 ## The CLI
 
@@ -380,62 +344,36 @@ rules (discovery, env, port, exit codes, `daemon.json`, the opener):
 
 ## Security posture
 
-zzz is a single-operator local app: one person, their own machine, the
-daemon running as their OS user on loopback. **Every session and every
-full-scope API token has the daemon user's powers** — terminals, opening
-a project on any directory the root rules admit (strictly inside `$HOME`,
-or allowlisted), file reads and writes in scope outside the protected
-directories — a registry project's scope is its whole root, every repo
-in it focused or not. Those rules keep the file actions and the index off `~/.ssh`,
-the whole home or filesystem, and `/proc/<pid>/environ` — a guard against
-mistakes and a smaller reach for the file API, not a sandbox: a terminal is
-a shell as the same user. Accounts keep
-other OS users' processes and other browser origins out, not same-user
-processes, and don't separate accounts from each other.
-
-Only zzz's own UI can drive the daemon from a browser: every request passes
-an **Origin** allowlist (`FUZ_ALLOWED_ORIGINS`), a **Host** check (against
-DNS rebinding), and a refusal of **CORS-simple POSTs** (pinned by
-`browser_gates.cross.test.ts`). The allowlist names only origins that are
-zzz's own. Full posture, the gates, and the dev and prod origins:
-./docs/architecture.md § Security posture.
+zzz is a single-operator local app on loopback. **Every session and every
+full-scope API token has the daemon user's powers** — terminals, opening a
+project anywhere the root rules admit, reads and writes in scope outside
+the protected directories. The root and protected-directory rules are a
+guard against mistakes, not a sandbox: a terminal is a shell as the same
+user. Accounts keep other OS users' processes and other browser origins
+out, not same-user processes, and don't separate accounts from each other.
+Only zzz's own UI can drive the daemon from a browser — every request
+passes the **Origin** allowlist (which names only origins that are zzz's
+own), a **Host** check, and a refusal of **CORS-simple POSTs**. Full posture: ./docs/architecture.md § Security
+posture.
 
 ## Known Limitations
 
-The main ones; detail in ./docs/architecture.md § Known Limitations:
+The main ones, each detailed in ./docs/architecture.md § Known
+Limitations:
 
 - **Domain state is in memory** — lost on a daemon restart; the frontend
-  resyncs after every reconnect and reopens the projects a restart lost.
-- **Focus is by hand** — a repo is indexed only once focused, until
-  unfocused or its project closes; a new file where nothing is indexed is
-  refused (§ Files, scope, and the app directory).
-- **Chats, prompts, terminal presets, and file drafts** live in page
-  memory, lost on reload — a draft outlives its project's close (dormant),
-  not the page.
-- **WebSocket auth** at upgrade only, with event-driven revocation; at most
-  50 sockets per account; no batch JSON-RPC.
-- **Message caps** — 16 MiB per JSON-RPC message, 32 MiB outbound queue per
-  socket; terminal output is paced by acks.
-- **The file index is metadata only, and all of it ships** on open and
-  resync — a large tree is a large response. The daemon holds no file
-  text: the frontend reads a file's content on demand (`diskfile_read`,
-  from the disk) to show, send, or copy it; files over 4 MiB or not UTF-8
-  don't load and are read-only. A moved `lstat` stamp is a change, so a
-  `touch` makes clients holding the file read it again.
-- **Big repos make big focus replies** — the client keeps a metadata
-  record per indexed file and makes a `Diskfile` cell only for a file in
-  use (a tab, a part, a view, or an editing state with something to keep —
-  a draft, a discarded edit, a save under way, a heading to reveal), but
-  every file ships in the focus reply, which can pass the 16 MiB message
-  size.
-- **No persistent undo**; symlinks are invisible; file watching can degrade
-  to polling past `max_user_watches`.
+  resyncs and reopens its projects. **Chats, prompts, terminal presets,
+  and file drafts** live in page memory, lost on reload.
+- **Focus is by hand**, and **every indexed file ships** in the focus
+  reply, which a big repo can push past the 16 MiB message cap.
+- **Files over 4 MiB or not UTF-8** are read-only; no persistent undo;
+  symlinks are invisible.
+- **WebSocket auth** at upgrade only, with event-driven revocation; no
+  batch JSON-RPC.
 - **The terminal emulator** lacks scrollback scrolling, IME, and mouse
-  reporting; paste is from the context menu only.
-- **Recording** is one at a time per tab; **transcription** is batch, needs
-  `ffmpeg`, whisper.cpp, and a model.
-- **No git integration** beyond read-only repo status on the projects
-  page, **no MCP/A2A** yet.
+  reporting.
+- **Transcription** is batch and needs `ffmpeg`, whisper.cpp, and a model.
+- **No git integration** beyond read-only repo status; **no MCP/A2A** yet.
 
 ## fuz_app
 

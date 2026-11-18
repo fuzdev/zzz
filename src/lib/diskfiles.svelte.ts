@@ -108,9 +108,10 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly #editor_states: SvelteMap<DiskfilePath, DiskfileEditorState> = new SvelteMap();
 
 	/**
-	 * The files' drafts, by path — apart from the cells, so a draft outlives
-	 * its file's cell and editing state. A draft keeps a file the index no
-	 * longer has (`#is_held`).
+	 * The files' drafts, by path — apart from the cells, so a draft can
+	 * outlive its file's cell and editing state (for now a dirty editing
+	 * state keeps both, `DiskfileEditorState.can_drop`). A draft keeps a file
+	 * the index no longer has (`#is_held`).
 	 */
 	readonly drafts: Drafts = new Drafts(this);
 

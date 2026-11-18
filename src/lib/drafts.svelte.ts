@@ -102,8 +102,9 @@ export class Draft {
 
 /**
  * The files' drafts, by path — at most one each. Owned by `Diskfiles`; a
- * draft is written by the file's `DiskfileEditorState` and outlives it and
- * the file's cell. A draft keeps a file the index no longer has
+ * draft is written by the file's `DiskfileEditorState`, kept apart so it
+ * can outlive it and the file's cell (for now the editing state stays while
+ * it has a draft). A draft keeps a file the index no longer has
  * (`Diskfiles.release_uncovered`, `remove_by_path`).
  */
 export class Drafts {

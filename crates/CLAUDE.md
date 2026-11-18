@@ -22,54 +22,44 @@ OpenAI, and Gemini (all full).
   `env_file.rs`, `error.rs`; its rules are ../docs/development.md § The
   `zzz` CLI.
 
-AI provider system feature-complete for all three providers (Anthropic,
-OpenAI, Gemini). Spine consumption is complete — the spine crates
-(`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`, `fuz_actions`) own
-auth, HTTP, realtime, and the boot-compiled `ActionRegistry` dispatch
-path. A single canonical `/api/rpc` + `/api/ws` (mounted via
-`fuz_actions::create_rpc_router` / `register_action_ws`) serves all
-dispatch; admin + account specs come from fuz_actions'
-`auth_adapter::build_auth_spec_set`, the zzz-specific project /
-filesystem / media / job / terminal / provider specs from
-`zzz_action_specs/` (handlers in `handlers/`), the admin audit-log SSE
-stream from `fuz_realtime::audit_stream_router`, and zzz's own
-hand-written file byte routes (`file_bytes.rs`, outside the registry).
-Besides the handlers, `handlers/` holds `App` state and a `broadcast`
-shim over `App.realtime` (connection revocation lives on the spine's
-`ConnectionRegistry` — see Auth below). RPC methods: `ping`,
-`session_load`, `project_*`, `repo_focus`, `repo_unfocus`, `repo_files`,
-`diskfile_*`, `directory_create`, `media_finalize`,
-`transcription_create`, `job_cancel`, `terminal_*`,
-`provider_load_status`, `completion_create`, `account_verify`,
-`account_session_list`, `account_session_revoke`,
+The spine crates (`fuz_db`, `fuz_auth`, `fuz_http`, `fuz_realtime`,
+`fuz_actions`) own auth, HTTP, realtime, the DB pool and migrations, and
+the boot-compiled `ActionRegistry`. One `/api/rpc` + `/api/ws`
+(`fuz_actions::create_rpc_router` / `register_action_ws`) serves all
+dispatch:
+
+- **zzz's specs** come from `zzz_action_specs/` (project, filesystem,
+  media, job, terminal, provider), their handlers in `handlers/`, which
+  also holds `App` state and a `broadcast` shim over `App.realtime`.
+- **fuz_auth's standard bundle** comes from fuz_actions'
+  `auth_adapter::build_auth_spec_set`: account self-service, admin
+  revocation and management, `app_settings_*`, and the `role_grant_*` /
+  `role_grant_offer_*` flow with its notifications — live though zzz ships
+  no UI for most of it; the spine crates are its source of truth.
+- **Protocol specs**: `fuz_actions::PROTOCOL_ACTION_SPECS` (`heartbeat`,
+  `peer/ping`; `cancel` is a client notification the WS read loop handles,
+  not a spec).
+- `_testing_emit_notifications` registers only under
+  `ZZZ_ENABLE_TEST_ACTIONS=1` (the integration runner sets it; elsewhere
+  dispatch answers `method_not_found`).
+
+Outside the registry: the admin audit-log SSE stream
+(`fuz_realtime::audit_stream_router`) and zzz's file byte routes
+(`file_bytes.rs`).
+
+RPC methods zzz exposes and uses: `ping`, `session_load`, `project_*`,
+`repo_focus`, `repo_unfocus`, `repo_files`, `diskfile_*`,
+`directory_create`, `media_finalize`, `transcription_create`,
+`job_cancel`, `terminal_*`, `provider_load_status`, `completion_create`,
+`account_verify`, `account_session_list`, `account_session_revoke`,
 `account_session_revoke_all`, `account_token_create`,
-`account_token_list`, `account_token_revoke`,
-`admin_session_revoke_all`, `admin_token_revoke_all`. Those are the
-zzz-domain methods plus fuz_app's account self-service and
-admin-revocation slice; `auth_adapter::build_auth_spec_set` registers
-the rest of `fuz_auth`'s standard bundle too — admin
-account/audit/invite management, `app_settings_*`, and the consent-based
-`role_grant_*` / `role_grant_offer_*` flow with its own notifications —
-plus `fuz_actions::PROTOCOL_ACTION_SPECS` (`heartbeat`, `peer/ping`;
-`cancel` is a client notification the WS read loop handles, not a spec).
-That spine surface is live on `/api/rpc` + `/api/ws` even though zzz
-ships no UI for most of it; the spine crates are its source of truth.
-`_testing_emit_notifications` is gated behind
-`ZZZ_ENABLE_TEST_ACTIONS=1` (set by the integration runner; production
-leaves it unset, dispatch returns `method_not_found`). Full auth stack
-(cookie sessions, bearer tokens, daemon tokens), account management
-routes, filesystem actions with `ScopedFs`, terminal actions via
-`fuz_pty`, `session_load` returns real provider status from all
-registered providers, `project_changed`/`filer_change`/
-`terminal_data`/`terminal_exited`/`job_changed`/`transcription_progress`
-notifications, local tools (`ffmpeg`, whisper.cpp) run as subprocesses
-with an in-memory job queue, file watching via `notify` crate with
-debounced broadcasts and immediate index updates, WebSocket connection
-tracking with targeted `completion_progress` streaming notifications,
-event-driven connection revocation. Database (PostgreSQL via
-`tokio-postgres`/`deadpool-postgres`), HMAC-SHA256 cookie signing,
-blake3 session hashing. Anthropic provider uses `reqwest` HTTP client
-with manual SSE parsing for streaming completions.
+`account_token_list`, `account_token_revoke`, `admin_session_revoke_all`,
+`admin_token_revoke_all`.
+
+Underneath: PostgreSQL via `tokio-postgres` / `deadpool-postgres`; local
+tools (`ffmpeg`, whisper.cpp) as subprocesses behind an in-memory job
+queue; file watching with `notify`; the providers over `reqwest` with
+manual SSE parsing.
 
 ## Prerequisites
 
@@ -408,7 +398,7 @@ crates/zzz_server/src/
 │   └── gemini.rs     # GeminiProvider — Generative Language API with SSE streaming
 ├── file_bytes.rs     # Byte routes for files (`/api/files/bytes`): ranged read with a response-header lockdown, exclusive create, offset-checked append — hand-written axum handlers with their own auth + scope gates
 ├── file_trust.rs     # Whether discovered config is the daemon user's alone to write — Debian sshd's rule: owned by the user or root, never `o+w`, `g+w` only by the user's private group (`TrustedOwner`, NSS read once by `current`)
-├── filer/            # File index + watcher (notify crate) — level-triggered, stat-only (events are hints, `lstat` decides; no file is read), change by `lstat` stamp with git's racily-clean rule, per-directory watches from the filer's own walk (degraded polling past the watch limit), debounced + coalesced filer_change broadcasts, overflow rescans, symlinks skipped; a whole tree, or a registry root's top level alone (`FilerDepth`); git's ignore rule under a checkout root, fixed names elsewhere
+├── filer/            # File index + watcher (notify crate) — stat-only and level-triggered (events are hints, `lstat` decides), debounced `filer_change` broadcasts, a whole tree or a registry root's top level (`FilerDepth`), git's ignore rule under a checkout root (../docs/projects.md § Filer)
 │   ├── mod.rs        # Module docs (the filer's design), re-exports of the public API, the indexing limits (`REPRUNE_BROADCAST_MAX`, the flood guard; `IGNORED_REFRESH_INTERVAL`), the `filer_change` notification params, `SerializableDisknode`, `IgnoredPaths` (a focused dir's `ignored` entry: git's paths and the nested repos), `WatchStatus`, and the dir-prefix helpers
 │   ├── core.rs       # `Filer` (the running handle, its ignored set as the wire carries it: `ignored_on_wire`), `FilerConfig`, `FilerDepth`, `start_filer`, the notify callback's `watcher_factory`, `RescanSignal`, the `FilerIgnoredChange` hook and its coalescing publisher (`publish_ignored_changes`)
 │   ├── index.rs      # The index's file metadata: `FileStat` and its racily-clean rule (`reusable_stat`, `is_unchanged`), disknodes, and `apply_subtree`, the diff of a scanned subtree
@@ -420,8 +410,8 @@ crates/zzz_server/src/
 │   ├── snapshot.rs   # `SnapshotFiles`: a snapshot reply's files on the wire, grouped by filer dir as `[rel, size, mtime, ctime?]` tuples, and its size hint
 │   ├── manager.rs    # `FilerManager`: lifetimes (permanent / project), depths, dedup of concurrent starts, snapshots, `hold_index`, a `#[cfg(test)]` seam that holds an index for writing (`project_manager`'s tests use it); each `filer_change` broadcast hints the repo status (`RepoStatusManager::hint`)
 │   └── test_support.rs # `#[cfg(test)]` helpers shared across the filer's test modules (`TempDir`, scan and state builders, checkouts, `HookedGit`)
-├── project_manager.rs # The open projects and the one path that changes them (`ProjectManager`): an open, close, focus, or unfocus computes the next state and `commit`s it under the state's lock — ensuring the filers it needs (`desired_filers`: each directory at the deepest any open project indexes it), stopping or narrowing the ones it doesn't (`release`), setting the runtime `ScopedFs` roots, publishing the snapshot `project_list` and `session_load` read, and broadcasting `project_changed` — every commit reads each focused dir's ignored paths from its filer (`OpenProject::ignored`, a change like any other), and a filer whose set changes asks for one (`refresh_ignored`); a commit that changes anything bumps the lifecycle rev (seeded from the clock at boot, `rev_seed`) and stamps it on what changed, which every reply, notification, and `session_load`'s `projects_rev` carry; an open's and a focus's reply read their files under that lock; an open's requested focuses land or are refused one by one (`Opened::refused`), its own filers required; an open's commit holds its registry's entries for `project_status` (`RepoStatusManager::set_registry`), forgotten on close; scans run before the lock
-├── project.rs        # Resolving an opened path to its project: a registry (`repos.toml`, found by `fuz_repos`'s bounded discovery — strictly below `$HOME` or within an allowlisted root — each candidate trusted, confined, and outside protected directories, or the open is refused), else the nearest `.git` (a directory or gitfile by `lstat`, as `fuz_repos`'s discovery reads one too — a symlinked `.git` makes no checkout), else the directory; a path under a `.git` component opens as the directory holding the outermost one; a path under a registry's root in none of its present entries (or the root of a checkout with none present), or under a refused registry kept inside a checkout, falls back to rules 2–3, never above the registry's root (`Fallback`, the project's `fallback`); entries canonicalized and confined to the root, refused one by one (`resolve_project`, `ProjectError` / `EntryRefusal` reasons)
+├── project_manager.rs # The open projects and the one path that changes them (`ProjectManager`): open, close, focus, and unfocus each compute the next state and `commit` it under the state's lock — the filers it needs, the `ScopedFs` roots, the published snapshot, `project_changed`, and the lifecycle rev (../docs/projects.md § Projects)
+├── project.rs        # Resolving an opened path to its project: a trusted `repos.toml` registry, else the nearest `.git`, else the directory, with the fallbacks and refusals (`resolve_project`, `Fallback`, `ProjectError` / `EntryRefusal`; ../docs/projects.md § Projects)
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── repo_status.rs    # Tier-1 git status of open registries' entries (`RepoStatusManager`, `App.repo_status`): `project_status` polls never wait on git — each present entry's `.git` stat stamp (`stat_stamp`), filer edit hints (`hint`, from each filer's broadcast), and a slow sweep pick the stale ones, probed by `fuz_repos::status::status` (no fetch, no busy detection) on a small pool; the narrow wire projection (`RepoStatusInfo`)
 ├── root_policy.rs    # Which directories can be roots: strictly inside `$HOME` or in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor, or under `/proc` / `/sys` / `/dev` (`RootPolicy`, held by `App` and the boot checks)
@@ -563,7 +553,7 @@ joined after the drain, before PTY teardown.
   connection), `project_changed` (broadcast on open, update — a focus added
   or dropped, or its ignored set changed — and close), and `filer_change`
   (broadcast; metadata only — the filer's watches, debounce, stamp rule,
-  and ignore rules are ../docs/architecture.md § Filer and
+  and ignore rules are ../docs/projects.md § Filer and
   ../docs/backend.md § Known Issues → Filer watches / Filer ignore rule).
   The spine's role-grant-offer bundle carries its own notification set.
 - No batch request support (JSON arrays)
