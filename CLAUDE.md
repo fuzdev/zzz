@@ -215,8 +215,8 @@ export class Chat extends Cell<typeof ChatJson> {
 5. **Call** via `app.api.my_action(input)` → `Result<{value}, {error}>`.
 
 A **UI intent** (open, close, move, toggle — never keystrokes) is a
-`local_call` spec, `satisfies IntentActionSpec` with a `version` and a
-`history`, listed in `all_intent_specs`, and called as
+`local_call` spec, `satisfies IntentActionSpec` with a `label`, a
+`version`, and a `history`, listed in `all_intent_specs`, and called as
 `app.intents.my_intent(input)`, synchronously; calls land in
 `app.recent_intents`, not the actions log. Details:
 ./docs/development.md § Adding an Intent.

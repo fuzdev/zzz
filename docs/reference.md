@@ -43,27 +43,28 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `transcription_create` — Queue a transcription of an audio file by the local speech model, and return its job. The transcript is written beside the file as `<name>.<model>.transcript.json`; fails with `conflict` (`already_exists`) if that model's transcript is already there. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `transcription_progress` — Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds. Kind: remote_notification. Initiator: backend. Auth: public
 
-## Intents (16)
+## Intents (17)
 
 UI intents — `local_call` specs called through `app.intents`, run in the
 page, never sent over the wire. History: what a later undo makes of them.
 
-- `desk_pin_toggle` — Pin or unpin the desk menu: a pinned one stays open beside the page. Version: 1. History: layout
-- `desk_toggle` — Toggle or set the visibility of the desk menu. Version: 1. History: layout
-- `diskfile_details_toggle` — Toggle or set the visibility of the file views' details drawer. Version: 1. History: layout
-- `explorer_mode_set` — Show the file explorer as a flat list or a folder tree. Version: 1. History: layout
-- `file_reveal` — Show the file explorer's tree and reveal a file or folder there: expand its folders and make its row active. Version: 1. History: navigation
-- `main_menu_toggle` — Toggle or set the visibility of the main menu. Version: 1. History: layout
-- `markdown_mode_set` — Choose a markdown file's view: its source beside a preview, the preview alone, or the source alone. Version: 1. History: layout
-- `sidebar_toggle` — Toggle or set the visibility of the sidebar. Version: 1. History: layout
-- `tab_back` — Go back to the file the selection last left: select its tab, or preview it if its tab closed. Version: 1. History: navigation
-- `tab_close` — Close a file's tab — or, for a file with a draft, ask first: save, don't save, or cancel. Version: 1. History: layout
-- `tab_forward` — Go forward again after going back. Version: 1. History: navigation
-- `tab_move` — Move a tab in front of another, or to the end. Version: 1. History: layout
-- `tab_open` — Open a file in a tab and select it: a preview tab, which the next preview replaces, unless `permanent`. A file already in a tab selects that tab. Version: 1. History: layout
-- `tab_pin` — Make a file's preview tab permanent, and select it. Version: 1. History: layout
-- `tab_reopen_closed` — Reopen the most recently closed tab whose file is not open. Version: 1. History: layout
-- `tab_select` — Select a file's tab. Version: 1. History: navigation
+- `desk_pin_toggle` (pin or unpin the desk menu) — Pin or unpin the desk menu: a pinned one stays open beside the page. Version: 1. History: layout
+- `desk_toggle` (toggle the desk menu) — Toggle or set the visibility of the desk menu. Version: 1. History: layout
+- `diskfile_details_toggle` (toggle the file details) — Toggle or set the visibility of the file views' details drawer. Version: 1. History: layout
+- `explorer_mode_set` (show the files as a list or a tree) — Show the file explorer as a flat list or a folder tree. Version: 1. History: layout
+- `file_reveal` (reveal the file in the tree) — Show the file explorer's tree and reveal a file or folder there: expand its folders and make its row active. Version: 1. History: navigation
+- `main_menu_toggle` (toggle the main menu) — Toggle or set the visibility of the main menu. Version: 1. History: layout
+- `markdown_mode_set` (choose the markdown view) — Choose a markdown file's view: its source beside a preview, the preview alone, or the source alone. Version: 1. History: layout
+- `palette_toggle` (toggle the command palette) — Toggle or set the visibility of the command palette. Version: 1. History: none
+- `sidebar_toggle` (toggle the sidebar) — Toggle or set the visibility of the sidebar. Version: 1. History: layout
+- `tab_back` (go back) — Go back to the file the selection last left: select its tab, or preview it if its tab closed. Version: 1. History: navigation
+- `tab_close` (close the tab) — Close a file's tab — or, for a file with a draft, ask first: save, don't save, or cancel. Version: 1. History: layout
+- `tab_forward` (go forward) — Go forward again after going back. Version: 1. History: navigation
+- `tab_move` (move a tab) — Move a tab in front of another, or to the end. Version: 1. History: layout
+- `tab_open` (open a file in a tab) — Open a file in a tab and select it: a preview tab, which the next preview replaces, unless `permanent`. A file already in a tab selects that tab. Version: 1. History: layout
+- `tab_pin` (keep the preview tab open) — Make a file's preview tab permanent, and select it. Version: 1. History: layout
+- `tab_reopen_closed` (reopen the closed tab) — Reopen the most recently closed tab whose file is not open. Version: 1. History: layout
+- `tab_select` (select a tab) — Select a file's tab. Version: 1. History: navigation
 
 ## Cell classes (34)
 

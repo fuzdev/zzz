@@ -314,8 +314,8 @@ export const CompletionProgressInput = object({
 export type CompletionProgressInput = Infer<typeof CompletionProgressInput>;
 
 /**
- * Input for the show / hide intents (`main_menu_toggle`, `sidebar_toggle`,
- * `desk_toggle`, `diskfile_details_toggle`). Optional — omit it to toggle,
+ * Input for the show / hide intents (`main_menu_toggle`, `palette_toggle`,
+ * `sidebar_toggle`, `desk_toggle`, `diskfile_details_toggle`). Optional — omit it to toggle,
  * pass `{show}` to set.
  */
 export const UiToggleInput = optional(object({ show: optional(boolean) }));
@@ -899,6 +899,7 @@ export const completion_progress_action_spec = {
 export const main_menu_toggle_action_spec = {
 	method: 'main_menu_toggle',
 	kind: 'local_call',
+	label: 'toggle the main menu',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -910,9 +911,25 @@ export const main_menu_toggle_action_spec = {
 	description: 'Toggle or set the visibility of the main menu.'
 } satisfies IntentActionSpec;
 
+export const palette_toggle_action_spec = {
+	method: 'palette_toggle',
+	kind: 'local_call',
+	label: 'toggle the command palette',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: UiToggleInput,
+	output: UiToggleOutput,
+	async: false,
+	version: 1,
+	history: 'none',
+	description: 'Toggle or set the visibility of the command palette.'
+} satisfies IntentActionSpec;
+
 export const sidebar_toggle_action_spec = {
 	method: 'sidebar_toggle',
 	kind: 'local_call',
+	label: 'toggle the sidebar',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -927,6 +944,7 @@ export const sidebar_toggle_action_spec = {
 export const desk_toggle_action_spec = {
 	method: 'desk_toggle',
 	kind: 'local_call',
+	label: 'toggle the desk menu',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -941,6 +959,7 @@ export const desk_toggle_action_spec = {
 export const desk_pin_toggle_action_spec = {
 	method: 'desk_pin_toggle',
 	kind: 'local_call',
+	label: 'pin or unpin the desk menu',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -955,6 +974,7 @@ export const desk_pin_toggle_action_spec = {
 export const tab_open_action_spec = {
 	method: 'tab_open',
 	kind: 'local_call',
+	label: 'open a file in a tab',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -970,6 +990,7 @@ export const tab_open_action_spec = {
 export const tab_select_action_spec = {
 	method: 'tab_select',
 	kind: 'local_call',
+	label: 'select a tab',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -984,6 +1005,7 @@ export const tab_select_action_spec = {
 export const tab_pin_action_spec = {
 	method: 'tab_pin',
 	kind: 'local_call',
+	label: 'keep the preview tab open',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -998,6 +1020,7 @@ export const tab_pin_action_spec = {
 export const tab_close_action_spec = {
 	method: 'tab_close',
 	kind: 'local_call',
+	label: 'close the tab',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -1013,6 +1036,7 @@ export const tab_close_action_spec = {
 export const tab_move_action_spec = {
 	method: 'tab_move',
 	kind: 'local_call',
+	label: 'move a tab',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -1027,6 +1051,7 @@ export const tab_move_action_spec = {
 export const tab_reopen_closed_action_spec = {
 	method: 'tab_reopen_closed',
 	kind: 'local_call',
+	label: 'reopen the closed tab',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -1041,6 +1066,7 @@ export const tab_reopen_closed_action_spec = {
 export const tab_back_action_spec = {
 	method: 'tab_back',
 	kind: 'local_call',
+	label: 'go back',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -1056,6 +1082,7 @@ export const tab_back_action_spec = {
 export const tab_forward_action_spec = {
 	method: 'tab_forward',
 	kind: 'local_call',
+	label: 'go forward',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -1070,6 +1097,7 @@ export const tab_forward_action_spec = {
 export const diskfile_details_toggle_action_spec = {
 	method: 'diskfile_details_toggle',
 	kind: 'local_call',
+	label: 'toggle the file details',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -1084,6 +1112,7 @@ export const diskfile_details_toggle_action_spec = {
 export const explorer_mode_set_action_spec = {
 	method: 'explorer_mode_set',
 	kind: 'local_call',
+	label: 'show the files as a list or a tree',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -1098,6 +1127,7 @@ export const explorer_mode_set_action_spec = {
 export const file_reveal_action_spec = {
 	method: 'file_reveal',
 	kind: 'local_call',
+	label: 'reveal the file in the tree',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -1113,6 +1143,7 @@ export const file_reveal_action_spec = {
 export const markdown_mode_set_action_spec = {
 	method: 'markdown_mode_set',
 	kind: 'local_call',
+	label: 'choose the markdown view',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
@@ -1336,6 +1367,7 @@ export const project_changed_action_spec = {
  */
 export const all_intent_specs: Array<IntentActionSpec> = [
 	main_menu_toggle_action_spec,
+	palette_toggle_action_spec,
 	sidebar_toggle_action_spec,
 	desk_toggle_action_spec,
 	desk_pin_toggle_action_spec,

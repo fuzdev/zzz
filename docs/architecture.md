@@ -221,8 +221,9 @@ A UI intent is a user's action at the grain of open, close, move, select,
 run, save — never a keystroke, cursor, scroll, or pointer move. Each is a
 `local_call` spec declared `satisfies IntentActionSpec` (`intent_spec.ts`)
 and listed in `all_intent_specs`; every `local_call` spec is one (a test
-holds the roster to it). An intent spec adds two fields fuz_app doesn't
-know: `version`, bumped when its input's meaning changes, and `history` —
+holds the roster to it). An intent spec adds three fields fuz_app doesn't
+know: `label`, what the UI calls it; `version`, bumped when its input's
+meaning changes; and `history` —
 `layout` (open, close, move, toggle: what a later undo reverses),
 `navigation` (what back / forward walks), or `none`.
 
@@ -248,6 +249,28 @@ know: `version`, bumped when its input's meaning changes, and `history` —
 - **Local only.** A wire message naming an intent finds no handler for its
   phase; a remote driver (the CLI's navigate, later agents) will reach
   intents through a bridge of its own.
+
+### The command palette
+
+Ctrl+K or Ctrl+Space opens the command palette (`CommandPalette`, the
+`palette_toggle` intent) from anywhere but a text field or a terminal view
+taking keys, which keep both chords (a shell's kill-line and NUL), and not
+over another modal dialog; inside it, either chord, Escape, or a click
+outside closes it. While a modal dialog is open, Escape is the dialog's,
+never the desk menu's behind it. It lists the commands the app's state can fill
+the input of (`create_palette_commands`): the selected tab's close, pin,
+reveal, and markdown modes, back / forward and reopen when there's
+somewhere to go, the explorer's other mode, the panels, and "collapse all
+folders", a tree command that isn't an intent (expanded folders are view
+state). A command that would do nothing is left out. Typing filters by the
+label — a match at its start first, then at a word's start, then inside a
+word — and the recently used lead (`recent_intents`). Focus stays in the
+input, which names the active command by `aria-activedescendant`; Up and
+Down move it, Enter or a click runs it, after closing the palette, so the
+command acts on the page as it was and lands in the recent intents after
+the close. Opening any file waits for the `path_open` intent. `Picker`'s
+filter input names its active item the same way (`SortableList`'s
+`listbox`).
 
 ## Cell System
 
@@ -726,7 +749,7 @@ and their output buffering, and coming back reattaches to them.
   browser. It never takes focus on its own: a click or Tab focuses it. A
   view taking keys marks its root (`data-fuz-terminal-keys`), and the
   dashboard's global shortcuts (`dashboard_shortcuts.ts`: ``
-  ` ``, `~`, Escape) leave keys whose target is inside one (`is_fuz_terminal_key_target`) to the terminal, as they leave a text field's — so with focus in a terminal, Escape goes to the program and leaves an open desk menu open. The app's other global key handlers are on pages that host no terminal, and a context menu takes keys only while it's open; a new global shortcut makes the same check. The copy button and the context menu's "copy output" read the emulator's text (`get_text`: the scrollback and screen, soft wraps joined). The view passes `TERMINAL_SCROLLBACK_MAX_BYTES` (2 MiB) as the emulator's `scrollback_max_bytes`: the limit counts the emulator's memory, pruned in whole pages, so a wider or more styled terminal keeps fewer lines, dropping the oldest; the library's default keeps a single page. A remount replays the whole output buffer, which usually holds more than that, so the fresh emulator keeps the newest history up to the limit. The context menu's "paste" (enabled exactly while the terminal takes input) reads the clipboard (`read_clipboard_text`, `navigator.clipboard.readText`, started in the entry's activation, since a browser allows the read only with a user gesture — Chrome asks for permission once, Firefox shows its own paste button) and hands the read to the view, which runs `paste_terminal_text` (`terminal_paste.ts`) over `FuzTerminal.paste` (./fuz_terminal.md, *Paste*). A paste longer than the terminal's input takes now (`Terminal.input_room`: what's left of `TERMINAL_INPUT_PENDING_MAX_LENGTH` after the input waiting to be sent, which `send_input` would otherwise drop the whole paste past) is refused whole, naming the limit — measured as `send_input` measures, the bracketed frame included, and before the text's safety, so a paste that can't fit is never asked about. Unsafe text (`get_ghostty_paste_hazard`) is pasted only once the person confirms it (`confirm`), and the confirmation covers only the hazard asked about: the second paste allows that hazard in that mode, so if the program toggled bracketed paste while the person was asked and the text is unsafe in the new mode (its hazard, or only the mode, differs from what was asked), nothing is sent and the notice says to paste again, which asks about the text as it is then (text the toggle made safe is pasted). Asking again at once instead could repeat for as long as a program kept toggling; the refusal is bounded. A failed or empty read, a refusal, or a view that takes no input is shown in the view as a notice until the next paste that doesn't fail, or it's dismissed — never thrown. A paste that goes through focuses the terminal. `TerminalViewLink` (`terminal_view_link.ts`) is the wiring between the cell and one view — attach and replay, acks, input decoding, resize — kept out of the component so tests drive it with a real `Terminal` cell.
+  ` ``, `~`, Escape, Ctrl+K and Ctrl+Space) leave keys whose target is inside one (`is_fuz_terminal_key_target`) to the terminal, as they leave a text field's — so with focus in a terminal, Escape goes to the program and leaves an open desk menu open. The app's other global key handlers are on pages that host no terminal, and a context menu takes keys only while it's open; a new global shortcut makes the same check. The copy button and the context menu's "copy output" read the emulator's text (`get_text`: the scrollback and screen, soft wraps joined). The view passes `TERMINAL_SCROLLBACK_MAX_BYTES` (2 MiB) as the emulator's `scrollback_max_bytes`: the limit counts the emulator's memory, pruned in whole pages, so a wider or more styled terminal keeps fewer lines, dropping the oldest; the library's default keeps a single page. A remount replays the whole output buffer, which usually holds more than that, so the fresh emulator keeps the newest history up to the limit. The context menu's "paste" (enabled exactly while the terminal takes input) reads the clipboard (`read_clipboard_text`, `navigator.clipboard.readText`, started in the entry's activation, since a browser allows the read only with a user gesture — Chrome asks for permission once, Firefox shows its own paste button) and hands the read to the view, which runs `paste_terminal_text` (`terminal_paste.ts`) over `FuzTerminal.paste` (./fuz_terminal.md, *Paste*). A paste longer than the terminal's input takes now (`Terminal.input_room`: what's left of `TERMINAL_INPUT_PENDING_MAX_LENGTH` after the input waiting to be sent, which `send_input` would otherwise drop the whole paste past) is refused whole, naming the limit — measured as `send_input` measures, the bracketed frame included, and before the text's safety, so a paste that can't fit is never asked about. Unsafe text (`get_ghostty_paste_hazard`) is pasted only once the person confirms it (`confirm`), and the confirmation covers only the hazard asked about: the second paste allows that hazard in that mode, so if the program toggled bracketed paste while the person was asked and the text is unsafe in the new mode (its hazard, or only the mode, differs from what was asked), nothing is sent and the notice says to paste again, which asks about the text as it is then (text the toggle made safe is pasted). Asking again at once instead could repeat for as long as a program kept toggling; the refusal is bounded. A failed or empty read, a refusal, or a view that takes no input is shown in the view as a notice until the next paste that doesn't fail, or it's dismissed — never thrown. A paste that goes through focuses the terminal. `TerminalViewLink` (`terminal_view_link.ts`) is the wiring between the cell and one view — attach and replay, acks, input decoding, resize — kept out of the component so tests drive it with a real `Terminal` cell.
 - **Status** — `starting` → `running` → `exited` (natural exit via the
   `terminal_exited` broadcast, with its code) or `closed` (the user's
   `terminal_close`, with the code from its response, or `null` if the process

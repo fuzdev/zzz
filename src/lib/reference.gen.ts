@@ -97,7 +97,7 @@ const to_intent_bullets = (specs: ReadonlyArray<IntentActionSpec>): string =>
 		.sort((a, b) => a.method.localeCompare(b.method))
 		.map((spec) => {
 			const desc = bullet_text(spec.description).replace(/\.\s*$/, '');
-			return `- \`${spec.method}\` — ${desc}. Version: ${spec.version}. History: ${spec.history}`;
+			return `- \`${spec.method}\` (${bullet_text(spec.label)}) — ${desc}. Version: ${spec.version}. History: ${spec.history}`;
 		})
 		.join('\n');
 

@@ -9,6 +9,7 @@ import { FUZ_TERMINAL_KEYS_ATTRIBUTE } from '#lib/fuz_terminal/fuz_terminal_key_
 interface TestApp extends DashboardShortcutsApp {
 	show_sidebar: boolean;
 	show_desk_menu: boolean;
+	show_palette: boolean;
 	desk_pinned: boolean;
 	toggle_desk_menu: (value?: boolean) => boolean;
 }
@@ -17,6 +18,7 @@ const create_ui = (): TestApp => {
 	const ui: TestApp = {
 		show_sidebar: false,
 		show_desk_menu: false,
+		show_palette: false,
 		desk_pinned: false,
 		toggle_desk_menu: (value = !ui.show_desk_menu) => (ui.show_desk_menu = value),
 		get ui() {
@@ -24,7 +26,8 @@ const create_ui = (): TestApp => {
 		},
 		intents: {
 			desk_toggle: (input) => ({ show: ui.toggle_desk_menu(input?.show) }),
-			sidebar_toggle: (input) => ({ show: (ui.show_sidebar = input?.show ?? !ui.show_sidebar) })
+			sidebar_toggle: (input) => ({ show: (ui.show_sidebar = input?.show ?? !ui.show_sidebar) }),
+			palette_toggle: (input) => ({ show: (ui.show_palette = input?.show ?? !ui.show_palette) })
 		}
 	};
 	return ui;
@@ -45,14 +48,15 @@ const add = <T extends Element>(element: T): T => {
 const press = (
 	target: Element,
 	key: string,
-	app: DashboardShortcutsApp
+	app: DashboardShortcutsApp,
+	init: KeyboardEventInit = {}
 ): { event: KeyboardEvent; ran: boolean } => {
 	let ran = false;
 	const handler = (e: KeyboardEvent): void => {
 		ran = handle_dashboard_shortcut(e, app);
 	};
 	window.addEventListener('keydown', handler, { capture: true });
-	const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+	const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
 	target.dispatchEvent(event);
 	window.removeEventListener('keydown', handler, { capture: true });
 	return { event, ran };
@@ -107,5 +111,92 @@ describe('handle_dashboard_shortcut', () => {
 		// one that stops taking keys drops the attribute, and the shortcuts apply again
 		root.removeAttribute(FUZ_TERMINAL_KEYS_ATTRIBUTE);
 		assert.isTrue(press(row, '`', ui).ran);
+	});
+
+	test('Ctrl+K and Ctrl+Space toggle the palette, swallowed', () => {
+		const ui = create_ui();
+		const button = add(document.createElement('button'));
+		assert.ok(press(button, 'k', ui, { ctrlKey: true }).event.defaultPrevented);
+		assert.isTrue(ui.show_palette);
+		press(button, ' ', ui, { ctrlKey: true, code: 'Space' });
+		assert.isFalse(ui.show_palette);
+		// a held chord's repeats are swallowed but toggle nothing
+		const held = press(button, 'k', ui, { ctrlKey: true, repeat: true });
+		assert.isTrue(held.event.defaultPrevented);
+		assert.isFalse(ui.show_palette);
+	});
+
+	test('the palette leaves other chords alone', () => {
+		const ui = create_ui();
+		const button = add(document.createElement('button'));
+		for (const init of [
+			{ ctrlKey: true, shiftKey: true },
+			{ ctrlKey: true, altKey: true },
+			{ ctrlKey: true, metaKey: true },
+			{ metaKey: true },
+			{}
+		]) {
+			const { event, ran } = press(button, 'k', ui, init);
+			assert.isFalse(ran || event.defaultPrevented, JSON.stringify(init));
+		}
+		assert.isFalse(ui.show_palette);
+	});
+
+	test('a text field and a terminal keep Ctrl+K and Ctrl+Space', () => {
+		const ui = create_ui();
+		const input = add(document.createElement('textarea'));
+		const terminal = add(document.createElement('div'));
+		terminal.setAttribute(FUZ_TERMINAL_KEYS_ATTRIBUTE, '');
+		for (const target of [input, terminal]) {
+			for (const [key, code] of [
+				['k', 'KeyK'],
+				[' ', 'Space']
+			] as const) {
+				const { event, ran } = press(target, key, ui, { ctrlKey: true, code });
+				assert.isFalse(ran || event.defaultPrevented, key);
+			}
+		}
+		assert.isFalse(ui.show_palette);
+	});
+
+	test('Ctrl+K on a layout whose K key types no ASCII letter, but not a Dvorak K', () => {
+		const ui = create_ui();
+		const button = add(document.createElement('button'));
+		press(button, 'л', ui, { ctrlKey: true, code: 'KeyK' });
+		assert.isTrue(ui.show_palette);
+		// Dvorak's physical K types `t`
+		const { ran } = press(button, 't', ui, { ctrlKey: true, code: 'KeyK' });
+		assert.isFalse(ran);
+		assert.isTrue(ui.show_palette);
+	});
+
+	test('Escape under a modal dialog is the dialog’s, not the desk menu’s', () => {
+		const ui = create_ui();
+		ui.toggle_desk_menu(true);
+		const button = add(document.createElement('button'));
+		const dialog = add(document.createElement('dialog'));
+		dialog.setAttribute('open', '');
+		const matches = dialog.matches.bind(dialog);
+		Object.defineProperty(dialog, 'matches', {
+			value: (selector: string) => selector === ':modal' || matches(selector)
+		});
+		const { event, ran } = press(button, 'Escape', ui);
+		assert.isFalse(ran || event.defaultPrevented);
+		assert.isTrue(ui.show_desk_menu);
+	});
+
+	test('a modal dialog keeps the palette from opening over it, the chord still swallowed', () => {
+		const ui = create_ui();
+		const button = add(document.createElement('button'));
+		const dialog = add(document.createElement('dialog'));
+		// jsdom has no `showModal`, so the dialog claims `:modal` itself
+		dialog.setAttribute('open', '');
+		const matches = dialog.matches.bind(dialog);
+		// `defineProperty`, not assignment: lib.dom types `matches` with type-predicate overloads
+		Object.defineProperty(dialog, 'matches', {
+			value: (selector: string) => selector === ':modal' || matches(selector)
+		});
+		assert.ok(press(button, 'k', ui, { ctrlKey: true }).event.defaultPrevented);
+		assert.isFalse(ui.show_palette);
 	});
 });

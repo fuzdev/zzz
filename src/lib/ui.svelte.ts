@@ -6,6 +6,7 @@ import { cell_json_schema } from './cell_types.ts';
 export const UiJson = cell_json_schema(
 	{
 		show_main_dialog: with_default(boolean, false),
+		show_palette: with_default(boolean, false),
 		show_sidebar: with_default(boolean, true),
 		tutorial_for_database: with_default(boolean, true),
 		tutorial_for_chats: with_default(boolean, true),
@@ -24,6 +25,7 @@ export type UiJsonInput = InferInput<typeof UiJson>;
 export interface UiOptions extends CellOptions<typeof UiJson> {}
 export class Ui extends Cell<typeof UiJson> {
 	show_main_dialog: boolean = $state.raw()!;
+	show_palette: boolean = $state.raw()!;
 	show_sidebar: boolean = $state.raw()!;
 	tutorial_for_database: boolean = $state.raw()!;
 	tutorial_for_chats: boolean = $state.raw()!;
@@ -49,6 +51,15 @@ export class Ui extends Cell<typeof UiJson> {
 	 */
 	toggle_main_menu(value: boolean = !this.show_main_dialog): boolean {
 		this.show_main_dialog = value;
+		return value;
+	}
+
+	/**
+	 * Toggle the command palette's visibility. The `palette_toggle` intent's
+	 * implementation — UI calls `app.intents.palette_toggle`, not this.
+	 */
+	toggle_palette(value: boolean = !this.show_palette): boolean {
+		this.show_palette = value;
 		return value;
 	}
 

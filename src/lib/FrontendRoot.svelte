@@ -6,6 +6,7 @@
 	import { Frontend, frontend_context } from './frontend.svelte.ts';
 	import Dashboard from './Dashboard.svelte';
 	import MainDialog from './MainDialog.svelte';
+	import CommandPalette from './CommandPalette.svelte';
 	import DeskMenu from './DeskMenu.svelte';
 	import DiskfileCloseDialog from './DiskfileCloseDialog.svelte';
 
@@ -32,6 +33,7 @@
 <ThemeRoot>
 	<ContextmenuRoot>
 		<MainDialog />
+		<CommandPalette />
 		<DeskMenu />
 		<DiskfileCloseDialog />
 		<!-- TODO user-defined pages should be able to control the full page at runtime -->

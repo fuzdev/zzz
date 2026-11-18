@@ -243,6 +243,11 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'main_menu_toggle', 'execute', 'handling'>
 		) => ActionOutputs['main_menu_toggle'];
 	};
+	palette_toggle?: {
+		execute?: (
+			action_event: TypedActionEvent<'palette_toggle', 'execute', 'handling'>
+		) => ActionOutputs['palette_toggle'];
+	};
 	sidebar_toggle?: {
 		execute?: (
 			action_event: TypedActionEvent<'sidebar_toggle', 'execute', 'handling'>

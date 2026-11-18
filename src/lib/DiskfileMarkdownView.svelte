@@ -54,6 +54,7 @@
 	} from './diskfile_helpers.ts';
 	import { lang_for_path } from './path_lang.ts';
 	import { handle_save_shortcut_keydown } from './save_shortcut.ts';
+	import { has_open_modal_dialog } from './dashboard_shortcuts.ts';
 	import {
 		MARKDOWN_VIEW_MODES,
 		MARKDOWN_VIEW_MODE_LABELS,
@@ -200,14 +201,6 @@
 		if (event.repeat) return;
 		const active = document.activeElement;
 		set_mode(next, inside || !active || active === document.body);
-	};
-
-	/** Whether a modal `<dialog>` is open — fuz_ui's `Dialog` opens one with `showModal`. */
-	const has_open_modal_dialog = (): boolean => {
-		for (const dialog of document.querySelectorAll('dialog[open]')) {
-			if (dialog.matches(':modal')) return true;
-		}
-		return false;
 	};
 
 	// a blocked save points at the conflict notice rather than doing nothing silently

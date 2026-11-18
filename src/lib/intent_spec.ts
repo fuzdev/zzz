@@ -18,17 +18,23 @@ export type IntentHistory = 'layout' | 'navigation' | 'none';
  * driver (a click, a shortcut, a test) calls the same spec through
  * `app.intents`.
  *
- * A `local_call` spec with two fields fuz_app doesn't know: `version`,
- * bumped when the input's meaning changes so a buffered or persisted entry
- * can't be replayed against the wrong shape, and `history`. Specs declare
- * `satisfies IntentActionSpec`; the base type's excess-property check would
- * refuse the extra fields.
+ * A `local_call` spec with three fields fuz_app doesn't know: `label`,
+ * `version`, bumped when the input's meaning changes so a buffered or
+ * persisted entry can't be replayed against the wrong shape, and
+ * `history`. Specs declare `satisfies IntentActionSpec`; the base type's
+ * excess-property check would refuse the extra fields.
  *
  * Intents are sync: the handler applies the change before the call returns.
  * An expected no-op (the tab is already gone) is reported in the output; a
  * throw is a bug.
  */
 export interface IntentActionSpec extends LocalCallActionSpec {
+	/**
+	 * What the intent is called in the UI — the command palette's entry,
+	 * lowercase like the rest of zzz's UI text. A palette entry that binds an
+	 * input may name itself more precisely (`palette_commands.ts`).
+	 */
+	readonly label: string;
 	readonly version: number;
 	readonly history: IntentHistory;
 	readonly async: false;
@@ -80,5 +86,6 @@ export const create_untracked_intents = <T extends object>(intents: T): T => {
  */
 export const is_intent_action_spec = (spec: ActionSpecUnion): spec is IntentActionSpec =>
 	spec.kind === 'local_call' &&
+	typeof (spec as Partial<IntentActionSpec>).label === 'string' &&
 	typeof (spec as Partial<IntentActionSpec>).version === 'number' &&
 	typeof (spec as Partial<IntentActionSpec>).history === 'string';

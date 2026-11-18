@@ -1,5 +1,11 @@
+<script lang="ts" module>
+	/** The id of a `SortableList` listbox's option at `index` in the shown order. */
+	export const to_sortable_list_option_id = (listbox_id: string, index: number): string =>
+		`${listbox_id}-option-${index}`;
+</script>
+
 <script lang="ts" generics="T extends {id: string}">
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import { EMPTY_ARRAY } from '@fuzdev/fuz_util/array.ts';
 	import { slide } from 'svelte/transition';
 	import type { SvelteHTMLElements } from 'svelte/elements';
@@ -21,6 +27,8 @@
 		item_attrs,
 		list_attrs,
 		label_attrs,
+		listbox,
+		onitems,
 		children
 	}: {
 		items: Array<T>;
@@ -50,6 +58,18 @@
 		list_attrs?: SvelteHTMLElements['ul'] | undefined;
 		item_attrs?: SvelteHTMLElements['li'] | undefined;
 		label_attrs?: SvelteHTMLElements['label'] | undefined;
+		/**
+		 * Makes the list a listbox whose active option a combobox names by
+		 * `aria-activedescendant` (`Picker`'s filter input): the list gets
+		 * `id` (`to_sortable_list_option_id` names each option), and the option
+		 * at `active_index` in the shown order is marked and kept scrolled into
+		 * view. `-1` marks none. When `windowed`, an active option scrolled out
+		 * of the window isn't rendered until it's scrolled back, so for that
+		 * moment the combobox names an id that isn't there.
+		 */
+		listbox?: { id: string; label: string; active_index: number } | undefined;
+		/** Called with the items as shown — filtered and sorted — whenever they change. */
+		onitems?: ((items: ReadonlyArray<T>) => void) | undefined;
 		/** Called once per rendered item. */
 		children: Snippet<[item: T]>;
 	} = $props();
@@ -106,6 +126,24 @@
 	const rendered_items = $derived(
 		list_window ? filtered_items.slice(list_window.start, list_window.end) : filtered_items
 	);
+
+	$effect.pre(() => {
+		const items = filtered_items;
+		untrack(() => onitems?.(items));
+	});
+
+	// the active option stays in view as the keyboard moves it — scrolled into the window first
+	const active_index = $derived(listbox?.active_index ?? -1);
+	$effect(() => {
+		if (active_index === -1 || !listbox) return;
+		if (windowed) {
+			viewport.scroll_into_view(active_index);
+			return;
+		}
+		const id = to_sortable_list_option_id(listbox.id, active_index);
+		// jsdom has no `scrollIntoView`
+		untrack(() => document.getElementById(id)?.scrollIntoView?.({ block: 'nearest' }));
+	});
 </script>
 
 {#if show_sort_controls && sortable.sorters.length > 1}
@@ -130,6 +168,9 @@
 {:else}
 	<ul
 		{...list_attrs}
+		id={listbox?.id ?? list_attrs?.id}
+		role={listbox ? 'listbox' : list_attrs?.role}
+		aria-label={listbox?.label ?? list_attrs?.['aria-label']}
 		class="unstyled {list_attrs?.class}"
 		{@attach windowed && viewport.measure}
 		style:padding-top={list_window ? `${list_window.start * viewport.row_height}px` : undefined}
@@ -137,10 +178,31 @@
 			? `${(filtered_items.length - list_window.end) * viewport.row_height}px`
 			: undefined}
 	>
-		{#each rendered_items as item (item.id)}
-			<li {...item_attrs}>
-				{@render children(item)}
-			</li>
+		{#each rendered_items as item, i (item.id)}
+			{@const index = (list_window?.start ?? 0) + i}
+			{#if listbox}
+				<li
+					{...item_attrs}
+					id={to_sortable_list_option_id(listbox.id, index)}
+					role="option"
+					aria-selected={index === active_index}
+					class={[item_attrs?.class, { 'sortable-list-active': index === active_index }]}
+				>
+					{@render children(item)}
+				</li>
+			{:else}
+				<li {...item_attrs}>
+					{@render children(item)}
+				</li>
+			{/if}
 		{/each}
 	</ul>
 {/if}
+
+<style>
+	/* the option a combobox names as active, its focus staying in the combobox */
+	.sortable-list-active {
+		outline: var(--outline_width_focus) solid var(--outline_color);
+		outline-offset: calc(-1 * var(--outline_width_focus));
+	}
+</style>

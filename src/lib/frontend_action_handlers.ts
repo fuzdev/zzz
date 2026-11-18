@@ -210,6 +210,10 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
+	palette_toggle: {
+		execute: ({ data: { input } }) => ({ show: frontend.ui.toggle_palette(input?.show) })
+	},
+
 	sidebar_toggle: {
 		execute: ({ data: { input } }) => ({ show: frontend.ui.toggle_sidebar(input?.show) })
 	},

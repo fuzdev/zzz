@@ -33,6 +33,7 @@ export const ActionSpecs: ActionSpecs = {
 	completion_create: specs.completion_create_action_spec,
 	completion_progress: specs.completion_progress_action_spec,
 	main_menu_toggle: specs.main_menu_toggle_action_spec,
+	palette_toggle: specs.palette_toggle_action_spec,
 	sidebar_toggle: specs.sidebar_toggle_action_spec,
 	desk_toggle: specs.desk_toggle_action_spec,
 	desk_pin_toggle: specs.desk_pin_toggle_action_spec,
@@ -85,6 +86,7 @@ export type ActionSpecs = {
 	readonly completion_create: typeof specs.completion_create_action_spec;
 	readonly completion_progress: typeof specs.completion_progress_action_spec;
 	readonly main_menu_toggle: typeof specs.main_menu_toggle_action_spec;
+	readonly palette_toggle: typeof specs.palette_toggle_action_spec;
 	readonly sidebar_toggle: typeof specs.sidebar_toggle_action_spec;
 	readonly desk_toggle: typeof specs.desk_toggle_action_spec;
 	readonly desk_pin_toggle: typeof specs.desk_pin_toggle_action_spec;
@@ -144,6 +146,7 @@ export interface ActionInputs {
 	completion_create: Infer<typeof specs.completion_create_action_spec.input>;
 	completion_progress: Infer<typeof specs.completion_progress_action_spec.input>;
 	main_menu_toggle: Infer<typeof specs.main_menu_toggle_action_spec.input>;
+	palette_toggle: Infer<typeof specs.palette_toggle_action_spec.input>;
 	sidebar_toggle: Infer<typeof specs.sidebar_toggle_action_spec.input>;
 	desk_toggle: Infer<typeof specs.desk_toggle_action_spec.input>;
 	desk_pin_toggle: Infer<typeof specs.desk_pin_toggle_action_spec.input>;
@@ -201,6 +204,7 @@ export interface ActionCallInputs {
 	completion_create: InferInput<typeof specs.completion_create_action_spec.input>;
 	completion_progress: InferInput<typeof specs.completion_progress_action_spec.input>;
 	main_menu_toggle: InferInput<typeof specs.main_menu_toggle_action_spec.input>;
+	palette_toggle: InferInput<typeof specs.palette_toggle_action_spec.input>;
 	sidebar_toggle: InferInput<typeof specs.sidebar_toggle_action_spec.input>;
 	desk_toggle: InferInput<typeof specs.desk_toggle_action_spec.input>;
 	desk_pin_toggle: InferInput<typeof specs.desk_pin_toggle_action_spec.input>;
@@ -258,6 +262,7 @@ export interface ActionOutputs {
 	completion_create: Infer<typeof specs.completion_create_action_spec.output>;
 	completion_progress: Infer<typeof specs.completion_progress_action_spec.output>;
 	main_menu_toggle: Infer<typeof specs.main_menu_toggle_action_spec.output>;
+	palette_toggle: Infer<typeof specs.palette_toggle_action_spec.output>;
 	sidebar_toggle: Infer<typeof specs.sidebar_toggle_action_spec.output>;
 	desk_toggle: Infer<typeof specs.desk_toggle_action_spec.output>;
 	desk_pin_toggle: Infer<typeof specs.desk_pin_toggle_action_spec.output>;
@@ -373,6 +378,11 @@ export interface ActionEventDatas {
 		'main_menu_toggle',
 		ActionInputs['main_menu_toggle'],
 		ActionOutputs['main_menu_toggle']
+	>;
+	palette_toggle: ActionEventLocalCallData<
+		'palette_toggle',
+		ActionInputs['palette_toggle'],
+		ActionOutputs['palette_toggle']
 	>;
 	sidebar_toggle: ActionEventLocalCallData<
 		'sidebar_toggle',

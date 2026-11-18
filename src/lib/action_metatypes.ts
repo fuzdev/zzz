@@ -29,6 +29,7 @@ export const ActionMethod = one_of([
 	'completion_create',
 	'completion_progress',
 	'main_menu_toggle',
+	'palette_toggle',
 	'sidebar_toggle',
 	'desk_toggle',
 	'desk_pin_toggle',
@@ -116,6 +117,7 @@ export type RemoteNotificationActionMethod = Infer<typeof RemoteNotificationActi
  */
 export const LocalCallActionMethod = one_of([
 	'main_menu_toggle',
+	'palette_toggle',
 	'sidebar_toggle',
 	'desk_toggle',
 	'desk_pin_toggle',
@@ -157,6 +159,7 @@ export const FrontendActionMethod = one_of([
 	'completion_create',
 	'completion_progress',
 	'main_menu_toggle',
+	'palette_toggle',
 	'sidebar_toggle',
 	'desk_toggle',
 	'desk_pin_toggle',
@@ -374,6 +377,7 @@ export interface FrontendActionsApi {
 	main_menu_toggle: (
 		input?: ActionCallInputs['main_menu_toggle']
 	) => ActionOutputs['main_menu_toggle'];
+	palette_toggle: (input?: ActionCallInputs['palette_toggle']) => ActionOutputs['palette_toggle'];
 	sidebar_toggle: (input?: ActionCallInputs['sidebar_toggle']) => ActionOutputs['sidebar_toggle'];
 	desk_toggle: (input?: ActionCallInputs['desk_toggle']) => ActionOutputs['desk_toggle'];
 	desk_pin_toggle: (

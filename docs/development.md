@@ -808,8 +808,8 @@ See ../crates/CLAUDE.md for the Rust handler patterns.
 A UI intent (./architecture.md § Intents) is a `local_call` spec:
 
 1. **Spec** in `src/lib/action_specs.ts`: `kind: 'local_call'`, `initiator:
-   'frontend'`, `auth: null`, `side_effects: true`, `async: false`,
-   `version: 1`, a `history`
+   'frontend'`, `auth: null`, `side_effects: true`, `async: false`, a
+   lowercase `label` (what the UI calls it), `version: 1`, a `history`
    (`layout`, `navigation`, or `none`), input and output schemas, a
    `description`, `satisfies IntentActionSpec`; add it to
    `all_intent_specs`. Name it domain-first (`tab_open`, `sidebar_toggle`);
@@ -820,7 +820,11 @@ A UI intent (./architecture.md § Intents) is a `local_call` spec:
    would record one gesture twice.
 3. **Call** it from every driver as `app.intents.my_intent(input)`. Wrap it
    in a closure — `onclick={app.intents.x}` would pass the event as input.
-4. **Bump `version`** when the input's meaning changes.
+4. **A palette command** in `create_palette_commands`
+   (`src/lib/palette_commands.ts`) when the app's state can fill its input
+   — with its own label where the bound input makes it more precise
+   ("show the files as a tree").
+5. **Bump `version`** when the input's meaning changes.
 
 ### Adding a New Route
 
