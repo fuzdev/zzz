@@ -40,7 +40,7 @@ reqwest = { version = "0.13", default-features = false, features = ["rustls-no-p
 libc = "0.2"
 # NSS user and group lookups (`getpwuid_r`, `getgrgid_r`) for the registry
 # trust rule.
-nix = { version = "0.31", default-features = false, features = ["user"] }
+nix = { version = "0.31", default-features = false, features = ["fs", "user"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -20,6 +20,7 @@ export const ActionMethod = one_of([
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
+	'diskfile_rename',
 	'directory_create',
 	'media_finalize',
 	'transcription_create',
@@ -80,6 +81,7 @@ export const RequestResponseActionMethod = one_of([
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
+	'diskfile_rename',
 	'directory_create',
 	'media_finalize',
 	'transcription_create',
@@ -158,6 +160,7 @@ export const FrontendActionMethod = one_of([
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
+	'diskfile_rename',
 	'directory_create',
 	'media_finalize',
 	'transcription_create',
@@ -220,6 +223,7 @@ export const BackendActionMethod = one_of([
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
+	'diskfile_rename',
 	'directory_create',
 	'media_finalize',
 	'transcription_create',
@@ -263,6 +267,7 @@ export const BackendRequestResponseMethod = one_of([
 	'diskfile_update',
 	'diskfile_create',
 	'diskfile_delete',
+	'diskfile_rename',
 	'directory_create',
 	'media_finalize',
 	'transcription_create',
@@ -346,6 +351,10 @@ export interface FrontendActionsApi {
 		input: ActionCallInputs['diskfile_delete'],
 		options?: RpcClientCallOptions
 	) => Promise<Result<{ value: ActionOutputs['diskfile_delete'] }, { error: JsonrpcErrorObject }>>;
+	diskfile_rename: (
+		input: ActionCallInputs['diskfile_rename'],
+		options?: RpcClientCallOptions
+	) => Promise<Result<{ value: ActionOutputs['diskfile_rename'] }, { error: JsonrpcErrorObject }>>;
 	directory_create: (
 		input: ActionCallInputs['directory_create'],
 		options?: RpcClientCallOptions

@@ -26,6 +26,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::panic::AssertUnwindSafe;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -36,6 +37,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::handlers::App;
+use crate::scoped_fs::normalize_path;
 
 /// How many finished jobs are kept as history; the oldest are dropped first.
 pub const MAX_FINISHED_JOBS: usize = 100;
@@ -118,6 +120,13 @@ impl JobFailure {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("job not found")]
 pub struct JobNotFound;
+
+/// An unfinished job works on the file ([`JobManager::without_job_on`]).
+#[derive(Debug, thiserror::Error)]
+#[error("a job ({job_id}) is working on the file")]
+pub struct JobOnPath {
+    pub job_id: String,
+}
 
 /// A job's work: resolves to the path of the file it wrote.
 pub type JobFuture = Pin<Box<dyn Future<Output = Result<String, JobFailure>> + Send>>;
@@ -274,6 +283,39 @@ impl JobManager {
             tokio::spawn(async move { manager.drain(app).await });
         }
         snapshot
+    }
+
+    /// Run `f` unless an unfinished job (any account's, queued or running)
+    /// works on a file at one of `paths`, holding the job table's lock
+    /// throughout, so no job is submitted on them meanwhile
+    /// ([`Self::submit`] takes the same lock). Paths compare lexically
+    /// normalized — `paths` given normalized; two spellings of one file on a
+    /// case-folding filesystem aren't caught. Blocking `f` blocks every job
+    /// update while it runs — keep it to a few syscalls (a file's rename).
+    ///
+    /// # Errors
+    ///
+    /// [`JobOnPath`] with the job's id when one is unfinished on a path.
+    // TODO a cancelled job's sidecar write already in `spawn_blocking` can land after its
+    // status is final, so a rename let through just then can still be followed by it
+    pub fn without_job_on<T>(
+        &self,
+        paths: &[impl AsRef<Path>],
+        f: impl FnOnce() -> T,
+    ) -> Result<T, JobOnPath> {
+        let table = self.table.lock();
+        let busy = table.jobs.values().find(|job| {
+            !job.snapshot.status.is_finished() && {
+                let input = normalize_path(Path::new(&job.snapshot.input_path));
+                paths.iter().any(|path| input == path.as_ref())
+            }
+        });
+        if let Some(job) = busy {
+            return Err(JobOnPath {
+                job_id: job.snapshot.job_id.clone(),
+            });
+        }
+        Ok(f())
     }
 
     /// `owner`'s jobs, oldest first.
@@ -583,6 +625,39 @@ mod tests {
             "job never became {status:?}: {:?}",
             status_of(app, owner, job_id)
         );
+    }
+
+    #[tokio::test]
+    async fn a_path_is_busy_while_a_job_on_it_is_unfinished() {
+        let app = test_app();
+        let owner = Uuid::new_v4();
+        let path = [Path::new("/w/a.webm")];
+        assert_eq!(app.job_manager.without_job_on(&path, || 1).unwrap(), 1);
+
+        // queued, then running: busy, for any account's caller, by the normalized path
+        let (work, release) = gated("/w/a.webm.m.transcript.json");
+        let job_id = submit(&app, owner, work);
+        let busy = app.job_manager.without_job_on(&path, || ()).unwrap_err();
+        assert_eq!(busy.job_id, job_id.to_string());
+        wait_for_status(&app, owner, job_id, JobStatus::Running).await;
+        assert!(app.job_manager.without_job_on(&path, || ()).is_err());
+        assert!(
+            app.job_manager
+                .without_job_on(&[Path::new("/w/b.webm")], || ())
+                .is_ok(),
+            "another file is free"
+        );
+        assert!(
+            app.job_manager
+                .without_job_on(&[Path::new("/w/b.webm"), Path::new("/w/a.webm")], || ())
+                .is_err(),
+            "any of them busy"
+        );
+
+        // finished: free again
+        release.send(Ok(())).unwrap();
+        wait_for_status(&app, owner, job_id, JobStatus::Succeeded).await;
+        assert!(app.job_manager.without_job_on(&path, || ()).is_ok());
     }
 
     #[tokio::test]

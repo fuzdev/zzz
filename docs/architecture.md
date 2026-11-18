@@ -187,6 +187,9 @@ several families are omitted here; see [reference.md](./reference.md)
   the edit was based on (`expected_hash`). Kind: `request_response`.
   Initiator: `frontend`
 - `diskfile_delete` — Delete a file. Kind: `request_response`. Initiator: `frontend`
+- `diskfile_rename` — Rename a file within its directory, carrying its
+  transcript sidecars; a taken name, or a job on the file, is `conflict`.
+  Kind: `request_response`. Initiator: `frontend`
 - `directory_create` — Create a new directory (and missing parents); a taken
   name is `conflict`. Kind: `request_response`. Initiator: `frontend`
 - `completion_create` — Start AI completion. Kind: `request_response`. Initiator: `frontend`
@@ -1264,6 +1267,35 @@ contents' length when they're loaded. Errors carry the file actions' reasons
 (`path_not_found`, `path_not_allowed`, `symlink_not_allowed`,
 `is_a_directory`, `not_a_regular_file`, …). Larger files and bytes go over
 the byte routes below.
+
+### Renaming Files
+
+`diskfile_rename {path, name}` renames a file within its own directory —
+`name` is one plain path component, never the file's own; directories
+aren't renamed. It never replaces anything: the file moves by
+`renameat2(RENAME_NOREPLACE)`, and a taken name is `conflict` /
+`already_exists` with nothing moved. The file's **companions** move with
+it — today its transcript sidecars, whose names are their link to it (§
+Recording): each is hard-linked to its new name first, then the file is
+renamed (the commit point), then the old names are removed, so a failure
+before the commit undoes the links it made, and a retry takes a link a crashed
+rename left. Nothing is ever cut off from its audio, but an old name that
+couldn't be removed after the commit stays — a file later created at the
+old name would pick that transcript up, until sidecars are checked by their
+`source.blake3`. A `.md` copy of a transcript is the person's own file and
+isn't moved. The name can't hold a `\` (no sidecar could name it). The
+reply lists each move, the file first (`renamed: [{path, new_path}]`).
+
+A filesystem that can't do it safely refuses the rename (`conflict` /
+`rename_unsupported`) rather than risk it: one without hard links (FAT,
+exFAT) when the file has sidecars, one that refuses a sidecar's link
+(`fs.protected_hardlinks`, an immutable file), or one without
+`RENAME_NOREPLACE` (some FUSE and NFS). A rename is refused
+(`conflict` / `job_on_file`) while a job works on the file or on its new
+path — a transcription writes its sidecar under the name it was given. The
+check, the companions' listing, and the renames run under the job table's
+lock, so no job starts on the file between them. The filer reports a
+rename as a delete and an add.
 
 ### File Bytes
 

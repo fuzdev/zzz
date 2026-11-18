@@ -484,7 +484,10 @@ commands):
   the file exists, a symlink to the file or along its path, a directory, a
   FIFO, a socket, strict inputs), scoped `diskfile_update` / `diskfile_delete`,
   `directory_create` (missing parents created, a taken name `conflict` /
-  `already_exists`), writes into `zzz_dir` + nested subdirs,
+  `already_exists`), `diskfile_rename` (the file's transcript sidecars
+  carried, a `.md` copy and another source's sidecar left; a taken name
+  `already_exists` with nothing moved; a bad name, its own name, or a
+  directory `invalid_params`), writes into `zzz_dir` + nested subdirs,
   path-traversal / out-of-scope / relative-path rejection and the error codes
   (see Filesystem errors), a `.zzz` home refused to `diskfile_update`,
   `diskfile_create`, `diskfile_delete`, and `directory_create` however it's

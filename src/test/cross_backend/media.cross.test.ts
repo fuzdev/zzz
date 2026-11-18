@@ -496,6 +496,21 @@ describe('transcription cross-backend', () => {
 
 			await wait_for_job(ws, first_id, (job) => job.status === 'running');
 
+			// neither file can be renamed while its job is unfinished, running or queued — the job
+			// writes its transcript under the name it was given
+			for (const path of [first_path, second_path]) {
+				const renamed = await rpc_call({
+					app: fixture.transport,
+					path: handle.config.rpc_path,
+					method: 'diskfile_rename',
+					params: { path, name: `renamed_${path.slice(path.lastIndexOf('/') + 1)}` },
+					headers: fixture.create_session_headers()
+				});
+				assert.ok(!renamed.ok, path);
+				assert.equal(renamed.error.code, JSONRPC_ERROR_CODES.conflict, path);
+				assert.deepEqual(renamed.error.data, { reason: 'job_on_file' }, path);
+			}
+
 			// the queued one never starts
 			const cancelled_queued = await cancel_job(fixture, second_id);
 			assert.ok(cancelled_queued.ok, JSON.stringify(cancelled_queued));

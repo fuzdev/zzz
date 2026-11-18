@@ -153,6 +153,20 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'diskfile_delete', 'receive_error', 'handling'>
 		) => void | Promise<void>;
 	};
+	diskfile_rename?: {
+		send_request?: (
+			action_event: TypedActionEvent<'diskfile_rename', 'send_request', 'handling'>
+		) => void | Promise<void>;
+		receive_response?: (
+			action_event: TypedActionEvent<'diskfile_rename', 'receive_response', 'handling'>
+		) => void | Promise<void>;
+		send_error?: (
+			action_event: TypedActionEvent<'diskfile_rename', 'send_error', 'handling'>
+		) => void | Promise<void>;
+		receive_error?: (
+			action_event: TypedActionEvent<'diskfile_rename', 'receive_error', 'handling'>
+		) => void | Promise<void>;
+	};
 	directory_create?: {
 		send_request?: (
 			action_event: TypedActionEvent<'directory_create', 'send_request', 'handling'>

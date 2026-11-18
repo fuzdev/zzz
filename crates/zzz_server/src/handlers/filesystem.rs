@@ -23,6 +23,7 @@ use serde_json::Value;
 use crate::filer::system_time_to_ms;
 use crate::handlers::{App, not_found_error};
 use crate::scoped_fs::{ExpectedContent, ScopedFsError, normalize_path};
+use crate::transcription::transcript_sidecar_renamed;
 
 // -- Error reasons (`error.data.reason`) --------------------------------------
 
@@ -37,7 +38,8 @@ pub const ERROR_SYMLINK_NOT_ALLOWED: &str = "symlink_not_allowed";
 pub const ERROR_PERMISSION_DENIED: &str = "permission_denied";
 /// A new file's or directory's parent directory isn't writable (`forbidden`).
 pub const ERROR_DIRECTORY_NOT_WRITABLE: &str = "directory_not_writable";
-/// `diskfile_create` or `directory_create` found the path taken (`conflict`).
+/// `diskfile_create`, `directory_create`, or `diskfile_rename` found the path
+/// taken (`conflict`).
 pub const ERROR_ALREADY_EXISTS: &str = "already_exists";
 /// A save's in-place fallback found the file replaced or removed externally
 /// since it was opened, and wrote nothing (`conflict`).
@@ -49,6 +51,13 @@ pub const ERROR_DISK_CHANGED: &str = "disk_changed";
 /// An append found the file at a different size than the expected offset,
 /// and wrote nothing (`conflict`).
 pub const ERROR_OFFSET_MISMATCH: &str = "offset_mismatch";
+/// A rename found a job (a transcription) working on the file, or on the
+/// path it would take (`conflict`).
+pub const ERROR_JOB_ON_FILE: &str = "job_on_file";
+/// A rename the filesystem can't do safely — no hard links for its
+/// sidecars, as on FAT or exFAT, or no `RENAME_NOREPLACE`, as on some FUSE
+/// and NFS — refused, nothing moved (`conflict`).
+pub const ERROR_RENAME_UNSUPPORTED: &str = "rename_unsupported";
 /// The path doesn't exist (`not_found`).
 pub const ERROR_PATH_NOT_FOUND: &str = "path_not_found";
 /// The path is a directory where a file was expected (`invalid_params`).
@@ -109,6 +118,7 @@ pub fn scoped_fs_error(action: &str, error: &ScopedFsError) -> JsonrpcError {
         }
         ScopedFsError::DiskChanged(_) => conflict(&message, Some(ERROR_DISK_CHANGED)),
         ScopedFsError::OffsetMismatch { .. } => conflict(&message, Some(ERROR_OFFSET_MISMATCH)),
+        ScopedFsError::RenameUnsupported(_) => conflict(&message, Some(ERROR_RENAME_UNSUPPORTED)),
         ScopedFsError::Io { source, .. } => match source.kind() {
             ErrorKind::NotFound => not_found_error(&message, ERROR_PATH_NOT_FOUND),
             ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem => {
@@ -150,6 +160,27 @@ struct DiskfileUpdateOutput {
     /// [`content_hash_hex`] of the bytes written — the base of the caller's
     /// next save, with no read in between.
     hash: String,
+}
+
+/// Input for `diskfile_rename` — twin of `DiskfileRenameInput`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DiskfileRenameInput {
+    path: String,
+    name: String,
+}
+
+/// A file `diskfile_rename` moved — twin of `DiskfileRenamed`.
+#[derive(Serialize)]
+struct DiskfileRenamed {
+    path: String,
+    new_path: String,
+}
+
+/// Output of `diskfile_rename` — twin of `DiskfileRenameOutput`.
+#[derive(Serialize)]
+struct DiskfileRenameOutput {
+    renamed: Vec<DiskfileRenamed>,
 }
 
 /// Input for `diskfile_create` — twin of `DiskfileCreateInput`.
@@ -507,6 +538,73 @@ pub async fn diskfile_delete(
         .map_err(|e| scoped_fs_error("failed to delete file", &e))?;
 
     Ok(Value::Null)
+}
+
+/// `diskfile_rename` — rename a file within its directory, carrying each
+/// transcript sidecar named for it ([`transcript_sidecar_renamed`]), never
+/// replacing anything ([`crate::scoped_fs::PreparedRename::apply`]).
+///
+/// Refused while a job works on the file: a transcription writes its sidecar
+/// under the name it was given, so it would be cut off. The check and the
+/// rename run under the job table's lock
+/// ([`crate::job_manager::JobManager::without_job_on`]), so
+/// no job is submitted on the file between them.
+///
+/// # Errors
+///
+/// `invalid_params` for a malformed input, a `name` that isn't one plain
+/// path component or is the file's own, or a directory; `conflict`
+/// (`already_exists`) when the new name, or a sidecar's, is taken;
+/// `conflict` (`job_on_file`) while a job works on the file or its new path
+/// (a job whose file was deleted would write its sidecar there);
+/// `conflict` (`rename_unsupported`) on a filesystem that can't do it
+/// safely; otherwise [`scoped_fs_error`].
+pub async fn diskfile_rename(
+    params: Value,
+    _ctx: ActionContext<'_>,
+    app: Arc<App>,
+) -> Result<Value, JsonrpcError> {
+    let input: DiskfileRenameInput = parse_strict_params(params)?;
+    require_absolute(&input.path)?;
+
+    let prepared = app
+        .scoped_fs
+        .prepare_rename(&input.path, &input.name)
+        .await
+        .map_err(|e| scoped_fs_error("failed to rename file", &e))?;
+    let old_name = prepared
+        .from()
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let new_name = input.name;
+    let jobs = app.job_manager.clone();
+    let renamed = tokio::task::spawn_blocking(move || {
+        let paths = [prepared.from().to_path_buf(), prepared.to().to_path_buf()];
+        jobs.without_job_on(&paths, move || {
+            prepared.apply(|name| transcript_sidecar_renamed(name, &old_name, &new_name))
+        })
+    })
+    .await
+    .map_err(|e| internal_error_with_source("diskfile_rename", &e))?
+    .map_err(|busy| {
+        conflict(
+            &format!("failed to rename file: {busy}"),
+            Some(ERROR_JOB_ON_FILE),
+        )
+    })?
+    .map_err(|e| scoped_fs_error("failed to rename file", &e))?;
+
+    let output = DiskfileRenameOutput {
+        renamed: renamed
+            .into_iter()
+            .map(|r| DiskfileRenamed {
+                path: r.from.to_string_lossy().into_owned(),
+                new_path: r.to.to_string_lossy().into_owned(),
+            })
+            .collect(),
+    };
+    serde_json::to_value(output).map_err(|e| internal_error_with_source("diskfile_rename", &e))
 }
 
 /// `directory_create` — create a new directory and any missing parents,

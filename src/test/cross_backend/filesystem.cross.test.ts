@@ -1,7 +1,8 @@
 /**
  * Cross-backend integration tests for filesystem actions
  * (`diskfile_read`, `diskfile_update`, `diskfile_create`, `diskfile_delete`,
- * `directory_create`) plus the `filer_change` notification path.
+ * `diskfile_rename`, `directory_create`) plus the `filer_change` notification
+ * path.
  *
  * @module
  */
@@ -37,7 +38,12 @@ import { raw_http_send_head } from '@fuzdev/fuz_app/testing/transports/raw_http.
 import { TEST_ORIGIN } from '@fuzdev/fuz_app/testing/test_origin.ts';
 import { hash_blake3 } from '@fuzdev/fuz_util/hash_blake3.ts';
 
-import { DiskfileReadOutput, DiskfileUpdateOutput, FilerChangeInput } from '#lib/action_specs.ts';
+import {
+	DiskfileReadOutput,
+	DiskfileRenameOutput,
+	DiskfileUpdateOutput,
+	FilerChangeInput
+} from '#lib/action_specs.ts';
 import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
 import { parse_snapshot_files } from '../diskfile_test_helpers.ts';
@@ -328,6 +334,80 @@ describe('filesystem cross-backend', () => {
 		assert.equal(res.result, null);
 
 		assert.ok(!(await file_exists(file_path)), 'file should not exist after delete');
+	});
+
+	test('diskfile_rename moves a file and its transcripts, never replacing', async () => {
+		const fixture = await setup_test();
+		const dir = join(scoped_dir, `rename_${randomUUID()}`);
+		await mkdir(join(dir, 'sub'), { recursive: true });
+		const rename_file = (path: string, name: string) =>
+			rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'diskfile_rename',
+				params: { path, name },
+				headers: fixture.create_session_headers()
+			});
+		try {
+			const audio = join(dir, 'a.webm');
+			await writeFile(audio, 'audio', 'utf-8');
+			await writeFile(join(dir, 'a.webm.base-en.transcript.json'), '{}', 'utf-8');
+			await writeFile(join(dir, 'a.webm.md'), 'a copy — yours, left alone', 'utf-8');
+			await writeFile(join(dir, 'a.webm.x.webm.m.transcript.json'), '{}', 'utf-8');
+
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'diskfile_rename',
+				params: { path: audio, name: 'b.webm' },
+				headers: fixture.create_session_headers()
+			});
+			assert.ok(res.ok, JSON.stringify(res));
+			const output = parse_or_throw(DiskfileRenameOutput, res.result);
+			assert.deepEqual(output.renamed, [
+				{ path: audio, new_path: join(dir, 'b.webm') },
+				{
+					path: join(dir, 'a.webm.base-en.transcript.json'),
+					new_path: join(dir, 'b.webm.base-en.transcript.json')
+				}
+			]);
+			assert.deepEqual((await readdir(dir)).sort(), [
+				'a.webm.md',
+				'a.webm.x.webm.m.transcript.json',
+				'b.webm',
+				'b.webm.base-en.transcript.json',
+				'sub'
+			]);
+			assert.equal(await readFile(join(dir, 'b.webm'), 'utf-8'), 'audio');
+
+			// a taken name is refused, nothing moved
+			await writeFile(join(dir, 'c.webm'), 'taken', 'utf-8');
+			const taken = await rename_file(join(dir, 'b.webm'), 'c.webm');
+			assert.ok(!taken.ok);
+			assert.equal(taken.error.code, JSONRPC_ERROR_CODES.conflict);
+			assert.deepEqual(taken.error.data, { reason: 'already_exists' });
+			assert.equal(await readFile(join(dir, 'c.webm'), 'utf-8'), 'taken');
+			assert.ok(await file_exists(join(dir, 'b.webm.base-en.transcript.json')), 'kept');
+
+			// one plain name in the file's own directory, never its own name
+			for (const name of ['', '.', '..', 'sub/x.webm', '../x.webm', 'b.webm', 'x\\y.webm']) {
+				const bad = await rename_file(join(dir, 'b.webm'), name);
+				assert.ok(!bad.ok, name);
+				assert.equal(bad.error.code, JSONRPC_ERROR_CODES.invalid_params, name);
+			}
+
+			// files only
+			const folder = await rename_file(join(dir, 'sub'), 'sub2');
+			assert.ok(!folder.ok);
+			assert.deepEqual(folder.error.data, { reason: 'is_a_directory' });
+
+			// a missing file
+			const missing = await rename_file(join(dir, 'missing.webm'), 'm2.webm');
+			assert.ok(!missing.ok);
+			assert.deepEqual(missing.error.data, { reason: 'path_not_found' });
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
 	});
 
 	test('directory_create', async () => {

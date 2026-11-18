@@ -5,7 +5,7 @@
 Generated from `action_specs.ts` and `cell_classes.ts` by `reference.gen.ts`.
 Run `gro gen` to refresh it; `gro check` fails if it drifts. Don't edit by hand.
 
-## Action specs (31)
+## Action specs (32)
 
 The fuz_app protocol actions `heartbeat` (WS-only) and `peer/ping` are
 registered too but omitted here — they belong to the shared runtime, not zzz
@@ -17,6 +17,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `diskfile_create` — Create a new file on disk, failing with `conflict` (`already_exists`) if the path is taken — never overwrites. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_delete` — Delete a file from disk. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_read` — Read a file's contents as text, with their `hash`, its size, and timestamps. Any regular file in scope, except in a credential directory or a `.zzz` directory other than the app dir (`forbidden` / `protected_dir_not_allowed`); one over the size limit or not UTF-8 has `contents: null` and an `unloaded_reason`. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
+- `diskfile_rename` — Rename a file within its directory, carrying its companions (each transcript sidecar named for it), never replacing anything — `conflict` (`already_exists`) when a new name is taken, (`job_on_file`) while a job works on the file. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `diskfile_update` — Write new content to a file on disk, returning the written bytes' `hash`. With `expected_hash` (a `diskfile_read` `hash`), only if the file still holds those bytes — else `conflict` (`disk_changed`), nothing written. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `filer_change` — Notifies the frontend of a file system change detected by the watcher. Carries the file's metadata, not its contents — a client holding them reads them again (`diskfile_read`). Kind: remote_notification. Initiator: backend. Auth: public
 - `job_cancel` — Cancel a job: a queued one never starts, the running one is stopped. A job that is already over is left as it is. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none

@@ -24,6 +24,7 @@ export const ActionSpecs: ActionSpecs = {
 	diskfile_update: specs.diskfile_update_action_spec,
 	diskfile_create: specs.diskfile_create_action_spec,
 	diskfile_delete: specs.diskfile_delete_action_spec,
+	diskfile_rename: specs.diskfile_rename_action_spec,
 	directory_create: specs.directory_create_action_spec,
 	media_finalize: specs.media_finalize_action_spec,
 	transcription_create: specs.transcription_create_action_spec,
@@ -81,6 +82,7 @@ export type ActionSpecs = {
 	readonly diskfile_update: typeof specs.diskfile_update_action_spec;
 	readonly diskfile_create: typeof specs.diskfile_create_action_spec;
 	readonly diskfile_delete: typeof specs.diskfile_delete_action_spec;
+	readonly diskfile_rename: typeof specs.diskfile_rename_action_spec;
 	readonly directory_create: typeof specs.directory_create_action_spec;
 	readonly media_finalize: typeof specs.media_finalize_action_spec;
 	readonly transcription_create: typeof specs.transcription_create_action_spec;
@@ -145,6 +147,7 @@ export interface ActionInputs {
 	diskfile_update: Infer<typeof specs.diskfile_update_action_spec.input>;
 	diskfile_create: Infer<typeof specs.diskfile_create_action_spec.input>;
 	diskfile_delete: Infer<typeof specs.diskfile_delete_action_spec.input>;
+	diskfile_rename: Infer<typeof specs.diskfile_rename_action_spec.input>;
 	directory_create: Infer<typeof specs.directory_create_action_spec.input>;
 	media_finalize: Infer<typeof specs.media_finalize_action_spec.input>;
 	transcription_create: Infer<typeof specs.transcription_create_action_spec.input>;
@@ -207,6 +210,7 @@ export interface ActionCallInputs {
 	diskfile_update: InferInput<typeof specs.diskfile_update_action_spec.input>;
 	diskfile_create: InferInput<typeof specs.diskfile_create_action_spec.input>;
 	diskfile_delete: InferInput<typeof specs.diskfile_delete_action_spec.input>;
+	diskfile_rename: InferInput<typeof specs.diskfile_rename_action_spec.input>;
 	directory_create: InferInput<typeof specs.directory_create_action_spec.input>;
 	media_finalize: InferInput<typeof specs.media_finalize_action_spec.input>;
 	transcription_create: InferInput<typeof specs.transcription_create_action_spec.input>;
@@ -269,6 +273,7 @@ export interface ActionOutputs {
 	diskfile_update: Infer<typeof specs.diskfile_update_action_spec.output>;
 	diskfile_create: Infer<typeof specs.diskfile_create_action_spec.output>;
 	diskfile_delete: Infer<typeof specs.diskfile_delete_action_spec.output>;
+	diskfile_rename: Infer<typeof specs.diskfile_rename_action_spec.output>;
 	directory_create: Infer<typeof specs.directory_create_action_spec.output>;
 	media_finalize: Infer<typeof specs.media_finalize_action_spec.output>;
 	transcription_create: Infer<typeof specs.transcription_create_action_spec.output>;
@@ -359,6 +364,11 @@ export interface ActionEventDatas {
 		'diskfile_delete',
 		ActionInputs['diskfile_delete'],
 		ActionOutputs['diskfile_delete']
+	>;
+	diskfile_rename: ActionEventRequestResponseData<
+		'diskfile_rename',
+		ActionInputs['diskfile_rename'],
+		ActionOutputs['diskfile_rename']
 	>;
 	directory_create: ActionEventRequestResponseData<
 		'directory_create',

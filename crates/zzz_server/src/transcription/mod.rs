@@ -133,6 +133,38 @@ pub fn transcript_sidecar_path(source_path: &str, model_slug: &str) -> String {
     format!("{source_path}.{model_slug}{TRANSCRIPT_SIDECAR_SUFFIX}")
 }
 
+/// The name of the audio file a sidecar was made from, parsed from the
+/// sidecar's own name ([`transcript_sidecar_path`]).
+///
+/// It's everything before the slug's `.`, when the slug is one
+/// [`whisper_cpp::model_slug`] could write (`[a-z0-9_-]+`) and the rest is
+/// one plain path component. Twin of the TS `to_transcript_source_name`.
+#[must_use]
+pub fn transcript_source_name(sidecar_name: &str) -> Option<&str> {
+    let stem = sidecar_name.strip_suffix(TRANSCRIPT_SIDECAR_SUFFIX)?;
+    let (source, slug) = stem.rsplit_once('.')?;
+    let slug_ok = !slug.is_empty()
+        && slug
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'-'));
+    let plain = !source.is_empty()
+        && source != "."
+        && source != ".."
+        && !source.contains(['/', '\\', '\0']);
+    (slug_ok && plain).then_some(source)
+}
+
+/// A sidecar's new name when its audio is renamed from `old_name` to
+/// `new_name`.
+///
+/// `None` for a file that isn't one of `old_name`'s sidecars. The name is
+/// the whole link, so a rename moves a sidecar by renaming it.
+#[must_use]
+pub fn transcript_sidecar_renamed(name: &str, old_name: &str, new_name: &str) -> Option<String> {
+    (transcript_source_name(name)? == old_name)
+        .then(|| format!("{new_name}{}", &name[old_name.len()..]))
+}
+
 /// Whether `language` is one a transcription accepts: `auto`, or a two- or
 /// three-letter lowercase code.
 #[must_use]
@@ -551,6 +583,48 @@ mod tests {
         assert!(
             transcript_sidecar_path("/w/a.ogg", "base-en").ends_with(TRANSCRIPT_SIDECAR_SUFFIX)
         );
+    }
+
+    #[test]
+    fn a_sidecar_names_its_source() {
+        for (sidecar, source) in [
+            ("a.webm.base-en.transcript.json", Some("a.webm")),
+            ("a.webm.x.webm.m.transcript.json", Some("a.webm.x.webm")),
+            (".hidden.wav.m.transcript.json", Some(".hidden.wav")),
+            ("a.webm.base.en.transcript.json", Some("a.webm.base")),
+            ("m.transcript.json", None),
+            ("..m.transcript.json", None),
+            ("a.webm.BASE.transcript.json", None),
+            ("a.webm..transcript.json", None),
+            ("a\\b.m.transcript.json", None),
+            ("a.webm", None),
+        ] {
+            assert_eq!(transcript_source_name(sidecar), source, "{sidecar}");
+        }
+        // every slug the backend writes parses back
+        for slug in ["base-en", "large-v3-turbo", "model", "a--b"] {
+            let sidecar = transcript_sidecar_path("/w/a.webm", slug);
+            let name = sidecar.rsplit('/').next().unwrap();
+            assert_eq!(transcript_source_name(name), Some("a.webm"), "{slug}");
+        }
+    }
+
+    #[test]
+    fn a_rename_moves_only_the_sidecars_of_the_renamed_file() {
+        let renamed = |name| transcript_sidecar_renamed(name, "a.webm", "b.ogg");
+        assert_eq!(
+            renamed("a.webm.base-en.transcript.json").as_deref(),
+            Some("b.ogg.base-en.transcript.json")
+        );
+        for name in [
+            "a.webm",
+            "a.webm.md",
+            "a.webm.x.webm.m.transcript.json",
+            "a.webm.base.en.transcript.json",
+            "c.webm.m.transcript.json",
+        ] {
+            assert_eq!(renamed(name), None, "{name}");
+        }
     }
 
     #[test]

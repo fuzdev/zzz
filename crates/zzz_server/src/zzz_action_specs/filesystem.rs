@@ -2,7 +2,8 @@
 //!
 //! Mirrors `src/lib/action_specs.ts`'s `diskfile_read` (read-only) and
 //! `diskfile_update`, `diskfile_create`, `diskfile_delete`,
-//! `directory_create` (`side_effects: true`), all account-grain. None touch
+//! `diskfile_rename`, `directory_create` (`side_effects: true`), all
+//! account-grain. None touch
 //! the DB today — `side_effects` is set to match the spec and to keep the
 //! transactional-audit boundary intact when filesystem audit emission lands.
 
@@ -23,6 +24,7 @@ pub fn build_filesystem_specs(app: Arc<App>) -> Vec<ActionSpec> {
         diskfile_update_spec(Arc::clone(&app)),
         diskfile_create_spec(Arc::clone(&app)),
         diskfile_delete_spec(Arc::clone(&app)),
+        diskfile_rename_spec(Arc::clone(&app)),
         directory_create_spec(app),
     ]
 }
@@ -74,6 +76,19 @@ fn diskfile_delete_spec(app: Arc<App>) -> ActionSpec {
     });
     ActionSpec::with_side_effects(
         "diskfile_delete",
+        AuthSpec::account_grain(CredentialGate::Any),
+        InputShape::Object,
+        handler,
+    )
+}
+
+fn diskfile_rename_spec(app: Arc<App>) -> ActionSpec {
+    let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
+        let app = Arc::clone(&app);
+        Box::pin(async move { filesystem::diskfile_rename(params, ctx, app).await })
+    });
+    ActionSpec::with_side_effects(
+        "diskfile_rename",
         AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Object,
         handler,

@@ -79,11 +79,26 @@ export const ERROR_CONTENT_NOT_LOADED = 'content_not_loaded';
 export const ERROR_DISK_CHANGED = 'disk_changed';
 
 /**
- * `data.reason` of the `conflict` a create gets for a path that's taken
- * (`diskfile_create`, `directory_create`) — twin of `ERROR_ALREADY_EXISTS`
- * in the backend's filesystem handlers.
+ * `data.reason` of the `conflict` a create or rename gets for a path that's
+ * taken (`diskfile_create`, `directory_create`, `diskfile_rename`) — twin of
+ * `ERROR_ALREADY_EXISTS` in the backend's filesystem handlers.
  */
 export const ERROR_ALREADY_EXISTS = 'already_exists';
+
+/**
+ * `data.reason` of the `conflict` a rename gets while a job (a
+ * transcription) works on the file, or on its new path — twin of `ERROR_JOB_ON_FILE` in the
+ * backend's filesystem handlers.
+ */
+export const ERROR_JOB_ON_FILE = 'job_on_file';
+
+/**
+ * `data.reason` of the `conflict` a rename gets on a filesystem that can't
+ * do it safely (no hard links for its sidecars, as on FAT or exFAT, or no
+ * `RENAME_NOREPLACE`, as on some FUSE and NFS) — twin of
+ * `ERROR_RENAME_UNSUPPORTED` in the backend's filesystem handlers.
+ */
+export const ERROR_RENAME_UNSUPPORTED = 'rename_unsupported';
 
 /**
  * Stands in for a file part's content in a formatted prompt while the file's

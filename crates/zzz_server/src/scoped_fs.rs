@@ -206,6 +206,11 @@ pub enum ScopedFsError {
     /// wrote nothing.
     #[error("File changed on disk since it was read: {0}")]
     DiskChanged(String),
+    /// A rename the filesystem can't do safely — no hard links for its
+    /// companions, or no `RENAME_NOREPLACE` — refused rather than risking a
+    /// replace or a companion cut off from its file.
+    #[error("The filesystem can't rename this safely: {0}")]
+    RenameUnsupported(String),
     /// An append found the file at a different size than the offset the
     /// caller expected, and wrote nothing. `size` is the file's current size.
     #[error("File size {size} differs from the expected offset: {path}")]
@@ -706,6 +711,245 @@ impl ScopedFs {
                 }
                 _ => ScopedFsError::io(&safe_path, e),
             })
+    }
+
+    /// Validate a rename of the file at `path` to `new_name` in its own
+    /// directory, for [`PreparedRename::apply`] — the validation is async,
+    /// the rename itself is blocking, so a caller can run it under a lock of
+    /// its own (the job table's, so no job starts on the file meanwhile).
+    ///
+    /// # Errors
+    ///
+    /// [`ScopedFsError::InvalidPath`] when `new_name` isn't one plain path
+    /// component, or is the file's own name; otherwise the path-validation
+    /// errors of every `ScopedFs` operation, for either path.
+    pub async fn prepare_rename(
+        &self,
+        path: &str,
+        new_name: &str,
+    ) -> Result<PreparedRename, ScopedFsError> {
+        if !is_plain_name(new_name) {
+            return Err(ScopedFsError::InvalidPath(new_name.to_owned()));
+        }
+        let from = self.ensure_safe_path(path).await?;
+        let (Some(dir), Some(old_name)) = (from.parent(), from.file_name()) else {
+            return Err(ScopedFsError::InvalidPath(path.to_owned()));
+        };
+        if old_name == new_name {
+            return Err(ScopedFsError::InvalidPath(new_name.to_owned()));
+        }
+        let to = self
+            .ensure_safe_path(&dir.join(new_name).to_string_lossy())
+            .await?;
+        Ok(PreparedRename { from, to })
+    }
+}
+
+// -- Renames ------------------------------------------------------------------
+
+/// Whether `name` is one plain path component: not empty, not `.` or `..`,
+/// no `/`, `\`, or NUL — the TS `is_plain_file_name`, which a transcript
+/// sidecar's source name must pass, so a renamed file's sidecars still name
+/// it.
+fn is_plain_name(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', '\0'])
+}
+
+/// Whether `a` and `b` name the same file (device and inode), neither
+/// followed if a symlink.
+fn is_same_file(a: &Path, b: &Path) -> bool {
+    match (std::fs::symlink_metadata(a), std::fs::symlink_metadata(b)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+/// Whether a hard link or `RENAME_NOREPLACE` failed because the filesystem
+/// doesn't do it (no hard links on FAT or exFAT; no `RENAME_NOREPLACE` on some FUSE and NFS) — or, for `EPERM` from a
+/// link, refuses it (`fs.protected_hardlinks`) — rather than for the path.
+fn is_unsupported(error: &std::io::Error, from_link: bool) -> bool {
+    match error.raw_os_error() {
+        Some(code) if code == libc::ENOSYS || code == libc::EOPNOTSUPP => true,
+        Some(code) if from_link => code == libc::EPERM,
+        Some(code) => code == libc::EINVAL,
+        None => false,
+    }
+}
+
+/// A validated rename of one file within its directory
+/// ([`ScopedFs::prepare_rename`]), carrying the file's companions — files
+/// beside it whose names derive from its own, like a transcript sidecar.
+#[derive(Debug)]
+pub struct PreparedRename {
+    from: PathBuf,
+    to: PathBuf,
+}
+
+/// A file a rename moved: its absolute path before and after.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Renamed {
+    pub from: PathBuf,
+    pub to: PathBuf,
+}
+
+impl PreparedRename {
+    /// The path the file has now.
+    #[must_use]
+    pub fn from(&self) -> &Path {
+        &self.from
+    }
+
+    /// The path the file would take.
+    #[must_use]
+    pub fn to(&self) -> &Path {
+        &self.to
+    }
+
+    /// Rename the file, and each companion `companion_name` finds beside it
+    /// (it maps a sibling's name to its new name, or `None` for a file that
+    /// isn't one), never replacing anything. Blocking.
+    ///
+    /// The companions are hard-linked to their new names first, then the
+    /// file is renamed — `renameat2(RENAME_NOREPLACE)`, the commit point —
+    /// then the companions' old names are removed. Before the commit, a
+    /// failure removes the links it made; after it, an old name that can't
+    /// be removed is left (logged) — never a companion cut off from its
+    /// file, but an extra name, which a file later created at the old name
+    /// would pick up until sidecars are checked by their `source.blake3`. A
+    /// companion's link already at its new name (a crashed rename's) is
+    /// taken, so a retry finishes. Only regular files are companions — a
+    /// symlink beside the file isn't one. The directory is fsynced after.
+    ///
+    /// # Errors
+    ///
+    /// [`ScopedFsError::IsADirectory`] or [`ScopedFsError::NotARegularFile`]
+    /// for anything but a regular file at the path;
+    /// [`ScopedFsError::AlreadyExists`] when the new name, or a companion's,
+    /// is taken; [`ScopedFsError::RenameUnsupported`] on a filesystem
+    /// without hard links or `RENAME_NOREPLACE`;
+    /// [`ScopedFsError::DirectoryNotWritable`]; otherwise
+    /// [`ScopedFsError::Io`] (`NotFound` for a missing file).
+    pub fn apply(
+        self,
+        companion_name: impl Fn(&str) -> Option<String>,
+    ) -> Result<Vec<Renamed>, ScopedFsError> {
+        let Self { from, to } = self;
+        let meta = std::fs::symlink_metadata(&from).map_err(|e| ScopedFsError::io(&from, e))?;
+        if meta.is_dir() {
+            return Err(ScopedFsError::IsADirectory(ScopedFsError::display(&from)));
+        }
+        if !meta.is_file() {
+            return Err(ScopedFsError::NotARegularFile(ScopedFsError::display(
+                &from,
+            )));
+        }
+        let dir = from
+            .parent()
+            .unwrap_or_else(|| Path::new("/"))
+            .to_path_buf();
+
+        // the companions, found now — under the caller's lock, so none
+        // written just before is missed
+        let mut companions = Vec::new();
+        let entries = std::fs::read_dir(&dir).map_err(|e| ScopedFsError::io(&dir, e))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| ScopedFsError::io(&dir, e))?;
+            let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+                continue;
+            };
+            let Some(new_name) = companion_name(&name) else {
+                continue;
+            };
+            if !is_plain_name(&new_name) {
+                continue;
+            }
+            let path = entry.path();
+            if path == from || !entry.file_type().is_ok_and(|t| t.is_file()) {
+                continue;
+            }
+            companions.push(Renamed {
+                from: path,
+                to: dir.join(new_name),
+            });
+        }
+
+        let refused = |path: &Path, e: std::io::Error, from_link: bool| match e.kind() {
+            _ if is_unsupported(&e, from_link) => {
+                ScopedFsError::RenameUnsupported(ScopedFsError::display(path))
+            }
+            std::io::ErrorKind::AlreadyExists => {
+                ScopedFsError::AlreadyExists(ScopedFsError::display(path))
+            }
+            _ if is_not_writable(&e) => {
+                ScopedFsError::DirectoryNotWritable(ScopedFsError::display(path))
+            }
+            _ => ScopedFsError::io(path, e),
+        };
+        // only the links this run made — a taken one (a crashed rename's, or a link the person
+        // made) stays as it was
+        let unlink_all = |linked: &[Renamed], made: &[bool]| {
+            for (link, _) in linked.iter().zip(made).filter(|(_, made)| **made) {
+                if let Err(e) = std::fs::remove_file(&link.to) {
+                    tracing::warn!(
+                        path = %link.to.display(),
+                        error = %fuz_sys::cli::format_error_chain(&e),
+                        "failed to remove a companion's link after a refused rename"
+                    );
+                }
+            }
+        };
+
+        let mut linked: Vec<Renamed> = Vec::with_capacity(companions.len());
+        let mut made: Vec<bool> = Vec::with_capacity(companions.len());
+        for companion in companions {
+            let made_link = match std::fs::hard_link(&companion.from, &companion.to) {
+                Ok(()) => true,
+                // a link a crashed rename already made (the same file): take it, so a retry
+                // finishes the job rather than refusing forever
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::AlreadyExists
+                        && is_same_file(&companion.from, &companion.to) =>
+                {
+                    false
+                }
+                Err(e) => {
+                    unlink_all(&linked, &made);
+                    return Err(refused(&companion.to, e, true));
+                }
+            };
+            linked.push(companion);
+            made.push(made_link);
+        }
+        if let Err(e) = nix::fcntl::renameat2(
+            nix::fcntl::AT_FDCWD,
+            &from,
+            nix::fcntl::AT_FDCWD,
+            &to,
+            nix::fcntl::RenameFlags::RENAME_NOREPLACE,
+        ) {
+            unlink_all(&linked, &made);
+            return Err(refused(&to, std::io::Error::from(e), false));
+        }
+        for companion in &linked {
+            if let Err(e) = std::fs::remove_file(&companion.from) {
+                tracing::warn!(
+                    path = %companion.from.display(),
+                    error = %fuz_sys::cli::format_error_chain(&e),
+                    "failed to remove a renamed companion's old name"
+                );
+            }
+        }
+        if let Err(e) = std::fs::File::open(&dir).and_then(|d| d.sync_all()) {
+            tracing::debug!(
+                dir = %dir.display(),
+                error = %fuz_sys::cli::format_error_chain(&e),
+                "failed to fsync directory after a rename"
+            );
+        }
+
+        let mut renamed = vec![Renamed { from, to }];
+        renamed.extend(linked);
+        Ok(renamed)
     }
 }
 
@@ -1423,6 +1667,236 @@ mod tests {
 
     fn mode_of(path: &Path) -> u32 {
         std::fs::metadata(path).unwrap().mode() & 0o7777
+    }
+
+    /// Companions named `<file name>.<x>.side`, renamed to `<new name>.<x>.side`.
+    fn sides(old: &str, new: &str) -> impl Fn(&str) -> Option<String> {
+        let (old, new) = (format!("{old}."), format!("{new}."));
+        move |name: &str| {
+            name.strip_prefix(&old)
+                .filter(|rest| rest.rsplit_once('.').is_some_and(|(_, ext)| ext == "side"))
+                .map(|rest| format!("{new}{rest}"))
+        }
+    }
+
+    fn names_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[tokio::test]
+    async fn rename_moves_the_file_and_its_companions() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        let dir = tmp.path("r");
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(dir.join("a.webm"), "audio").unwrap();
+        std::fs::write(dir.join("a.webm.m1.side"), "one").unwrap();
+        std::fs::write(dir.join("a.webm.m2.side"), "two").unwrap();
+        std::fs::write(dir.join("a.webm.other"), "not a companion").unwrap();
+        std::fs::create_dir(dir.join("a.webm.d.side")).unwrap();
+        let path = dir.join("a.webm");
+
+        let prepared = fs
+            .prepare_rename(path.to_str().unwrap(), "b.webm")
+            .await
+            .unwrap();
+        let mut renamed = prepared.apply(sides("a.webm", "b.webm")).unwrap();
+
+        assert_eq!(
+            renamed.remove(0),
+            Renamed {
+                from: path,
+                to: dir.join("b.webm")
+            },
+            "the file first"
+        );
+        renamed.sort_by(|a, b| a.to.cmp(&b.to));
+        assert_eq!(
+            renamed,
+            ["m1", "m2"].map(|m| Renamed {
+                from: dir.join(format!("a.webm.{m}.side")),
+                to: dir.join(format!("b.webm.{m}.side")),
+            })
+        );
+        assert_eq!(
+            names_in(&dir),
+            [
+                "a.webm.d.side",
+                "a.webm.other",
+                "b.webm",
+                "b.webm.m1.side",
+                "b.webm.m2.side"
+            ]
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("b.webm")).unwrap(),
+            "audio"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("b.webm.m2.side")).unwrap(),
+            "two"
+        );
+    }
+
+    #[tokio::test]
+    async fn rename_skips_symlinks_and_finishes_a_crashed_rename() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        let dir = tmp.path("r");
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("a.webm");
+        std::fs::write(&path, "audio").unwrap();
+        std::fs::write(dir.join("a.webm.m.side"), "side").unwrap();
+        // a crashed rename's link, already at the companion's new name
+        std::fs::hard_link(dir.join("a.webm.m.side"), dir.join("b.webm.m.side")).unwrap();
+        // a symlink named like a companion isn't one
+        std::os::unix::fs::symlink("/etc/hostname", dir.join("a.webm.s.side")).unwrap();
+
+        let renamed = fs
+            .prepare_rename(path.to_str().unwrap(), "b.webm")
+            .await
+            .unwrap()
+            .apply(sides("a.webm", "b.webm"))
+            .unwrap();
+
+        assert_eq!(renamed.len(), 2, "{renamed:?}");
+        assert_eq!(names_in(&dir), ["a.webm.s.side", "b.webm", "b.webm.m.side"]);
+        assert!(
+            std::fs::symlink_metadata(dir.join("a.webm.s.side"))
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "the symlink untouched"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refused_rename_keeps_a_link_it_took_but_did_not_make() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        let dir = tmp.path("r");
+        std::fs::create_dir(&dir).unwrap();
+        // a hard-linked twin recording, its sidecar linked too — `b.webm`'s real one
+        std::fs::write(dir.join("a.webm"), "audio").unwrap();
+        std::fs::write(dir.join("a.webm.m.side"), "side").unwrap();
+        std::fs::hard_link(dir.join("a.webm"), dir.join("b.webm")).unwrap();
+        std::fs::hard_link(dir.join("a.webm.m.side"), dir.join("b.webm.m.side")).unwrap();
+
+        let e = fs
+            .prepare_rename(dir.join("a.webm").to_str().unwrap(), "b.webm")
+            .await
+            .unwrap()
+            .apply(sides("a.webm", "b.webm"))
+            .unwrap_err();
+
+        assert!(matches!(e, ScopedFsError::AlreadyExists(_)), "{e:?}");
+        assert_eq!(
+            names_in(&dir),
+            ["a.webm", "a.webm.m.side", "b.webm", "b.webm.m.side"],
+            "b.webm keeps its sidecar"
+        );
+    }
+
+    #[tokio::test]
+    async fn rename_never_replaces_and_leaves_nothing_behind_when_refused() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        let dir = tmp.path("r");
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("a.webm");
+
+        // the new name taken: refused, the companion's link undone
+        std::fs::write(&path, "audio").unwrap();
+        std::fs::write(dir.join("a.webm.m.side"), "side").unwrap();
+        std::fs::write(dir.join("b.webm"), "taken").unwrap();
+        let prepared = fs
+            .prepare_rename(path.to_str().unwrap(), "b.webm")
+            .await
+            .unwrap();
+        let e = prepared.apply(sides("a.webm", "b.webm")).unwrap_err();
+        assert!(matches!(e, ScopedFsError::AlreadyExists(_)), "{e:?}");
+        assert_eq!(names_in(&dir), ["a.webm", "a.webm.m.side", "b.webm"]);
+        assert_eq!(
+            std::fs::read_to_string(dir.join("b.webm")).unwrap(),
+            "taken"
+        );
+
+        // a companion's new name taken: refused before the file moves
+        std::fs::remove_file(dir.join("b.webm")).unwrap();
+        std::fs::write(dir.join("a.webm.n.side"), "side").unwrap();
+        std::fs::write(dir.join("b.webm.n.side"), "taken").unwrap();
+        let prepared = fs
+            .prepare_rename(path.to_str().unwrap(), "b.webm")
+            .await
+            .unwrap();
+        let e = prepared.apply(sides("a.webm", "b.webm")).unwrap_err();
+        assert!(matches!(e, ScopedFsError::AlreadyExists(_)), "{e:?}");
+        assert_eq!(
+            names_in(&dir),
+            ["a.webm", "a.webm.m.side", "a.webm.n.side", "b.webm.n.side"]
+        );
+    }
+
+    #[tokio::test]
+    async fn rename_refuses_bad_names_directories_and_missing_files() {
+        let tmp = TempDir::new();
+        let fs = tmp.fs();
+        let dir = tmp.path("r");
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("a.txt"), "a").unwrap();
+        let path = dir.join("a.txt");
+        let path = path.to_str().unwrap();
+        for name in ["", ".", "..", "x/y", "../a.txt", "a\0b", "a.txt"] {
+            let e = fs.prepare_rename(path, name).await.unwrap_err();
+            assert!(
+                matches!(e, ScopedFsError::InvalidPath(_)),
+                "{name:?}: {e:?}"
+            );
+        }
+        let sub = dir.join("sub");
+        let e = fs
+            .prepare_rename(sub.to_str().unwrap(), "sub2")
+            .await
+            .unwrap()
+            .apply(|_| None)
+            .unwrap_err();
+        assert!(matches!(e, ScopedFsError::IsADirectory(_)), "{e:?}");
+        let missing = dir.join("missing.txt");
+        let e = fs
+            .prepare_rename(missing.to_str().unwrap(), "m2.txt")
+            .await
+            .unwrap()
+            .apply(|_| None)
+            .unwrap_err();
+        assert!(
+            matches!(&e, ScopedFsError::Io { source, .. } if source.kind() == std::io::ErrorKind::NotFound),
+            "{e:?}"
+        );
+        // a protected directory's name is refused as a file name too
+        for name in [".ssh", ".zzz"] {
+            let e = fs.prepare_rename(path, name).await.unwrap_err();
+            assert!(
+                matches!(e, ScopedFsError::ProtectedDirNotAllowed { .. }),
+                "{name}: {e:?}"
+            );
+        }
+        // a backslash would cut the sidecars off: no name parse reads it back
+        let e = fs.prepare_rename(path, "a\\b.txt").await.unwrap_err();
+        assert!(matches!(e, ScopedFsError::InvalidPath(_)), "{e:?}");
+        // the file itself a symlink: refused
+        std::os::unix::fs::symlink(dir.join("a.txt"), dir.join("link.txt")).unwrap();
+        let e = fs
+            .prepare_rename(dir.join("link.txt").to_str().unwrap(), "l2.txt")
+            .await
+            .unwrap_err();
+        assert!(matches!(e, ScopedFsError::SymlinkNotAllowed(_)), "{e:?}");
+        std::fs::remove_file(dir.join("link.txt")).unwrap();
+        assert_eq!(names_in(&dir), ["a.txt", "sub"]);
     }
 
     #[tokio::test]

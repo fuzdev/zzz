@@ -272,6 +272,27 @@ export const DiskfileDeleteInput = object({
 });
 export type DiskfileDeleteInput = Infer<typeof DiskfileDeleteInput>;
 
+/** Input for `diskfile_rename`: the file, and its new name in its own directory. */
+export const DiskfileRenameInput = object({
+	path: DiskfilePath,
+	/** One plain path component — the daemon refuses anything else, and the file's own name. */
+	name: string
+});
+export type DiskfileRenameInput = Infer<typeof DiskfileRenameInput>;
+
+/** A file `diskfile_rename` moved: its path before and after. */
+export const DiskfileRenamed = object({
+	path: DiskfilePath,
+	new_path: DiskfilePath
+});
+export type DiskfileRenamed = Infer<typeof DiskfileRenamed>;
+
+/** Output of `diskfile_rename`: the file first, then each companion moved with it. */
+export const DiskfileRenameOutput = object({
+	renamed: array(DiskfileRenamed)
+});
+export type DiskfileRenameOutput = Infer<typeof DiskfileRenameOutput>;
+
 /** Input for `directory_create`. */
 export const DirectoryCreateInput = object({
 	path: DiskfilePath
@@ -865,6 +886,19 @@ export const diskfile_delete_action_spec = {
 	output: literal(null),
 	async: true,
 	description: 'Delete a file from disk.'
+} satisfies RequestResponseActionSpec;
+
+export const diskfile_rename_action_spec = {
+	method: 'diskfile_rename',
+	kind: 'request_response',
+	initiator: 'frontend',
+	auth: { account: 'required', actor: 'none' },
+	side_effects: true,
+	input: DiskfileRenameInput,
+	output: DiskfileRenameOutput,
+	async: true,
+	description:
+		'Rename a file within its directory, carrying its companions (each transcript sidecar named for it), never replacing anything — `conflict` (`already_exists`) when a new name is taken, (`job_on_file`) while a job works on the file.'
 } satisfies RequestResponseActionSpec;
 
 export const directory_create_action_spec = {
@@ -1545,6 +1579,7 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	diskfile_update_action_spec,
 	diskfile_create_action_spec,
 	diskfile_delete_action_spec,
+	diskfile_rename_action_spec,
 	directory_create_action_spec,
 	media_finalize_action_spec,
 	transcription_create_action_spec,
