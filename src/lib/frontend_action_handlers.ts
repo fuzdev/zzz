@@ -278,6 +278,24 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		execute: () => ({ path: frontend.diskfiles.editor.navigate('forward') })
 	},
 
+	explorer_mode_set: {
+		execute: ({ data: { input } }) => {
+			frontend.diskfiles.editor.set_explorer_mode(input.mode);
+		}
+	},
+
+	file_reveal: {
+		execute: ({ data: { input } }) => ({
+			revealed: frontend.diskfiles.editor.reveal_in_tree(input.path)
+		})
+	},
+
+	markdown_mode_set: {
+		execute: ({ data: { input } }) => ({
+			markdown: frontend.diskfiles.set_markdown_view_mode(input.path, input.mode)
+		})
+	},
+
 	diskfile_details_toggle: {
 		execute: ({ data: { input } }) => ({
 			show: frontend.ui.toggle_diskfile_details(input?.show)

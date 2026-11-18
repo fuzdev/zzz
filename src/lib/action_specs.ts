@@ -46,6 +46,7 @@ export { heartbeat_action_spec, cancel_action_spec, peer_ping_action_spec };
 import {
 	DiskfileChange,
 	DiskfileDirectoryPath,
+	DiskfileExplorerMode,
 	DiskfilePath,
 	DiskfileUnloadedReason,
 	SerializableDisknode,
@@ -53,6 +54,7 @@ import {
 	WireTime
 } from './diskfile_types.ts';
 import { ERROR_INVALID_PATH, is_path_absolute } from './diskfile_helpers.ts';
+import { MarkdownViewMode } from './markdown_view_mode.ts';
 import { ERROR_TERMINAL_COMMAND_NOT_FOUND } from './terminal_helpers.ts';
 import { ProviderStatus, ProviderName } from './provider_types.ts';
 import { JobSnapshot } from './job_types.ts';
@@ -367,6 +369,26 @@ export type TabMoveOutput = Infer<typeof TabMoveOutput>;
  */
 export const TabPathOutput = object({ path: nullable(DiskfilePath) });
 export type TabPathOutput = Infer<typeof TabPathOutput>;
+
+/** Input for `explorer_mode_set`: show the file explorer as a list or a tree. */
+export const ExplorerModeSetInput = object({ mode: DiskfileExplorerMode });
+export type ExplorerModeSetInput = Infer<typeof ExplorerModeSetInput>;
+
+/** Input for `markdown_mode_set`: the markdown file, and the view mode to keep for it. */
+export const MarkdownModeSetInput = object({ path: DiskfilePath, mode: MarkdownViewMode });
+export type MarkdownModeSetInput = Infer<typeof MarkdownModeSetInput>;
+
+/** Output for `markdown_mode_set`: whether the path is a markdown file, so the mode was kept. */
+export const MarkdownModeSetOutput = object({ markdown: boolean });
+export type MarkdownModeSetOutput = Infer<typeof MarkdownModeSetOutput>;
+
+/** Input for `file_reveal`: a file's path, or a folder's with a trailing `/`. */
+export const FileRevealInput = object({ path: DiskfilePath });
+export type FileRevealInput = Infer<typeof FileRevealInput>;
+
+/** Output for `file_reveal`: whether the path is in the tree, so its row was revealed. */
+export const FileRevealOutput = object({ revealed: boolean });
+export type FileRevealOutput = Infer<typeof FileRevealOutput>;
 
 /** Input for `desk_pin_toggle`. Optional — omit it to toggle, pass `{pinned}` to set. */
 export const DeskPinToggleInput = optional(object({ pinned: optional(boolean) }));
@@ -1059,6 +1081,50 @@ export const diskfile_details_toggle_action_spec = {
 	description: "Toggle or set the visibility of the file views' details drawer."
 } satisfies IntentActionSpec;
 
+export const explorer_mode_set_action_spec = {
+	method: 'explorer_mode_set',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: ExplorerModeSetInput,
+	output: fuz_void,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description: 'Show the file explorer as a flat list or a folder tree.'
+} satisfies IntentActionSpec;
+
+export const file_reveal_action_spec = {
+	method: 'file_reveal',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: FileRevealInput,
+	output: FileRevealOutput,
+	async: false,
+	version: 1,
+	history: 'navigation',
+	description:
+		"Show the file explorer's tree and reveal a file or folder there: expand its folders and make its row active."
+} satisfies IntentActionSpec;
+
+export const markdown_mode_set_action_spec = {
+	method: 'markdown_mode_set',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: MarkdownModeSetInput,
+	output: MarkdownModeSetOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description:
+		"Choose a markdown file's view: its source beside a preview, the preview alone, or the source alone."
+} satisfies IntentActionSpec;
+
 export const provider_load_status_action_spec = {
 	method: 'provider_load_status',
 	kind: 'request_response',
@@ -1281,7 +1347,10 @@ export const all_intent_specs: Array<IntentActionSpec> = [
 	tab_move_action_spec,
 	tab_reopen_closed_action_spec,
 	tab_back_action_spec,
-	tab_forward_action_spec
+	tab_forward_action_spec,
+	explorer_mode_set_action_spec,
+	file_reveal_action_spec,
+	markdown_mode_set_action_spec
 ];
 
 /**

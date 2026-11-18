@@ -43,7 +43,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `transcription_create` — Queue a transcription of an audio file by the local speech model, and return its job. The transcript is written beside the file as `<name>.<model>.transcript.json`; fails with `conflict` (`already_exists`) if that model's transcript is already there. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `transcription_progress` — Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds. Kind: remote_notification. Initiator: backend. Auth: public
 
-## Intents (13)
+## Intents (16)
 
 UI intents — `local_call` specs called through `app.intents`, run in the
 page, never sent over the wire. History: what a later undo makes of them.
@@ -51,7 +51,10 @@ page, never sent over the wire. History: what a later undo makes of them.
 - `desk_pin_toggle` — Pin or unpin the desk menu: a pinned one stays open beside the page. Version: 1. History: layout
 - `desk_toggle` — Toggle or set the visibility of the desk menu. Version: 1. History: layout
 - `diskfile_details_toggle` — Toggle or set the visibility of the file views' details drawer. Version: 1. History: layout
+- `explorer_mode_set` — Show the file explorer as a flat list or a folder tree. Version: 1. History: layout
+- `file_reveal` — Show the file explorer's tree and reveal a file or folder there: expand its folders and make its row active. Version: 1. History: navigation
 - `main_menu_toggle` — Toggle or set the visibility of the main menu. Version: 1. History: layout
+- `markdown_mode_set` — Choose a markdown file's view: its source beside a preview, the preview alone, or the source alone. Version: 1. History: layout
 - `sidebar_toggle` — Toggle or set the visibility of the sidebar. Version: 1. History: layout
 - `tab_back` — Go back to the file the selection last left: select its tab, or preview it if its tab closed. Version: 1. History: navigation
 - `tab_close` — Close a file's tab — or, for a file with a draft, ask first: save, don't save, or cancel. Version: 1. History: layout

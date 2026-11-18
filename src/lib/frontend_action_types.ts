@@ -303,6 +303,21 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'tab_forward', 'execute', 'handling'>
 		) => ActionOutputs['tab_forward'];
 	};
+	explorer_mode_set?: {
+		execute?: (
+			action_event: TypedActionEvent<'explorer_mode_set', 'execute', 'handling'>
+		) => ActionOutputs['explorer_mode_set'];
+	};
+	file_reveal?: {
+		execute?: (
+			action_event: TypedActionEvent<'file_reveal', 'execute', 'handling'>
+		) => ActionOutputs['file_reveal'];
+	};
+	markdown_mode_set?: {
+		execute?: (
+			action_event: TypedActionEvent<'markdown_mode_set', 'execute', 'handling'>
+		) => ActionOutputs['markdown_mode_set'];
+	};
 	provider_load_status?: {
 		send_request?: (
 			action_event: TypedActionEvent<'provider_load_status', 'send_request', 'handling'>

@@ -174,7 +174,7 @@
 	});
 
 	const set_mode = (next: MarkdownViewMode, move_focus: boolean): void => {
-		editor_state.markdown_view_mode_choice = next;
+		app.intents.markdown_mode_set({ path: diskfile.path, mode: next });
 		// keep the focus in the view: whichever pane it moves to takes it (see `focus_key` below)
 		if (move_focus) app.ui.pending_element_to_focus_key = diskfile.path;
 	};

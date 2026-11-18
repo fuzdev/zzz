@@ -4,11 +4,14 @@
  * @module
  */
 
+import { one_of, type Infer } from '@fuzdev/fuz_schema/schema.ts';
+
 /**
  * `split` shows the source beside its preview, `preview` the rendered
  * markdown alone, and `source` the source alone.
  */
-export type MarkdownViewMode = 'split' | 'preview' | 'source';
+export const MarkdownViewMode = one_of(['split', 'preview', 'source']);
+export type MarkdownViewMode = Infer<typeof MarkdownViewMode>;
 
 /** The markdown view's modes, in the order the UI offers them. */
 export const MARKDOWN_VIEW_MODES: ReadonlyArray<MarkdownViewMode> = ['split', 'preview', 'source'];

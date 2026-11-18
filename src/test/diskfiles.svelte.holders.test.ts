@@ -262,7 +262,7 @@ describe('an editing state with something to keep keeps its cell after the last 
 
 	test('not a markdown view mode chosen, which outlives it by path', async () => {
 		const { a, es, release } = await setup();
-		es.markdown_view_mode_choice = 'preview';
+		app.diskfiles.markdown_view_modes.set(a.path, 'preview');
 		release();
 		await microtask();
 		assert.isUndefined(app.diskfiles.find_editor_state(a.path), 'dropped');

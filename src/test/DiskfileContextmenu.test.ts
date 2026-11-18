@@ -102,6 +102,10 @@ describe('DiskfileContextmenu view submenu', () => {
 		flushSync();
 		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
 		assert.strictEqual(app.diskfiles.markdown_view_modes.get(a.path), 'preview');
+		assert.deepEqual(
+			app.recent_intents.entries.map((entry) => [entry.method, entry.input]),
+			[['markdown_mode_set', { path: a.path, mode: 'preview' }]]
+		);
 		assert.strictEqual(
 			app.diskfiles.get_editor_state_at(a.path)?.markdown_view_mode_choice,
 			'preview',

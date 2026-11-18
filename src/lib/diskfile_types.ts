@@ -39,6 +39,10 @@ import { PathWithTrailingSlash } from './path_schemas.ts';
 export const DiskfileChangeType = one_of(['add', 'change', 'delete']);
 export type DiskfileChangeType = Infer<typeof DiskfileChangeType>;
 
+/** How the file explorer shows the files: a flat, sortable list, or a folder tree. */
+export const DiskfileExplorerMode = one_of(['list', 'tree']);
+export type DiskfileExplorerMode = Infer<typeof DiskfileExplorerMode>;
+
 /** An absolute Unix-style file path. */
 export const DiskfilePath = brand(
 	pipe(

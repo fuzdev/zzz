@@ -208,16 +208,11 @@ export class DiskfileEditorState {
 	 * The markdown view's mode the user chose for this file, `null` until they
 	 * choose one. Kept by path (`Diskfiles.markdown_view_modes`), not here, so
 	 * it lasts across tab switches and reopening after this state is dropped
-	 * (in page memory, like the drafts) — set even from a throwaway state, the
-	 * choice being the path's. See `markdown_view_mode`.
+	 * (in page memory, like the drafts). Chosen through the `markdown_mode_set`
+	 * intent. See `markdown_view_mode`.
 	 */
 	get markdown_view_mode_choice(): MarkdownViewMode | null {
 		return this.app.diskfiles.markdown_view_modes.get(this.path) ?? null;
-	}
-	set markdown_view_mode_choice(mode: MarkdownViewMode | null) {
-		const modes = this.app.diskfiles.markdown_view_modes;
-		if (mode === null) modes.delete(this.path);
-		else modes.set(this.path, mode);
 	}
 
 	/**

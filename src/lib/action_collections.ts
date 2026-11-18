@@ -45,6 +45,9 @@ export const ActionSpecs: ActionSpecs = {
 	tab_reopen_closed: specs.tab_reopen_closed_action_spec,
 	tab_back: specs.tab_back_action_spec,
 	tab_forward: specs.tab_forward_action_spec,
+	explorer_mode_set: specs.explorer_mode_set_action_spec,
+	file_reveal: specs.file_reveal_action_spec,
+	markdown_mode_set: specs.markdown_mode_set_action_spec,
 	provider_load_status: specs.provider_load_status_action_spec,
 	terminal_create: specs.terminal_create_action_spec,
 	terminal_data_send: specs.terminal_data_send_action_spec,
@@ -94,6 +97,9 @@ export type ActionSpecs = {
 	readonly tab_reopen_closed: typeof specs.tab_reopen_closed_action_spec;
 	readonly tab_back: typeof specs.tab_back_action_spec;
 	readonly tab_forward: typeof specs.tab_forward_action_spec;
+	readonly explorer_mode_set: typeof specs.explorer_mode_set_action_spec;
+	readonly file_reveal: typeof specs.file_reveal_action_spec;
+	readonly markdown_mode_set: typeof specs.markdown_mode_set_action_spec;
 	readonly provider_load_status: typeof specs.provider_load_status_action_spec;
 	readonly terminal_create: typeof specs.terminal_create_action_spec;
 	readonly terminal_data_send: typeof specs.terminal_data_send_action_spec;
@@ -150,6 +156,9 @@ export interface ActionInputs {
 	tab_reopen_closed: Infer<typeof specs.tab_reopen_closed_action_spec.input>;
 	tab_back: Infer<typeof specs.tab_back_action_spec.input>;
 	tab_forward: Infer<typeof specs.tab_forward_action_spec.input>;
+	explorer_mode_set: Infer<typeof specs.explorer_mode_set_action_spec.input>;
+	file_reveal: Infer<typeof specs.file_reveal_action_spec.input>;
+	markdown_mode_set: Infer<typeof specs.markdown_mode_set_action_spec.input>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.input>;
@@ -204,6 +213,9 @@ export interface ActionCallInputs {
 	tab_reopen_closed: InferInput<typeof specs.tab_reopen_closed_action_spec.input>;
 	tab_back: InferInput<typeof specs.tab_back_action_spec.input>;
 	tab_forward: InferInput<typeof specs.tab_forward_action_spec.input>;
+	explorer_mode_set: InferInput<typeof specs.explorer_mode_set_action_spec.input>;
+	file_reveal: InferInput<typeof specs.file_reveal_action_spec.input>;
+	markdown_mode_set: InferInput<typeof specs.markdown_mode_set_action_spec.input>;
 	provider_load_status: InferInput<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: InferInput<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: InferInput<typeof specs.terminal_data_send_action_spec.input>;
@@ -258,6 +270,9 @@ export interface ActionOutputs {
 	tab_reopen_closed: Infer<typeof specs.tab_reopen_closed_action_spec.output>;
 	tab_back: Infer<typeof specs.tab_back_action_spec.output>;
 	tab_forward: Infer<typeof specs.tab_forward_action_spec.output>;
+	explorer_mode_set: Infer<typeof specs.explorer_mode_set_action_spec.output>;
+	file_reveal: Infer<typeof specs.file_reveal_action_spec.output>;
+	markdown_mode_set: Infer<typeof specs.markdown_mode_set_action_spec.output>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.output>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.output>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.output>;
@@ -414,6 +429,21 @@ export interface ActionEventDatas {
 		'tab_forward',
 		ActionInputs['tab_forward'],
 		ActionOutputs['tab_forward']
+	>;
+	explorer_mode_set: ActionEventLocalCallData<
+		'explorer_mode_set',
+		ActionInputs['explorer_mode_set'],
+		ActionOutputs['explorer_mode_set']
+	>;
+	file_reveal: ActionEventLocalCallData<
+		'file_reveal',
+		ActionInputs['file_reveal'],
+		ActionOutputs['file_reveal']
+	>;
+	markdown_mode_set: ActionEventLocalCallData<
+		'markdown_mode_set',
+		ActionInputs['markdown_mode_set'],
+		ActionOutputs['markdown_mode_set']
 	>;
 	provider_load_status: ActionEventRequestResponseData<
 		'provider_load_status',

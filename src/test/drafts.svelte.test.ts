@@ -208,7 +208,7 @@ describe('the drafts store', () => {
 	test('is emptied with the files when the collection is replaced, view modes too', () => {
 		const editor_state = app.diskfiles.get_editor_state(diskfile);
 		editor_state.current_content = 'mine';
-		editor_state.markdown_view_mode_choice = 'preview';
+		app.diskfiles.markdown_view_modes.set(PATH, 'preview');
 		assert.isTrue(app.diskfiles.drafts.has(PATH));
 
 		app.diskfiles.set_json({ diskfiles: [] });

@@ -230,6 +230,10 @@ describe('the file contextmenu, toward the tree and the terminals', () => {
 		assert.deepEqual(row_texts(target), ['/w/', 'a/b', 'x.md', 'c.md']);
 		assert.strictEqual(app.diskfiles.editor.tree.active_row?.path, '/w/a/b/x.md');
 		assert.strictEqual(active_text(target), 'x.md');
+		assert.deepEqual(
+			app.recent_intents.entries.map((entry) => [entry.method, entry.input]),
+			[['file_reveal', { path: '/w/a/b/x.md' }]]
+		);
 	});
 
 	test('reveal in tree from a tab switches the explorer to the tree, the file active', async () => {

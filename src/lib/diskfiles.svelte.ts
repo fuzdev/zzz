@@ -124,6 +124,18 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	readonly markdown_view_modes: SvelteMap<DiskfilePath, MarkdownViewMode> = new SvelteMap();
 
 	/**
+	 * Keeps `mode` as the markdown view's mode for the file at `path`
+	 * (`markdown_view_modes`), with or without a cell or editing state for it.
+	 *
+	 * @returns whether `path` is a markdown file — any other keeps nothing
+	 */
+	set_markdown_view_mode(path: DiskfilePath, mode: MarkdownViewMode): boolean {
+		if (to_diskfile_content_kind(path) !== 'markdown') return false;
+		this.markdown_view_modes.set(path, mode);
+		return true;
+	}
+
+	/**
 	 * The metadata of every file on disk the index reports — the source of
 	 * truth for what's on disk here. A file has a cell (`cells`) only while
 	 * something needs one; the cells kept after leaving the index

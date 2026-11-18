@@ -127,7 +127,7 @@
 						<ContextmenuEntry
 							icon={icon_directory}
 							run={() => {
-								diskfiles.editor.reveal_in_tree(path);
+								app.intents.file_reveal({ path });
 							}}
 						>
 							<span>reveal in tree</span>
@@ -174,7 +174,7 @@
 							<ContextmenuEntry
 								icon={mode === current_mode ? icon_checkmark : icon_view}
 								run={() => {
-									diskfiles.markdown_view_modes.set(path, mode);
+									app.intents.markdown_mode_set({ path, mode });
 								}}
 							>
 								<span>{MARKDOWN_VIEW_MODE_LABELS[mode]}</span>

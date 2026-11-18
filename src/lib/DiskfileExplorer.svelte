@@ -145,7 +145,7 @@
 					aria-label="show files as a tree"
 					title="show files as a tree"
 					aria-pressed={tree_mode}
-					onclick={() => editor.toggle_explorer_mode()}
+					onclick={() => app.intents.explorer_mode_set({ mode: tree_mode ? 'list' : 'tree' })}
 				>
 					<Icon data={icon_directory} />
 				</button>

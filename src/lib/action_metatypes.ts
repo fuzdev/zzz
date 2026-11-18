@@ -41,6 +41,9 @@ export const ActionMethod = one_of([
 	'tab_reopen_closed',
 	'tab_back',
 	'tab_forward',
+	'explorer_mode_set',
+	'file_reveal',
+	'markdown_mode_set',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -124,7 +127,10 @@ export const LocalCallActionMethod = one_of([
 	'tab_move',
 	'tab_reopen_closed',
 	'tab_back',
-	'tab_forward'
+	'tab_forward',
+	'explorer_mode_set',
+	'file_reveal',
+	'markdown_mode_set'
 ]);
 export type LocalCallActionMethod = Infer<typeof LocalCallActionMethod>;
 
@@ -163,6 +169,9 @@ export const FrontendActionMethod = one_of([
 	'tab_reopen_closed',
 	'tab_back',
 	'tab_forward',
+	'explorer_mode_set',
+	'file_reveal',
+	'markdown_mode_set',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -381,6 +390,13 @@ export interface FrontendActionsApi {
 	tab_reopen_closed: (input?: void) => ActionOutputs['tab_reopen_closed'];
 	tab_back: (input?: void) => ActionOutputs['tab_back'];
 	tab_forward: (input?: void) => ActionOutputs['tab_forward'];
+	explorer_mode_set: (
+		input: ActionCallInputs['explorer_mode_set']
+	) => ActionOutputs['explorer_mode_set'];
+	file_reveal: (input: ActionCallInputs['file_reveal']) => ActionOutputs['file_reveal'];
+	markdown_mode_set: (
+		input: ActionCallInputs['markdown_mode_set']
+	) => ActionOutputs['markdown_mode_set'];
 	provider_load_status: (
 		input: ActionCallInputs['provider_load_status'],
 		options?: RpcClientCallOptions

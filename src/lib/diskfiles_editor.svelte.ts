@@ -1,12 +1,6 @@
 // @slop Claude Sonnet 3.7
 
-import {
-	boolean,
-	one_of,
-	with_default,
-	type Infer,
-	type InferInput
-} from '@fuzdev/fuz_schema/schema.ts';
+import { boolean, with_default, type Infer, type InferInput } from '@fuzdev/fuz_schema/schema.ts';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -14,7 +8,7 @@ import { DiskfileTabs } from './diskfile_tabs.svelte.ts';
 import type { DiskfileTab } from './diskfile_tab.svelte.ts';
 import { DiskfileTreeState } from './diskfile_tree_state.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
-import type { DiskfilePath } from './diskfile_types.ts';
+import { DiskfileExplorerMode, type DiskfilePath } from './diskfile_types.ts';
 
 /**
  * A tab close waiting on the user — see `DiskfilesEditor.request_close_tab`.
@@ -27,10 +21,6 @@ export interface DiskfileTabCloseRequest {
 	/** Set by `cancel_close_tab` — the user chose to keep the tab. */
 	cancelled: boolean;
 }
-
-/** How the file explorer shows the files: a flat, sortable list, or a folder tree. */
-export const DiskfileExplorerMode = one_of(['list', 'tree']);
-export type DiskfileExplorerMode = Infer<typeof DiskfileExplorerMode>;
 
 export const DiskfilesEditorJson = cell_json_schema(
 	{
@@ -214,11 +204,9 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 		this.show_sort_controls = value;
 	}
 
-	/** Switches the file explorer between its list and tree modes. */
-	toggle_explorer_mode(
-		value: DiskfileExplorerMode = this.explorer_mode === 'tree' ? 'list' : 'tree'
-	): void {
-		this.explorer_mode = value;
+	/** Shows the file explorer as a list or a tree. */
+	set_explorer_mode(mode: DiskfileExplorerMode): void {
+		this.explorer_mode = mode;
 	}
 
 	/**

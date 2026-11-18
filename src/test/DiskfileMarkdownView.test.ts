@@ -171,6 +171,14 @@ describe('DiskfileMarkdownView', () => {
 		click_button(second.target, 'source');
 		assert.ok(second.textarea());
 		assert.isNull(second.heading());
+		assert.deepEqual(
+			app.recent_intents.entries.map((entry) => [entry.method, entry.input]),
+			[
+				['markdown_mode_set', { path: a.path, mode: 'preview' }],
+				['markdown_mode_set', { path: a.path, mode: 'source' }]
+			],
+			'each click is one intent'
+		);
 	});
 
 	test('a draft survives switching modes', async () => {
@@ -239,7 +247,7 @@ describe('DiskfileMarkdownView', () => {
 
 	test('in preview mode, a pending focus key is taken by the preview', async () => {
 		const a = await disk.load(PATH_A, '# a');
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'preview' });
 		app.ui.pending_element_to_focus_key = a.path;
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		assert.isNull(app.ui.pending_element_to_focus_key);
@@ -332,6 +340,15 @@ describe('DiskfileMarkdownView mode shortcuts', () => {
 		press_mode(document.activeElement!, 1);
 		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'split');
 		assert.ok(view.heading());
+		assert.deepEqual(
+			app.recent_intents.entries.map((entry) => [entry.method, entry.input]),
+			[
+				['markdown_mode_set', { path: a.path, mode: 'preview' }],
+				['markdown_mode_set', { path: a.path, mode: 'source' }],
+				['markdown_mode_set', { path: a.path, mode: 'split' }]
+			],
+			'each chord is one intent'
+		);
 	});
 
 	test('work from the page, but leave an input elsewhere its keys', async () => {
@@ -363,6 +380,7 @@ describe('DiskfileMarkdownView mode shortcut guards', () => {
 		const event = press_mode(document.body, 3, { repeat: true });
 		assert.isTrue(event.defaultPrevented);
 		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'split');
+		assert.strictEqual(app.recent_intents.entries.length, 0, 'no intent');
 	});
 
 	test('focus on a non-editable element outside the view stays put, and the mode switches', async () => {
@@ -453,7 +471,7 @@ describe('DiskfileMarkdownView outline and links', () => {
 
 	test('the drawer lists broken links; a click reveals the link', async () => {
 		const a = await disk.load(PATH_A, DOC);
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'preview' });
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const section = Array.from(view.target.querySelectorAll('section')).find((el) =>
 			el.textContent.includes('broken links')
@@ -491,7 +509,7 @@ describe('DiskfileMarkdownView outline and links', () => {
 	test('a link from another file reveals its heading once this file shows', async () => {
 		const a = await disk.load(PATH_A, DOC);
 		const b = await disk.load(parse_or_throw(DiskfilePath, '/w/b.md'), '[to a](./a.md#part-two)');
-		app.diskfiles.get_editor_state(b).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: b.path, mode: 'preview' });
 		const view = render(DiskfileView, {
 			get diskfile() {
 				return app.diskfiles.selected_file ?? b;
@@ -590,7 +608,7 @@ describe('DiskfileMarkdownView source sync', () => {
 
 	test('in preview mode a click is only a click, and nothing is marked', async () => {
 		const a = await disk.load(PATH_A, DOC);
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'preview' });
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const h2 = find_by_text(view.target, 'h2', 'Part Two');
 		click(h2);
@@ -828,7 +846,7 @@ describe('DiskfileMarkdownView outline highlight', () => {
 
 	test('in the preview alone, sections on screen are lit, and the topmost heading in view is current', async () => {
 		const a = await disk.load(PATH_A, DOC);
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'preview' });
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
 
@@ -846,7 +864,7 @@ describe('DiskfileMarkdownView outline highlight', () => {
 
 	test('a re-render re-reads the preview on the next frame', async () => {
 		const a = await disk.load(PATH_A, DOC);
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'preview' });
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
@@ -948,7 +966,7 @@ describe('DiskfileMarkdownView outline highlight', () => {
 
 	test('in the source alone the caret says too', async () => {
 		const a = await disk.load(PATH_A, DOC);
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'source';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'source' });
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		move_caret(view.textarea()!, DOC.indexOf('see'));
 		run_frames();
@@ -957,7 +975,7 @@ describe('DiskfileMarkdownView outline highlight', () => {
 
 	test('with the drawer closed, a scroll measures nothing', async () => {
 		const a = await disk.load(PATH_A, DOC);
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'preview' });
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		toggle_details();
 		const preview = lay_out_preview(view.target, 6);
@@ -973,7 +991,7 @@ describe('DiskfileMarkdownView outline highlight', () => {
 	test('a closing drawer measures nothing as its content slides out', async () => {
 		allow_motion();
 		const a = await disk.load(PATH_A, DOC);
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'preview' });
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		toggle_details();
 		assert.ok(view.target.querySelector('.details-drawer-content'), 'still closing');
@@ -985,7 +1003,7 @@ describe('DiskfileMarkdownView outline highlight', () => {
 
 	test('closing the drawer clears its lights, so it reopens with none stale', async () => {
 		const a = await disk.load(PATH_A, DOC);
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'preview' });
 		const view = render(DiskfileMarkdownView, { diskfile: a });
 		const preview = lay_out_preview(view.target, 6);
 		preview.scroll(DOC.indexOf('## B') + 1);
@@ -1026,8 +1044,8 @@ describe('DiskfileMarkdownView outline highlight', () => {
 	test('a file switch starts the outline afresh: the followed heading and lit sections too', async () => {
 		const a = await disk.load(PATH_A, DOC);
 		const b = await disk.load(PATH_B, DOC_B);
-		app.diskfiles.get_editor_state(a).markdown_view_mode_choice = 'preview';
-		app.diskfiles.get_editor_state(b).markdown_view_mode_choice = 'preview';
+		app.intents.markdown_mode_set({ path: a.path, mode: 'preview' });
+		app.intents.markdown_mode_set({ path: b.path, mode: 'preview' });
 		app.diskfiles.select(a.path, true);
 		const view = render_switching(a);
 		const preview = lay_out_preview(view.target, 6);

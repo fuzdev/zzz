@@ -1286,8 +1286,9 @@ markdown (`.md`, `.markdown`) `DiskfileMarkdownView`, and everything else the
 text editor (`DiskfileEditorView`). The markdown view is the text editor's
 twin over the same editing state: its source in `SourceEditor` (fuz_code's
 highlighted `CodeTextarea`) beside a live `MarkdownPreview`, or either alone —
-split, preview, or source, a mode chosen per file and kept by path
-(`Diskfiles.markdown_view_modes`, outlasting the editing state),
+split, preview, or source, a mode chosen per file (the `markdown_mode_set`
+intent) and kept by path (`Diskfiles.markdown_view_modes`, outlasting the
+editing state),
 defaulting to the split, or to the preview when the content can't be
 loaded. Ctrl+Shift+1, 2, and 3 switch to split, preview, and
 source from anywhere on the page — the textarea included, since Ctrl+Shift
@@ -1914,8 +1915,9 @@ on one is lost when it scrolls away.
 The files page's explorer (`DiskfileExplorer`)
 shows the same files as a flat, sortable list (`DiskfileList`) or as a
 folder tree (`DiskfileTree`), switched by the folder toggle in its header
-(`DiskfilesEditor.explorer_mode`); the sort controls belong to the list, and
-"collapse all" to the tree. The tree has one top row per indexed root — the
+(the `explorer_mode_set` intent, `DiskfilesEditor.explorer_mode`); the
+sort controls belong to the list, and "collapse all" to the tree. The
+tree has one top row per indexed root — the
 app directory, each scoped directory, each open project's root — labeled
 with the root's path, and under it folders before files, each sorted by name
 (case-insensitive, numbers by value), with names relative to their folder. A
@@ -1957,9 +1959,10 @@ path relative to the innermost indexed root holding it (the same from any row
 showing it, `to_diskfile_copy_paths`), and its name; opens a terminal in its
 folder, unless the file is deleted on disk (a shell with that `cwd`, shown on
 the terminals page and named by its folder, since it runs no command); and, on
-list rows and tabs, reveals it in the tree (`DiskfilesEditor.reveal_in_tree`:
-switches the explorer to the tree, expands its folders, makes its row active,
-and scrolls to it). A folder or root row's menu (`DiskfileDirectoryContextmenu`)
+list rows and tabs, reveals it in the tree (the `file_reveal` intent,
+`DiskfilesEditor.reveal_in_tree`: switches the explorer to the tree,
+expands its folders, makes its row active, and scrolls to it). A folder
+or root row's menu (`DiskfileDirectoryContextmenu`)
 creates a new file or folder inside it, opens a terminal there, expands every
 folder below it or collapses them, and copies its path, relative path, and name
 — a root only its path. Expanding skips the folders the rows never show, and

@@ -74,10 +74,18 @@ describe('the mode switch', () => {
 		flushSync();
 		assert.strictEqual(app.diskfiles.editor.explorer_mode, 'list');
 		assert.isNull(target.querySelector('[role="tree"]'));
+		assert.deepEqual(
+			app.recent_intents.entries.map((entry) => [entry.method, entry.input]),
+			[
+				['explorer_mode_set', { mode: 'tree' }],
+				['explorer_mode_set', { mode: 'list' }]
+			],
+			'each click is one intent'
+		);
 	});
 
 	test('the mode is serialized with the editor', () => {
-		app.diskfiles.editor.toggle_explorer_mode();
+		app.intents.explorer_mode_set({ mode: 'tree' });
 		assert.strictEqual(app.diskfiles.editor.to_json().explorer_mode, 'tree');
 	});
 
