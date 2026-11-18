@@ -279,8 +279,12 @@ word's start, then inside a word — and the recently used lead
 (`recent_intents`). Focus stays in the input, which names the active
 command by `aria-activedescendant`; Up and Down move it, Enter or a click
 runs it, after closing the palette, so the command acts on the page as it
-was and lands in the recent intents after the close. A "go to file" mode,
-over the index into `path_open`, is still to come. `Picker`'s filter
+was and lands in the recent intents after the close. "go to a file"
+switches the palette, still open, to the indexed files by path (the home
+directory as `~`; a match at a name's start first), at most
+`PALETTE_FILES_MAX` of them with a count of the rest; one opens in a
+preview tab (`tab_open`) and shows the files page (`view_show`), and
+Backspace in an empty filter goes back to the commands. `Picker`'s filter
 input names its active item the same way (`SortableList`'s `listbox`).
 
 ## Cell System

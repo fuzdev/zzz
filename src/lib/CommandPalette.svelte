@@ -7,6 +7,9 @@
 	import { frontend_context } from './frontend.svelte.ts';
 	import {
 		create_palette_commands,
+		create_palette_file_commands,
+		to_palette_file_entries,
+		type PaletteMode,
 		filter_palette_commands,
 		to_palette_recency,
 		type PaletteCommand
@@ -37,12 +40,24 @@
 
 	let query = $state('');
 	let active_index = $state(0);
+	let mode = $state<PaletteMode>('commands');
 
 	const commands = $derived(
-		app.ui.show_palette ? create_palette_commands(app, page.url.pathname) : []
+		app.ui.show_palette && mode === 'commands'
+			? create_palette_commands(app, page.url.pathname)
+			: []
 	);
 	const recency = $derived(to_palette_recency(app.recent_intents.entries));
-	const matches = $derived(filter_palette_commands(commands, query, recency));
+	// made once per index change, so a keystroke only filters
+	const file_entries = $derived(
+		app.ui.show_palette && mode === 'files' ? to_palette_file_entries(app) : null
+	);
+	const files = $derived(
+		file_entries ? create_palette_file_commands(app, file_entries, query, page.url.pathname) : null
+	);
+	const matches = $derived(
+		files ? files.commands : filter_palette_commands(commands, query, recency)
+	);
 	// the matches can shrink under the active index (a command's state changed) — keep it on one
 	const active = $derived(Math.min(active_index, matches.length - 1));
 
@@ -62,6 +77,13 @@
 	};
 
 	const run = (command: PaletteCommand, close_dialog: () => void): void => {
+		if (command.mode) {
+			// a switch of what the palette lists keeps it open, starting afresh
+			mode = command.mode;
+			query = '';
+			active_index = 0;
+			return;
+		}
 		close_dialog();
 		command.run();
 	};
@@ -74,6 +96,15 @@
 		if (is_palette_shortcut(e)) {
 			swallow(e);
 			if (!e.repeat) close_dialog();
+			return;
+		}
+		// Backspace in an empty file filter goes back to the commands
+		if (e.key === 'Backspace' && mode === 'files' && !query) {
+			swallow(e);
+			// a held Backspace that emptied the filter stops there
+			if (e.repeat) return;
+			mode = 'commands';
+			active_index = 0;
 			return;
 		}
 		if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
@@ -111,12 +142,14 @@
 					}}
 					onkeydown={(e) => onkeydown(e, dialog.close)}
 					role="combobox"
-					aria-label="command"
+					aria-label={mode === 'files' ? 'file' : 'command'}
 					aria-expanded="true"
 					aria-controls={listbox_id}
 					aria-autocomplete="list"
 					aria-activedescendant={active === -1 ? undefined : to_option_id(active)}
-					placeholder="run a command [{PALETTE_SHORTCUTS}]"
+					placeholder={mode === 'files'
+						? 'go to a file — Backspace for the commands'
+						: `run a command [${PALETTE_SHORTCUTS}]`}
 					autocomplete="off"
 					spellcheck="false"
 					class="width:100%"
@@ -124,6 +157,7 @@
 						// each opening starts afresh: this component stays mounted while the palette's closed
 						query = '';
 						active_index = 0;
+						mode = 'commands';
 						el.focus();
 					}}
 				/>
@@ -132,7 +166,7 @@
 					bind:this={list_el}
 					id={listbox_id}
 					role="listbox"
-					aria-label="commands"
+					aria-label={mode === 'files' ? 'files' : 'commands'}
 					class="command-palette-list unstyled"
 					onmousedown={(e) => e.preventDefault()}
 				>
@@ -155,7 +189,13 @@
 					{/each}
 				</ul>
 				{#if !matches.length}
-					<p class="px_md py_xs text_50">[no matching commands]</p>
+					<p class="px_md py_xs text_50">
+						{mode === 'files' ? '[no matching files]' : '[no matching commands]'}
+					</p>
+				{:else if files && files.total > files.commands.length}
+					<p class="px_md py_xs text_50" role="status">
+						the first {files.commands.length} of {files.total} files — type to narrow them
+					</p>
 				{/if}
 			</DialogContent>
 		{/snippet}

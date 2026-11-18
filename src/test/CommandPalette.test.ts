@@ -7,10 +7,14 @@ import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { DiskfilePath } from '#lib/diskfile_types.ts';
 import CommandPalette from '#lib/CommandPalette.svelte';
+import { PALETTE_FILES_MAX } from '#lib/palette_commands.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import { write_diskfile } from './diskfile_tree_test_helpers.ts';
+
+const navigation = vi.hoisted(() => ({ goto: vi.fn((_url: string) => Promise.resolve()) }));
+vi.mock('$app/navigation', () => navigation);
 
 const MD = parse_or_throw(DiskfilePath, '/w/x.md');
 
@@ -206,6 +210,57 @@ describe('CommandPalette', () => {
 		const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
 		options(target)[0]!.dispatchEvent(press);
 		assert.isTrue(press.defaultPrevented);
+	});
+
+	test('"go to a file" lists the files, keeping the palette open; Backspace goes back', () => {
+		const target = render();
+		open();
+		const input = get_input(target);
+		type(input, 'go to a file');
+		key(input, 'Enter');
+		assert.isTrue(app.ui.show_palette, 'kept open');
+		assert.strictEqual(input.value, '');
+		assert.strictEqual(input.getAttribute('aria-label'), 'file');
+		assert.deepEqual(
+			options(target).map((o) => o.textContent.trim()),
+			['/w/x.md']
+		);
+		key(input, 'Enter');
+		assert.isFalse(app.ui.show_palette);
+		assert.strictEqual(app.diskfiles.selected_path, MD);
+		assert.deepEqual(
+			navigation.goto.mock.calls.map((call) => call[0]),
+			['/files']
+		);
+
+		open();
+		type(get_input(target), 'go to a file');
+		key(get_input(target), 'Enter');
+		assert.isTrue(key(get_input(target), 'Backspace').defaultPrevented);
+		assert.strictEqual(get_input(target).getAttribute('aria-label'), 'command');
+		// a held Backspace that emptied the filter stays in the file mode
+		type(get_input(target), 'go to a file');
+		key(get_input(target), 'Enter');
+		assert.isTrue(key(get_input(target), 'Backspace', { repeat: true }).defaultPrevented);
+		assert.strictEqual(get_input(target).getAttribute('aria-label'), 'file');
+		// Backspace with text in the filter is the input's
+		type(get_input(target), 'x');
+		assert.isFalse(key(get_input(target), 'Backspace').defaultPrevented);
+	});
+
+	test('the file mode says when nothing matches, and when the list is cut short', () => {
+		for (let i = 0; i <= PALETTE_FILES_MAX; i++) write_diskfile(app, `/w/many/f${i}.txt`);
+		const target = render();
+		open();
+		type(get_input(target), 'go to a file');
+		key(get_input(target), 'Enter');
+		type(get_input(target), 'many');
+		assert.include(
+			target.querySelector('[role="status"]')?.textContent,
+			`the first ${PALETTE_FILES_MAX} of ${PALETTE_FILES_MAX + 1} files`
+		);
+		type(get_input(target), 'nothing like this');
+		assert.include(target.textContent, '[no matching files]');
 	});
 
 	test('reopening starts afresh', () => {

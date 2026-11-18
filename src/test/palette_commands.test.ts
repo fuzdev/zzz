@@ -6,6 +6,9 @@ import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
 import {
+	PALETTE_FILES_MAX,
+	create_palette_file_commands,
+	to_palette_file_entries,
 	create_palette_commands,
 	filter_palette_commands,
 	to_palette_recency,
@@ -187,6 +190,95 @@ describe('the page and project commands', () => {
 			navigation.goto.mock.calls.map((call) => call[0]),
 			['/chats']
 		);
+	});
+});
+
+describe('the file mode', () => {
+	test('"go to a file" switches the mode, offered once anything is indexed', () => {
+		const command = create_palette_commands(app).find((c) => c.label === 'go to a file');
+		assert.ok(command);
+		assert.strictEqual(command.mode, 'files');
+	});
+
+	test('ranks a name match first, then a folder or word, then inside one; home as ~', () => {
+		app.home_dir = parse_or_throw(DiskfileDirectoryPath, '/w/');
+		write_diskfile(app, '/w/x/readme.md');
+		write_diskfile(app, '/w/readme/a.md');
+		write_diskfile(app, '/w/myreadme.txt');
+		const { commands, total } = create_palette_file_commands(
+			app,
+			to_palette_file_entries(app),
+			'README'
+		);
+		assert.deepEqual(labels(commands), ['~/x/readme.md', '~/readme/a.md', '~/myreadme.txt']);
+		assert.strictEqual(total, 3);
+		assert.deepEqual(
+			labels(create_palette_file_commands(app, to_palette_file_entries(app), '').commands),
+			['~/a/x.md', '~/b.txt', '~/myreadme.txt', '~/readme/a.md', '~/x/readme.md'],
+			'every file, by path, with no query'
+		);
+	});
+
+	test('a match at the path’s own start is a folder’s, below a name’s', () => {
+		write_diskfile(app, '/w/wx.md');
+		const { commands } = create_palette_file_commands(app, to_palette_file_entries(app), '/w');
+		// `/w` names `wx.md` by the slash before its name; every path also starts with it
+		assert.deepEqual(labels(commands).slice(0, 1), ['/w/wx.md']);
+	});
+
+	test('a query starting with a slash matches a name by the slash before it', () => {
+		const { commands } = create_palette_file_commands(app, to_palette_file_entries(app), '/b');
+		assert.deepEqual(labels(commands), ['/w/b.txt']);
+	});
+
+	test('with no file indexed there is no "go to a file"', () => {
+		const empty = monkeypatch_zzz_for_tests(new Frontend());
+		assert.notInclude(labels(create_palette_commands(empty)), 'go to a file');
+		empty.dispose();
+	});
+
+	test('the best matches survive the cap, whatever their path', () => {
+		for (let i = 0; i <= PALETTE_FILES_MAX; i++) write_diskfile(app, `/w/a/many/xmany${i}.txt`);
+		write_diskfile(app, '/w/zz/many.md');
+		const { commands } = create_palette_file_commands(app, to_palette_file_entries(app), 'many');
+		assert.strictEqual(commands[0]?.label, '/w/zz/many.md', 'a name match, sorted last by path');
+	});
+
+	test('lists at most the cap, counting every match', () => {
+		for (let i = 0; i <= PALETTE_FILES_MAX; i++) write_diskfile(app, `/w/many/f${i}.txt`);
+		const { commands, total } = create_palette_file_commands(
+			app,
+			to_palette_file_entries(app),
+			'many'
+		);
+		assert.strictEqual(commands.length, PALETTE_FILES_MAX);
+		assert.strictEqual(total, PALETTE_FILES_MAX + 1);
+	});
+
+	test('a file opens in a preview tab and shows the files page, unless shown', () => {
+		const [first] = create_palette_file_commands(
+			app,
+			to_palette_file_entries(app),
+			'b.txt',
+			'/chats'
+		).commands;
+		assert.ok(first);
+		first.run();
+		assert.strictEqual(app.diskfiles.editor.tabs.preview_tab?.path, TXT);
+		assert.deepEqual(
+			app.recent_intents.entries.map((e) => [e.method, e.input]),
+			[
+				['tab_open', { path: TXT }],
+				['view_show', { view: 'files' }]
+			]
+		);
+		create_palette_file_commands(
+			app,
+			to_palette_file_entries(app),
+			'x.md',
+			'/files'
+		).commands[0]!.run();
+		assert.strictEqual(app.recent_intents.entries.at(-1)?.method, 'tab_open');
 	});
 });
 

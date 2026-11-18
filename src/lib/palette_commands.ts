@@ -58,7 +58,21 @@ export interface PaletteCommand {
 	readonly recent_key: string | null;
 	/** Runs the command — call it from an event handler, never a `$derived`. */
 	readonly run: () => void;
+	/**
+	 * The palette's mode the command switches to, keeping the palette open,
+	 * instead of closing it first — `run` is then a no-op.
+	 */
+	readonly mode?: PaletteMode | undefined;
 }
+
+/** What the palette lists: commands, or the indexed files to go to. */
+export type PaletteMode = 'commands' | 'files';
+
+/**
+ * The most files the palette's file mode lists at once — enough to scroll,
+ * few enough that a large index stays cheap to render; typing narrows it.
+ */
+export const PALETTE_FILES_MAX = 200;
 
 const intent_labels: ReadonlyMap<string, string> = new Map(
 	all_intent_specs.map((spec) => [spec.method, spec.label])
@@ -122,6 +136,16 @@ export const create_palette_commands = (
 	};
 
 	const { diskfiles, ui } = app;
+
+	if (diskfiles.index.size) {
+		commands.push({
+			key: 'files_mode',
+			label: 'go to a file',
+			recent_key: null,
+			run: () => undefined,
+			mode: 'files'
+		});
+	}
 	const { editor } = diskfiles;
 	const { tabs, tree } = editor;
 	const path: DiskfilePath | null = tabs.selected_path;
@@ -203,6 +227,93 @@ export const create_palette_commands = (
 	}
 
 	return commands;
+};
+
+/** An indexed file as the palette's file mode matches it, made once per index change. */
+export interface PaletteFileEntry {
+	readonly path: DiskfilePath;
+	/** The path with the home directory as `~`, what the palette shows. */
+	readonly label: string;
+	readonly lower: string;
+	/** Where the file's name starts in `label`. */
+	readonly name_start: number;
+}
+
+/**
+ * The indexed files as the file mode matches them, sorted by label — read
+ * it in a `$derived` of its own, so a keystroke reuses it and only a change
+ * to the index (or the home directory) rebuilds it.
+ */
+export const to_palette_file_entries = (app: Frontend): Array<PaletteFileEntry> => {
+	const home = app.home_dir;
+	const entries: Array<PaletteFileEntry> = app.diskfiles.on_disk.map((record) => {
+		const path = record.id;
+		const label = home && path.startsWith(home) ? `~/${path.slice(home.length)}` : path;
+		return { path, label, lower: label.toLowerCase(), name_start: label.lastIndexOf('/') + 1 };
+	});
+	entries.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+	return entries;
+};
+
+/**
+ * Where lowercase `q` falls in a file's label: `0` at its name's start (a
+ * `q` starting with `/` there by the slash before it), `1` at a folder's or
+ * a word's start, `2` inside a word, `-1` nowhere.
+ */
+const to_file_match_rank = (entry: PaletteFileEntry, q: string): number => {
+	const { lower, name_start } = entry;
+	const slash = q.startsWith('/');
+	if (lower.startsWith(q, slash ? name_start - 1 : name_start)) return 0;
+	let index = lower.indexOf(q);
+	if (index === -1) return -1;
+	while (index !== -1) {
+		if (slash || index === 0 || !/[a-z0-9]/.test(lower[index - 1]!)) return 1;
+		index = lower.indexOf(q, index + 1);
+	}
+	return 2;
+};
+
+/**
+ * The indexed files whose label holds `query` (ignoring case), best first —
+ * a match at a name's start, then at a folder's or word's, then inside one,
+ * ties by label — at most `PALETTE_FILES_MAX` of them. One pass over
+ * `entries` (`to_palette_file_entries`), sorted already, so a keystroke
+ * sorts nothing. Each opens its file in a preview tab (`tab_open`) and shows
+ * the files page (`view_show`) unless it's shown.
+ *
+ * @returns the commands, and how many files matched in all
+ */
+export const create_palette_file_commands = (
+	app: Frontend,
+	entries: ReadonlyArray<PaletteFileEntry>,
+	query: string,
+	pathname: string | null = null
+): { commands: Array<PaletteCommand>; total: number } => {
+	const q = query.trim().toLowerCase();
+	// by rank, each in label order, none longer than the cap the whole is cut to
+	const buckets: Array<Array<PaletteFileEntry>> = [[], [], []];
+	let total = 0;
+	for (const entry of entries) {
+		const rank = q ? to_file_match_rank(entry, q) : 0;
+		if (rank === -1) continue;
+		total++;
+		const bucket = buckets[rank]!;
+		if (bucket.length < PALETTE_FILES_MAX) bucket.push(entry);
+	}
+	const files_url = to_view_url('files');
+	const commands = buckets
+		.flat()
+		.slice(0, PALETTE_FILES_MAX)
+		.map(({ path, label }): PaletteCommand => ({
+			key: path,
+			label,
+			recent_key: null,
+			run: () => {
+				app.intents.tab_open({ path });
+				if (pathname !== files_url) app.intents.view_show({ view: 'files' });
+			}
+		}));
+	return { commands, total };
 };
 
 /**
