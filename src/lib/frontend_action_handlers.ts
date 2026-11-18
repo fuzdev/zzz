@@ -210,6 +210,24 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
+	sidebar_toggle: {
+		execute: ({ data: { input } }) => ({ show: frontend.ui.toggle_sidebar(input?.show) })
+	},
+
+	desk_toggle: {
+		execute: ({ data: { input } }) => ({ show: frontend.ui.toggle_desk_menu(input?.show) })
+	},
+
+	desk_pin_toggle: {
+		execute: ({ data: { input } }) => ({ pinned: frontend.ui.toggle_desk_pinned(input?.pinned) })
+	},
+
+	diskfile_details_toggle: {
+		execute: ({ data: { input } }) => ({
+			show: frontend.ui.toggle_diskfile_details(input?.show)
+		})
+	},
+
 	provider_load_status: {
 		receive_response: ({ data: { output } }) => {
 			frontend.update_provider_status(output.status);

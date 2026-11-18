@@ -27,7 +27,12 @@
 			<h3>ui</h3>
 			<div class="my_md">
 				<label class="row">
-					<input type="checkbox" bind:checked={app.ui.show_sidebar} aria-label="show sidebar" />
+					<input
+						type="checkbox"
+						checked={app.ui.show_sidebar}
+						onchange={(e) => app.intents.sidebar_toggle({ show: e.currentTarget.checked })}
+						aria-label="show sidebar"
+					/>
 					show sidebar <code class="ml_md">[backtick `]</code>
 				</label>
 			</div>

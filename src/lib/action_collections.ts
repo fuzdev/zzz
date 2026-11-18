@@ -33,6 +33,10 @@ export const ActionSpecs: ActionSpecs = {
 	completion_create: specs.completion_create_action_spec,
 	completion_progress: specs.completion_progress_action_spec,
 	main_menu_toggle: specs.main_menu_toggle_action_spec,
+	sidebar_toggle: specs.sidebar_toggle_action_spec,
+	desk_toggle: specs.desk_toggle_action_spec,
+	desk_pin_toggle: specs.desk_pin_toggle_action_spec,
+	diskfile_details_toggle: specs.diskfile_details_toggle_action_spec,
 	provider_load_status: specs.provider_load_status_action_spec,
 	terminal_create: specs.terminal_create_action_spec,
 	terminal_data_send: specs.terminal_data_send_action_spec,
@@ -70,6 +74,10 @@ export type ActionSpecs = {
 	readonly completion_create: typeof specs.completion_create_action_spec;
 	readonly completion_progress: typeof specs.completion_progress_action_spec;
 	readonly main_menu_toggle: typeof specs.main_menu_toggle_action_spec;
+	readonly sidebar_toggle: typeof specs.sidebar_toggle_action_spec;
+	readonly desk_toggle: typeof specs.desk_toggle_action_spec;
+	readonly desk_pin_toggle: typeof specs.desk_pin_toggle_action_spec;
+	readonly diskfile_details_toggle: typeof specs.diskfile_details_toggle_action_spec;
 	readonly provider_load_status: typeof specs.provider_load_status_action_spec;
 	readonly terminal_create: typeof specs.terminal_create_action_spec;
 	readonly terminal_data_send: typeof specs.terminal_data_send_action_spec;
@@ -114,6 +122,10 @@ export interface ActionInputs {
 	completion_create: Infer<typeof specs.completion_create_action_spec.input>;
 	completion_progress: Infer<typeof specs.completion_progress_action_spec.input>;
 	main_menu_toggle: Infer<typeof specs.main_menu_toggle_action_spec.input>;
+	sidebar_toggle: Infer<typeof specs.sidebar_toggle_action_spec.input>;
+	desk_toggle: Infer<typeof specs.desk_toggle_action_spec.input>;
+	desk_pin_toggle: Infer<typeof specs.desk_pin_toggle_action_spec.input>;
+	diskfile_details_toggle: Infer<typeof specs.diskfile_details_toggle_action_spec.input>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.input>;
@@ -156,6 +168,10 @@ export interface ActionCallInputs {
 	completion_create: InferInput<typeof specs.completion_create_action_spec.input>;
 	completion_progress: InferInput<typeof specs.completion_progress_action_spec.input>;
 	main_menu_toggle: InferInput<typeof specs.main_menu_toggle_action_spec.input>;
+	sidebar_toggle: InferInput<typeof specs.sidebar_toggle_action_spec.input>;
+	desk_toggle: InferInput<typeof specs.desk_toggle_action_spec.input>;
+	desk_pin_toggle: InferInput<typeof specs.desk_pin_toggle_action_spec.input>;
+	diskfile_details_toggle: InferInput<typeof specs.diskfile_details_toggle_action_spec.input>;
 	provider_load_status: InferInput<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: InferInput<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: InferInput<typeof specs.terminal_data_send_action_spec.input>;
@@ -198,6 +214,10 @@ export interface ActionOutputs {
 	completion_create: Infer<typeof specs.completion_create_action_spec.output>;
 	completion_progress: Infer<typeof specs.completion_progress_action_spec.output>;
 	main_menu_toggle: Infer<typeof specs.main_menu_toggle_action_spec.output>;
+	sidebar_toggle: Infer<typeof specs.sidebar_toggle_action_spec.output>;
+	desk_toggle: Infer<typeof specs.desk_toggle_action_spec.output>;
+	desk_pin_toggle: Infer<typeof specs.desk_pin_toggle_action_spec.output>;
+	diskfile_details_toggle: Infer<typeof specs.diskfile_details_toggle_action_spec.output>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.output>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.output>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.output>;
@@ -298,6 +318,26 @@ export interface ActionEventDatas {
 		'main_menu_toggle',
 		ActionInputs['main_menu_toggle'],
 		ActionOutputs['main_menu_toggle']
+	>;
+	sidebar_toggle: ActionEventLocalCallData<
+		'sidebar_toggle',
+		ActionInputs['sidebar_toggle'],
+		ActionOutputs['sidebar_toggle']
+	>;
+	desk_toggle: ActionEventLocalCallData<
+		'desk_toggle',
+		ActionInputs['desk_toggle'],
+		ActionOutputs['desk_toggle']
+	>;
+	desk_pin_toggle: ActionEventLocalCallData<
+		'desk_pin_toggle',
+		ActionInputs['desk_pin_toggle'],
+		ActionOutputs['desk_pin_toggle']
+	>;
+	diskfile_details_toggle: ActionEventLocalCallData<
+		'diskfile_details_toggle',
+		ActionInputs['diskfile_details_toggle'],
+		ActionOutputs['diskfile_details_toggle']
 	>;
 	provider_load_status: ActionEventRequestResponseData<
 		'provider_load_status',

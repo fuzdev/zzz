@@ -62,7 +62,7 @@
 				class:palette_d={app.ui.show_sidebar}
 				class:palette_f={!app.ui.show_sidebar}
 				onclick={() => {
-					app.ui.toggle_sidebar();
+					app.intents.sidebar_toggle();
 					if (!browser.browserified) {
 						browser.browserified = true;
 					}

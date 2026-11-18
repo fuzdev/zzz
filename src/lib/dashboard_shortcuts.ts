@@ -13,13 +13,15 @@
 import { is_editable, swallow } from '@fuzdev/fuz_util/dom.ts';
 
 import { is_fuz_terminal_key_target } from './fuz_terminal/fuz_terminal_key_target.ts';
+import type { FrontendIntentsApi } from './intent_spec.ts';
 
-/** What the shortcuts read and toggle — the app's `Ui`. */
-export interface DashboardShortcutsUi {
-	readonly show_desk_menu: boolean;
-	readonly desk_pinned: boolean;
-	toggle_desk_menu: (value?: boolean) => unknown;
-	toggle_sidebar: (value?: boolean) => unknown;
+/** What the shortcuts read (the app's `Ui`) and call (its intents). */
+export interface DashboardShortcutsApp {
+	readonly ui: {
+		readonly show_desk_menu: boolean;
+		readonly desk_pinned: boolean;
+	};
+	readonly intents: Pick<FrontendIntentsApi, 'desk_toggle' | 'sidebar_toggle'>;
 }
 
 /** Whether a key event belongs to what has focus, so no shortcut takes it. */
@@ -33,15 +35,16 @@ export const is_dashboard_shortcut_excluded = (target: EventTarget | null): bool
  */
 export const handle_dashboard_shortcut = (
 	event: KeyboardEvent,
-	ui: DashboardShortcutsUi
+	app: DashboardShortcutsApp
 ): boolean => {
 	if (is_dashboard_shortcut_excluded(event.target)) return false;
+	const { ui, intents } = app;
 	if (event.key === 'Escape' && ui.show_desk_menu && !ui.desk_pinned) {
-		ui.toggle_desk_menu(false);
+		intents.desk_toggle({ show: false });
 	} else if (event.key === '~') {
-		ui.toggle_desk_menu();
+		intents.desk_toggle();
 	} else if (event.key === '`') {
-		ui.toggle_sidebar();
+		intents.sidebar_toggle();
 	} else {
 		return false;
 	}

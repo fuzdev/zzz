@@ -44,7 +44,8 @@ export class Ui extends Cell<typeof UiJson> {
 
 	// TODO think about the main menu allowing any components to add snippets
 	/**
-	 * Toggle the main menu visibility.
+	 * Toggle the main menu visibility. The `main_menu_toggle` intent's
+	 * implementation — UI calls `app.intents.main_menu_toggle`, not this.
 	 */
 	toggle_main_menu(value: boolean = !this.show_main_dialog): boolean {
 		this.show_main_dialog = value;
@@ -52,7 +53,8 @@ export class Ui extends Cell<typeof UiJson> {
 	}
 
 	/**
-	 * Toggle the sidebar visibility.
+	 * Toggle the sidebar visibility. The `sidebar_toggle` intent's
+	 * implementation — UI calls `app.intents.sidebar_toggle`, not this.
 	 */
 	toggle_sidebar(value: boolean = !this.show_sidebar): boolean {
 		this.show_sidebar = value;
@@ -60,7 +62,8 @@ export class Ui extends Cell<typeof UiJson> {
 	}
 
 	/**
-	 * Toggle the desk menu visibility.
+	 * Toggle the desk menu visibility. The `desk_toggle` intent's
+	 * implementation — UI calls `app.intents.desk_toggle`, not this.
 	 */
 	toggle_desk_menu(value: boolean = !this.show_desk_menu): boolean {
 		this.show_desk_menu = value;
@@ -68,7 +71,8 @@ export class Ui extends Cell<typeof UiJson> {
 	}
 
 	/**
-	 * Toggle the desk menu pinned state.
+	 * Toggle the desk menu pinned state. The `desk_pin_toggle` intent's
+	 * implementation — UI calls `app.intents.desk_pin_toggle`, not this.
 	 */
 	toggle_desk_pinned(value: boolean = !this.desk_pinned): boolean {
 		this.desk_pinned = value;
@@ -76,7 +80,9 @@ export class Ui extends Cell<typeof UiJson> {
 	}
 
 	/**
-	 * Toggle the file views' details drawer.
+	 * Toggle the file views' details drawer. The `diskfile_details_toggle`
+	 * intent's implementation — UI calls `app.intents.diskfile_details_toggle`,
+	 * not this.
 	 */
 	toggle_diskfile_details(value: boolean = !this.show_diskfile_details): boolean {
 		this.show_diskfile_details = value;

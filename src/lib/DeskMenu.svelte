@@ -52,7 +52,9 @@
 		tabindex="-1"
 		aria-label="desk menu"
 		{@attach manage_focus}
-		{@attach app.ui.desk_pinned ? null : click_outside(() => app.ui.toggle_desk_menu(false))}
+		{@attach app.ui.desk_pinned
+			? null
+			: click_outside(() => app.intents.desk_toggle({ show: false }))}
 	>
 		<section>
 			<div class="row gap_sm mb_xl">
@@ -64,7 +66,7 @@
 					class="icon-button sized_sm"
 					class:selected={app.ui.desk_pinned}
 					title={app.ui.desk_pinned ? 'unpin desk' : 'pin desk'}
-					onclick={() => app.ui.toggle_desk_pinned()}
+					onclick={() => app.intents.desk_pin_toggle()}
 				>
 					<Icon data={icon_pin} />
 				</button>

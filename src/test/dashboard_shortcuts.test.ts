@@ -2,22 +2,30 @@
 
 import { test, describe, assert, afterEach } from 'vitest';
 
-import { handle_dashboard_shortcut, type DashboardShortcutsUi } from '#lib/dashboard_shortcuts.ts';
+import { handle_dashboard_shortcut, type DashboardShortcutsApp } from '#lib/dashboard_shortcuts.ts';
 import { FUZ_TERMINAL_KEYS_ATTRIBUTE } from '#lib/fuz_terminal/fuz_terminal_key_target.ts';
 
-interface TestUi extends DashboardShortcutsUi {
+/** A stand-in app: its `Ui` state, and intents that set it as the real handlers do. */
+interface TestApp extends DashboardShortcutsApp {
 	show_sidebar: boolean;
 	show_desk_menu: boolean;
 	desk_pinned: boolean;
+	toggle_desk_menu: (value?: boolean) => boolean;
 }
 
-const create_ui = (): TestUi => {
-	const ui: TestUi = {
+const create_ui = (): TestApp => {
+	const ui: TestApp = {
 		show_sidebar: false,
 		show_desk_menu: false,
 		desk_pinned: false,
 		toggle_desk_menu: (value = !ui.show_desk_menu) => (ui.show_desk_menu = value),
-		toggle_sidebar: (value = !ui.show_sidebar) => (ui.show_sidebar = value)
+		get ui() {
+			return ui;
+		},
+		intents: {
+			desk_toggle: (input) => ({ show: ui.toggle_desk_menu(input?.show) }),
+			sidebar_toggle: (input) => ({ show: (ui.show_sidebar = input?.show ?? !ui.show_sidebar) })
+		}
 	};
 	return ui;
 };
@@ -37,11 +45,11 @@ const add = <T extends Element>(element: T): T => {
 const press = (
 	target: Element,
 	key: string,
-	ui: DashboardShortcutsUi
+	app: DashboardShortcutsApp
 ): { event: KeyboardEvent; ran: boolean } => {
 	let ran = false;
 	const handler = (e: KeyboardEvent): void => {
-		ran = handle_dashboard_shortcut(e, ui);
+		ran = handle_dashboard_shortcut(e, app);
 	};
 	window.addEventListener('keydown', handler, { capture: true });
 	const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });

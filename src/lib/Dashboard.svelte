@@ -64,7 +64,7 @@
 	);
 </script>
 
-<svelte:window onkeydowncapture={(e) => handle_dashboard_shortcut(e, app.ui)} />
+<svelte:window onkeydowncapture={(e) => handle_dashboard_shortcut(e, app)} />
 
 <!-- TODO drive with data -->
 <div
@@ -151,7 +151,7 @@
 		class="fixed bottom:0 left:0 icon-button plain border-radius:0 border_top_right_radius_md"
 		aria-label={sidebar_button_title}
 		title={sidebar_button_title}
-		onclick={() => app.ui.toggle_sidebar()}
+		onclick={() => app.intents.sidebar_toggle()}
 	>
 		<Icon data={app.ui.show_sidebar ? icon_arrow_left : icon_arrow_right} />
 	</button>
@@ -164,7 +164,7 @@
 			class="fixed top:0 right:0 icon-button plain border-radius:0 border_bottom_left_radius_md"
 			aria-label="desk menu"
 			title="desk menu — switch projects [~]"
-			onclick={() => app.ui.toggle_desk_menu()}
+			onclick={() => app.intents.desk_toggle()}
 			{@attach (el) => {
 				if (app.ui.pending_element_to_focus_key === DESK_MENU_BUTTON_FOCUS_KEY) {
 					app.ui.pending_element_to_focus_key = null;

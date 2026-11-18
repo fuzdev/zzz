@@ -8,6 +8,7 @@ import { all_action_specs, all_intent_specs } from '#lib/action_specs.ts';
 import { is_intent_action_spec } from '#lib/intent_spec.ts';
 import { Frontend, type FrontendOptions } from '#lib/frontend.svelte.ts';
 import { RecentIntents } from '#lib/recent_intents.svelte.ts';
+import { handle_dashboard_shortcut } from '#lib/dashboard_shortcuts.ts';
 import { create_frontend_action_handlers } from '#lib/frontend_action_handlers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
@@ -222,6 +223,47 @@ describe('app.intents', () => {
 		cleanup();
 		assert.strictEqual(runs, 1);
 		assert.strictEqual(app.ui.show_main_dialog, true);
+	});
+});
+
+describe('the Ui intents', () => {
+	test('each toggles, or sets, its flag', () => {
+		const app = create_app();
+		const cases = [
+			['sidebar_toggle', () => app.ui.show_sidebar],
+			['desk_toggle', () => app.ui.show_desk_menu],
+			['diskfile_details_toggle', () => app.ui.show_diskfile_details]
+		] as const;
+		for (const [method, read] of cases) {
+			const before = read();
+			assert.deepEqual(app.intents[method](), { show: !before }, method);
+			assert.strictEqual(read(), !before, method);
+			assert.deepEqual(app.intents[method]({ show: before }), { show: before }, method);
+			assert.strictEqual(read(), before, method);
+		}
+		assert.deepEqual(app.intents.desk_pin_toggle(), { pinned: true });
+		assert.deepEqual(app.intents.desk_pin_toggle({ pinned: false }), { pinned: false });
+		assert.strictEqual(app.ui.desk_pinned, false);
+	});
+
+	test('the dashboard shortcuts call them, and land in the recent intents', () => {
+		const app = create_app();
+		const press = (key: string): boolean =>
+			handle_dashboard_shortcut(new KeyboardEvent('keydown', { key, cancelable: true }), app);
+		const sidebar = app.ui.show_sidebar;
+		assert.ok(press('`'));
+		assert.strictEqual(app.ui.show_sidebar, !sidebar);
+		assert.ok(press('~'));
+		assert.ok(press('Escape'));
+		assert.strictEqual(app.ui.show_desk_menu, false);
+		assert.deepEqual(
+			app.recent_intents.entries.map((entry) => [entry.method, entry.input]),
+			[
+				['sidebar_toggle', undefined],
+				['desk_toggle', undefined],
+				['desk_toggle', { show: false }]
+			]
+		);
 	});
 });
 

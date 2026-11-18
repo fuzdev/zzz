@@ -311,13 +311,25 @@ export const CompletionProgressInput = object({
 });
 export type CompletionProgressInput = Infer<typeof CompletionProgressInput>;
 
-/** Input for `main_menu_toggle`. Optional — omit to toggle, pass `{show}` to set explicitly. */
-export const MainMenuToggleInput = optional(object({ show: optional(boolean) }));
-export type MainMenuToggleInput = Infer<typeof MainMenuToggleInput>;
+/**
+ * Input for the show / hide intents (`main_menu_toggle`, `sidebar_toggle`,
+ * `desk_toggle`, `diskfile_details_toggle`). Optional — omit it to toggle,
+ * pass `{show}` to set.
+ */
+export const UiToggleInput = optional(object({ show: optional(boolean) }));
+export type UiToggleInput = Infer<typeof UiToggleInput>;
 
-/** Output for `main_menu_toggle`: whether the menu shows now. */
-export const MainMenuToggleOutput = object({ show: boolean });
-export type MainMenuToggleOutput = Infer<typeof MainMenuToggleOutput>;
+/** Output for the show / hide intents: whether it shows now. */
+export const UiToggleOutput = object({ show: boolean });
+export type UiToggleOutput = Infer<typeof UiToggleOutput>;
+
+/** Input for `desk_pin_toggle`. Optional — omit it to toggle, pass `{pinned}` to set. */
+export const DeskPinToggleInput = optional(object({ pinned: optional(boolean) }));
+export type DeskPinToggleInput = Infer<typeof DeskPinToggleInput>;
+
+/** Output for `desk_pin_toggle`: whether the desk menu is pinned now. */
+export const DeskPinToggleOutput = object({ pinned: boolean });
+export type DeskPinToggleOutput = Infer<typeof DeskPinToggleOutput>;
 
 /** Input for `provider_load_status`. */
 export const ProviderLoadStatusInput = object({
@@ -823,12 +835,68 @@ export const main_menu_toggle_action_spec = {
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
-	input: MainMenuToggleInput,
-	output: MainMenuToggleOutput,
+	input: UiToggleInput,
+	output: UiToggleOutput,
 	async: false,
 	version: 1,
 	history: 'layout',
 	description: 'Toggle or set the visibility of the main menu.'
+} satisfies IntentActionSpec;
+
+export const sidebar_toggle_action_spec = {
+	method: 'sidebar_toggle',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: UiToggleInput,
+	output: UiToggleOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description: 'Toggle or set the visibility of the sidebar.'
+} satisfies IntentActionSpec;
+
+export const desk_toggle_action_spec = {
+	method: 'desk_toggle',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: UiToggleInput,
+	output: UiToggleOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description: 'Toggle or set the visibility of the desk menu.'
+} satisfies IntentActionSpec;
+
+export const desk_pin_toggle_action_spec = {
+	method: 'desk_pin_toggle',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: DeskPinToggleInput,
+	output: DeskPinToggleOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description: 'Pin or unpin the desk menu: a pinned one stays open beside the page.'
+} satisfies IntentActionSpec;
+
+export const diskfile_details_toggle_action_spec = {
+	method: 'diskfile_details_toggle',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: UiToggleInput,
+	output: UiToggleOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description: "Toggle or set the visibility of the file views' details drawer."
 } satisfies IntentActionSpec;
 
 export const provider_load_status_action_spec = {
@@ -1040,7 +1108,13 @@ export const project_changed_action_spec = {
  * The UI intents (`IntentActionSpec`), called through `app.intents`. Every
  * `local_call` spec belongs here.
  */
-export const all_intent_specs: Array<IntentActionSpec> = [main_menu_toggle_action_spec];
+export const all_intent_specs: Array<IntentActionSpec> = [
+	main_menu_toggle_action_spec,
+	sidebar_toggle_action_spec,
+	desk_toggle_action_spec,
+	desk_pin_toggle_action_spec,
+	diskfile_details_toggle_action_spec
+];
 
 /**
  * Canonical action spec list — fuz_app's protocol actions (`heartbeat`,

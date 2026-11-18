@@ -701,7 +701,7 @@ describe('TerminalView paste', () => {
 describe('the dashboard shortcuts around a terminal', () => {
 	/** The dashboard's real handler, on `window` in the capture phase as `Dashboard` installs it. */
 	const install_shortcuts = (): void => {
-		const handler = (e: KeyboardEvent): void => void handle_dashboard_shortcut(e, app.ui);
+		const handler = (e: KeyboardEvent): void => void handle_dashboard_shortcut(e, app);
 		window.addEventListener('keydown', handler, { capture: true });
 		cleanups.push(() => window.removeEventListener('keydown', handler, { capture: true }));
 	};

@@ -243,6 +243,26 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'main_menu_toggle', 'execute', 'handling'>
 		) => ActionOutputs['main_menu_toggle'];
 	};
+	sidebar_toggle?: {
+		execute?: (
+			action_event: TypedActionEvent<'sidebar_toggle', 'execute', 'handling'>
+		) => ActionOutputs['sidebar_toggle'];
+	};
+	desk_toggle?: {
+		execute?: (
+			action_event: TypedActionEvent<'desk_toggle', 'execute', 'handling'>
+		) => ActionOutputs['desk_toggle'];
+	};
+	desk_pin_toggle?: {
+		execute?: (
+			action_event: TypedActionEvent<'desk_pin_toggle', 'execute', 'handling'>
+		) => ActionOutputs['desk_pin_toggle'];
+	};
+	diskfile_details_toggle?: {
+		execute?: (
+			action_event: TypedActionEvent<'diskfile_details_toggle', 'execute', 'handling'>
+		) => ActionOutputs['diskfile_details_toggle'];
+	};
 	provider_load_status?: {
 		send_request?: (
 			action_event: TypedActionEvent<'provider_load_status', 'send_request', 'handling'>

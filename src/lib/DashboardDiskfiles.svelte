@@ -144,7 +144,7 @@
 						title={details_title}
 						aria-expanded={app.ui.show_diskfile_details}
 						aria-controls={DISKFILE_DETAILS_DRAWER_ID}
-						onclick={() => app.ui.toggle_diskfile_details()}
+						onclick={() => app.intents.diskfile_details_toggle()}
 					>
 						<Icon
 							data={app.ui.show_diskfile_details

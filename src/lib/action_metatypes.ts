@@ -29,6 +29,10 @@ export const ActionMethod = one_of([
 	'completion_create',
 	'completion_progress',
 	'main_menu_toggle',
+	'sidebar_toggle',
+	'desk_toggle',
+	'desk_pin_toggle',
+	'diskfile_details_toggle',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -99,7 +103,13 @@ export type RemoteNotificationActionMethod = Infer<typeof RemoteNotificationActi
 /**
  * Names of all local_call actions.
  */
-export const LocalCallActionMethod = one_of(['main_menu_toggle']);
+export const LocalCallActionMethod = one_of([
+	'main_menu_toggle',
+	'sidebar_toggle',
+	'desk_toggle',
+	'desk_pin_toggle',
+	'diskfile_details_toggle'
+]);
 export type LocalCallActionMethod = Infer<typeof LocalCallActionMethod>;
 
 /**
@@ -125,6 +135,10 @@ export const FrontendActionMethod = one_of([
 	'completion_create',
 	'completion_progress',
 	'main_menu_toggle',
+	'sidebar_toggle',
+	'desk_toggle',
+	'desk_pin_toggle',
+	'diskfile_details_toggle',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -327,6 +341,14 @@ export interface FrontendActionsApi {
 	main_menu_toggle: (
 		input?: ActionCallInputs['main_menu_toggle']
 	) => ActionOutputs['main_menu_toggle'];
+	sidebar_toggle: (input?: ActionCallInputs['sidebar_toggle']) => ActionOutputs['sidebar_toggle'];
+	desk_toggle: (input?: ActionCallInputs['desk_toggle']) => ActionOutputs['desk_toggle'];
+	desk_pin_toggle: (
+		input?: ActionCallInputs['desk_pin_toggle']
+	) => ActionOutputs['desk_pin_toggle'];
+	diskfile_details_toggle: (
+		input?: ActionCallInputs['diskfile_details_toggle']
+	) => ActionOutputs['diskfile_details_toggle'];
 	provider_load_status: (
 		input: ActionCallInputs['provider_load_status'],
 		options?: RpcClientCallOptions
