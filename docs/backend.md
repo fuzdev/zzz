@@ -85,7 +85,7 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `prod-setup` create `.env.development` / `.env.production` from the
   `.example` templates (mode `0600`, `create_new`) with a freshly generated
   `SECRET_FUZ_COOKIE_KEYS` — the templates ship the key empty; `check-release`
-  (the dep-graph audit — sanity check #2 of the test-binary pattern) delegates
+  (the dep-graph audit, one of the test-binary pattern's sanity checks) delegates
   its work to `fuz_audit::run_check_release_cli()`; `ghostty-vt`
   (`ghostty_vt.rs`) builds libghostty-vt's WebAssembly module for the
   `fuz_terminal` library (`src/lib/fuz_terminal/`, which draws zzz's
@@ -382,6 +382,12 @@ commands):
   (`_testing_action_manifest` against `build_action_manifest` over
   `all_action_specs` and the test-only `_testing_emit_notifications`). A
   spec added, dropped, or changed on one side alone fails.
+- **`spec_schemas.cross.test.ts`** — wire-shape conformance: the responses
+  and backend-initiated notifications of zzz's own session, provider-status,
+  project, filesystem, and terminal actions parse against their TS
+  `spec.output` / `spec.input` (the frontend rejects what doesn't), and
+  every void-input method is sent over a WebSocket with `params` both
+  omitted and `{}`. `completion_*` needs a live provider and isn't covered.
 - **`session.cross.test.ts`** — the per-port session cookie
   (`zzz_session_<port>`: set on login, the shared `fuz_session` name not
   read; fuz_app's hardened-attribute suite runs under it in
@@ -446,7 +452,10 @@ commands):
   checkout opens the checkout with `fallback` `registry_refused` /
   `registry_invalid`; a checkout holding its own registry with nothing
   cloned opens as the checkout, `unregistered`, from a path in it and from
-  its root alike — the root with its focus requested, as a reopen asks.
+  its root alike — the root with its focus requested, as a reopen asks;
+  `project_status` fills in each present entry's git status and follows an
+  edit, refusing a plain directory (`project_not_registry`) and a closed
+  root (`project_not_open`).
 - **`filesystem.cross.test.ts`** — `diskfile_read` (a text file whole with
   its size and `mtime`, read through to the disk — a same-length rewrite read
   at once, a file in an ignored directory the filer never indexes — a file
@@ -521,6 +530,12 @@ commands):
   413 from a foreign origin on every group (health, the fallback, an account
   route, RPC, the byte routes). Requests go through `node:http`, since `fetch` won't send a
   chosen `Host`.
+- **`dev_origins.cross.test.ts`** — a second backend started with the dev
+  env template's `FUZ_ALLOWED_ORIGINS`, as `cargo xtask dev` runs `zzzd`:
+  the Vite dev server's pinned origin reaches a handler, and every other
+  local origin (a default Vite port, `vite preview`'s, the dev port under
+  another loopback name, the backend's own port) gets the gate's 403 on
+  RPC, REST, and the WebSocket upgrade.
 - **`media.cross.test.ts`** — the media actions and jobs against the
   daemon's real tools; each test that needs one skips, visibly, without it
   (`ffmpeg` on `PATH`; for transcription also whisper.cpp and
@@ -1394,7 +1409,7 @@ commands):
     thinks is running is gone; the frontend takes a `not_found` close as
     closed, since the process is already gone.
 - **Provider system**: Enum-dispatched (`Provider` enum, not trait objects) —
-  3 providers known at compile time, exhaustive matching. API keys come from
+  the providers known at compile time, exhaustive matching. API keys come from
   the `SECRET_*_API_KEY` env vars at construction and are never mutated at
   runtime; provider state sits behind `tokio::sync::RwLock` for the
   `load_status` cache write. The shared client has a 30s connect timeout and

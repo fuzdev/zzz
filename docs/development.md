@@ -298,7 +298,7 @@ the daemon and opens the UI:
 
 ```bash
 zzz                          # start daemon if needed, open zzz (the browser, or a configured opener)
-zzz ~/dev/zzz                # open the project holding ~/dev/zzz, focused on its repo (a file works too)
+zzz ~/dev/zzz                # open the project holding ~/dev/zzz, focused on its repo (a file also opens in a tab)
 zzz daemon start             # start daemon (foreground)
 zzz daemon stop              # stop the recorded daemon
 zzz daemon status            # show daemon info (exit 0 running, 1 not responding, 3 not running, 4 unknown)
@@ -615,6 +615,8 @@ export const my_action_action_spec = {
 	description: 'What this action does.'
 } satisfies RequestResponseActionSpec;
 ```
+
+   Then add it to `all_action_specs` at the bottom of the file.
 
 2. Run `gro gen` to regenerate handler types.
 

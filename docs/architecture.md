@@ -151,7 +151,7 @@ MCP-compatible subset, no batching:
 
 ### Actions
 
-Defined in `src/lib/action_specs.ts`. A representative subset below — the `terminal_*` and `project_*` families are omitted here; see [reference.md](./reference.md) (generated from the specs) for the full list:
+Defined in `src/lib/action_specs.ts`. A representative subset below — several families are omitted here; see [reference.md](./reference.md) (generated from the specs) for the full list:
 
 - `ping` — Health check. Kind: `request_response`. Initiator: `both`
 - `session_load` — Load the session snapshot, at boot and after each reconnect. Kind: `request_response`. Initiator: `frontend`
@@ -1964,9 +1964,9 @@ projects to switch it. Opening happens on `/projects`, the projects page
 auto-opens — this is how the CLI's `zzz <path>` lands the browser on a
 project, and a file the open indexed then opens in a tab on `/files`).
 It lists each open project with its kind, and a registry's registry file
-and each of its entries: a present one with a button to
-focus or unfocus it, a missing or refused one with why. Both
-paths take an absolute path or one starting `~` or `~/`, expanded to the
+and each of its entries: a present one with a button to focus or unfocus
+it and its git status (§ Repo status below), a missing or refused one with
+why. Both paths take an absolute path or one starting `~` or `~/`, expanded to the
 daemon's home (`session_load`'s `home_dir`; the param waits for the
 session) — `~user` is refused — and activate
 the project `project_open` returns, and the query param is handled once and
@@ -2116,7 +2116,10 @@ stamp, no git run), when its focused checkout's filer broadcast a change
 (editing a tracked file moves nothing under `.git`; at most every few
 seconds), when it was never probed, on a refresh, or — one per poll — when
 its status is past the sweep age, which is how an unfocused repo edited by
-another program catches up. Only registry projects have status; the daemon
+another program catches up. A "refresh status" button re-probes every
+entry at once; a failed poll shows its error above the list, and an entry
+`repos sync` would leave to a person is flagged, its reasons in the
+tooltip. Only registry projects have status; the daemon
 holds each registry's resolved entries while it's open, set and dropped
 under the projects lock with the open and close.
 

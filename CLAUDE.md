@@ -4,7 +4,9 @@
 
 `@fuzdev/zzz` — local-first AI forge: chat + files + prompts + terminals in one app.
 SvelteKit frontend (static SPA), Rust (Axum) backend, Svelte 5 runes, fuz_schema schemas.
-v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL DB. Cell + Action patterns (generated roster in ./docs/reference.md), 3 AI providers.
+v0.0.1. fuz_app auth stack (sessions, bearer tokens, bootstrap), PostgreSQL
+DB. Cell + Action patterns (generated roster in ./docs/reference.md). Claude,
+ChatGPT, and Gemini via BYOK.
 
 zzz has a single **Rust** backend: `crates/zzz_server` (Axum), whose
 `zzzd` binary also serves the frontend — a prerendered static SPA, no JS
@@ -354,8 +356,8 @@ PTY terminals don't get `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`,
 
 `zzz` (crate `crates/zzz`) starts or finds the daemon (`~/.zzz/` home,
 port 4460) and opens the UI — the browser, or a configured opener; `zzz
-<path>` opens the project holding a file or directory, and a file in a
-tab; `zzz daemon start|stop|status`; `zzz init`. It
+<path>` opens the project holding a file or directory, and a file it
+indexes in a tab; `zzz daemon start|stop|status`; `zzz init`. It
 never searches the current directory for `zzzd` or an opener, so an
 untrusted checkout can't get its own binary run with your secrets. Full
 rules (discovery, env, port, exit codes, `daemon.json`, the opener):

@@ -16,8 +16,10 @@ OpenAI, and Gemini (all full).
   filter and `cargo xtask check-release`).
 - `xtask/` — `cargo xtask dev`, `dev-setup` / `prod-setup`, `check-release`,
   `ghostty-vt`; pure `std` + `fuz_audit`, marked `dev_only`.
-- `zzz/` — the CLI: `daemon_launch.rs`, `opener.rs`, `daemon_lifecycle.rs`,
-  `procfs.rs`, `env_file.rs`; its rules are ../docs/development.md § The
+- `zzz/` — the CLI: `cli/` (argument parsing, and a module per command in
+  `cli/commands/` — `open`, `daemon`, `init`, `status`, `version`),
+  `daemon_launch.rs`, `opener.rs`, `daemon_lifecycle.rs`, `procfs.rs`,
+  `env_file.rs`, `error.rs`; its rules are ../docs/development.md § The
   `zzz` CLI.
 
 AI provider system feature-complete for all three providers (Anthropic,
@@ -76,7 +78,7 @@ out alongside this repo:
 ```
 ~/dev/zzz/                  (this repo)
 ~/dev/fuz/                  (path deps: fuz_sys, fuz_pty, the spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions — plus fuz_testing for the test binary and fuz_audit for xtask)
-~/dev/fuz_repos/            (path deps: fuz_repos for registry discovery and parsing, fuz_git, its git runner)
+~/dev/fuz_repos/            (path deps: fuz_repos for registry discovery, parsing, and repo status, fuz_git, its git runner)
 ```
 
 If a path dep is missing, `cargo build` will fail with
@@ -478,11 +480,13 @@ open project keeps them, and a depth — a whole tree, or a registry root's
 top level alone),
 `PtyManager`, `JobManager`, `ProviderManager`, `tools` (the local tools
 found at boot), `completion_options`, `enable_test_actions`,
-the spine `realtime: Arc<fuz_realtime::ConnectionRegistry>`, and the
-boot-compiled `action_registry: OnceLock<Arc<fuz_actions::ActionRegistry>>`
+`root_policy` (which directories can be roots, `RootPolicy`),
+`audit_emitter` (the spine emitter, held so the test binary's specs factory
+can reach it), the spine `realtime: Arc<fuz_realtime::ConnectionRegistry>`,
+and the boot-compiled `action_registry: OnceLock<Arc<fuz_actions::ActionRegistry>>`
 (OnceLock because the spec builders capture `Arc<App>`). Constructed once
-in `run_app`, wrapped in `Arc`. Auth keyring, daemon-token state, audit
-emitter, rate limiters, allowed-origins, and trusted-proxy config live on the
+in `run_app`, wrapped in `Arc`. Auth keyring, daemon-token state, rate
+limiters, allowed-origins, and trusted-proxy config live on the
 spine core (`fuz_actions::server::AppBackend`), whose builders produce the
 spine route states
 (`fuz_auth::AccountRouteState` / `BootstrapRouteState` / `SignupRouteState`,
@@ -615,8 +619,8 @@ joined after the drain, before PTY teardown.
 - Admin audit-log SSE broadcast is live at `GET /api/admin/audit/stream` — the
   shared `fuz_realtime::audit_stream_router`, wired to the spine
   `AuditEmitter` via `fuz_realtime::register_audit_sse_listener`, which only
-  broadcasts. Wire shape matches fuz_app's `audit_log_sse`; the
-  `sse.cross.test.ts` suite verifies it. Close-on-revoke is the one revocation
+  broadcasts. Wire shape matches fuz_app's `audit_log_sse`; fuz_app's
+  SSE suite (run by `spine_suites.cross.test.ts`) verifies it. Close-on-revoke is the one revocation
   guard's, closing through the `RealtimeCloser` fan-out, so it reaches these
   streams too: it dispatches on the `RevocationScope` each event declares in
   `fuz_auth`'s `AUDIT_EVENT_SPECS` — `session_revoke` (session-hash-scoped) /
@@ -732,7 +736,7 @@ over `App.realtime`.
   `ProviderStatus`, `CompletionOptions`
 - [x] Anthropic provider: full implementation with `reqwest` HTTP client, SSE
   streaming, message format conversion
-- [x] `provider_load_status` handler (all 3 providers report status)
+- [x] `provider_load_status` handler (every provider reports status)
 - [x] `completion_create` handler with `completion_progress` streaming
   notifications (targeted to requesting WS connection)
 - [x] `session_load` returns real provider status from all providers
