@@ -391,11 +391,13 @@ describe('a file whose content loads on view', () => {
 		['DiskfileEditorView', DiskfileEditorView],
 		['DiskfileMarkdownView', DiskfileMarkdownView]
 	] as const) {
-		test(`${name} reads it, read-only with a loading notice until it lands`, async () => {
+		test(`${name} reads it, read-only and with no notice at first until it lands`, async () => {
 			const { diskfile, read, read_paths } = setup();
 			const view = render(component, { diskfile });
 			assert.strictEqual(diskfile.content_status, 'loading');
-			assert.include(to_visible_text(view.target), DISKFILE_CONTENT_LOADING_MESSAGE);
+			// a quick read flashes nothing — the delayed notice is `DiskfileLoadingNotice`'s tests'
+			assert.notInclude(to_visible_text(view.target), DISKFILE_CONTENT_LOADING_MESSAGE);
+			assert.notInclude(to_visible_text(view.target), '[loading]');
 			assert.notInclude(to_visible_text(view.target), 'content not loaded');
 			assert.notInclude(
 				to_visible_text(view.target),

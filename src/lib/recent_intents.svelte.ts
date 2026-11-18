@@ -32,7 +32,7 @@ export interface RecentIntent extends IntentCall {
 
 /**
  * The bounded buffer of recent intents — the API's only memory of what was
- * done. Shown on the actions page beside the wire log; later read by
+ * done. Shown on the actions page under the wire log; later read by
  * reopen-closed-tab and layout undo. Never persisted beyond its bound.
  *
  * Kept apart from the `Actions` wire log: RPC traffic would evict intents

@@ -14,11 +14,8 @@
 	import { icon_file } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
 	import { format_placeholder } from './helpers.ts';
-	import {
-		DISKFILE_CONTENT_LOADING_MESSAGE,
-		DISKFILE_UNCOVERED_LABEL,
-		to_diskfile_unloaded_message
-	} from './diskfile_helpers.ts';
+	import DiskfileLoadingNotice from './DiskfileLoadingNotice.svelte';
+	import { DISKFILE_UNCOVERED_LABEL, to_diskfile_unloaded_message } from './diskfile_helpers.ts';
 
 	const {
 		diskfile_part,
@@ -75,9 +72,7 @@
 {#if diskfile && editor_state}
 	<div>
 		{#if editor_state.content_loading}
-			<p class="mb_xs text_50">
-				<small>{DISKFILE_CONTENT_LOADING_MESSAGE} — read-only until it arrives</small>
-			</p>
+			<DiskfileLoadingNotice suffix="read-only until it arrives" small attrs={{ class: 'mb_xs' }} />
 		{:else if !editor_state.content_loaded}
 			<p class="mb_xs color_c_60">
 				<small>{to_diskfile_unloaded_message(diskfile)} — read-only</small>
@@ -122,7 +117,7 @@
 				placeholder={editor_state.content_loaded
 					? format_placeholder(diskfile.path_relative)
 					: editor_state.content_loading
-						? '[loading]'
+						? ''
 						: '[content not loaded]'}
 				show_stats={false}
 				readonly={!editor_state.can_edit}

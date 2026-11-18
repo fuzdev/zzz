@@ -14,7 +14,11 @@
 		to_palette_recency,
 		type PaletteCommand
 	} from './palette_commands.ts';
-	import { PALETTE_SHORTCUTS, is_palette_shortcut } from './dashboard_shortcuts.ts';
+	import {
+		PALETTE_SHORTCUTS,
+		is_key_composing,
+		is_palette_shortcut
+	} from './dashboard_shortcuts.ts';
 
 	/**
 	 * The command palette: a filter input over a list of commands
@@ -89,10 +93,11 @@
 	};
 
 	const onkeydown = (e: KeyboardEvent, close_dialog: () => void): void => {
-		// the Enter that confirms an input method's text isn't a choice
-		if (e.isComposing) return;
-		// the input is a text field, which the dashboard's shortcuts leave alone, so the chord that
-		// opened the palette closes it here — and never reaches the browser's own Ctrl+K
+		// an input method's keys are its own: the Enter that confirms its text isn't a choice, and its
+		// Ctrl+Space switch doesn't close the palette
+		if (is_key_composing(e)) return;
+		// the dashboard's shortcuts leave the chord to the open palette, which closes here — and it
+		// never reaches the browser's own Ctrl+K
 		if (is_palette_shortcut(e)) {
 			swallow(e);
 			if (!e.repeat) close_dialog();

@@ -1,11 +1,21 @@
 <script lang="ts">
+	import { icon_error } from '@fuzdev/fuz_ui/icons.ts';
+
 	import { app_context } from './app.svelte.ts';
+	import Icon from './Icon.svelte';
+	import { get_icon_for_action_kind } from './action_icons.ts';
+	import type { RecentIntent } from './recent_intents.svelte.ts';
+	import { format_time } from './time_helpers.ts';
 
 	const {
-		limit = 50
+		limit = 50,
+		selected_seq = null,
+		onselect
 	}: {
 		/** How many of the newest entries to show. */
 		limit?: number | undefined;
+		selected_seq?: number | null | undefined;
+		onselect?: ((entry: RecentIntent) => void) | undefined;
 	} = $props();
 
 	const app = app_context.get();
@@ -14,21 +24,10 @@
 
 	/** Newest first. */
 	const shown = $derived(recent_intents.entries.slice(-limit).reverse());
-
-	const to_input_text = (input: unknown): string => {
-		let text: string | undefined;
-		try {
-			text = JSON.stringify(input);
-		} catch {
-			text = undefined;
-		}
-		if (text === undefined) return '(not shown)';
-		return text.length > 80 ? text.slice(0, 79) + '…' : text;
-	};
 </script>
 
 <section>
-	<header class="row gap_sm justify-content:space-between">
+	<header class="row gap_sm justify-content:space-between p_sm">
 		<h2 class="mt_0 mb_0">recent intents</h2>
 		<button
 			type="button"
@@ -42,20 +41,28 @@
 	{#if shown.length}
 		<ol class="unstyled">
 			{#each shown as entry (entry.seq)}
-				<li class:color_c_50={entry.outcome === 'failed'} title={entry.error ?? undefined}>
-					<code>{entry.method}</code>
-					<small>
-						v{entry.version} · {entry.history}{#if entry.outcome === 'failed'}
-							· failed
-						{/if}
-					</small>
-					{#if entry.input !== undefined}
-						<small class="display:block"><code>{to_input_text(entry.input)}</code></small>
-					{/if}
+				<li>
+					<button
+						type="button"
+						class="width:100% text-align:left justify-content:start py_xs px_md border-radius:0 border-style:none box-shadow:none"
+						class:selected={entry.seq === selected_seq}
+						class:palette_c={entry.outcome === 'failed'}
+						title={entry.error ?? undefined}
+						onclick={() => onselect?.(entry)}
+					>
+						<div class="font-weight:400 flex align-items:center gap_xs width:100%">
+							<Icon data={get_icon_for_action_kind('local_call')} />
+							<span class="font_family_mono flex:1 ellipsis">{entry.method}</span>
+							{#if entry.outcome === 'failed'}
+								<Icon class="color_c_60" data={icon_error} />
+							{/if}
+							<small class="font_family_mono ml_auto">{format_time(entry.at)}</small>
+						</div>
+					</button>
 				</li>
 			{/each}
 		</ol>
 	{:else}
-		<p><small>no intents yet — the menus, tabs, and shortcuts call them</small></p>
+		<p class="px_sm"><small>no intents yet — the menus, tabs, and shortcuts call them</small></p>
 	{/if}
 </section>

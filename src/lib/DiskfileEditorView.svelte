@@ -17,11 +17,8 @@
 	import DiskfileConflictNotice, { save_from_view } from './DiskfileConflictNotice.svelte';
 	import DiskfileSaveErrorNotice from './DiskfileSaveErrorNotice.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
-	import {
-		DISKFILE_CONTENT_LOADING_MESSAGE,
-		DISKFILE_UNCOVERED_LABEL,
-		to_diskfile_unloaded_message
-	} from './diskfile_helpers.ts';
+	import DiskfileLoadingNotice from './DiskfileLoadingNotice.svelte';
+	import { DISKFILE_UNCOVERED_LABEL, to_diskfile_unloaded_message } from './diskfile_helpers.ts';
 
 	const {
 		diskfile,
@@ -62,9 +59,10 @@
 	<div class="flex height:100% isolation:isolate">
 		<div class="flex:1 width_atleast_sm height:100% column">
 			{#if editor_state.content_loading}
-				<p class="px_md py_xs text_50">
-					{DISKFILE_CONTENT_LOADING_MESSAGE} — read-only until it arrives
-				</p>
+				<DiskfileLoadingNotice
+					suffix="read-only until it arrives"
+					attrs={{ class: 'px_md py_xs' }}
+				/>
 			{:else if !editor_state.content_loaded}
 				<p class="px_md py_xs color_c_60">
 					{to_diskfile_unloaded_message(diskfile)} — read-only, it can't be edited or saved
@@ -111,7 +109,7 @@
 				placeholder={editor_state.content_loaded
 					? format_placeholder(diskfile.path_relative)
 					: editor_state.content_loading
-						? '[loading]'
+						? ''
 						: '[content not loaded]'}
 				readonly={!editor_state.can_edit}
 				attrs={{ class: 'height:100% border-radius:0' }}

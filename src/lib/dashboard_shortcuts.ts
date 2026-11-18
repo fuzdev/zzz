@@ -4,10 +4,11 @@
  * the command palette, backtick toggles the sidebar, `~` the desk menu, and
  * Escape closes an open, unpinned desk menu.
  *
- * A key meant for what has focus is left alone: one typed into a text field,
- * or into a terminal view that takes keys (`is_fuz_terminal_key_target`),
- * where every key — a backtick, a `~`, Escape, Ctrl+K (kill-line), Ctrl+Space
- * (NUL) — may be the program's.
+ * A key meant for what has focus is left alone: a terminal view that takes
+ * keys (`is_fuz_terminal_key_target`) keeps every key — a backtick, a `~`,
+ * Escape, Ctrl+K (kill-line), Ctrl+Space (NUL) — since any may be the
+ * program's. A text field keeps the printable keys and Escape, but not the
+ * palette's chords: they open it from anywhere but a terminal.
  *
  * @module
  */
@@ -22,6 +23,7 @@ export interface DashboardShortcutsApp {
 	readonly ui: {
 		readonly show_desk_menu: boolean;
 		readonly desk_pinned: boolean;
+		readonly show_palette: boolean;
 	};
 	readonly intents: Pick<FrontendIntentsApi, 'desk_toggle' | 'sidebar_toggle' | 'palette_toggle'>;
 }
@@ -56,7 +58,19 @@ export const has_open_modal_dialog = (): boolean => {
 	return false;
 };
 
-/** Whether a key event belongs to what has focus, so no shortcut takes it. */
+/**
+ * Whether an input method holds the key (`isComposing`, `Process`, or key
+ * code 229, which Safari sends on the Enter that confirms its text) — the
+ * key is the IME's, so no shortcut or palette key acts on it.
+ */
+export const is_key_composing = (event: {
+	readonly isComposing: boolean;
+	readonly key: string;
+	/** The legacy key code — lib.dom marks it deprecated, yet it's 229 while an IME holds the key. */
+	readonly keyCode?: number;
+}): boolean => event.isComposing || event.key === 'Process' || event.keyCode === 229;
+
+/** Whether a key event belongs to what has focus, so no shortcut but the palette's takes it. */
 export const is_dashboard_shortcut_excluded = (target: EventTarget | null): boolean =>
 	is_editable(target) || is_fuz_terminal_key_target(target);
 
@@ -69,15 +83,25 @@ export const handle_dashboard_shortcut = (
 	event: KeyboardEvent,
 	app: DashboardShortcutsApp
 ): boolean => {
-	if (is_dashboard_shortcut_excluded(event.target)) return false;
 	const { ui, intents } = app;
-	if (is_palette_shortcut(event)) {
-		// the browser's own Ctrl+K (its search bar) stays shut either way; a modal dialog over the
-		// page keeps the palette from stacking on it
+	if (
+		is_palette_shortcut(event) &&
+		!is_key_composing(event) &&
+		!is_fuz_terminal_key_target(event.target)
+	) {
+		// the browser's own Ctrl+K (its search bar) stays shut wherever the focus is
+		if (ui.show_palette) {
+			// the open palette closes itself on the chord through its own close, which returns the
+			// focus — so the event goes on to its input, unstopped (from its padding, nothing closes)
+			event.preventDefault();
+			return false;
+		}
+		// a modal dialog over the page keeps the palette from stacking on it
 		swallow(event);
 		if (!event.repeat && !has_open_modal_dialog()) intents.palette_toggle();
 		return true;
 	}
+	if (is_dashboard_shortcut_excluded(event.target)) return false;
 	// a modal dialog's Escape is its own, closing it, not the desk menu behind it
 	if (event.key === 'Escape' && ui.show_desk_menu && !ui.desk_pinned && !has_open_modal_dialog()) {
 		intents.desk_toggle({ show: false });

@@ -197,9 +197,33 @@ describe('CommandPalette', () => {
 	test('the Enter that confirms an input method’s text runs nothing', () => {
 		const target = render();
 		open();
-		const event = key(get_input(target), 'Enter', { isComposing: true });
-		assert.isFalse(event.defaultPrevented);
-		assert.isTrue(app.ui.show_palette);
+		for (const init of [
+			{ isComposing: true },
+			{ key: 'Process' },
+			{ keyCode: 229 }
+		] as Array<KeyboardEventInit>) {
+			const event = key(get_input(target), init.key ?? 'Enter', init);
+			assert.isFalse(event.defaultPrevented, JSON.stringify(init));
+			assert.isTrue(app.ui.show_palette, JSON.stringify(init));
+		}
+	});
+
+	test('an input method’s Ctrl+Space in the input stays the IME’s, the palette open', () => {
+		const target = render();
+		open();
+		for (const init of [
+			{ isComposing: true },
+			{ key: 'Process' },
+			{ keyCode: 229 }
+		] as Array<KeyboardEventInit>) {
+			const event = key(get_input(target), init.key ?? ' ', {
+				ctrlKey: true,
+				code: 'Space',
+				...init
+			});
+			assert.isFalse(event.defaultPrevented, JSON.stringify(init));
+			assert.isTrue(app.ui.show_palette, JSON.stringify(init));
+		}
 	});
 
 	test('a press on the list keeps the focus in the input', () => {

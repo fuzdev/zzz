@@ -11,11 +11,8 @@
 	import DiskfileEditorView from './DiskfileEditorView.svelte';
 	import Icon from './Icon.svelte';
 	import TranscriptSegments from './TranscriptSegments.svelte';
-	import {
-		DISKFILE_CONTENT_LOADING_MESSAGE,
-		DISKFILE_UNCOVERED_LABEL,
-		delete_diskfile
-	} from './diskfile_helpers.ts';
+	import DiskfileLoadingNotice from './DiskfileLoadingNotice.svelte';
+	import { DISKFILE_UNCOVERED_LABEL, delete_diskfile } from './diskfile_helpers.ts';
 	import { DiskfilePath } from './diskfile_types.ts';
 	import { to_file_bytes_url } from './file_bytes.ts';
 	import {
@@ -102,7 +99,7 @@
 
 {#if loading}
 	<DiskfileContextmenu path={diskfile.path}>
-		<p class="p_md text_50">{DISKFILE_CONTENT_LOADING_MESSAGE}</p>
+		<DiskfileLoadingNotice attrs={{ class: 'p_md' }} />
 	</DiskfileContextmenu>
 {:else if transcript}
 	<DiskfileContextmenu path={diskfile.path}>

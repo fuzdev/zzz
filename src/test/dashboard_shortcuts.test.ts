@@ -113,14 +113,16 @@ describe('handle_dashboard_shortcut', () => {
 		assert.isTrue(press(row, '`', ui).ran);
 	});
 
-	test('Ctrl+K and Ctrl+Space toggle the palette, swallowed', () => {
+	test('Ctrl+K and Ctrl+Space open the palette, swallowed', () => {
 		const ui = create_ui();
 		const button = add(document.createElement('button'));
 		assert.ok(press(button, 'k', ui, { ctrlKey: true }).event.defaultPrevented);
 		assert.isTrue(ui.show_palette);
+		ui.show_palette = false;
 		press(button, ' ', ui, { ctrlKey: true, code: 'Space' });
-		assert.isFalse(ui.show_palette);
+		assert.isTrue(ui.show_palette);
 		// a held chord's repeats are swallowed but toggle nothing
+		ui.show_palette = false;
 		const held = press(button, 'k', ui, { ctrlKey: true, repeat: true });
 		assert.isTrue(held.event.defaultPrevented);
 		assert.isFalse(ui.show_palette);
@@ -142,19 +144,61 @@ describe('handle_dashboard_shortcut', () => {
 		assert.isFalse(ui.show_palette);
 	});
 
-	test('a text field and a terminal keep Ctrl+K and Ctrl+Space', () => {
+	test('Ctrl+K and Ctrl+Space open the palette from a text field, but a terminal keeps them', () => {
 		const ui = create_ui();
 		const input = add(document.createElement('textarea'));
+		for (const [key, code] of [
+			['k', 'KeyK'],
+			[' ', 'Space']
+		] as const) {
+			ui.show_palette = false;
+			assert.ok(press(input, key, ui, { ctrlKey: true, code }).event.defaultPrevented, key);
+			assert.isTrue(ui.show_palette, key);
+		}
+		ui.show_palette = false;
 		const terminal = add(document.createElement('div'));
 		terminal.setAttribute(FUZ_TERMINAL_KEYS_ATTRIBUTE, '');
-		for (const target of [input, terminal]) {
-			for (const [key, code] of [
-				['k', 'KeyK'],
-				[' ', 'Space']
-			] as const) {
-				const { event, ran } = press(target, key, ui, { ctrlKey: true, code });
-				assert.isFalse(ran || event.defaultPrevented, key);
-			}
+		for (const [key, code] of [
+			['k', 'KeyK'],
+			[' ', 'Space']
+		] as const) {
+			const { event, ran } = press(terminal, key, ui, { ctrlKey: true, code });
+			assert.isFalse(ran || event.defaultPrevented, key);
+		}
+		assert.isFalse(ui.show_palette);
+	});
+
+	test('the open palette gets its own chord, to close itself, the browser kept out', () => {
+		const ui = create_ui();
+		ui.show_palette = true;
+		const input = add(document.createElement('input'));
+		let reached = false;
+		input.addEventListener('keydown', () => (reached = true));
+		const { event, ran } = press(input, 'k', ui, { ctrlKey: true });
+		assert.isFalse(ran);
+		assert.isTrue(reached, 'the palette input still gets it');
+		assert.isTrue(event.defaultPrevented, "the browser's Ctrl+K stays shut");
+		assert.isTrue(ui.show_palette);
+		// focus dropped out of the palette (a click on its padding) — still never the browser's
+		const outside = press(document.body, 'k', ui, { ctrlKey: true });
+		assert.isTrue(outside.event.defaultPrevented);
+		assert.isTrue(ui.show_palette);
+	});
+
+	test("an input method's Ctrl+Space in a text field stays the IME's", () => {
+		const ui = create_ui();
+		const input = add(document.createElement('input'));
+		for (const init of [
+			{ isComposing: true },
+			{ key: 'Process' },
+			{ keyCode: 229 }
+		] as Array<KeyboardEventInit>) {
+			const { event, ran } = press(input, init.key ?? ' ', ui, {
+				ctrlKey: true,
+				code: 'Space',
+				...init
+			});
+			assert.isFalse(ran || event.defaultPrevented, JSON.stringify(init));
 		}
 		assert.isFalse(ui.show_palette);
 	});
