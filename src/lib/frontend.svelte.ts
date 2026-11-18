@@ -67,7 +67,13 @@ import './zzz_jsonrpc_errors.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import type { Result } from '@fuzdev/fuz_util/result.ts';
 
-import type { FrontendActionsApi } from './action_metatypes.ts';
+import {
+	create_untracked_intents,
+	is_intent_action_spec,
+	type FrontendIntentsApi,
+	type FrontendRpcApi
+} from './intent_spec.ts';
+import { RecentIntents } from './recent_intents.svelte.ts';
 import type { FrontendActionHandlers } from './frontend_action_types.ts';
 import type { ActionOutputs } from './action_collections.ts';
 import { all_action_specs } from './action_specs.ts';
@@ -178,7 +184,15 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 	readonly action_registry: ActionRegistry;
 	readonly action_handlers: FrontendActionHandlers;
-	readonly api: FrontendActionsApi;
+	/** The RPC surface: every action but the intents. */
+	readonly api: FrontendRpcApi;
+	/**
+	 * The UI intents (`IntentActionSpec`): every driver of a UI action — a
+	 * click, a shortcut, the command palette, a test — calls these. Each call
+	 * lands in `recent_intents`, not in the `actions` wire log.
+	 */
+	readonly intents: FrontendIntentsApi;
+	readonly recent_intents: RecentIntents = new RecentIntents();
 	readonly peer: ActionDispatcher;
 
 	// Cells - these are managed objects/collections that contain the app state
@@ -352,9 +366,18 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 
 		this.peer = new ActionDispatcher({ environment: this });
 
-		this.api = create_rpc_client<FrontendActionsApi>({
+		this.api = create_rpc_client<FrontendRpcApi>({
 			peer: this.peer,
-			environment: this,
+			// the intents are `app.intents`' alone
+			environment: {
+				executor: this.executor,
+				log: this.log,
+				lookup_action_handler: (method, phase) => this.lookup_action_handler(method, phase),
+				lookup_action_spec: (method) => {
+					const spec = this.lookup_action_spec(method);
+					return spec && is_intent_action_spec(spec) ? undefined : spec;
+				}
+			},
 			on_action_event: (event) => {
 				// flow-control calls would turn the whole history over in seconds
 				if (!QUIET_ACTION_METHODS.has(event.spec.method)) {
@@ -386,6 +409,38 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 				}
 			}
 		});
+
+		this.intents = create_untracked_intents(
+			create_rpc_client<FrontendIntentsApi>({
+				peer: this.peer,
+				environment: {
+					executor: this.executor,
+					log: this.log,
+					lookup_action_handler: (method, phase) => this.lookup_action_handler(method, phase),
+					lookup_action_spec: (method) => {
+						const spec = this.lookup_action_spec(method);
+						return spec && is_intent_action_spec(spec) ? spec : undefined;
+					}
+				},
+				on_action_event: (event) => {
+					const spec = event.spec;
+					if (!is_intent_action_spec(spec)) return;
+					// a sync intent is parsed and handled right after this returns
+					const stop = event.observe((data, old_data) => {
+						if (data.step === 'handled') {
+							stop();
+							this.recent_intents.record(spec, data.input, 'applied');
+						} else if (data.step === 'failed') {
+							stop();
+							// input that failed its schema is whatever the caller passed (an
+							// event, a cycle) — not kept, nor rendered
+							const input = old_data.step === 'initial' ? null : data.input;
+							this.recent_intents.record(spec, input, 'failed', data.error?.message ?? null);
+						}
+					});
+				}
+			})
+		);
 
 		// Set up transports, adding websocket first so it'll be the default
 		if (options.socket_url) {

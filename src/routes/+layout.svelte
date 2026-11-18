@@ -219,7 +219,7 @@
 				content: 'settings',
 				icon: icon_settings,
 				run: () => {
-					app?.api.toggle_main_menu({ show: true });
+					app?.intents.main_menu_toggle({ show: true });
 				}
 			}
 		},

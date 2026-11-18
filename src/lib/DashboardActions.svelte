@@ -7,6 +7,7 @@
 	import type { Action } from './action.svelte.ts';
 	import { app_context } from './app.svelte.ts';
 	import TimeWidget from './TimeWidget.svelte';
+	import RecentIntentList from './RecentIntentList.svelte';
 	import { random_item } from '@fuzdev/fuz_util/random.ts';
 	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -56,6 +57,10 @@
 			class="overflow:auto scrollbar-width:thin"
 			style:border-right="1px solid var(--border_color)"
 		>
+			<div class="p_sm" style:border-bottom="1px solid var(--border_color)">
+				<RecentIntentList limit={30} />
+			</div>
+			<h2 class="p_sm mt_0 mb_0">wire log</h2>
 			<ActionList
 				limit={100}
 				{selected_action_id}
@@ -86,16 +91,16 @@
 			{:else}
 				<div class="box height:100%">
 					<p>
-						no actions yet,
+						no wire actions yet —
 						<button
 							type="button"
 							class="inline palette_d"
 							onclick={() => {
-								app.api.toggle_main_menu();
+								void app.api.ping();
 							}}
 						>
-							do something?
-						</button>?
+							ping the daemon
+						</button>
 					</p>
 				</div>
 			{/if}

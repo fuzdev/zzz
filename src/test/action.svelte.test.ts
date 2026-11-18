@@ -10,7 +10,7 @@ import type {
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { Action } from '#lib/action.svelte.ts';
-import { toggle_main_menu_action_spec } from '#lib/action_specs.ts';
+import { main_menu_toggle_action_spec } from '#lib/action_specs.ts';
 import { ACTION_PAYLOAD_BUDGET, is_action_payload_omitted } from '#lib/action_helpers.ts';
 
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
@@ -19,7 +19,7 @@ const environment: ActionEventEnvironment = {
 	executor: 'frontend',
 	lookup_action_handler: () => undefined,
 	lookup_action_spec: (method) =>
-		method === toggle_main_menu_action_spec.method ? toggle_main_menu_action_spec : undefined
+		method === main_menu_toggle_action_spec.method ? main_menu_toggle_action_spec : undefined
 };
 
 let app: Frontend;
@@ -30,8 +30,8 @@ beforeEach(() => {
 
 describe('listen_to_action_event', () => {
 	test('keeps a bounded copy of the data and lets go of the event once complete', () => {
-		const event = create_action_event(environment, toggle_main_menu_action_spec, {});
-		const action = new Action({ app, json: { method: 'toggle_main_menu' } });
+		const event = create_action_event(environment, main_menu_toggle_action_spec, {});
+		const action = new Action({ app, json: { method: 'main_menu_toggle' } });
 		action.listen_to_action_event(event);
 		assert.strictEqual(action.action_event, event);
 

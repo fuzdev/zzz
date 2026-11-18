@@ -3,13 +3,17 @@ import { is_protocol_action_method } from '@fuzdev/fuz_app/actions/action_codege
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { all_action_specs } from './action_specs.ts';
+import { all_action_specs, all_intent_specs } from './action_specs.ts';
+import { is_intent_action_spec, type IntentActionSpec } from './intent_spec.ts';
 
 /**
  * zzz's own action specs, excluding the fuz_app protocol actions
- * (`heartbeat` / `peer/ping`) that `all_action_specs` folds in for dispatch.
+ * (`heartbeat` / `peer/ping`) that `all_action_specs` folds in for dispatch,
+ * and the intents, which have their own list.
  */
-const domain_specs = all_action_specs.filter((spec) => !is_protocol_action_method(spec.method));
+const domain_specs = all_action_specs.filter(
+	(spec) => !is_protocol_action_method(spec.method) && !is_intent_action_spec(spec)
+);
 
 /**
  * Generates `docs/reference.md` — the action-spec and cell-class reference
@@ -42,6 +46,13 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 (\`cancel\` is a WS notification the read loop owns, not a spec).
 
 ${to_action_bullets(domain_specs)}
+
+## Intents (${all_intent_specs.length})
+
+UI intents — \`local_call\` specs called through \`app.intents\`, run in the
+page, never sent over the wire. History: what a later undo makes of them.
+
+${to_intent_bullets(all_intent_specs)}
 
 ## Cell classes (${cell_names.length})
 
@@ -78,6 +89,15 @@ const to_action_bullets = (specs: typeof all_action_specs): string =>
 		.map((spec) => {
 			const desc = bullet_text(spec.description).replace(/\.\s*$/, '');
 			return `- \`${spec.method}\` — ${desc}. Kind: ${spec.kind}. Initiator: ${spec.initiator}. Auth: ${bullet_text(format_auth(spec.auth))}`;
+		})
+		.join('\n');
+
+const to_intent_bullets = (specs: ReadonlyArray<IntentActionSpec>): string =>
+	[...specs]
+		.sort((a, b) => a.method.localeCompare(b.method))
+		.map((spec) => {
+			const desc = bullet_text(spec.description).replace(/\.\s*$/, '');
+			return `- \`${spec.method}\` — ${desc}. Version: ${spec.version}. History: ${spec.history}`;
 		})
 		.join('\n');
 

@@ -238,10 +238,10 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'completion_progress', 'receive', 'handling'>
 		) => void | Promise<void>;
 	};
-	toggle_main_menu?: {
+	main_menu_toggle?: {
 		execute?: (
-			action_event: TypedActionEvent<'toggle_main_menu', 'execute', 'handling'>
-		) => ActionOutputs['toggle_main_menu'];
+			action_event: TypedActionEvent<'main_menu_toggle', 'execute', 'handling'>
+		) => ActionOutputs['main_menu_toggle'];
 	};
 	provider_load_status?: {
 		send_request?: (

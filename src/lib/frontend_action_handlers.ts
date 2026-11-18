@@ -204,7 +204,7 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		}
 	},
 
-	toggle_main_menu: {
+	main_menu_toggle: {
 		execute: ({ data: { input } }) => {
 			return { show: frontend.ui.toggle_main_menu(input?.show) };
 		}

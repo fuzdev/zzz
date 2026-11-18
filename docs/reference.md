@@ -5,7 +5,7 @@
 Generated from `action_specs.ts` and `cell_classes.ts` by `reference.gen.ts`.
 Run `gro gen` to refresh it; `gro check` fails if it drifts. Don't edit by hand.
 
-## Action specs (32)
+## Action specs (31)
 
 The fuz_app protocol actions `heartbeat` (WS-only) and `peer/ping` are
 registered too but omitted here — they belong to the shared runtime, not zzz
@@ -40,9 +40,15 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `terminal_data_send` — Send stdin bytes to a terminal. Fails with `not_found` when the caller has no live terminal with the id. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `terminal_exited` — Notify the frontend that a terminal process exited naturally. Kind: remote_notification. Initiator: backend. Auth: public
 - `terminal_resize` — Update PTY dimensions for a terminal. Fails with `not_found` when the caller has no live terminal with the id. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
-- `toggle_main_menu` — Toggle or set the visibility of the main navigation menu. Kind: local_call. Initiator: frontend. Auth: public
 - `transcription_create` — Queue a transcription of an audio file by the local speech model, and return its job. The transcript is written beside the file as `<name>.<model>.transcript.json`; fails with `conflict` (`already_exists`) if that model's transcript is already there. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `transcription_progress` — Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds. Kind: remote_notification. Initiator: backend. Auth: public
+
+## Intents (1)
+
+UI intents — `local_call` specs called through `app.intents`, run in the
+page, never sent over the wire. History: what a later undo makes of them.
+
+- `main_menu_toggle` — Toggle or set the visibility of the main menu. Version: 1. History: layout
 
 ## Cell classes (34)
 

@@ -12,7 +12,7 @@ import {
 	ping_action_spec,
 	session_load_action_spec,
 	filer_change_action_spec,
-	toggle_main_menu_action_spec,
+	main_menu_toggle_action_spec,
 	completion_create_action_spec
 } from '#lib/action_specs.ts';
 
@@ -435,10 +435,10 @@ describe('get_executor_phases', () => {
 	});
 
 	describe('local_call actions', () => {
-		test('frontend initiator - toggle_main_menu spec', () => {
-			// toggle_main_menu has initiator: 'frontend'
-			assert.deepEqual(get_executor_phases(toggle_main_menu_action_spec, 'frontend'), ['execute']);
-			assert.deepEqual(get_executor_phases(toggle_main_menu_action_spec, 'backend'), []);
+		test('frontend initiator - main_menu_toggle spec', () => {
+			// main_menu_toggle has initiator: 'frontend'
+			assert.deepEqual(get_executor_phases(main_menu_toggle_action_spec, 'frontend'), ['execute']);
+			assert.deepEqual(get_executor_phases(main_menu_toggle_action_spec, 'backend'), []);
 		});
 	});
 
@@ -453,7 +453,7 @@ describe('get_executor_phases', () => {
 
 		test('returns empty array for invalid initiator', () => {
 			const spec_with_backend_only = {
-				...toggle_main_menu_action_spec,
+				...main_menu_toggle_action_spec,
 				initiator: 'backend' as const
 			};
 			assert.deepEqual(get_executor_phases(spec_with_backend_only, 'frontend'), []);
@@ -501,9 +501,9 @@ describe('get_handler_return_type', () => {
 		test('execute phase returns output for sync action', () => {
 			const imports = new ImportBuilder();
 
-			// toggle_main_menu is a sync local_call (async: false)
-			const result = get_handler_return_type(toggle_main_menu_action_spec, 'execute', imports);
-			assert.strictEqual(result, `ActionOutputs['toggle_main_menu']`);
+			// main_menu_toggle is a sync local_call (async: false)
+			const result = get_handler_return_type(main_menu_toggle_action_spec, 'execute', imports);
+			assert.strictEqual(result, `ActionOutputs['main_menu_toggle']`);
 
 			// Should add ActionOutputs import
 			assert.include(imports.build(), 'ActionOutputs');
@@ -514,14 +514,14 @@ describe('get_handler_return_type', () => {
 
 			// Create an async local_call spec
 			const async_local_spec = {
-				...toggle_main_menu_action_spec,
+				...main_menu_toggle_action_spec,
 				async: true
 			};
 
 			const result = get_handler_return_type(async_local_spec, 'execute', imports);
 			assert.strictEqual(
 				result,
-				`ActionOutputs['toggle_main_menu'] | Promise<ActionOutputs['toggle_main_menu']>`
+				`ActionOutputs['main_menu_toggle'] | Promise<ActionOutputs['main_menu_toggle']>`
 			);
 		});
 	});
@@ -565,12 +565,12 @@ describe('get_handler_return_type', () => {
 
 describe('generate_phase_handlers', () => {
 	test('generates empty string for actions with no valid phases', () => {
-		// toggle_main_menu on backend should have no valid phases. The helper
+		// main_menu_toggle on backend should have no valid phases. The helper
 		// returns '' so wrappers' `.filter(Boolean)` drops the row from the
 		// typed handler map rather than emitting a useless `?: never` for a
 		// method that doesn't belong on this side.
 		const imports = new ImportBuilder();
-		const result = generate_phase_handlers(toggle_main_menu_action_spec, 'backend', imports);
+		const result = generate_phase_handlers(main_menu_toggle_action_spec, 'backend', imports);
 
 		assert.strictEqual(result, '');
 		assert.ok(!imports.has_imports());
@@ -609,11 +609,11 @@ describe('generate_phase_handlers', () => {
 
 	test('generates handlers for local_call action', () => {
 		const imports = new ImportBuilder();
-		const result = generate_phase_handlers(toggle_main_menu_action_spec, 'frontend', imports);
+		const result = generate_phase_handlers(main_menu_toggle_action_spec, 'frontend', imports);
 
-		assert.include(result, 'toggle_main_menu?: {');
+		assert.include(result, 'main_menu_toggle?: {');
 		assert.include(result, 'execute?:');
-		assert.include(result, `ActionOutputs['toggle_main_menu']`);
+		assert.include(result, `ActionOutputs['main_menu_toggle']`);
 		assert.notInclude(result, 'Promise'); // It's a sync action
 
 		const import_str = imports.build();
@@ -690,7 +690,7 @@ describe('generate_phase_handlers', () => {
 		// Generate handlers for multiple specs
 		generate_phase_handlers(ping_action_spec, 'frontend', imports);
 		generate_phase_handlers(session_load_action_spec, 'frontend', imports);
-		generate_phase_handlers(toggle_main_menu_action_spec, 'frontend', imports);
+		generate_phase_handlers(main_menu_toggle_action_spec, 'frontend', imports);
 
 		const import_str = imports.build();
 

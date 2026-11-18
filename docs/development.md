@@ -803,6 +803,24 @@ to all connected sockets (server-wide events like `filer_change` or
 `project_changed`) go through the backend's realtime connection registry.
 See ../crates/CLAUDE.md for the Rust handler patterns.
 
+### Adding an Intent
+
+A UI intent (./architecture.md § Intents) is a `local_call` spec:
+
+1. **Spec** in `src/lib/action_specs.ts`: `kind: 'local_call'`, `initiator:
+   'frontend'`, `auth: null`, `async: false`, `version: 1`, a `history`
+   (`layout`, `navigation`, or `none`), input and output schemas, a
+   `description`, `satisfies IntentActionSpec`; add it to
+   `all_intent_specs`. Name it domain-first (`tab_open`, `sidebar_toggle`);
+   a name an RPC already has takes a different verb.
+2. **`gro gen`**, then an `execute` handler in
+   `create_frontend_action_handlers` that changes state through the cell's
+   own method and returns the output — never through `app.intents`, which
+   would record one gesture twice.
+3. **Call** it from every driver as `app.intents.my_intent(input)`. Wrap it
+   in a closure — `onclick={app.intents.x}` would pass the event as input.
+4. **Bump `version`** when the input's meaning changes.
+
 ### Adding a New Route
 
 Create `src/routes/my_route/+page.svelte`:
@@ -863,8 +881,8 @@ const result = await app.api.completion_create({
   _meta: {progressToken: turn.id},
 });
 
-// Local action (sync)
-app.api.toggle_main_menu();
+// UI intent (sync, see § Adding an Intent)
+app.intents.main_menu_toggle();
 ```
 
 ### Component Pattern (Svelte 5)

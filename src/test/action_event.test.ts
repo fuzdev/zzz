@@ -16,7 +16,7 @@ import type { ActionSpecUnion } from '@fuzdev/fuz_app/actions/action_spec.ts';
 import {
 	ping_action_spec,
 	filer_change_action_spec,
-	toggle_main_menu_action_spec,
+	main_menu_toggle_action_spec,
 	completion_create_action_spec
 } from '#lib/action_specs.ts';
 
@@ -351,12 +351,12 @@ describe('ActionEvent', () => {
 
 	describe('handle_sync()', () => {
 		test('executes synchronous local_call', () => {
-			const env = new TestEnvironment([toggle_main_menu_action_spec]);
+			const env = new TestEnvironment([main_menu_toggle_action_spec]);
 			const output = { show: true };
 
-			env.add_handler('toggle_main_menu', 'execute', () => output);
+			env.add_handler('main_menu_toggle', 'execute', () => output);
 
-			const event = create_action_event(env, toggle_main_menu_action_spec, { show: true });
+			const event = create_action_event(env, main_menu_toggle_action_spec, { show: true });
 			event.parse();
 
 			event.handle_sync();
@@ -377,10 +377,10 @@ describe('ActionEvent', () => {
 		});
 
 		test('is no-op when already failed', () => {
-			const env = new TestEnvironment([toggle_main_menu_action_spec]);
+			const env = new TestEnvironment([main_menu_toggle_action_spec]);
 
 			// Force a failure by providing invalid input - show must be boolean
-			const event = create_action_event(env, toggle_main_menu_action_spec, {
+			const event = create_action_event(env, main_menu_toggle_action_spec, {
 				show: 'not-a-boolean'
 			});
 			event.parse();
@@ -835,11 +835,11 @@ describe('ActionEvent', () => {
 		});
 
 		test('local_call completes in single phase', () => {
-			const env = new TestEnvironment([toggle_main_menu_action_spec]);
+			const env = new TestEnvironment([main_menu_toggle_action_spec]);
 
-			env.add_handler('toggle_main_menu', 'execute', () => ({ show: false }));
+			env.add_handler('main_menu_toggle', 'execute', () => ({ show: false }));
 
-			const event = create_action_event(env, toggle_main_menu_action_spec, { show: true });
+			const event = create_action_event(env, main_menu_toggle_action_spec, { show: true });
 			event.parse();
 			event.handle_sync();
 

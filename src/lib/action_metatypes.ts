@@ -28,7 +28,7 @@ export const ActionMethod = one_of([
 	'job_changed',
 	'completion_create',
 	'completion_progress',
-	'toggle_main_menu',
+	'main_menu_toggle',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -99,7 +99,7 @@ export type RemoteNotificationActionMethod = Infer<typeof RemoteNotificationActi
 /**
  * Names of all local_call actions.
  */
-export const LocalCallActionMethod = one_of(['toggle_main_menu']);
+export const LocalCallActionMethod = one_of(['main_menu_toggle']);
 export type LocalCallActionMethod = Infer<typeof LocalCallActionMethod>;
 
 /**
@@ -124,7 +124,7 @@ export const FrontendActionMethod = one_of([
 	'job_changed',
 	'completion_create',
 	'completion_progress',
-	'toggle_main_menu',
+	'main_menu_toggle',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -324,9 +324,9 @@ export interface FrontendActionsApi {
 	) => Promise<
 		Result<{ value: ActionOutputs['completion_progress'] }, { error: JsonrpcErrorObject }>
 	>;
-	toggle_main_menu: (
-		input?: ActionCallInputs['toggle_main_menu']
-	) => ActionOutputs['toggle_main_menu'];
+	main_menu_toggle: (
+		input?: ActionCallInputs['main_menu_toggle']
+	) => ActionOutputs['main_menu_toggle'];
 	provider_load_status: (
 		input: ActionCallInputs['provider_load_status'],
 		options?: RpcClientCallOptions

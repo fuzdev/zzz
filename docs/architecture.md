@@ -38,7 +38,8 @@ export const completion_create_action_spec = {
   or WebSocket
 - `remote_notification` — Backend → frontend push (progress, broadcast).
   Phases: `send` → `receive`. Transport: WebSocket only
-- `local_call` — Frontend-only UI actions. Phases: `execute`. Transport: None
+- `local_call` — Frontend-only UI intents (§ Intents). Phases: `execute`.
+  Transport: None
 
 `remote_notification` actions have three routing paths on the backend:
 
@@ -191,14 +192,14 @@ several families are omitted here; see [reference.md](./reference.md)
 - `completion_create` — Start AI completion. Kind: `request_response`. Initiator: `frontend`
 - `completion_progress` — Stream completion chunks. Kind:
   `remote_notification`. Initiator: `backend`
-- `toggle_main_menu` — Toggle main menu UI. Kind: `local_call`. Initiator: `frontend`
 - `provider_load_status` — Check provider availability. Kind:
   `request_response`. Initiator: `frontend`
 
 ### Actions Log
 
-Every `app.api` call is recorded as an `Action` cell in `app.actions` (shown on
-the actions page), which keeps the newest 512 (`HISTORY_LIMIT_DEFAULT`) —
+Every `app.api` call (not the intents, § Intents) is recorded as an
+`Action` cell in `app.actions` (shown on the actions page), which keeps the
+newest 512 (`HISTORY_LIMIT_DEFAULT`) —
 except calls of the flow-control methods in `QUIET_ACTION_METHODS`
 (`terminal_ack`), which arrive many a second under a flood of terminal output
 and would turn the whole history over. The
@@ -213,6 +214,40 @@ doesn't keep a whole file tree or file per call, and `completion_create`
 requests, each carrying the chat history so far, don't add up quadratically.
 An `Action` stops observing its `ActionEvent` and drops it once the call
 completes, so the event's full payloads can be collected.
+
+### Intents
+
+A UI intent is a user's action at the grain of open, close, move, select,
+run, save — never a keystroke, cursor, scroll, or pointer move. Each is a
+`local_call` spec declared `satisfies IntentActionSpec` (`intent_spec.ts`)
+and listed in `all_intent_specs`; every `local_call` spec is one (a test
+holds the roster to it). An intent spec adds two fields fuz_app doesn't
+know: `version`, bumped when its input's meaning changes, and `history` —
+`layout` (open, close, move, toggle: what a later undo reverses),
+`navigation` (what back / forward walks), or `none`.
+
+- **One surface for every driver.** A click, a keyboard shortcut, the
+  command palette, and tests call `app.intents.*` (typed
+  `FrontendIntentsApi`). `app.api` is the RPC surface and resolves no
+  intent; `app.intents` resolves nothing else.
+- **Sync.** The handler applies the change before the call returns. An
+  expected no-op is reported in the output; a call throws only on a bug —
+  input or output that fails its schema, or a handler that throws (an
+  output failure comes after the handler's change applied). The call runs
+  untracked, so an `$effect` that calls an intent doesn't depend on what
+  the handler reads; never call one from a `$derived` or a template
+  expression, which the untrack would let through. A handler changes
+  state through cell methods, never `app.intents` — a nested call would
+  record one gesture twice (development builds warn).
+- **Recorded apart from the wire log.** Each call lands in
+  `app.recent_intents` (`RecentIntents`, the newest 200), never in
+  `app.actions`: `{seq, method, version, history, input, at, outcome,
+  error, inverse}`, with `inverse` `null` until layout undo is built, and
+  the input left out (`null`) when it failed its schema. Nothing persists
+  it. The actions page shows it beside the wire log.
+- **Local only.** A wire message naming an intent finds no handler for its
+  phase; a remote driver (the CLI's navigate, later agents) will reach
+  intents through a bridge of its own.
 
 ## Cell System
 

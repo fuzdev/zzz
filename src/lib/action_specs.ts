@@ -24,7 +24,6 @@ import {
 import { Blake3Hash, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JsonrpcRequestId } from '@fuzdev/fuz_app/http/jsonrpc.ts';
 import type {
-	LocalCallActionSpec,
 	RemoteNotificationActionSpec,
 	RequestResponseActionSpec,
 	ActionSpecUnion
@@ -60,6 +59,7 @@ import { JobSnapshot } from './job_types.ts';
 import { TranscriptSegment } from './transcript_types.ts';
 import { CompletionMessage, CompletionRequest, CompletionResponse } from './completion_types.ts';
 import { ProjectInfoJson, ProjectRev, ProjectWatchStatus } from './project.svelte.ts';
+import type { IntentActionSpec } from './intent_spec.ts';
 
 // -- Shared sub-schemas -----------------------------------------------------
 
@@ -311,14 +311,13 @@ export const CompletionProgressInput = object({
 });
 export type CompletionProgressInput = Infer<typeof CompletionProgressInput>;
 
-// TODO this is just a placeholder for a local call
-/** Input for `toggle_main_menu`. Optional — omit to toggle, pass `{show}` to set explicitly. */
-export const ToggleMainMenuInput = optional(object({ show: optional(boolean) }));
-export type ToggleMainMenuInput = Infer<typeof ToggleMainMenuInput>;
+/** Input for `main_menu_toggle`. Optional — omit to toggle, pass `{show}` to set explicitly. */
+export const MainMenuToggleInput = optional(object({ show: optional(boolean) }));
+export type MainMenuToggleInput = Infer<typeof MainMenuToggleInput>;
 
-/** Output for `toggle_main_menu`. */
-export const ToggleMainMenuOutput = object({ show: boolean });
-export type ToggleMainMenuOutput = Infer<typeof ToggleMainMenuOutput>;
+/** Output for `main_menu_toggle`: whether the menu shows now. */
+export const MainMenuToggleOutput = object({ show: boolean });
+export type MainMenuToggleOutput = Infer<typeof MainMenuToggleOutput>;
 
 /** Input for `provider_load_status`. */
 export const ProviderLoadStatusInput = object({
@@ -818,17 +817,19 @@ export const completion_progress_action_spec = {
 	description: 'Streams a completion chunk to the frontend during a streaming AI response.'
 } satisfies RemoteNotificationActionSpec;
 
-export const toggle_main_menu_action_spec = {
-	method: 'toggle_main_menu',
+export const main_menu_toggle_action_spec = {
+	method: 'main_menu_toggle',
 	kind: 'local_call',
 	initiator: 'frontend',
 	auth: null,
 	side_effects: true,
-	input: ToggleMainMenuInput,
-	output: ToggleMainMenuOutput,
+	input: MainMenuToggleInput,
+	output: MainMenuToggleOutput,
 	async: false,
-	description: 'Toggle or set the visibility of the main navigation menu.'
-} satisfies LocalCallActionSpec;
+	version: 1,
+	history: 'layout',
+	description: 'Toggle or set the visibility of the main menu.'
+} satisfies IntentActionSpec;
 
 export const provider_load_status_action_spec = {
 	method: 'provider_load_status',
@@ -1036,6 +1037,12 @@ export const project_changed_action_spec = {
 } satisfies RemoteNotificationActionSpec;
 
 /**
+ * The UI intents (`IntentActionSpec`), called through `app.intents`. Every
+ * `local_call` spec belongs here.
+ */
+export const all_intent_specs: Array<IntentActionSpec> = [main_menu_toggle_action_spec];
+
+/**
  * Canonical action spec list — fuz_app's protocol actions (`heartbeat`,
  * `cancel`) plus zzz-owned specs. Single source of truth for codegen and
  * runtime registries (`Frontend.action_registry`, `Backend.action_registry`).
@@ -1065,7 +1072,7 @@ export const all_action_specs: Array<ActionSpecUnion> = [
 	job_changed_action_spec,
 	completion_create_action_spec,
 	completion_progress_action_spec,
-	toggle_main_menu_action_spec,
+	...all_intent_specs,
 	provider_load_status_action_spec,
 	terminal_create_action_spec,
 	terminal_data_send_action_spec,
