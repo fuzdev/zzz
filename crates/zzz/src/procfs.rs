@@ -12,6 +12,7 @@
 //! means "not identified", never "identified".
 
 use std::fs;
+use std::os::unix::ffi::OsStrExt as _;
 use std::path::Path;
 
 /// This boot's id (`/proc/sys/kernel/random/boot_id`), or `None` when
@@ -127,9 +128,62 @@ fn socket_inode(target: &Path) -> Option<u64> {
         .ok()
 }
 
+/// Whether the executable `pid` runs has been unlinked since it started —
+/// a rebuild or reinstall that put a new binary at its path (a rename or a
+/// relink, as `cargo build` and `cargo xtask install` do). The kernel then
+/// reads `/proc/<pid>/exe` as the old path plus ` (deleted)`. `false` when
+/// the link is unreadable (the process gone, or another user's).
+#[must_use]
+pub fn exe_replaced(pid: u32) -> bool {
+    fs::read_link(format!("/proc/{pid}/exe")).is_ok_and(|target| is_deleted_exe_link(&target))
+}
+
+/// Whether a `/proc/<pid>/exe` target names an unlinked file.
+fn is_deleted_exe_link(target: &Path) -> bool {
+    target.as_os_str().as_bytes().ends_with(b" (deleted)")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deleted_exe_links() {
+        assert!(is_deleted_exe_link(Path::new(
+            "/home/u/.local/bin/zzzd (deleted)"
+        )));
+        assert!(!is_deleted_exe_link(Path::new("/home/u/.local/bin/zzzd")));
+        assert!(!is_deleted_exe_link(Path::new("/x/(deleted)/zzzd")));
+    }
+
+    #[test]
+    fn own_exe_is_not_replaced() {
+        assert!(!exe_replaced(std::process::id()));
+    }
+
+    #[test]
+    fn an_unlinked_running_binary_is_replaced() {
+        let dir = std::env::temp_dir().join(format!(
+            "zzz_procfs_{}_{}",
+            std::process::id(),
+            fuz_sys::rand::random_hex_suffix()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("sleeper");
+        fs::copy("/bin/sleep", &bin).unwrap();
+        let mut child = std::process::Command::new(&bin).arg("30").spawn().unwrap();
+        let pid = child.id();
+        assert!(!exe_replaced(pid), "running from its file");
+        // a reinstall: a new file renamed over the path
+        let staged = dir.join("sleeper.new");
+        fs::copy("/bin/sleep", &staged).unwrap();
+        fs::rename(&staged, &bin).unwrap();
+        let replaced = exe_replaced(pid);
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = fs::remove_dir_all(&dir);
+        assert!(replaced, "its file was renamed over");
+    }
 
     const fn stat(zombie: bool, start_ticks: u64) -> Stat {
         Stat {

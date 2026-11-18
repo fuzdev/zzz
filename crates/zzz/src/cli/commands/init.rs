@@ -92,7 +92,7 @@ pub fn cmd_init(args: &Init) -> Result<(), CliError> {
     println!();
     println!("next steps:");
     println!(
-        "  - set DATABASE_URL in {} (and create the database, e.g. `createdb zzz`)",
+        "  - check DATABASE_URL in {} and create its database (`createdb zzz` for the default)",
         env_path.display()
     );
     let static_dir = zzz_dir.join("static");

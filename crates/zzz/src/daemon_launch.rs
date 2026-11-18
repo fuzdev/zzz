@@ -56,6 +56,10 @@ const ZZZD_ENV: &[&str] = &[
     "ZZZ_PORT",
     "FUZ_ALLOWED_ORIGINS",
     "ZZZ_TRUSTED_PROXIES",
+    // the spine refuses these blank, so a blank exported one must not reach it
+    "FUZ_ALLOW_ORIGIN_WILDCARDS",
+    "FUZ_DB_CHECKOUT_TIMEOUT_MS",
+    "FUZ_DB_AUDIT_CHECKOUT_TIMEOUT_MS",
     "SECRET_ANTHROPIC_API_KEY",
     "SECRET_OPENAI_API_KEY",
     "SECRET_GOOGLE_API_KEY",
@@ -604,7 +608,11 @@ mod tests {
     #[test]
     fn blank_values_are_removed_not_passed_on() {
         let process = |key: &str| match key {
-            "PUBLIC_ZZZ_DIR" | "ZZZ_PORT" | "FROM_FILE" | "UNRELATED" => Some(OsString::from("")),
+            "PUBLIC_ZZZ_DIR"
+            | "ZZZ_PORT"
+            | "FUZ_ALLOW_ORIGIN_WILDCARDS"
+            | "FROM_FILE"
+            | "UNRELATED" => Some(OsString::from("")),
             "DATABASE_URL" => Some(OsString::from("  ")),
             "SECRET_FUZ_COOKIE_KEYS" => Some(OsString::from("set")),
             _ => None,
@@ -629,7 +637,16 @@ mod tests {
         assert!(!overlay.contains_key("SECRET_ANTHROPIC_API_KEY"));
         // blank inherited values zzzd reads, or the file names, are removed;
         // unrelated blanks are left alone
-        assert_eq!(removed, ["FROM_FILE", "PUBLIC_ZZZ_DIR", "ZZZ_PORT"]);
+        // (the spine refuses a blank `FUZ_ALLOW_ORIGIN_WILDCARDS`, so it never gets one)
+        assert_eq!(
+            removed,
+            [
+                "FROM_FILE",
+                "FUZ_ALLOW_ORIGIN_WILDCARDS",
+                "PUBLIC_ZZZ_DIR",
+                "ZZZ_PORT"
+            ]
+        );
     }
 
     #[test]

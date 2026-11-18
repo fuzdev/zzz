@@ -7,7 +7,13 @@
 //!   serves `5460` and proxies `/api` to it).
 //! - `dev-setup`  — generate `.env.development` from `.env.development.example`.
 //! - `prod-setup` — generate `.env.production` from `.env.production.example`.
-//!   Both fill `SECRET_FUZ_COOKIE_KEYS` with a freshly generated key.
+//!   Both fill `SECRET_FUZ_COOKIE_KEYS` with a freshly generated key;
+//!   `prod-setup` also creates the bootstrap token its
+//!   `FUZ_BOOTSTRAP_TOKEN_PATH` names when missing (as `dev` does for its own).
+//! - `install`    — build a release (the terminal module when it can, the UI,
+//!   `zzz` + `zzzd`) and install it for the `zzz` CLI: the binaries into
+//!   `~/.local/bin`, the UI into `~/.zzz/static`, then `zzz init` (see
+//!   [`run_install`]).
 //! - `check-release` — the dep-graph audit (sanity check #2 of the test-binary
 //!   pattern); its work is delegated to [`fuz_audit::run_check_release_cli`].
 //! - `ghostty-vt` — build libghostty-vt's WebAssembly module from pinned,
@@ -42,7 +48,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::io::{self, Read as _, Write as _};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
-use std::os::unix::fs::OpenOptionsExt as _;
+use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitCode};
 use std::time::{Duration, Instant};
@@ -97,7 +103,8 @@ fn main() -> ExitCode {
     match subcommand {
         Subcommand::Dev => finish(run_dev()),
         Subcommand::DevSetup => finish(setup_env(DEV_ENV_FILE, ".env.development.example")),
-        Subcommand::ProdSetup => finish(setup_env(".env.production", ".env.production.example")),
+        Subcommand::ProdSetup => finish(run_prod_setup()),
+        Subcommand::Install => finish(run_install()),
         // The dep-graph audit is fuz_audit's; everything else (dispatch, help) is ours.
         Subcommand::CheckRelease => fuz_audit::run_check_release_cli(),
         Subcommand::GhosttyVt => finish(ghostty_vt::run()),
@@ -111,6 +118,7 @@ enum Subcommand {
     Dev,
     DevSetup,
     ProdSetup,
+    Install,
     CheckRelease,
     GhosttyVt,
     Help,
@@ -127,6 +135,7 @@ fn parse_args(args: &[String]) -> std::result::Result<Subcommand, String> {
         "dev" => Subcommand::Dev,
         "dev-setup" => Subcommand::DevSetup,
         "prod-setup" => Subcommand::ProdSetup,
+        "install" => Subcommand::Install,
         "check-release" => Subcommand::CheckRelease,
         "ghostty-vt" => Subcommand::GhosttyVt,
         "help" | "-h" | "--help" => Subcommand::Help,
@@ -186,12 +195,249 @@ usage: cargo xtask <command>
 commands:
   dev            build the terminal module if needed and zzz_server (port {DEV_BACKEND_PORT}), then run it alongside the Vite frontend
   dev-setup      create {DEV_ENV_FILE} from {DEV_ENV_FILE}.example
-  prod-setup     create .env.production from .env.production.example
+  prod-setup     create .env.production from .env.production.example, and its bootstrap token
+  install        build a release and install it for the zzz CLI (~/.local/bin, ~/.zzz/static)
   check-release  audit that no production binary depends on fuz_testing / fuz_audit
   ghostty-vt     build the libghostty-vt {ghostty_vt_version} wasm module (needs Zig 0.17) into {ghostty_vt_module}",
         ghostty_vt_version = ghostty_vt::VERSION,
         ghostty_vt_module = ghostty_vt::MODULE_PATH
     );
+}
+
+const PROD_ENV_FILE: &str = ".env.production";
+
+/// `prod-setup`: create `.env.production` (see [`setup_env`]), then the
+/// bootstrap token its `FUZ_BOOTSTRAP_TOKEN_PATH` names, when missing — so a
+/// bare `zzzd` run from the workspace can create the first admin. Like
+/// `zzz init`, a re-run recreates a token the daemon deleted once used; a
+/// token while an admin exists is harmless (the server refuses a second
+/// bootstrap).
+fn run_prod_setup() -> Result<()> {
+    setup_env(PROD_ENV_FILE, ".env.production.example")?;
+    let parsed = env_file::parse_env(&fs::read_to_string(PROD_ENV_FILE)?);
+    let token_path = parsed
+        .vars
+        .iter()
+        .rev()
+        .find(|(key, _)| key == "FUZ_BOOTSTRAP_TOKEN_PATH")
+        .map(|(_, value)| value.trim())
+        .filter(|value| !value.is_empty());
+    let Some(token_path) = token_path else {
+        println!(
+            "[xtask] {PROD_ENV_FILE} sets no FUZ_BOOTSTRAP_TOKEN_PATH — zzzd can't create the first admin without one"
+        );
+        return Ok(());
+    };
+    ensure_bootstrap_token(token_path)
+}
+
+/// Where `install` puts `zzz` and `zzzd`, under `$HOME`.
+const INSTALL_BIN_DIR: &str = ".local/bin";
+/// The `zzz` CLI's daemon home, under `$HOME`.
+const ZZZ_HOME_DIR: &str = ".zzz";
+
+/// `install`: build a release and install it where the `zzz` CLI runs it.
+///
+/// 1. The terminal module, as `dev` does — a failure warns and carries on
+///    (the release's terminals then say the module is missing).
+/// 2. `gro build --force_build` — forced, since the module is gitignored and
+///    `gro build`'s cache wouldn't notice it. No `.env.production` needed:
+///    unset, every `PUBLIC_ZZZ_*` var is what a UI served by `zzzd` wants.
+/// 3. `cargo build --release -p zzz -p zzz_server`.
+/// 4. `zzz` and `zzzd` into `~/.local/bin`, side by side (the CLI finds
+///    `zzzd` beside itself), each staged and renamed over the old one, so a
+///    running daemon keeps its binary and `zzz` notes it was replaced.
+/// 5. `build/` into `~/.zzz/static`, staged and swapped in whole.
+/// 6. `zzz init` — idempotent: creates the home's config, `.env`, and
+///    bootstrap token when missing, never touching existing ones.
+///
+/// A running daemon keeps serving the old build until `zzz daemon restart`.
+fn run_install() -> Result<()> {
+    let home = home_dir()?;
+    let bin_dir = home.join(INSTALL_BIN_DIR);
+    let zzz_home = home.join(ZZZ_HOME_DIR);
+
+    ensure_ghostty_vt_module();
+
+    println!("[xtask] building the UI...");
+    run_step(
+        Command::new(gro_bin()).args(["build", "--force_build"]),
+        "gro build --force_build",
+    )?;
+
+    println!("[xtask] building zzz and zzzd (release)...");
+    run_step(
+        Command::new("cargo").args(["build", "--release", "-p", "zzz", "-p", "zzz_server"]),
+        "cargo build --release -p zzz -p zzz_server",
+    )?;
+
+    fs::create_dir_all(&bin_dir).map_err(|e| format!("can't create {}: {e}", bin_dir.display()))?;
+    for name in ["zzzd", "zzz"] {
+        let dest = bin_dir.join(name);
+        install_binary(&Path::new("target/release").join(name), &dest)?;
+        println!("[xtask] installed {}", dest.display());
+    }
+
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&zzz_home)
+        .map_err(|e| format!("can't create {}: {e}", zzz_home.display()))?;
+    let static_dir = zzz_home.join("static");
+    replace_tree(Path::new("build"), &static_dir)?;
+    println!("[xtask] installed the UI at {}", static_dir.display());
+
+    let zzz = bin_dir.join("zzz");
+    run_step(Command::new(&zzz).arg("init"), "zzz init")?;
+
+    if !path_contains(std::env::var_os("PATH").as_deref(), &bin_dir) {
+        println!(
+            "[xtask] note: {} isn't on your PATH — add it, or run {}",
+            bin_dir.display(),
+            zzz.display()
+        );
+    }
+    let running = Command::new(&zzz)
+        .args(["daemon", "status"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success());
+    if running {
+        println!(
+            "[xtask] a daemon is running the previous build — `zzz daemon restart` runs this one"
+        );
+    } else {
+        println!("[xtask] done — run `zzz` to start the daemon and open zzz");
+    }
+    Ok(())
+}
+
+/// `$HOME`, which must be an absolute path.
+fn home_dir() -> Result<PathBuf> {
+    let home = std::env::var_os("HOME")
+        .filter(|home| !home.is_empty())
+        .map(PathBuf::from)
+        .ok_or("HOME is not set")?;
+    if !home.is_absolute() {
+        return Err(format!("HOME is not an absolute path: {}", home.display()).into());
+    }
+    Ok(home)
+}
+
+/// The workspace's own `gro` when `npm install` put one there, else the one
+/// on `PATH`.
+fn gro_bin() -> PathBuf {
+    let local = Path::new("node_modules/.bin/gro");
+    if local.is_file() {
+        local.to_path_buf()
+    } else {
+        PathBuf::from("gro")
+    }
+}
+
+/// Run `command` to completion, failing with `what` when it doesn't succeed.
+fn run_step(command: &mut Command, what: &str) -> Result<()> {
+    let status = command
+        .status()
+        .map_err(|e| format!("can't run {what}: {e}"))?;
+    if !status.success() {
+        return Err(format!("{what} failed ({status})").into());
+    }
+    Ok(())
+}
+
+/// Whether `path_var` (a `PATH` value) lists `dir`.
+fn path_contains(path_var: Option<&std::ffi::OsStr>, dir: &Path) -> bool {
+    path_var.is_some_and(|path| std::env::split_paths(path).any(|entry| entry == dir))
+}
+
+/// Copy the file `src` to `dest` (mode `0755`): staged beside `dest`, synced,
+/// then renamed over it — never written in place, so a process running the
+/// old file keeps it intact, and `dest` is never half-written.
+fn install_binary(src: &Path, dest: &Path) -> Result<()> {
+    let staged = staged_sibling(dest, "new")?;
+    let copy = || -> io::Result<()> {
+        let mut from = fs::File::open(src)?;
+        let mut to = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o755)
+            .open(&staged)?;
+        io::copy(&mut from, &mut to)?;
+        to.sync_all()?;
+        fs::rename(&staged, dest)
+    };
+    copy().map_err(|e| {
+        let _ = fs::remove_file(&staged);
+        format!("can't install {} at {}: {e}", src.display(), dest.display()).into()
+    })
+}
+
+/// Replace the directory `dest` with a copy of `src`: copied to a staged
+/// sibling first, then swapped in by rename, the old tree removed after —
+/// so a failed copy leaves `dest` as it was. Symlinks in `src` are refused.
+fn replace_tree(src: &Path, dest: &Path) -> Result<()> {
+    let staged = staged_sibling(dest, "new")?;
+    if let Err(e) = copy_tree(src, &staged) {
+        let _ = fs::remove_dir_all(&staged);
+        return Err(format!("can't copy {} to {}: {e}", src.display(), staged.display()).into());
+    }
+    let old = staged_sibling(dest, "old")?;
+    let had_old = match fs::rename(dest, &old) {
+        Ok(()) => true,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => false,
+        Err(e) => {
+            let _ = fs::remove_dir_all(&staged);
+            return Err(format!("can't move aside {}: {e}", dest.display()).into());
+        }
+    };
+    if let Err(e) = fs::rename(&staged, dest) {
+        if had_old {
+            let _ = fs::rename(&old, dest);
+        }
+        let _ = fs::remove_dir_all(&staged);
+        return Err(format!("can't put {} in place: {e}", dest.display()).into());
+    }
+    if had_old {
+        fs::remove_dir_all(&old)
+            .map_err(|e| format!("can't remove the old {}: {e}", old.display()))?;
+    }
+    Ok(())
+}
+
+/// Copy the tree at `src` to the new directory `dest` (which must not
+/// exist): directories and regular files only, a symlink an error.
+fn copy_tree(src: &Path, dest: &Path) -> io::Result<()> {
+    fs::create_dir(dest)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        let to = dest.join(entry.file_name());
+        if kind.is_dir() {
+            copy_tree(&entry.path(), &to)?;
+        } else if kind.is_file() {
+            fs::copy(entry.path(), &to)?;
+        } else {
+            return Err(io::Error::other(format!(
+                "not a file or directory: {}",
+                entry.path().display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// A sibling of `path` named `.{name}.{tag}-{pid}`, for staging a
+/// replacement beside it (so the final rename stays on one filesystem).
+fn staged_sibling(path: &Path, tag: &str) -> Result<PathBuf> {
+    let name = path
+        .file_name()
+        .ok_or_else(|| format!("no file name in {}", path.display()))?;
+    let mut staged = OsString::from(".");
+    staged.push(name);
+    staged.push(format!(".{tag}-{}", std::process::id()));
+    Ok(path.with_file_name(staged))
 }
 
 /// The env var holding the cookie signing key(s).
@@ -889,6 +1135,92 @@ mod tests {
         args.iter().map(|&arg| arg.to_owned()).collect()
     }
 
+    /// A fresh scratch directory under the system temp dir.
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "xtask_{tag}_{}_{}",
+            std::process::id(),
+            random_hex(4).unwrap()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn install_binary_renames_over_the_old_file() {
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+        let dir = scratch("install_binary");
+        let src = dir.join("built");
+        let dest = dir.join("zzzd");
+        fs::write(&src, "new").unwrap();
+        fs::write(&dest, "old").unwrap();
+        let old_inode = fs::metadata(&dest).unwrap().ino();
+        install_binary(&src, &dest).unwrap();
+        let meta = fs::metadata(&dest).unwrap();
+        assert_eq!(fs::read_to_string(&dest).unwrap(), "new");
+        assert_eq!(meta.permissions().mode() & 0o777, 0o755);
+        // a new file, not the old one rewritten — a process running it keeps it
+        assert_ne!(meta.ino(), old_inode);
+        // nothing staged is left behind
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 2);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn replace_tree_swaps_in_a_copy_and_drops_stale_files() {
+        let dir = scratch("replace_tree");
+        let src = dir.join("build");
+        fs::create_dir_all(src.join("_app")).unwrap();
+        fs::write(src.join("index.html"), "new").unwrap();
+        fs::write(src.join("_app/a.js"), "a").unwrap();
+        let dest = dir.join("static");
+        // absent: created
+        replace_tree(&src, &dest).unwrap();
+        assert_eq!(fs::read_to_string(dest.join("_app/a.js")).unwrap(), "a");
+        // present: replaced whole, a file the new build lacks gone
+        fs::write(dest.join("stale.js"), "").unwrap();
+        fs::write(src.join("index.html"), "newer").unwrap();
+        replace_tree(&src, &dest).unwrap();
+        assert_eq!(
+            fs::read_to_string(dest.join("index.html")).unwrap(),
+            "newer"
+        );
+        assert!(!dest.join("stale.js").exists());
+        // only `build` and `static` remain — no staged or old trees
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 2);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn replace_tree_refuses_a_symlink_and_keeps_the_old_tree() {
+        let dir = scratch("replace_tree_link");
+        let src = dir.join("build");
+        fs::create_dir_all(&src).unwrap();
+        std::os::unix::fs::symlink("/etc/passwd", src.join("leak")).unwrap();
+        let dest = dir.join("static");
+        fs::create_dir_all(&dest).unwrap();
+        fs::write(dest.join("index.html"), "kept").unwrap();
+        let err = replace_tree(&src, &dest).unwrap_err().to_string();
+        assert!(err.contains("not a file or directory"), "{err}");
+        assert_eq!(fs::read_to_string(dest.join("index.html")).unwrap(), "kept");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 2);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn path_contains_matches_whole_entries() {
+        let dir = Path::new("/home/u/.local/bin");
+        assert!(path_contains(
+            Some(std::ffi::OsStr::new("/usr/bin:/home/u/.local/bin")),
+            dir
+        ));
+        assert!(!path_contains(
+            Some(std::ffi::OsStr::new("/usr/bin:/home/u/.local/bin2")),
+            dir
+        ));
+        assert!(!path_contains(None, dir));
+    }
+
     #[test]
     fn parse_args_takes_one_subcommand_and_nothing_after_it() {
         assert_eq!(parse_args(&[]), Ok(Subcommand::Help));
@@ -896,6 +1228,7 @@ mod tests {
             ("dev", Subcommand::Dev),
             ("dev-setup", Subcommand::DevSetup),
             ("prod-setup", Subcommand::ProdSetup),
+            ("install", Subcommand::Install),
             ("check-release", Subcommand::CheckRelease),
             ("ghostty-vt", Subcommand::GhosttyVt),
             ("help", Subcommand::Help),

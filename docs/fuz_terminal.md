@@ -8,7 +8,7 @@ terminals run — the `Terminal` cell, PTYs, output pacing — is
 `src/lib/fuz_terminal/` binds libghostty-vt's wasm build — Ghostty's
 emulator: parsing, the screens, scrollback with reflow — and draws it with
 `FuzTerminal.svelte`, a DOM renderer of zzz's own, which zzz's terminal views
-host (see [Terminals](./architecture.md#terminals) above). The binding has no DOM or Svelte
+host (see [Terminals](./architecture.md#terminals)). The binding has no DOM or Svelte
 dependency, so its behavior is tested in Node:
 
 - `ghostty_vt.ts` — `load_ghostty_vt` and `GhosttyVt`: the instance (its

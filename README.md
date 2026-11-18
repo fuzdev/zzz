@@ -27,7 +27,8 @@ for now you'll need Node (>=24.14), the Rust toolchain pinned in
 PostgreSQL, and Git to clone the repo.
 
 Running Zzz locally — in development with `cargo xtask dev`, or self-hosted through
-the `zzz` CLI (see [docs/development.md](docs/development.md)) — is the supported way to use it right now.
+the `zzz` CLI (`createdb zzz && cargo xtask install`, then `zzz`; see
+[docs/development.md § Through the `zzz` CLI](docs/development.md#through-the-zzz-cli)) — is the supported way to use it right now.
 It also builds as a static site via SvelteKit's static adapter with diminished capabilities,
 and the full app is served by the Rust `zzz_server` backend.
 
@@ -44,7 +45,7 @@ After cloning, from the project root:
 
 ```bash
 # 1. Create the PostgreSQL database the backend connects to
-createdb zzz
+createdb zzz_dev
 
 # 2. Generate .env.development (idempotent — safe to re-run)
 cargo xtask dev-setup

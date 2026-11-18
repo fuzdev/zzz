@@ -120,6 +120,14 @@ impl DaemonInfo {
         }
     }
 
+    /// Whether the binary this daemon runs was replaced on disk after it
+    /// started ([`procfs::exe_replaced`]) — it keeps serving the old one until
+    /// restarted.
+    #[must_use]
+    pub fn binary_replaced(&self) -> bool {
+        procfs::exe_replaced(self.pid)
+    }
+
     /// Whether the recorded process is still running — this boot, the same
     /// pid with the same start time, not a zombie.
     #[must_use]

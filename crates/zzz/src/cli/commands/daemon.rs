@@ -1,6 +1,7 @@
 //! `zzz daemon` — manage the zzz daemon lifecycle.
 //!
-//! Three subcommands: `start` (foreground), `stop`, `status`. The shared
+//! Four subcommands: `start` (foreground), `stop`, `restart` (stop, then
+//! start detached as `zzz` does), `status`. The shared
 //! plumbing (launch preparation, serving wait, `daemon.json` I/O, process
 //! identity) lives in `crate::daemon_launch` and `crate::daemon_lifecycle`;
 //! these handlers orchestrate it.
@@ -26,6 +27,7 @@ pub struct Daemon {
 pub enum DaemonSub {
     Start(DaemonStart),
     Stop(DaemonStop),
+    Restart(DaemonRestart),
     Status(DaemonStatus),
 }
 
@@ -43,6 +45,11 @@ pub struct DaemonStart {
 #[argh(subcommand, name = "stop")]
 pub struct DaemonStop {}
 
+/// Restart the daemon: stop the recorded one, then start it detached.
+#[derive(FromArgs, Debug)]
+#[argh(subcommand, name = "restart")]
+pub struct DaemonRestart {}
+
 /// Show daemon status (exit 0 running, 1 not responding, 3 not running, 4 unknown).
 #[derive(FromArgs, Debug)]
 #[argh(subcommand, name = "status")]
@@ -57,6 +64,7 @@ pub async fn cmd_daemon(args: Daemon) -> Result<ExitCode, CliError> {
     match args.nested {
         DaemonSub::Start(opts) => cmd_daemon_start(&opts).await,
         DaemonSub::Stop(opts) => cmd_daemon_stop(&opts).await.map(|()| ExitCode::SUCCESS),
+        DaemonSub::Restart(opts) => cmd_daemon_restart(&opts).await.map(|()| ExitCode::SUCCESS),
         DaemonSub::Status(opts) => crate::cli::commands::status::report_status(opts.json).await,
     }
 }
@@ -204,5 +212,21 @@ async fn cmd_daemon_stop(_args: &DaemonStop) -> Result<(), CliError> {
     }
     dl::remove_daemon_info_if(&info)?;
     println!("daemon stopped (pid {})", info.pid);
+    Ok(())
+}
+
+/// Stop the recorded daemon (as `zzz daemon stop`, nothing when none is
+/// running), then start one detached, as `zzz` does — on the port `zzz`
+/// would choose, which for a daemon run with `zzz daemon start --port` may
+/// differ. Picks up a rebuilt `zzzd` and a changed `~/.zzz/.env`. The
+/// config is read before anything is stopped, so a config error leaves the
+/// running daemon alone.
+async fn cmd_daemon_restart(_args: &DaemonRestart) -> Result<(), CliError> {
+    let config = CliConfig::read(&dl::require_zzz_dir()?)?;
+    // a launch error (missing env, no `zzzd`) also refuses before the stop
+    DaemonLaunch::prepare(None, config.as_ref())?;
+    dl::resolve_server_bin()?;
+    cmd_daemon_stop(&DaemonStop {}).await?;
+    crate::cli::commands::open::start_daemon_detached(config.as_ref()).await?;
     Ok(())
 }

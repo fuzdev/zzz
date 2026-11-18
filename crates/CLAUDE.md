@@ -14,7 +14,7 @@ OpenAI, and Gemini (all full).
   `_testing_reset`, `_testing_drain_effects`, and `_testing_action_manifest`,
   default port 4462. **Never ships in a release** (`fuz_release`'s `testing_`
   filter and `cargo xtask check-release`).
-- `xtask/` — `cargo xtask dev`, `dev-setup` / `prod-setup`, `check-release`,
+- `xtask/` — `cargo xtask dev`, `dev-setup` / `prod-setup`, `install`, `check-release`,
   `ghostty-vt`; pure `std` + `fuz_audit`, marked `dev_only`.
 - `zzz/` — the CLI: `cli/` (argument parsing, and a module per command in
   `cli/commands/` — `open`, `daemon`, `init`, `status`, `version`),
@@ -92,7 +92,8 @@ If a path dep is missing, `cargo build` will fail with
 created by their global setup when missing):
 
 ```bash
-createdb zzz                 # development
+createdb zzz_dev             # development (`cargo xtask dev`)
+createdb zzz                 # the `zzz` CLI's daemon
 createdb zzz_test            # manual testing_zzzd runs
 ```
 
@@ -106,7 +107,7 @@ cargo doc --workspace --no-deps --document-private-items   # the doc-link gate (
 cargo xtask check-release         # audit: no production binary depends on fuz_testing / fuz_audit
 
 # Run (requires DATABASE_URL, SECRET_FUZ_COOKIE_KEYS, and FUZ_ALLOWED_ORIGINS)
-DATABASE_URL=postgres://localhost/zzz \
+DATABASE_URL=postgres://localhost/zzz_dev \
 SECRET_FUZ_COOKIE_KEYS=dev-only-not-for-production-use-000 \
 FUZ_ALLOWED_ORIGINS='http://localhost:4460' \
 ./target/debug/zzzd --port 4460
@@ -191,8 +192,8 @@ An unset or blank (empty or whitespace) `DATABASE_URL` or
   home only as the working directory — an explicit `PUBLIC_ZZZ_DIR` naming
   `~/.zzz` for a daemon run elsewhere makes the home the app dir and indexes
   its `.env`, so don't
-- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (no `~`
-  expansion); an entry the root rules refuse (`root_policy.rs`: strictly
+- `PUBLIC_ZZZ_SCOPED_DIRS` — Comma-separated filesystem paths (`zzzd`
+  doesn't expand `~`; the `zzz` CLI does); an entry the root rules refuse (`root_policy.rs`: strictly
   inside `$HOME` or in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an
   ancestor, or under `/proc`, `/sys`, `/dev`), or that resolves to, or
   inside, a credential directory or a `.zzz` directory other than the app
@@ -203,7 +204,7 @@ An unset or blank (empty or whitespace) `DATABASE_URL` or
   starts (`recheck_scoped_dir`: skipped with a warning if refused, or if it
   resolves anywhere but the path the boot checked)
 - `ZZZ_ROOTS_OUTSIDE_HOME` — Comma-separated directories outside `$HOME`
-  that roots may be at or inside (no `~` expansion; parsed like
+  that roots may be at or inside (`zzzd` doesn't expand `~`; the `zzz` CLI does; parsed like
   `PUBLIC_ZZZ_SCOPED_DIRS`). An entry that is `/`, `$HOME` or an ancestor of
   it, or under a pseudo-filesystem fails boot (`build_root_policy`). `$HOME`
   is `fuz_sys::home_dir()`, canonicalized at boot (`root_policy::resolve_home`);
@@ -417,9 +418,9 @@ crates/zzz_server/src/
 │   ├── event_loop.rs # `FilerState` + `filer_event_loop`: events resolved against the disk, a git root's burst vetting and re-prunes (a big one on the wire resynced rather than broadcast, `queue_or_resync`), the ignored-set signal, the debounce / coalesce, `flush_ready`, `filer_change_notification`
 │   ├── git_rule_tests.rs # `#[cfg(test)]` tests of a git root's rule live: a listing racing its walk (a `HookedGit` acting between git's answer and the walk), re-prunes and their failures, the `info/exclude` watch, vetting
 │   ├── snapshot.rs   # `SnapshotFiles`: a snapshot reply's files on the wire, grouped by filer dir as `[rel, size, mtime, ctime?]` tuples, and its size hint
-│   ├── manager.rs    # `FilerManager`: lifetimes (permanent / project), depths, dedup of concurrent starts, snapshots, `hold_index`, a `#[cfg(test)]` seam that holds an index for writing (`project_manager`'s tests use it)
+│   ├── manager.rs    # `FilerManager`: lifetimes (permanent / project), depths, dedup of concurrent starts, snapshots, `hold_index`, a `#[cfg(test)]` seam that holds an index for writing (`project_manager`'s tests use it); each `filer_change` broadcast hints the repo status (`RepoStatusManager::hint`)
 │   └── test_support.rs # `#[cfg(test)]` helpers shared across the filer's test modules (`TempDir`, scan and state builders, checkouts, `HookedGit`)
-├── project_manager.rs # The open projects and the one path that changes them (`ProjectManager`): an open, close, focus, or unfocus computes the next state and `commit`s it under the state's lock — ensuring the filers it needs (`desired_filers`: each directory at the deepest any open project indexes it), stopping or narrowing the ones it doesn't (`release`), setting the runtime `ScopedFs` roots, publishing the snapshot `project_list` and `session_load` read, and broadcasting `project_changed` — every commit reads each focused dir's ignored paths from its filer (`OpenProject::ignored`, a change like any other), and a filer whose set changes asks for one (`refresh_ignored`); a commit that changes anything bumps the lifecycle rev (seeded from the clock at boot, `rev_seed`) and stamps it on what changed, which every reply, notification, and `session_load`'s `projects_rev` carry; an open's and a focus's reply read their files under that lock; an open's requested focuses land or are refused one by one (`Opened::refused`), its own filers required; scans run before the lock
+├── project_manager.rs # The open projects and the one path that changes them (`ProjectManager`): an open, close, focus, or unfocus computes the next state and `commit`s it under the state's lock — ensuring the filers it needs (`desired_filers`: each directory at the deepest any open project indexes it), stopping or narrowing the ones it doesn't (`release`), setting the runtime `ScopedFs` roots, publishing the snapshot `project_list` and `session_load` read, and broadcasting `project_changed` — every commit reads each focused dir's ignored paths from its filer (`OpenProject::ignored`, a change like any other), and a filer whose set changes asks for one (`refresh_ignored`); a commit that changes anything bumps the lifecycle rev (seeded from the clock at boot, `rev_seed`) and stamps it on what changed, which every reply, notification, and `session_load`'s `projects_rev` carry; an open's and a focus's reply read their files under that lock; an open's requested focuses land or are refused one by one (`Opened::refused`), its own filers required; an open's commit holds its registry's entries for `project_status` (`RepoStatusManager::set_registry`), forgotten on close; scans run before the lock
 ├── project.rs        # Resolving an opened path to its project: a registry (`repos.toml`, found by `fuz_repos`'s bounded discovery — strictly below `$HOME` or within an allowlisted root — each candidate trusted, confined, and outside protected directories, or the open is refused), else the nearest `.git` (a directory or gitfile by `lstat`, as `fuz_repos`'s discovery reads one too — a symlinked `.git` makes no checkout), else the directory; a path under a `.git` component opens as the directory holding the outermost one; a path under a registry's root in none of its present entries (or the root of a checkout with none present), or under a refused registry kept inside a checkout, falls back to rules 2–3, never above the registry's root (`Fallback`, the project's `fallback`); entries canonicalized and confined to the root, refused one by one (`resolve_project`, `ProjectError` / `EntryRefusal` reasons)
 ├── pty_manager.rs    # PTY terminal manager (fuz_pty crate) — one task per terminal (readiness-driven I/O, output paced by client acks, ordered input queue, reaping) → terminal_data/exited notifications; `terminal_env` scrubs the child env
 ├── repo_status.rs    # Tier-1 git status of open registries' entries (`RepoStatusManager`, `App.repo_status`): `project_status` polls never wait on git — each present entry's `.git` stat stamp (`stat_stamp`), filer edit hints (`hint`, from each filer's broadcast), and a slow sweep pick the stale ones, probed by `fuz_repos::status::status` (no fetch, no busy detection) on a small pool; the narrow wire projection (`RepoStatusInfo`)
@@ -569,7 +570,7 @@ joined after the drain, before PTY teardown.
   state on every change) and `transcription_progress` (segments a
   running transcription just decoded), both sent only to the owning
   account's sockets, `project_changed` (broadcast on open, update — a
-  focus added or dropped — and close), `filer_change` (`FilerManager`
+  focus added or dropped, or its ignored set changed — and close), `filer_change` (`FilerManager`
   with `notify` crate — per-directory watches (see ../docs/backend.md §
   Known Issues → Filer watches), per-path debounced broadcasts (80ms
   quiet, capped at 500ms) with immediate index updates (delete+create
@@ -713,14 +714,20 @@ joined after the drain, before PTY teardown.
   broadcast's text is one buffer shared by every recipient. Acceptable for the
   same reason as the message cap: authenticated sockets only, on a loopback
   bind
+- `/api/ws` closes a socket that sends nothing for `WS_RECEIVE_TIMEOUT`
+  (20 min, close 4003) — twice the longest heartbeat interval the frontend
+  allows (`HEARTBEAT_INTERVAL_BOUNDS.max` in `src/lib/socket_helpers.ts`);
+  the spine's 60 s default would drop a client whose interval was raised
+  past 30 s
 
 ## Design Decisions
 
-../docs/backend.md § Design Decisions — DB, Credentials, Strict inputs,
-Filesystem errors, Atomic writes, File byte routes, Local tools, `ffmpeg`
-never gets a path, `media_finalize`, Jobs, Transcription, Dispatch is async,
-`parking_lot::RwLock`, PTY terminals, Provider system, Dispatcher transaction
-wrap.
+../docs/backend.md § Design Decisions — DB, Credentials, Large responses,
+Strict inputs, Filesystem errors, Atomic writes, Text reads, File byte
+routes, Local tools, `ffmpeg` never gets a path, `media_finalize`, Jobs,
+Transcription, Dispatch is async, The lifecycle rev, Ignored paths in the
+commit, `parking_lot::RwLock`, PTY terminals, Provider system, Dispatcher
+transaction wrap.
 
 ## What's Next
 

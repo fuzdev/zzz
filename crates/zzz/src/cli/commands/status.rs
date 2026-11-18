@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use argh::FromArgs;
 
 use crate::CliError;
-use crate::daemon_lifecycle::{self as dl, DaemonState};
+use crate::daemon_lifecycle::{self as dl, DaemonInfo, DaemonState};
 
 /// Show current system state (exit 0 running, 1 not responding, 3 not running, 4 unknown).
 #[derive(FromArgs, Debug)]
@@ -63,6 +63,11 @@ pub async fn report_status(json: bool) -> Result<ExitCode, CliError> {
             println!("  version: {}", info.app_version);
             println!("  started: {}", info.started);
             println!("  url:     http://localhost:{}", info.port);
+            if info.binary_replaced() {
+                println!(
+                    "  binary:  replaced since it started — `zzz daemon restart` runs the new one"
+                );
+            }
         }
         DaemonState::Wedged(info) => {
             println!(
@@ -71,6 +76,9 @@ pub async fn report_status(json: bool) -> Result<ExitCode, CliError> {
             );
             println!("  pid:     {}", info.pid);
             println!("  port:    {} (not answering /health)", info.port);
+            if info.binary_replaced() {
+                println!("  binary:  replaced since it started");
+            }
         }
         DaemonState::Stale(info) => {
             println!(
@@ -96,6 +104,8 @@ pub async fn report_status(json: bool) -> Result<ExitCode, CliError> {
 /// - `healthy` — it answers `/health` (`running` only)
 /// - `daemon` — the `daemon.json` record (`running`, `not_responding`,
 ///   `stale`), else `null`
+/// - `binary_replaced` — the running process's binary was replaced on disk
+///   since it started (`running`, `not_responding`; else `false`)
 /// - `foreign_record` — `{pid, kind, description}` for `unknown` (`pid`
 ///   `null` when it names none; `kind` `older`, `newer`, or `unreadable`),
 ///   else `null`
@@ -112,6 +122,8 @@ fn status_json(state: &DaemonState) -> serde_json::Value {
         "running": matches!(state, DaemonState::Running(_) | DaemonState::Wedged(_)),
         "healthy": matches!(state, DaemonState::Running(_)),
         "daemon": info,
+        "binary_replaced": matches!(state, DaemonState::Running(_) | DaemonState::Wedged(_))
+            && info.is_some_and(DaemonInfo::binary_replaced),
         "foreign_record": foreign.map(|record| serde_json::json!({
             "pid": record.pid,
             "kind": record.kind.name(),
@@ -162,9 +174,18 @@ mod tests {
             keys.sort_unstable();
             assert_eq!(
                 keys,
-                ["daemon", "foreign_record", "healthy", "running", "state"],
+                [
+                    "binary_replaced",
+                    "daemon",
+                    "foreign_record",
+                    "healthy",
+                    "running",
+                    "state"
+                ],
                 "{name}"
             );
+            // the fixture's pid is no process this test can read
+            assert_eq!(json["binary_replaced"], false, "{name}");
             assert_eq!(json["state"], name);
             assert_eq!(json["running"], running, "{name}");
             assert_eq!(json["healthy"], healthy, "{name}");

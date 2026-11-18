@@ -16,8 +16,9 @@ module](#terminal-emulator-module)); without it everything else runs.
 
 ```bash
 git clone https://github.com/fuzdev/fuz.git
+git clone https://github.com/fuzdev/fuz_repos.git
 git clone https://github.com/fuzdev/zzz.git && cd zzz
-createdb zzz          # PostgreSQL database the backend connects to
+createdb zzz_dev      # PostgreSQL database the dev backend connects to
 cargo xtask dev-setup   # generate .env.development (idempotent)
 npm install           # Node dependencies
 cargo xtask dev         # build the terminal module if needed and the Rust backend, then run it with the Vite frontend
@@ -207,8 +208,8 @@ start it yourself.
 
 Three task runners, by role: **`gro`** for checks, build, gen, and tests
 (`gro check` / `build` / `gen` / `test`); **`cargo xtask`** for the dev server and
-env setup (`dev`, `dev-setup`, `prod-setup`) and the terminal emulator's wasm
-module (`ghostty-vt`); **`npm run`** for the package
+env setup (`dev`, `dev-setup`, `prod-setup`), the release install (`install`), and the terminal emulator's wasm
+module (`ghostty-vt`), and the release-binary audit (`check-release`); **`npm run`** for the package
 scripts, notably `test:cross` (the Rust cross-process suites). `npm run dev`,
 `npm run dev:setup`, and `npm run prod:setup` alias the matching `cargo xtask`
 commands.
@@ -238,15 +239,23 @@ cached build: run `gro build --force_build` after building the module.
 `zzzd` serves it as `application/wasm` (so the browser compiles it as it
 downloads), and a missing one is a 404, never the SPA shell.
 
-Build and run the full self-hosted server:
+The `zzz` CLI is the way to run it on your own machine — it supplies the
+environment, the bootstrap token, and the daemon's lifecycle (§ Through the
+`zzz` CLI, next). Running `zzzd` bare, say under a process manager, is the
+same build with those left to you:
 
 ```bash
-cargo xtask prod-setup                      # writes .env.production (fresh cookie key) — edit its other secrets
+cargo xtask prod-setup                      # .env.production (fresh cookie key) + .zzz/bootstrap_token — edit its other secrets
 cargo xtask ghostty-vt                      # the terminal emulator module → static/ (needs Zig 0.17)
-gro build                                 # frontend → build/
-cargo build -p zzz_server --release       # backend  → target/release/zzzd
-./target/release/zzzd --static-dir build  # serve SPA + /api (port 4460; --port/ZZZ_PORT overrides)
+gro build --force_build                     # frontend → build/ (forced, to pick up the module)
+cargo build -p zzz_server --release         # backend  → target/release/zzzd
+./target/release/zzzd --static-dir build    # serve SPA + /api (port 4460; --port/ZZZ_PORT overrides)
 ```
+
+`prod-setup` creates the one-shot admin token `FUZ_BOOTSTRAP_TOKEN_PATH`
+names when it's missing — a re-run recreates one the daemon deleted once
+used. Without that variable naming an existing token file, `zzzd` has no
+way to create the first admin account.
 
 `zzzd` reads its config from the **process environment** — it does _not_
 load `.env.production` itself (unlike `cargo xtask dev`, which loads
@@ -280,13 +289,34 @@ that fixed server instead of the page's origin.
 The `zzz` CLI runs the same daemon from its home, `~/.zzz/`:
 
 ```bash
-cargo build -p zzz -p zzz_server --release   # put target/release on PATH — zzz finds zzzd beside itself
-zzz init                                  # ~/.zzz/: config.json, .env (fresh cookie key), bootstrap_token
-cargo xtask prod-setup                    # .env.production, which `gro build` reads (idempotent)
-cargo xtask ghostty-vt                    # the terminal emulator module, which `gro build` copies (needs Zig 0.17)
-gro build && rm -rf ~/.zzz/static && cp -r build ~/.zzz/static   # the UI the daemon serves
-zzz                                       # start the daemon (detached) and open zzz (the browser, or a configured opener)
+createdb zzz            # the daemon's database (dev's is zzz_dev)
+cargo xtask install     # build a release, install zzz + zzzd and the UI, then `zzz init`
+zzz                     # start the daemon (detached) and open zzz (the browser, or a configured opener)
 ```
+
+`cargo xtask install` builds the terminal emulator module when it can (as
+`cargo xtask dev` does — without Zig 0.17 it warns, and the release's
+terminals say the module is missing), then the UI (`gro build
+--force_build`, which needs no `.env.production`: unset, every
+`PUBLIC_ZZZ_*` var reads as empty, which is what a UI served by `zzzd`
+wants) and `zzz` + `zzzd` (`cargo build --release`). It installs both
+binaries into `~/.local/bin`, side by side since `zzz` finds `zzzd` beside
+itself, and the UI into `~/.zzz/static`, each staged and renamed into place,
+then runs `zzz init`, which creates `~/.zzz/`'s `config.json`, `.env` (with
+a fresh cookie key), and `bootstrap_token` when missing and never touches
+existing ones. It says so when `~/.local/bin` isn't on your `PATH`. The
+installed copies stay apart from whatever you build next. On first run,
+create the admin account with the token in `~/.zzz/bootstrap_token`.
+
+`~/.zzz/.env` names `postgres://localhost/zzz`, and `.env.development`
+`zzz_dev`, so dev's accounts and migrations never reach the daemon you use.
+A `.env.development` written before the split still names `zzz`; change its
+`DATABASE_URL` (and `createdb zzz_dev`) to separate them.
+
+To upgrade, run `cargo xtask install` again, then `zzz daemon restart`: a
+running daemon keeps serving the binary it started from, and `zzz` reuses
+whatever daemon is recorded — it notes when that daemon's binary has been
+replaced since it started, as `zzz daemon status` does.
 
 The CLI passes `zzzd` its own environment with `~/.zzz/.env` filling the
 gaps, runs it in `~/.zzz` (relative paths in `~/.zzz/.env` resolve there;
@@ -304,8 +334,10 @@ zzz                          # start daemon if needed, open zzz (the browser, or
 zzz ~/dev/zzz                # open the project holding ~/dev/zzz, focused on its repo (a file also opens in a tab)
 zzz daemon start             # start daemon (foreground)
 zzz daemon stop              # stop the recorded daemon
+zzz daemon restart           # stop it, then start one detached (a rebuilt zzzd, a changed ~/.zzz/.env)
 zzz daemon status            # show daemon info (exit 0 running, 1 not responding, 3 not running, 4 unknown)
 zzz init                     # initialize ~/.zzz/
+zzz version                  # print the CLI's version (also --version / -v)
 ```
 
 The global daemon runs on port 4460 with `~/.zzz/` as its home and working
@@ -389,6 +421,14 @@ signal if one killed it); a signal during startup exits 128 + that signal, and
 a startup failure exits 1. A usage or config error — a bad argument, a
 non-UTF-8 one, an invalid port, a bad `config.json`, missing env, no `zzzd` —
 exits 2 before anything runs; `--help` exits 0.
+
+`zzz daemon restart` stops the recorded daemon as `stop` does (nothing, when
+none runs), then starts one detached as `zzz` does — on the port `zzz` would
+choose, so a daemon run with `zzz daemon start --port` may come back on
+another. It checks the config, the env, and the `zzzd` binary first, so an
+error there leaves the running daemon alone. `zzz` and `zzz daemon status`
+note a daemon whose binary was replaced on disk since it started (a rebuild
+or `cargo xtask install`), which keeps serving the old one until restarted.
 
 `zzz <path>` expands `~`, resolves the path against the current directory,
 and canonicalizes it before building the `/projects?open=<path>` URL —
@@ -552,7 +592,11 @@ fills gaps; see § The `zzz` CLI); `cargo xtask dev` from `.env.development`,
 where the **file wins** — it's dev's source of truth, so a stale exported
 `DATABASE_URL` can't redirect dev migrations, and xtask prints each
 inherited key it overrides. In both, a blank value is unset: a template's
-empty `SECRET_*_API_KEY=` line never clears an exported key.
+empty `SECRET_*_API_KEY=` line never clears an exported key. `zzzd` itself
+follows the spine's stricter rule for `FUZ_ALLOW_ORIGIN_WILDCARDS` and the
+`FUZ_DB_*_CHECKOUT_TIMEOUT_MS` pair, refusing to boot on a blank one; the
+CLI drops a blank exported one before it gets there, while `cargo xtask
+dev` passes an inherited one through.
 `.env.production` is what `gro build` reads for the `PUBLIC_ZZZ_*` vars, and
 the template for running `zzzd` under a process manager (see § Production
 build). The CLI itself also reads `ZZZ_SERVER_BIN` (the `zzzd` binary to
@@ -589,7 +633,7 @@ their outputs. Edit the generators, never the outputs (each output carries a
 - `action_collections.gen.ts` (`src/lib/action_collections.ts`) —
   `ActionInputs` / `ActionOutputs` type maps + `ActionEventDatas`
 - `action_metatypes.gen.ts` (`src/lib/action_metatypes.ts`) — the
-  `ActionMethod` open union, the narrow handler enums
+  `ActionMethod` enum of every method, the narrow handler enums
   (`BackendRequestResponseMethod`, `BroadcastActionMethod`, …), the
   `FrontendActionsApi` interface
 - `frontend_action_types.gen.ts` (`src/lib/frontend_action_types.ts`) —
@@ -851,7 +895,7 @@ app.api.toggle_main_menu();
 
 <Contextmenu>
 	{#snippet entries()}
-		<ContextmenuEntry onclick={() => doSomething()}>Action Label</ContextmenuEntry>
+		<ContextmenuEntry run={() => do_something()}>Action Label</ContextmenuEntry>
 	{/snippet}
 	<div>Right-click me</div>
 </Contextmenu>
@@ -885,10 +929,10 @@ npm run test:cross
 
 ### Test Pattern
 
-Uses Vitest with `test` and `expect`:
+Uses Vitest with `test` and `assert` (which narrows types):
 
 ```typescript
-import { test, expect } from 'vitest';
+import { test, assert } from 'vitest';
 
 import { providers_default, models_default } from '#lib/config_defaults.ts';
 
@@ -897,10 +941,10 @@ test('all model provider_names exist in providers_default', () => {
 	const provider_names = new Set(providers_default.map((provider) => provider.name));
 
 	for (const provider_name of model_provider_names) {
-		expect(
+		assert.ok(
 			provider_names.has(provider_name),
 			`Provider "${provider_name}" does not exist in providers_default`
-		).toBe(true);
+		);
 	}
 });
 ```
@@ -977,7 +1021,7 @@ unmounts. Event handlers and async code are safe.
 ```typescript
 // Structured JSON-RPC errors
 throw jsonrpc_errors.invalid_params('Missing required field');
-throw jsonrpc_errors.ai_provider_error(provider_name, error_message);
+// zzz's own codes (`ai_provider_error`, raised by `zzzd`) are in `zzz_jsonrpc_errors.ts`
 
 // Let ThrownJsonrpcError bubble through
 if (error instanceof ThrownJsonrpcError) {

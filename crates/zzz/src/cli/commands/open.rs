@@ -61,7 +61,15 @@ pub async fn cmd_open(args: &Open) -> Result<(), CliError> {
     };
 
     let info = match discover_running_daemon().await? {
-        Some(info) => info,
+        Some(info) => {
+            if info.binary_replaced() {
+                eprintln!(
+                    "note: the running daemon (pid {}) started from a binary since replaced; `zzz daemon restart` runs the new one",
+                    info.pid
+                );
+            }
+            info
+        }
         None => start_daemon_detached(config.as_ref()).await?,
     };
 
@@ -151,7 +159,7 @@ async fn discover_running_daemon() -> Result<Option<DaemonInfo>, CliError> {
 /// leaving an unrecorded daemon behind. `daemon.json` is written only once
 /// it serves, so a concurrent `zzz` never takes a starting daemon for a
 /// wedged one.
-async fn start_daemon_detached(config: Option<&CliConfig>) -> Result<DaemonInfo, CliError> {
+pub async fn start_daemon_detached(config: Option<&CliConfig>) -> Result<DaemonInfo, CliError> {
     let launch = DaemonLaunch::prepare(None, config)?;
     let port = launch.port;
     dl::require_free_port(port, false)?;

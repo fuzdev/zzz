@@ -67,8 +67,8 @@ export const completion_create_action_spec = {
   `local_call`
 - `side_effects` (`boolean`) — Whether action mutates state (also keeps it
   off the side-effect-free `GET /api/rpc` path)
-- `input` (`ValidationSchema`) — schema for request params (zzz's are fuz_schema)
-- `output` (`ValidationSchema`) — schema for response
+- `input` (`AnySchema`) — schema for request params (zzz's are fuz_schema)
+- `output` (`AnySchema`) — schema for response
 - `async` (`boolean`) — Whether handler is async
 - `description` (`string`) — What the action does (rendered into ./reference.md)
 - `streams` (`string` (optional)) — Name of the companion request-scoped
@@ -416,7 +416,7 @@ Prompt → parts: Array<Part>  (reusable content templates)
 ### Parts
 
 - Text (`TextPart`) — `content: string` stored directly
-- Diskfile (`DiskfilePart`) — `path: DiskfilePath | null` → reads from disk or editor state;
+- Diskfile (`DiskfilePart`) — `path: DiskfilePath | null` → sends the file's draft (`Diskfiles.drafts`) if it has one, else its disk content;
   attaching one loads the file's content and keeps it current (see
   [Contents on demand](#file-editing))
 
@@ -981,8 +981,7 @@ An index is maintained one of two ways:
   changes only (O(1) per change, per-key reactive via `SvelteMap`), which is
   correct only while an item's indexed values never change. Single and multi
   indexes opt in with `immutable_key: true`; use it for identity-like keys on
-  large or busy collections (`Diskfiles.by_path` — seeded with every file,
-  upserting by path in a loop — plus `Projects.by_root`). Derived-array
+  large or busy collections (`Projects.by_root`, and `Jobs`' id index). Derived-array
   indexes (`create_derived_index`) are incremental and can be replaced by
   assignment (e.g. `items.indexes.manual_order = reordered`).
 
@@ -1521,12 +1520,14 @@ source offsets, not the `href`, since mdz can rewrite a root-relative `href`
 injected component renders, is left alone — and follows a click from the
 link's reference.
 
-The frontend file pipeline is six Cells plus a per-file editing-state class
-and the drafts store:
+The frontend file pipeline is these Cells plus three plain classes — the
+per-file editing state, the drafts store, and the metadata index:
 
-- `Diskfiles` — `IndexedCollection<Diskfile>` (`by_path` single index,
-  `immutable_key` since a path is a diskfile's disk identity); its
-  `handle_change` is the `filer_change` dispatch point
+- `Diskfiles` — the pipeline's root: the cells of files in use, by path
+  (`cells`, a `SvelteMap`; a `Diskfile` exists only while something holds
+  its path), beside every indexed file's metadata record (`Diskfiles.index`,
+  a `DiskfileIndex`, described below); its `handle_change` is the
+  `filer_change` dispatch point
 - `Diskfile` — one file: `{path, source_dir, content}`; the Cell `id` is
   client-side identity, `path` is the disk identity used for backend
   correlation
@@ -1555,7 +1556,7 @@ and the drafts store:
   derived, never set: `bound`, `stale` (the
   disk's hash isn't `base_hash`, or the editing state saw the disk move),
   `deleted` (the file is deleted on disk), or `dormant` (under no open
-  root — its project closed; see § File Editing). In-memory only, lost on
+  root — its project closed; see "A kept file under no open root" below). In-memory only, lost on
   reload
 - `DiskfileHistory` — one file's disk, saved, and discarded states (not
   the draft), newest first; capped at 100 entries and 16M characters of
@@ -1589,8 +1590,9 @@ Save → save_changes() → app.api.diskfile_update({path, content, expected_has
     writes; the response is the written bytes' hash — no content echo)
 → notify watcher fires → Filer updates its index immediately
   → debounced (80ms) filer_change broadcast to all sockets
-    → Diskfiles.handle_change → upsert → existing Diskfile.set_json(...)
-      → DiskfileEditorState.check_disk_changes → disk-change history entry
+    → Diskfiles.handle_change → upsert (metadata in place; a held file re-read)
+      → diskfile_read lands → DiskfileEditorState.check_disk_changes
+        → disk-change history entry
 ```
 
 The confirmation is the broadcast, not the RPC response — a save and an

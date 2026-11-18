@@ -85,7 +85,18 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `SIGKILL`) and reap the survivor on every exit path; `dev-setup` /
   `prod-setup` create `.env.development` / `.env.production` from the
   `.example` templates (mode `0600`, `create_new`) with a freshly generated
-  `SECRET_FUZ_COOKIE_KEYS` — the templates ship the key empty; `check-release`
+  `SECRET_FUZ_COOKIE_KEYS` — the templates ship the key empty — and
+  `prod-setup` creates the bootstrap token `.env.production`'s
+  `FUZ_BOOTSTRAP_TOKEN_PATH` names when missing (`run_prod_setup`);
+  `install` (`run_install`) builds a release — the `ghostty-vt` step as
+  `dev` runs it, `gro build --force_build` (the workspace's `gro`, else
+  `PATH`'s), `cargo build --release -p zzz -p zzz_server` — and installs
+  `zzz` + `zzzd` into `~/.local/bin` (`install_binary`: staged beside the
+  target, synced, renamed over it, so a running daemon keeps its file) and
+  `build/` into `~/.zzz/static` (`replace_tree`: copied to a staged sibling,
+  swapped in by rename, the old tree removed; symlinks refused), then runs
+  `zzz init` and says whether `~/.local/bin` is on `PATH` and whether a
+  daemon still runs the old build; `check-release`
   (the dep-graph audit, one of the test-binary pattern's sanity checks) delegates
   its work to `fuz_audit::run_check_release_cli()`; `ghostty-vt`
   (`ghostty_vt.rs`) builds libghostty-vt's WebAssembly module for the
@@ -122,9 +133,12 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   against their working directory) are always the workspace's. Marked
   `[package.metadata.fuz_audit] dev_only = true` so xtask itself is excluded
   from the production scan.
-- `zzz/` — Rust CLI (argh). `daemon start/stop/status`, `status`, `init`,
-  `open` (the default command — opener resolution, path resolution, daemon
-  discovery, detached auto-start, then the configured opener or the browser),
+- `zzz/` — Rust CLI (argh). `daemon start/stop/restart/status`, `status`, `init`,
+  `open` (the default command — opener resolution, the path argument (`~`
+  expanded, joined onto the cwd, canonicalized; a file or a directory),
+  daemon discovery, detached auto-start, then the configured opener or the
+  browser at `/projects?open=<path>`, which opens the project and a file it
+  indexes in a tab),
   and `version` (+ the `--version`/`-v` switch). Modules: `daemon_launch.rs`
   (the `zzzd` command: `--port`, `--static-dir`, cwd `~/.zzz`, and the env
   overlay from `~/.zzz/.env` + defaults, with required-var / static-dir / port
@@ -152,7 +166,7 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   group, output appended to a `0600` log under `~/.zzz/run` that each launch
   empties), shutdown-signal handling, `stop_child` SIGTERM → SIGKILL → reap,
   terminate), `procfs.rs` (Linux `/proc` identity: boot id, pid start time,
-  listening-socket ownership), `env_file.rs` (the dotenv parser — std-only,
+  listening-socket ownership, whether a process's binary was replaced), `env_file.rs` (the dotenv parser — std-only,
   also compiled into xtask via `#[path]`; its module doc lists where it
   diverges from `dotenv`). `zzz status` / `zzz daemon status` exit 0 when
   running, 1 when alive but not responding, 3 when not running, 4 when unknown
@@ -163,7 +177,9 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `healthy` (it answers `/health`), `daemon` (the `daemon.json` record —
   `version`, `pid`, `boot_id`, `pid_start_ticks`, `port`, `started`,
   `app_version` — for `running` / `not_responding` / `stale`, else `null`),
-  and `foreign_record` (`{pid, kind, description}` for `unknown`, `kind` one
+  `binary_replaced` (the running process's binary was replaced on disk since
+  it started — `/proc/<pid>/exe` reads ` (deleted)`; `false` unless
+  `running` / `not_responding`), and `foreign_record` (`{pid, kind, description}` for `unknown`, `kind` one
   of `older` / `newer` / `unreadable`, `pid` `null` when it names none; else
   `null`). The CLI reads its args with `args_os`, so a non-UTF-8 argument is
   an error, never a panic (the program name is decoded lossily — argh only
@@ -223,8 +239,9 @@ orientation; the spine crates are authoritative:
    production.** `zzz_server` cannot construct the credential: its producer
    (`fuz_testing::init_daemon_token`) lives in `fuz_testing`, which
    `cargo xtask check-release` forbids in a production binary, and
-   `RunAppOptions::daemon_token_state` is `None` for `zzz_server`'s own
-   `main.rs`. Only `testing_zzz_server` supplies one, so `_testing_reset` can
+   `SpineBackendOptions::daemon_token_state` (`RunAppOptions.spine.backend`)
+   is `None` in `SpineRunOptions::production`, which `zzz_server`'s own
+   `main.rs` uses. Only `testing_zzz_server` supplies one, so `_testing_reset` can
    authenticate as keeper; it writes `{zzz_dir}/run/daemon_token` for the
    cross-process harness to read. No production caller exists — a browser
    request carries `Origin`/`Referer`, which `is_browser_context` refuses for

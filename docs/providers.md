@@ -271,7 +271,8 @@ Remote providers: `available` = `true` when a valid API key is configured
 Providers live in the Rust backend (`crates/zzz_server/src/provider/`), enum-
 dispatched via the `Provider` enum (no trait objects). To add one:
 
-1. Add a variant to the `Provider` enum and `ProviderName` in `provider/mod.rs`
+1. Add a variant to the `Provider` enum and `ProviderName` in `provider/mod.rs`,
+   and to `ProviderName` and a `ProviderData*` schema in `src/lib/provider_types.ts`
 2. Create `crates/zzz_server/src/provider/newprovider.rs` implementing the
    completion path (status, non-streaming, and SSE streaming via `provider/sse.rs`)
 3. Wire it into `ProviderManager` and the exhaustive match arms — construction
@@ -280,7 +281,10 @@ dispatched via the `Provider` enum (no trait objects). To add one:
    `provider::read_api_key_env`, and building the client through
    `common::ProviderClient::from_api_key`)
 4. Add env var to `.env.development.example` and `.env.production.example`:
-   `SECRET_NEWPROVIDER_API_KEY=`
-5. Add default models to `src/lib/config_defaults.ts` (`models_default`)
+   `SECRET_NEWPROVIDER_API_KEY=`, and to `ZZZD_ENV` in
+   `crates/zzz/src/daemon_launch.rs` (so the CLI drops a blank one)
+5. Add the provider to `providers_default` and its default models to
+   `models_default` in `src/lib/config_defaults.ts` (`config_defaults.test.ts`
+   fails on a model whose provider isn't listed)
 
 See ../crates/CLAUDE.md for the backend architecture.

@@ -137,11 +137,14 @@ appearing** — run `gro build --force_build` after building the module.
 ## Development Workflow
 
 ```bash
-createdb zzz
+createdb zzz_dev
 cargo xtask dev-setup
 npm install
 cargo xtask dev            # the terminal module if needed, then zzzd + Vite — the user runs it
 ```
+
+The installed app (`cargo xtask install`, then `zzz`) uses its own
+database, `zzz`; dev's is `zzz_dev`.
 
 The Rust crates need the sibling Rust workspaces `fuz` and `fuz_repos`
 checked out alongside this repo (path deps); terminals need Zig 0.17
@@ -340,7 +343,9 @@ Editing, § Recording; ./docs/backend.md § Design Decisions.
 
 `zzzd` reads only its process environment. The `zzz` CLI supplies it from
 `~/.zzz/.env` (the process env wins); `cargo xtask dev` from
-`.env.development` (the file wins). A blank value is unset everywhere.
+`.env.development` (the file wins). A blank value is unset — except that
+`zzzd` itself refuses a blank `FUZ_ALLOW_ORIGIN_WILDCARDS` or
+`FUZ_DB_*_CHECKOUT_TIMEOUT_MS` (the spine's rule), which the CLI drops.
 
 - Required: `DATABASE_URL`, `SECRET_FUZ_COOKIE_KEYS`, `FUZ_ALLOWED_ORIGINS`
   (exact origins; wildcards refuse to boot unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true`)
@@ -366,7 +371,9 @@ PTY terminals don't get `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`,
 `zzz` (crate `crates/zzz`) starts or finds the daemon (`~/.zzz/` home,
 port 4460) and opens the UI — the browser, or a configured opener; `zzz
 <path>` opens the project holding a file or directory, and a file it
-indexes in a tab; `zzz daemon start|stop|status`; `zzz init`. It
+indexes in a tab; `zzz daemon start|stop|restart|status`; `zzz init`.
+`cargo xtask install` builds a release and installs it for the CLI
+(`~/.local/bin`, `~/.zzz/static`). It
 never searches the current directory for `zzzd` or an opener, so an
 untrusted checkout can't get its own binary run with your secrets. Full
 rules (discovery, env, port, exit codes, `daemon.json`, the opener):

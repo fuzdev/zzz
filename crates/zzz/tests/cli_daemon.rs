@@ -252,6 +252,7 @@ fn status_reports_not_running_with_exit_3() {
             "running": false,
             "healthy": false,
             "daemon": null,
+            "binary_replaced": false,
             "foreign_record": null,
         })
     );
@@ -1038,6 +1039,69 @@ fn open_auto_starts_a_detached_daemon() {
     for pid in cleanup.daemon_pids() {
         assert!(!is_running(pid), "daemon {pid} stopped");
     }
+}
+
+#[test]
+fn restart_replaces_a_running_daemon_and_starts_one_when_none_runs() {
+    const TEST: &str = "restart_replaces_a_running_daemon_and_starts_one_when_none_runs";
+    let home = launchable_home("restart");
+    let cleanup = Cleanup::new(&home);
+    let Some((bin, _record)) = write_fake_daemon(TEST, &cleanup, FakeDaemon::default()) else {
+        return;
+    };
+    let port = free_port().to_string();
+    let restart = || {
+        run(zzz(&home)
+            .args(["daemon", "restart"])
+            .env("ZZZ_PORT", &port)
+            .env("ZZZ_SERVER_BIN", &bin)
+            .envs(DEAD_PROXY.iter().copied()))
+    };
+
+    // nothing running: restart just starts one, detached
+    let out = restart();
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    assert!(daemon_json(&home).exists());
+    let first = cleanup.daemon_pids();
+    assert_eq!(first.len(), 1, "{first:?}");
+
+    // running: restart stops it and starts another on the same port
+    let out = restart();
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    assert!(stdout(&out).contains("stopped"), "{}", stdout(&out));
+    let pids = cleanup.daemon_pids();
+    assert_eq!(pids.len(), 2, "{pids:?}");
+    assert!(!is_running(pids[0]), "the old daemon stopped");
+    assert!(is_running(pids[1]), "the new daemon runs");
+    let out = run(zzz(&home).arg("status"));
+    assert_eq!(out.status.code(), Some(0), "stdout: {}", stdout(&out));
+    assert!(
+        stdout(&out).contains(&format!("pid:     {}", pids[1])),
+        "{}",
+        stdout(&out)
+    );
+
+    let out = run(zzz(&home).args(["daemon", "stop"]));
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+}
+
+#[test]
+fn restart_refuses_a_bad_launch_before_stopping_anything() {
+    let home = launchable_home("restart_bad");
+    let _cleanup = Cleanup::new(&home);
+    // a live process standing in for the recorded daemon
+    let mut sleeper = Command::new("sleep").arg("30").spawn().unwrap();
+    write_daemon_json(&home, sleeper.id(), start_ticks(sleeper.id()));
+    // a missing `zzzd` refuses before the recorded daemon is signalled
+    let out = run(zzz(&home)
+        .args(["daemon", "restart"])
+        .env("ZZZ_SERVER_BIN", home.join("no_such_zzzd")));
+    let alive = is_running(sleeper.id());
+    let _ = sleeper.kill();
+    let _ = sleeper.wait();
+    assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
+    assert!(alive, "the recorded daemon was left running");
+    assert!(daemon_json(&home).exists());
 }
 
 /// A stand-in opener (or browser stub): records its argument count, each

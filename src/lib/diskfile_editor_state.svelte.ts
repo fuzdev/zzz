@@ -113,7 +113,8 @@ export interface DiskfileSaveOptions {
  * - The editor shows the selected history entry (`current_content`), or the
  *   disk content when none is selected. A clean editor follows the disk.
  * - Editing keeps the file's one draft (`draft`, in `Diskfiles.drafts` — not
- *   in the history, so it outlives this state and the file's cell), updated
+ *   in the history, so it can outlive this state and the file's cell, though
+ *   for now a draft keeps both), updated
  *   in place and re-dated on each edit. The views list it with the history
  *   (`content_history`, as `draft_entry`). Editing from another entry (an
  *   older state picked from the history) starts a new draft and sets the old
