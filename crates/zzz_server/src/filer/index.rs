@@ -47,7 +47,7 @@ const MAX_WIRE_TIME_MS: u64 = 253_402_300_799_999;
 /// It moves on every write, truncate, `utimes`, chmod, chown, xattr write,
 /// link, and rename, and can't be set from userspace on a kernel-managed
 /// filesystem (a FUSE one may report `mtime` instead — see
-/// `docs/architecture.md` § Known Limitations), so a rewrite that keeps the
+/// `docs/projects.md` § Known limitations), so a rewrite that keeps the
 /// size and restores `mtime` (`touch -r`) still moves the stamp — and so
 /// does a metadata-only change, which broadcasts a `change` whose
 /// wire metadata is the same as before (accepted: a client re-reads and

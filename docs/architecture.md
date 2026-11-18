@@ -1508,7 +1508,9 @@ editor; the main `/files` view also takes it from anywhere on the page, the
 markdown view included when its preview is shown alone and no editor is
 mounted.
 
-**Contents on demand.** A diskfile's content loads when something needs
+### Contents on demand
+
+A diskfile's content loads when something needs
 it, over `diskfile_read` — the only way content arrives: the backend's
 disknodes carry metadata alone. `Diskfile.content_status` says where
 the content stands: `unrequested`, `loading`, `loaded`, or `unloadable` — a
@@ -1580,7 +1582,9 @@ content back to `unrequested`, to load again on next access. A re-read
 of unchanged text changes nothing (`check_disk_changes` compares
 strings), so a resync raises no spurious conflict.
 
-**Disk changes and drafts.** `Diskfiles` records every content change
+### Disk changes and drafts
+
+`Diskfiles` records every content change
 in the file's editing state, if it has one — whether or not an editor is
 mounted — so a file reopens on the disk content, never text a save would
 write back over an external change. A clean editor follows the disk. Editing
@@ -1600,7 +1604,9 @@ write back. A file with a draft or
 showing something other than the disk is marked ● in its tab and in the
 explorer (the accessible name says "unsaved changes", or "changed on disk").
 
-**Closing tabs.** Like VS Code: closing the last tab of a file with a draft
+### Closing tabs
+
+Like VS Code: closing the last tab of a file with a draft
 (the close button, Ctrl+Q, or the contextmenu) asks **save**, **don't
 save**, or **cancel** (the `tab_close` intent answers `asking`;
 `DiskfilesEditor.request_close_tab`, `DiskfileCloseDialog`). "Don't save"
@@ -1613,7 +1619,9 @@ depend on its tab — it's app-level — so programmatic closes (`close_tab`,
 `close_all_tabs`, a preview tab reused for another file) close without
 asking and keep the draft, reachable from the explorer's ● and file parts.
 
-**What gets saved and sent.** Saving writes what the editor shows
+### What gets saved and sent
+
+Saving writes what the editor shows
 (`current_content`) — the draft, or an older entry picked to restore it. A
 file part (`DiskfilePart.content`) sends the draft if there is one, else the
 disk content — never merely an entry an editor is viewing — and its XML tag
@@ -1629,7 +1637,9 @@ model otherwise can't tell a draft from the file. Line endings aren't kept:
 a textarea reads a CRLF file's line breaks as `\n`, so its first edit saves
 it with `\n` throughout, with no indicator.
 
-**Conflicts.** A disk change under the user's content (the draft, or a
+### Conflicts
+
+A disk change under the user's content (the draft, or a
 picked older entry) keeps that content and sets `disk_conflict`; a draft
 whose `base_hash` isn't the disk's is stale too, even one made before this
 editing state (it outlived an earlier one). While the
@@ -1706,7 +1716,9 @@ write landing in it is replaced unseen. No lock spans another process's
 write, so the compare narrows the window to that gap rather than closing
 it.
 
-**Cells outlive components.** Svelte owns a `$derived` by the effect running
+### Cells outlive components
+
+Svelte owns a `$derived` by the effect running
 when it was created and can stop recomputing it once that effect is
 destroyed, so app-level state constructed during component init silently
 freezes when the component unmounts (and code in `onMount` or an `$effect`
@@ -1731,7 +1743,9 @@ keeps what the notification left — its snapshot entry is skipped, so a file
 deleted mid-request isn't resurrected and newer metadata isn't reverted; the
 change itself re-read or dropped the file's content.
 
-**Reconnect resync.** Notifications sent while the socket is down —
+### Reconnect resync
+
+Notifications sent while the socket is down —
 `filer_change`, `project_changed`, `terminal_data`, `terminal_exited`,
 `completion_progress` — are lost, and reconnects are routine (heartbeat
 timeouts, sleep/wake, daemon restarts). So the app root feeds the socket's
@@ -1895,7 +1909,9 @@ in both directions, and equal values tie by path (every `sort_by_text` and
 (case-insensitive substring). Rows scrolled out of range unmount, so focus
 on one is lost when it scrolls away.
 
-**The explorer's two modes.** The files page's explorer (`DiskfileExplorer`)
+### The explorer's two modes
+
+The files page's explorer (`DiskfileExplorer`)
 shows the same files as a flat, sortable list (`DiskfileList`) or as a
 folder tree (`DiskfileTree`), switched by the folder toggle in its header
 (`DiskfilesEditor.explorer_mode`); the sort controls belong to the list, and
@@ -1933,7 +1949,9 @@ previews a file, a double click opens it, and a click toggles a folder. A
 registry's repos that aren't focused show as lazy rows that expanding
 focuses (./projects.md § Projects).
 
-**The explorer's contextmenus.** A file's menu (`DiskfileContextmenu`, on list
+### The explorer's contextmenus
+
+A file's menu (`DiskfileContextmenu`, on list
 and tree rows, tabs, and the file views) copies the file's absolute path, its
 path relative to the innermost indexed root holding it (the same from any row
 showing it, `to_diskfile_copy_paths`), and its name; opens a terminal in its
@@ -1953,7 +1971,9 @@ also unfocuses it; an unfocused repo's lazy row has a "repo" menu instead —
 focus it, open a terminal there, copy its path. Rename, move, and deleting
 a folder wait on backend actions.
 
-**Creating in the tree** names the new file or folder inline, VS Code style:
+### Creating in the tree
+
+A create in the tree names the new file or folder inline, VS Code style:
 an input (`DiskfileTreeCreateInput`) shows as the folder's first child,
 expanded first; in tree mode the header's create buttons open it at the
 active project's root row. Enter creates and Escape cancels, both returning
@@ -2274,109 +2294,10 @@ Population, per capability:
 - **Symlinks are invisible** — the filer never follows or indexes a symlink
   (file or directory), and `ScopedFs` rejects symlinked paths, so linked files
   don't appear in the file tree
-- **File watching** — the filer adds one inotify watch per directory it
-  indexes (never inside ignored directories), and those watches come out of
-  the user's `max_user_watches` budget, shared with every other process. An
-  unreadable subdirectory is skipped (logged once) and picked up if it
-  becomes readable; an unreadable root or focused directory fails
-  `project_open` with `forbidden` (`permission_denied`). When the watch
-  limit is reached (or no watcher can be created), the project still opens
-  with every file the scans found, but in **degraded mode**: `project_open`
-  returns `watch_status: 'degraded'` (kept on the opening tab's `Project`
-  cell; the projects page and the desk menu show it — another tab or a
-  reload shows `'full'`), and the directories without a watch are rescanned
-  every 5 seconds or more (retrying their watches each time), so changes
-  there show up late. A project that degrades or recovers after it opened
-  isn't re-announced — only the daemon log says so. A file is re-announced
-  as changed when its `lstat` stamp moves (a `touch` or a chmod included, so
-  clients holding it read it again), and once more at the next look after a
-  change seen within 3 seconds of its inode change time (a stamp that fresh
-  isn't trusted)
-- **Change detection is by stat stamp** — the filer reads no file, so a
-  write that doesn't move the file's `lstat` stamp goes unnoticed until the
-  stamp next moves: an `mmap` store to an already-dirty page, or a remote or
-  FUSE filesystem whose server clock lags this machine's by more than the
-  3-second margin, or a FUSE filesystem that reports `st_ctime` as the
-  `mtime` (sshfs), where a `touch -r` after a same-size rewrite hides it. A
-  wall clock stepped back by more than the margin can hide a write that
-  lands in the same timestamp tick as the stored stamp. An inode change time
-  in the future (a clock stepped back, a remote server's clock ahead) is
-  never trusted, so the file is a `change` on every look until the clock
-  passes it
-- **Project scope** — opening a project makes its root a writable
-  `ScopedFs` root, with filers on what's focused, until it's closed; closing
-  never revokes
-  the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). A
-  directory strictly inside `$HOME`, or in `ZZZ_ROOTS_OUTSIDE_HOME`, can be
-  opened — never `/`, `$HOME` or an ancestor of it, or a pseudo-filesystem
-  (./projects.md § Root scope) — and no root makes a credential directory or a `.zzz`
-  directory other than the app dir readable or writable. A project opened
-  in another tab (or by `zzz <path>`) appears here unactivated, and its files
-  arrive with a session resync
-- **Projects and focus** — focus is by hand: a repo is indexed only once
-  it's focused (opening a path in it, the file tree's lazy row, the
-  projects page), and stays focused until it's unfocused, its project
-  closes, or a later open finds its entry missing or the root's kind
-  changed. Under a registry's root the registry's project indexes only
-  its loose files and its focused repos — an unregistered directory only
-  as its own project, once a path in it is opened. A new file where
-  nothing indexes it is refused, since it would never show; a file another
-  tool creates there doesn't appear. A registry's entries are
-  resolved when it's opened, again on each later open, never in between —
-  so `repo_focus` of an entry cloned since refuses it until a path in it
-  is opened. A file kept from an unfocused repo for its draft or tab
-  isn't watched: a change on disk meanwhile shows only when the repo is
-  focused again, or as a conflict when it's saved
-- **Git's ignore rule** (./projects.md § Filer) — what a checkout's filer ignores is
-  git's answer as of its last listing plus the paths it vetted since: the
-  user's global excludes file isn't watched (an edit there shows at the next
-  re-prune), nor is `info/exclude` for a linked worktree or a submodule's
-  checkout (its common directory is named only by the repo's own files,
-  which the filer doesn't follow). A `.git` appearing in an indexed
-  directory drops it from the index; one removed from a directory that
-  wasn't indexed shows only at the next rescan. A directory whose `.git`
-  is a symlink is indexed by no filer: git lists nothing in it, and a path
-  in it resolves to the outer checkout. A file created by hand inside an
-  unpopulated submodule makes git refuse the burst's check; that submodule
-  is then left unindexed, as a populated one is, until the next rebuild of
-  the set. A file git ignores replaced by a directory it doesn't (a
-  `.gitignore` naming `x` and `!x/`) stays skipped as the file was; the
-  directory is picked up at the next rebuild of the set or rescan. A
-  rebuild whose listing fails or times out leaves the change it was for
-  unapplied — and a new file git couldn't vet meanwhile unindexed — until
-  the next `session_load` (a reload or a reconnect) or degraded poll
-  rebuilds the set again; three failing in a row that a change on disk
-  asked for (a rule edit, lost events, new files git couldn't vet, a set
-  grown past its budget) fall back to fixed names, but a load's or poll's
-  retry failing doesn't count, so a git that never answers costs a
-  listing's timeout (5 s) per degraded poll and per load until such
-  changes fail too — on a quiet degraded tree, possibly never. Each load
-  waits out the 5 s with the filer blocked; polls back off to about 50 s
-  apart (ten times their own duration, roughly a 10% duty cycle).
-  Any `.git` entry — even one git wouldn't read as a repo — makes its
-  directory a repo of its own here, so its files aren't indexed; the wire
-  names it (`nested`), so a link into one reads "not indexed" and a file
-  created there isn't waited for. A `.git` removed from a nested repo is
-  seen only at the next rescan (no watch is inside it), so until then its
-  files stay unindexed and it stays `nested`. A permanent filer on a
-  checkout (the app directory, a scoped dir) runs git's rule, but its set
-  is off the wire unless a project focuses it, so the frontend holds it to
-  fixed names — a tracked `dist/` in it is indexed but hidden in the tree,
-  and a file git ignores there reads as broken in a link, and is waited
-  for, without a notice, when created. What the wire says is ignored can lag
-  a second behind the filer (refreshes are coalesced), and a re-prune
-  resynced while its project closes and a permanent filer stays on the
-  directory leaves clients' permanent copy of it stale until the next
-  `session_load`; and a filer started by a focus scan before the lock is
-  off the wire until its commit marks it, so a re-prune past the threshold
-  in that window sends each change
-- **Large trees cost the client** — every indexed file of a focused repo
-  ships in the focus reply and is kept as a metadata record
-  (`DiskfileIndex`); a `Diskfile` cell is made only for a file in use (see
-  § File Editing), so focusing a big clone costs the reply's size and
-  parse more than the cells, and a reply of roughly 180k files passes the
-  16 MiB message size (replies aren't capped, so it still arrives). A re-prune past the
-  flood guard costs each client the same pull of the whole repo
+- **Projects, focus, and the filer** — focus is by hand, the watch budget
+  can degrade to polling, change detection is by stat stamp, git's ignore
+  rule has edge cases, and a big focused tree is a big reply:
+  ./projects.md § Known limitations
 - **Terminals** — any authenticated account can create a terminal, which runs
   a command as the daemon's OS user (see § Security posture). Each terminal
   belongs to the account that created it: its output (`terminal_data`,
@@ -2398,7 +2319,7 @@ Population, per capability:
     paste), whole or not at all, and text that could run commands as it
     arrives is pasted only once you confirm it; Ctrl+Shift+V, Shift+Insert,
     and a middle click don't paste. The input box under each terminal sends
-    text. The rules: ./fuz_terminal.md (*Paste*).
+    text. The rules: ./fuz_terminal.md § Paste.
   - **No scrollback scrolling**: the wheel over a terminal scrolls the page's
     list of runs, never the terminal — inside `less`, `man`, or vim on the
     alternate screen too — and Shift+PgUp / Shift+PgDn go to the program;
@@ -2432,7 +2353,7 @@ Population, per capability:
   - **Keys** follow Ghostty's encodings, which differ from what xterm-style
     terminals commonly send — Shift+Enter is `CSI 27;2;13~`, which a plain
     shell prints as junk, and Ctrl+Shift+letter is `CSI … u`;
-    ./fuz_terminal.md (*Keyboard input*) lists the differences. Ctrl+digit is
+    ./fuz_terminal.md § Keyboard input lists the differences. Ctrl+digit is
     taken by the terminal while it has focus, its default prevented — whether
     a browser still switches tabs on it is the browser's decision. The Kitty
     keyboard protocol is supported when a program turns it on. Meta

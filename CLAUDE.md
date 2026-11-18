@@ -358,8 +358,8 @@ posture.
 
 ## Known Limitations
 
-The main ones, each detailed in ./docs/architecture.md § Known
-Limitations:
+The main ones, detailed in ./docs/architecture.md § Known Limitations
+and, for projects and the filer, ./docs/projects.md § Known limitations:
 
 - **Domain state is in memory** — lost on a daemon restart; the frontend
   resyncs and reopens its projects. **Chats, prompts, terminal presets,

@@ -849,7 +849,7 @@ commands):
   trusted stamp once `st_ctime` is past the margin. A spurious `change`
   costs a client holding the file one `diskfile_read` that finds the same
   text. A write the stamp can't see goes unnoticed until it next moves (see
-  ./architecture.md § Known Limitations).
+  ./projects.md § Known limitations).
   `FilerManager::start_filer` gates starts per path, so concurrent opens of
   one directory share a single initial scan. On macOS `FSEvents` each watch
   call restarts notify's stream, so per-directory watching is slow there on

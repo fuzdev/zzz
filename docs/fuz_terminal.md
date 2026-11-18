@@ -5,6 +5,8 @@ a DOM renderer and input layer of zzz's own, in `src/lib/fuz_terminal/`. How
 terminals run — the `Terminal` cell, PTYs, output pacing — is
 ./architecture.md § Terminals.
 
+## Modules
+
 `src/lib/fuz_terminal/` binds libghostty-vt's wasm build — Ghostty's
 emulator: parsing, the screens, scrollback with reflow — and draws it with
 `FuzTerminal.svelte`, a DOM renderer of zzz's own, which zzz's terminal views
@@ -54,7 +56,7 @@ dependency, so its behavior is tested in Node:
   terminal disposes it first.
 - `ghostty_paste.ts` — the paste safety rule (`get_ghostty_paste_hazard`),
   the encoded length (`to_ghostty_paste_length`), and the encoder's
-  constants, under `GhosttyTerminal.encode_paste` (*Paste*, below).
+  constants, under `GhosttyTerminal.encode_paste` (§ Paste, below).
 - `ghostty_effects.ts` — the effects the binding registers (`write_pty`,
   `bell`, `title_changed`, `pwd_changed`, `render_hold`), their handler
   types, their constants and callback signatures from the manifest, and
@@ -91,7 +93,9 @@ The renderer, beside it (tested under jsdom with the built module):
   resize observation, measuring, the keyboard platform), the browser's
   defaults, and the context a test sets its own through.
 
-**Effects.** A program's output asks the terminal for things it can't do
+## Effects
+
+A program's output asks the terminal for things it can't do
 itself — answer a query, ring the bell, retitle the window. libghostty-vt
 hands each to a callback the host registers (`GhosttyTerminal.set_effect`,
 which replaces a handler, or clears it with `null`): `write_pty` gets a
@@ -140,7 +144,9 @@ person first. The trampolines are compiled at runtime, so a page
 Content-Security-Policy would have to allow wasm compilation
 (`'wasm-unsafe-eval'`) — which loading the module needs anyway.
 
-**Poisoning.** A handler's exception is caught inside the callback and
+## Poisoning
+
+A handler's exception is caught inside the callback and
 surfaced after the call. One can still escape a call into the module: a
 trap, or the JS stack running out inside the module's frames or at the
 callback boundary, before the catch is reached. Unwinding through wasm
@@ -171,7 +177,9 @@ A poisoned instance's terminals dispose without calling in, and its memory
 goes when it's collected; a host builds a fresh instance from the compiled
 module. The guard costs a few nanoseconds a call.
 
-**Rendering data.** libghostty-vt's render state is a copy of what one
+## Rendering data
+
+libghostty-vt's render state is a copy of what one
 frame needs, updated in place from the terminal — it redoes only what
 changed — with two layers of change tracking: the frame's (clean, partial,
 full) and a flag per row. An update only adds to them; the renderer clears
@@ -263,7 +271,9 @@ came back detached and always after growing its own grapheme buffer. The
 cell data is borrowed from the render state until the next update; the
 reader copies what it keeps before then.
 
-**Render holds.** A program redrawing the whole screen sets synchronized
+## Render holds
+
+A program redrawing the whole screen sets synchronized
 output (mode 2026) so it isn't seen half-drawn. The library reports the
 hold through the `render_hold` effect, `true` at the start — when the
 terminal holds exactly the frame to keep showing, later bytes of the same
@@ -277,7 +287,9 @@ tracking without changing what it shows, and effects fire between whole
 steps of the parse. Writing, resizing, or disposing the terminal from a
 handler still throws `GhosttyReentrancyError`.
 
-**Keyboard input.** A key reaches a program as bytes, and which bytes
+## Keyboard input
+
+A key reaches a program as bytes, and which bytes
 depends on modes the program sets in its output: the up arrow is `ESC [ A`
 until it turns on application cursor mode, then `ESC O A`; under the Kitty
 keyboard protocol most keys become `CSI … u` sequences. libghostty-vt's key
@@ -427,7 +439,9 @@ keydown ─ FuzTerminalState.handle_key
   and an `ondata` that throws is reported, not fatal. Key bytes and the
   terminal's replies share `ondata`, in the order they happen.
 
-**The Kitty keyboard protocol** lets a program ask for unambiguous key
+### The Kitty keyboard protocol
+
+The Kitty keyboard protocol lets a program ask for unambiguous key
 reports — every key and modifier as an escape code, presses, repeats, and
 releases told apart, the text a key produced. It can't be left
 unadvertised: the library always takes a program's push, set, and pop of
@@ -448,8 +462,10 @@ browser, was composed, or came before the view had focus is dropped, and
 the keys held when focus leaves are forgotten. The protocol's key codes are
 the unshifted code points above, so their US-layout fallback carries over.
 
-**The DOM renderer.** `FuzTerminal` draws one terminal's screen as DOM
-text, and takes its keys (above) and the text its host pastes (*Paste*,
+## The DOM renderer
+
+`FuzTerminal` draws one terminal's screen as DOM
+text, and takes its keys (above) and the text its host pastes (§ Paste,
 below). It takes no paste events of its own (Ctrl+Shift+V, Shift+Insert, a
 middle click), IME, focus reporting, or mouse reporting yet, doesn't scroll
 into the scrollback, and has no selection of its own: the rows are text, so
@@ -460,7 +476,9 @@ one line per row — a soft-wrapped line copies broken at the wrap (the rows
 don't carry the wrap flag yet). It has no dependency on zzz's app — no
 cells, no actions.
 
-*Ownership.* The host loads and compiles the module and passes it — or the
+### Ownership
+
+The host loads and compiles the module and passes it — or the
 promise of it, a fetch and compile in flight — as `module`; the view is
 `loading` until it settles and `failed` if it rejects. The view
 instantiates its own instance, terminal, and render-state reader, and frees
@@ -473,7 +491,9 @@ lives). Instantiating from a compiled module and creating the terminal and
 reader is cheap next to the compile the host does once; each instance
 parses its own type manifest, the larger part of that cost.
 
-*Modes.* Every view's terminal is created with `FUZ_TERMINAL_MODES`, set as
+### Modes
+
+Every view's terminal is created with `FUZ_TERMINAL_MODES`, set as
 the modes' reset defaults (`GhosttyTerminalOptions.modes`, the library's
 `GHOSTTY_TERMINAL_OPT_MODE_DEFAULT`), so a full reset (RIS) keeps them:
 grapheme clustering (mode 2027) on, so an emoji sequence or a base and its
@@ -481,7 +501,9 @@ combining marks take one cell, and a mark in a write of its own is drawn. A
 program can still turn it off. It's the view's, not a prop: a host has no
 reason to want the stale rows that come with it off.
 
-*Host API.* Props: `module`; `scrollback_max_bytes` (unset, the library's
+### Host API
+
+Props: `module`; `scrollback_max_bytes` (unset, the library's
 default, which keeps a single page of history; zzz's `TerminalView` passes
 `TERMINAL_SCROLLBACK_MAX_BYTES`); `label`, the
 accessible name; `accepts_input` (default on — off, a key is neither encoded
@@ -507,7 +529,7 @@ the view is destroyed. Through `bind:this` the host calls:
   never rings, whatever it's interleaved with. A title it sets reaches
   `ontitle`, a render hold it starts is honored, and what it does to the
   terminal's state carries forward (above).
-- `paste(text, options?)` — the text sent to `ondata` as a paste (*Paste*,
+- `paste(text, options?)` — the text sent to `ondata` as a paste (§ Paste,
   below), returning what happened.
 - `get_text()` — the active screen and its scrollback as plain text
   through the formatter (trimmed, soft wraps joined), for a copy-all.
@@ -524,7 +546,9 @@ callback that throws — inside a write, from a frame, or on a resize — never
 escapes: it's handed to `onerror` (or the console) and shown as a notice,
 and the view goes on; so is a failed copy (above), with its own notice.
 
-*Paste.* `paste(text, {allow_unsafe?, max_length?})` sends text as the
+### Paste
+
+`paste(text, {allow_unsafe?, max_length?})` sends text as the
 person pasting it: encoded under the terminal's modes as they are now
 (`GhosttyTerminal.encode_paste`, over the library's `ghostty_paste_encode`)
 and handed to `ondata` in one call, like a key's bytes. The encoder replaces
@@ -570,14 +594,18 @@ is sent, and needs no callback into the library's writer.
 the bytes, and the length, a rejection's too — over texts that probe the
 rule and the encoder and over seeded random ones.
 
-*Keys and the page.* While the view takes keys — ready, `accepts_input` on
+### Keys and the page
+
+While the view takes keys — ready, `accepts_input` on
 — its root carries `data-fuz-terminal-keys` (`FUZ_TERMINAL_KEYS_ATTRIBUTE`),
 and `is_fuz_terminal_key_target(target)` says whether an event target is
 inside such a view. A page's global shortcuts check it beside their check
 for a text field: the view takes keys on a focusable `div`, which isn't an
 editable element, and every key typed into it may be the program's.
 
-*What a host provides.* A sized box: the view fills its container (`width`
+### What a host provides
+
+A sized box: the view fills its container (`width`
 and `height` 100%), and its own content never sizes it — the rows are a
 layer positioned over the root's box. So the container needs a definite
 size: an explicit height, or a stretched flex or grid item (`min-height: 0`
@@ -587,7 +615,9 @@ until the box has one. A view whose first frame finds no size warns once in
 the console, naming what's missing (a hidden view warns too); it's never a
 failure.
 
-*The frame loop.* A frame is requested after output, after the box changes
+### The frame loop
+
+A frame is requested after output, after the box changes
 size, and when a render hold ends, and at most one is pending
 (`FuzTerminalFrameLoop`); with nothing changing nothing is scheduled. A
 frame resizes the terminal if the box changed, then updates the reader and
@@ -600,7 +630,9 @@ ordinary scroll moves the elements of the rows still on screen. A scroll
 inside a scroll region, or inserted or deleted lines, gives every row of the
 library's page a new id, so those frames recreate every row's elements.
 
-*Render holds.* On the `render_hold` effect's start the view updates from
+### Render holds in the view
+
+On the `render_hold` effect's start the view updates from
 inside the handler — the frame the program wants left on screen — and
 updates nothing more until the hold ends or `FUZ_TERMINAL_RENDER_HOLD_TIMEOUT_MS`
 passes; after that it draws again. It can't end the hold in the terminal
@@ -608,7 +640,9 @@ passes; after that it draws again. It can't end the hold in the terminal
 resetting a timed-out one isn't seen. A hold that begins after the view was
 destroyed or stopped — later in the same write — does nothing.
 
-*Drawing a row.* The rows stack in block flow in the screen layer, so row
+### Drawing a row
+
+The rows stack in block flow in the screen layer, so row
 `y` starts `y` rows down, where the cursor is placed; a row is a block with a
 pinned height, and each run is an inline box (`inline-block`, top-aligned) as
 wide as its columns. A run is drawn at its own column, never after the runs
@@ -661,7 +695,9 @@ as `text-decoration` lines. Blink and hyperlinks are classes: blinking
 text, off under `prefers-reduced-motion`; a hyperlink underlined on hover,
 with no link to follow.
 
-*Colors.* Colors are never read from the theme into JS. Runs name custom
+### Colors
+
+Colors are never read from the theme into JS. Runs name custom
 properties — `--fuz_terminal_fg`, `--fuz_terminal_bg`, and
 `--fuz_terminal_palette_0` … `_255` — that the root defines. The stylesheet
 gives the defaults and the base 16 from the theme; the root's inline style
@@ -700,7 +736,9 @@ hues are fuz_css palette stops, the bright ones the higher-contrast stops in
 either scheme. The terminal itself isn't told the theme, so a program that
 queries a color (OSC 10, 11, or 4) gets the library's placeholders.
 
-*The cursor.* One element over the rows at the cursor's cell, two cells
+### The cursor
+
+One element over the rows at the cursor's cell, two cells
 wide over a wide character (on either of its cells), in the shape the
 program set — a block (drawing the cell's text in the background color, or
 a blank over invisible text), a bar, an underline, or a hollow block — and
@@ -708,7 +746,9 @@ hidden when the program hides it or it's out of the viewport. Without focus
 a block is hollow and nothing blinks; a blinking cursor blinks by CSS, not
 under `prefers-reduced-motion`.
 
-*Sizing.* A hidden probe — a run of cells in the terminal's font, with the
+### Sizing
+
+A hidden probe — a run of cells in the terminal's font, with the
 line height the rows fall back to, unselectable so no copy takes its text —
 measures the cell (its width over its length, its height a row's), and the
 root's box is the area; `to_fuz_terminal_size` turns them into cols and
@@ -721,7 +761,9 @@ that loads late re-measures too) requests a frame, so a storm of size
 changes costs one resize per frame. The terminal is created at the measured
 size, or `FUZ_TERMINAL_DEFAULT_SIZE` when there's nothing to measure yet.
 
-*Accessibility.* The root is focusable (`tabindex="0"`, a `group` with the
+### Accessibility
+
+The root is focusable (`tabindex="0"`, a `group` with the
 `terminal` role description and `label` as its name) and takes the keys
 typed while it has focus; the rows are plain
 text in the accessibility tree, the cursor and probe are hidden from it,

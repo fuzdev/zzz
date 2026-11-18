@@ -4,7 +4,7 @@ What a project is and how opening a path resolves one, which directories
 can be roots, and the file index and its watcher. The rest of the
 filesystem — the app directory, `ScopedFs`, reads, and the byte routes —
 is ./architecture.md § Filesystem; editing files is ./architecture.md
-§ File Editing.
+§ File Editing. Their limits close this doc (§ Known limitations).
 
 ## Projects
 
@@ -474,3 +474,112 @@ degrades or recovers later is just logged. A project root or focused
 directory that can't be listed fails `project_open` (`forbidden` /
 `permission_denied`, or `not_found`); a running filer whose root disappears
 polls it until it's back.
+
+## Known limitations
+
+The limits of projects, focus, and the filer; the app's other limits are
+./architecture.md § Known Limitations.
+
+- **Projects and focus** — focus is by hand: a repo is indexed only once
+  it's focused (opening a path in it, the file tree's lazy row, the
+  projects page), and stays focused until it's unfocused, its project
+  closes, or a later open finds its entry missing or the root's kind
+  changed. Under a registry's root the registry's project indexes only
+  its loose files and its focused repos — an unregistered directory only
+  as its own project, once a path in it is opened. A new file where
+  nothing indexes it is refused, since it would never show; a file another
+  tool creates there doesn't appear. A registry's entries are
+  resolved when it's opened, again on each later open, never in between —
+  so `repo_focus` of an entry cloned since refuses it until a path in it
+  is opened. A file kept from an unfocused repo for its draft or tab
+  isn't watched: a change on disk meanwhile shows only when the repo is
+  focused again, or as a conflict when it's saved
+- **Project scope** — opening a project makes its root a writable
+  `ScopedFs` root, with filers on what's focused, until it's closed; closing
+  never revokes
+  the permanent roots (`PUBLIC_ZZZ_DIR` and `PUBLIC_ZZZ_SCOPED_DIRS`). A
+  directory strictly inside `$HOME`, or in `ZZZ_ROOTS_OUTSIDE_HOME`, can be
+  opened — never `/`, `$HOME` or an ancestor of it, or a pseudo-filesystem
+  (§ Root scope) — and no root makes a credential directory or a `.zzz`
+  directory other than the app dir readable or writable. A project opened
+  in another tab (or by `zzz <path>`) appears here unactivated, and its files
+  arrive with a session resync
+- **Large trees cost the client** — every indexed file of a focused repo
+  ships in the focus reply and is kept as a metadata record
+  (`DiskfileIndex`); a `Diskfile` cell is made only for a file in use (see
+  ./architecture.md § File Editing), so focusing a big clone costs the reply's size and
+  parse more than the cells, and a reply of roughly 180k files passes the
+  16 MiB message size (replies aren't capped, so it still arrives). A re-prune past the
+  flood guard costs each client the same pull of the whole repo
+- **File watching** — the filer adds one inotify watch per directory it
+  indexes (never inside ignored directories), and those watches come out of
+  the user's `max_user_watches` budget, shared with every other process. An
+  unreadable subdirectory is skipped (logged once) and picked up if it
+  becomes readable; an unreadable root or focused directory fails
+  `project_open` with `forbidden` (`permission_denied`). When the watch
+  limit is reached (or no watcher can be created), the project still opens
+  with every file the scans found, but in **degraded mode**: `project_open`
+  returns `watch_status: 'degraded'` (kept on the opening tab's `Project`
+  cell; the projects page and the desk menu show it — another tab or a
+  reload shows `'full'`), and the directories without a watch are rescanned
+  every 5 seconds or more (retrying their watches each time), so changes
+  there show up late. A project that degrades or recovers after it opened
+  isn't re-announced — only the daemon log says so. A file is re-announced
+  as changed when its `lstat` stamp moves (a `touch` or a chmod included, so
+  clients holding it read it again), and once more at the next look after a
+  change seen within 3 seconds of its inode change time (a stamp that fresh
+  isn't trusted)
+- **Change detection is by stat stamp** — the filer reads no file, so a
+  write that doesn't move the file's `lstat` stamp goes unnoticed until the
+  stamp next moves: an `mmap` store to an already-dirty page, or a remote or
+  FUSE filesystem whose server clock lags this machine's by more than the
+  3-second margin, or a FUSE filesystem that reports `st_ctime` as the
+  `mtime` (sshfs), where a `touch -r` after a same-size rewrite hides it. A
+  wall clock stepped back by more than the margin can hide a write that
+  lands in the same timestamp tick as the stored stamp. An inode change time
+  in the future (a clock stepped back, a remote server's clock ahead) is
+  never trusted, so the file is a `change` on every look until the clock
+  passes it
+- **Git's ignore rule** (§ Filer) — what a checkout's filer ignores is
+  git's answer as of its last listing plus the paths it vetted since: the
+  user's global excludes file isn't watched (an edit there shows at the next
+  re-prune), nor is `info/exclude` for a linked worktree or a submodule's
+  checkout (its common directory is named only by the repo's own files,
+  which the filer doesn't follow). A `.git` appearing in an indexed
+  directory drops it from the index; one removed from a directory that
+  wasn't indexed shows only at the next rescan. A directory whose `.git`
+  is a symlink is indexed by no filer: git lists nothing in it, and a path
+  in it resolves to the outer checkout. A file created by hand inside an
+  unpopulated submodule makes git refuse the burst's check; that submodule
+  is then left unindexed, as a populated one is, until the next rebuild of
+  the set. A file git ignores replaced by a directory it doesn't (a
+  `.gitignore` naming `x` and `!x/`) stays skipped as the file was; the
+  directory is picked up at the next rebuild of the set or rescan. A
+  rebuild whose listing fails or times out leaves the change it was for
+  unapplied — and a new file git couldn't vet meanwhile unindexed — until
+  the next `session_load` (a reload or a reconnect) or degraded poll
+  rebuilds the set again; three failing in a row that a change on disk
+  asked for (a rule edit, lost events, new files git couldn't vet, a set
+  grown past its budget) fall back to fixed names, but a load's or poll's
+  retry failing doesn't count, so a git that never answers costs a
+  listing's timeout (5 s) per degraded poll and per load until such
+  changes fail too — on a quiet degraded tree, possibly never. Each load
+  waits out the 5 s with the filer blocked; polls back off to about 50 s
+  apart (ten times their own duration, roughly a 10% duty cycle).
+  Any `.git` entry — even one git wouldn't read as a repo — makes its
+  directory a repo of its own here, so its files aren't indexed; the wire
+  names it (`nested`), so a link into one reads "not indexed" and a file
+  created there isn't waited for. A `.git` removed from a nested repo is
+  seen only at the next rescan (no watch is inside it), so until then its
+  files stay unindexed and it stays `nested`. A permanent filer on a
+  checkout (the app directory, a scoped dir) runs git's rule, but its set
+  is off the wire unless a project focuses it, so the frontend holds it to
+  fixed names — a tracked `dist/` in it is indexed but hidden in the tree,
+  and a file git ignores there reads as broken in a link, and is waited
+  for, without a notice, when created. What the wire says is ignored can lag
+  a second behind the filer (refreshes are coalesced), and a re-prune
+  resynced while its project closes and a permanent filer stays on the
+  directory leaves clients' permanent copy of it stale until the next
+  `session_load`; and a filer started by a focus scan before the lock is
+  off the wire until its commit marks it, so a re-prune past the threshold
+  in that window sends each change
