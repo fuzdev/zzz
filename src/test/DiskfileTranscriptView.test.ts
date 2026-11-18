@@ -47,9 +47,8 @@ afterEach(() => {
 
 const transcript_json = (): string =>
 	JSON.stringify({
-		version: 1,
+		version: 2,
 		source: {
-			name: 'a.webm',
 			blake3: parse_or_throw(FactHashSchema, `blake3:${'ab'.repeat(32)}`),
 			size: 10,
 			duration_ms: 1000
@@ -65,8 +64,8 @@ const transcript_json = (): string =>
 		segments: []
 	} satisfies Transcript);
 
-const render = async (): Promise<void> => {
-	const transcript = await disk.load(TRANSCRIPT, transcript_json());
+const render = async (path: string = TRANSCRIPT): Promise<void> => {
+	const transcript = await disk.load(path, transcript_json());
 	mounted = mount(FrontendContextHarness, {
 		target,
 		props: { app, component: DiskfileTranscriptView, props: { diskfile: transcript } }
@@ -95,4 +94,18 @@ test('an audio arriving later shows its player', async () => {
 	flushSync();
 	assert.ok(target.querySelector('audio'));
 	assert.ok(open_audio_button());
+});
+
+test('a transcript whose name names no audio says so, and makes no copy', async () => {
+	const create_file_at = vi.spyOn(app.diskfiles, 'create_file_at');
+	await render(`${DIR}m.transcript.json`);
+	assert.include(target.textContent, "doesn't name the audio it was made from");
+	assert.isNull(target.querySelector('audio'));
+	const copy = [...target.querySelectorAll('button')].find(
+		(b) => b.textContent.trim() === 'edit a copy'
+	);
+	assert.ok(copy);
+	assert.isTrue(copy.disabled);
+	copy.click();
+	assert.strictEqual(create_file_at.mock.calls.length, 0);
 });

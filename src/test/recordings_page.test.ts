@@ -40,10 +40,9 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-const create_transcript = (source_name: string, model: string): Transcript => ({
-	version: 1,
+const create_transcript = (model: string): Transcript => ({
+	version: 2,
 	source: {
-		name: source_name,
 		blake3: parse_or_throw(FactHashSchema, `blake3:${'ab'.repeat(32)}`),
 		size: 10,
 		duration_ms: 1000
@@ -69,7 +68,7 @@ test('lists the audio files under the recordings folder at any depth, newest fir
 	disk.write(`${RECORDINGS}2026-11-02_10-00-00.webm`, null);
 	disk.write(
 		`${RECORDINGS}2026-11-02_10-00-00.webm.base.transcript.json`,
-		JSON.stringify(create_transcript('2026-11-02_10-00-00.webm', 'base'))
+		JSON.stringify(create_transcript('base'))
 	);
 	// nested: a folder of older recordings
 	disk.write(`${RECORDINGS}2025/2025-06-01_10-00-00.webm`, null);
@@ -98,7 +97,7 @@ test('holds the transcript candidates while mounted, and lets go on unmount', ()
 	const audio = disk.write(`${RECORDINGS}2026-11-02_10-00-00.webm`, null);
 	const transcript = disk.write(
 		`${RECORDINGS}2026-11-02_10-00-00.webm.base.transcript.json`,
-		JSON.stringify(create_transcript('2026-11-02_10-00-00.webm', 'base'))
+		JSON.stringify(create_transcript('base'))
 	);
 
 	mounted = mount(FrontendContextHarness, {

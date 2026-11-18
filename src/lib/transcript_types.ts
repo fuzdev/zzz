@@ -1,13 +1,10 @@
 import {
 	array,
-	check,
 	loose_object,
-	message,
 	nullable,
 	number,
 	object,
 	optional,
-	pipe,
 	string,
 	type Infer
 } from '@fuzdev/fuz_schema/schema.ts';
@@ -47,9 +44,17 @@ export const is_plain_file_name = (name: string): boolean =>
 export const TRANSCRIPT_SIDECAR_SUFFIX = '.transcript.json';
 
 /**
+ * A model's slug as a sidecar's name carries it — never a `.`, so the
+ * source's name parses back out (`to_transcript_source_name`). Twin of the
+ * backend's `whisper_cpp::model_slug`.
+ */
+export const TRANSCRIPT_MODEL_SLUG_REGEX = /^[a-z0-9_-]+$/;
+
+/**
  * A transcript sidecar: the file a transcription writes beside its source,
  * `<source name>.<model>.transcript.json`. It records what it was made from
- * and what made it. Twin of the backend's `Transcript`.
+ * (the source's hash and size — its name is the sidecar's own name, the
+ * link) and what made it. Twin of the backend's `Transcript`, version 2.
  *
  * Loose, because it's a file on disk: one written by a newer zzz may carry
  * fields this one doesn't know.
@@ -57,14 +62,7 @@ export const TRANSCRIPT_SIDECAR_SUFFIX = '.transcript.json';
 export const Transcript = loose_object({
 	version: number,
 	source: loose_object({
-		/**
-		 * The source's file name — it sits beside the sidecar. A sidecar is a
-		 * file anyone can write, and this name becomes a path the app reads and
-		 * creates files at, so anything but a single path component is refused:
-		 * a transcript can't point outside its own directory.
-		 */
-		name: pipe(string, message(check(is_plain_file_name), 'must be a file name, not a path')),
-		/** `blake3:<hex>` of the source's bytes when it was transcribed. */
+		/** `blake3:<hex>` of the source's bytes when it was transcribed — its identity. */
 		blake3: FactHashSchema,
 		size: number,
 		duration_ms: number

@@ -49,8 +49,10 @@ pub struct WhisperCpp {
 /// A short name for a model file, for a transcript's file name.
 ///
 /// The file name without `ggml-` and `.bin`, lowercased, with anything
-/// outside `[a-z0-9._-]` replaced by `-`: `ggml-large-v3-turbo.bin` →
-/// `large-v3-turbo`.
+/// outside `[a-z0-9_-]` replaced by `-`: `ggml-large-v3-turbo.bin` →
+/// `large-v3-turbo`, `ggml-base.en.bin` → `base-en`. Never a `.`, so a
+/// sidecar's name splits back into its source's name and the slug
+/// ([`super::transcript_sidecar_path`]).
 #[must_use]
 pub fn model_slug(model: &Path) -> String {
     let name = model
@@ -63,14 +65,14 @@ pub fn model_slug(model: &Path) -> String {
         .chars()
         .map(|c| {
             let c = c.to_ascii_lowercase();
-            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+            if c.is_ascii_alphanumeric() || matches!(c, '_' | '-') {
                 c
             } else {
                 '-'
             }
         })
         .collect();
-    let slug = slug.trim_matches(['.', '-']);
+    let slug = slug.trim_matches('-');
     if slug.is_empty() {
         "model".to_owned()
     } else {
@@ -292,7 +294,8 @@ mod tests {
     fn model_slugs_name_the_model() {
         for (file, slug) in [
             ("/m/ggml-large-v3-turbo.bin", "large-v3-turbo"),
-            ("/m/ggml-base.en.bin", "base.en"),
+            ("/m/ggml-base.en.bin", "base-en"),
+            ("/m/a..b.bin", "a--b"),
             ("/m/ggml-large-v3-turbo-q5_0.bin", "large-v3-turbo-q5_0"),
             ("/m/My Model (v2).bin", "my-model--v2"),
             ("/m/custom", "custom"),

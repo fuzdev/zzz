@@ -18,6 +18,7 @@
 	import {
 		parse_transcript,
 		to_transcript_copy_path,
+		to_transcript_source_name,
 		to_transcript_source_path,
 		transcript_to_text
 	} from './transcript_helpers.ts';
@@ -50,11 +51,13 @@
 		diskfile.content_status === 'unrequested' || diskfile.content_status === 'loading'
 	);
 	const transcript = $derived(parse_transcript(diskfile.content));
-	const source_path = $derived(
-		transcript
-			? parse_or_throw(DiskfilePath, to_transcript_source_path(diskfile.path, transcript))
-			: null
-	);
+	// the sidecar's name is its link to the audio, beside it
+	const source_name = $derived(to_transcript_source_name(diskfile.path));
+	const source_path = $derived.by(() => {
+		if (!transcript) return null;
+		const path = to_transcript_source_path(diskfile.path);
+		return path === null ? null : parse_or_throw(DiskfilePath, path);
+	});
 	// the audio's metadata alone — its cell when one is kept (deleted on disk or uncovered, for a
 	// draft or a tab), else the index's record — never held, so it isn't read as text on a change
 	const source: { path: DiskfilePath; mtime: number | null; deleted_on_disk: boolean } | undefined =
@@ -83,13 +86,13 @@
 	let copy_error: string | null = $state.raw(null);
 
 	const edit_a_copy = async (): Promise<void> => {
-		if (!transcript || !source_path) return;
+		if (!transcript || !source_path || source_name === null) return;
 		copy_error = null;
 		const path = to_transcript_copy_path(source_path, (p) => diskfiles.has_path(p));
 		try {
 			await diskfiles.create_file_at(
 				parse_or_throw(DiskfilePath, path),
-				transcript_to_text(transcript)
+				transcript_to_text(transcript, source_name)
 			);
 		} catch (error) {
 			copy_error = to_error_message(error);
@@ -126,7 +129,12 @@
 					{/key}
 				{:else}
 					<p class="text_50">
-						the audio this was made from, {transcript.source.name}, isn't beside it
+						{#if source_name === null}
+							this file's name doesn't name the audio it was made from —
+							<code>&lt;audio&gt;.&lt;model&gt;.transcript.json</code>
+						{:else}
+							the audio this was made from, {source_name}, isn't beside it
+						{/if}
 					</p>
 				{/if}
 				<!-- the drawer shows it beside "edit a copy", so here only with the drawer closed -->
@@ -150,6 +158,7 @@
 						type="button"
 						class="plain"
 						title="create a text file from this transcript and open it — the transcript itself is never edited"
+						disabled={source_name === null}
 						onclick={edit_a_copy}
 					>
 						edit a copy

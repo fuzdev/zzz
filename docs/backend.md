@@ -569,9 +569,10 @@ commands):
   unknown key; `tool_unavailable` on a machine with no speech model; with
   one, a clip is transcribed to its sidecar — the `job_changed` and
   `transcription_progress` notifications and the outputs parse against
-  their specs, the sidecar parses as a `Transcript` with the source's name,
-  size, blake3, and duration, neither recorded command line contains the
-  file's path, the scratch directory is left empty, the job is in
+  their specs, the sidecar parses as a `Transcript` (version 2) named for
+  its source, with the source's size, blake3, and duration, neither
+  recorded command line contains the file's path, the scratch directory
+  is left empty, the job is in
   `session_load`, and a second run is `already_exists`; a non-audio file
   fails the job with the tool's stderr and no sidecar; a queued job
   cancelled never starts and the running one is stopped, both without a
@@ -1244,8 +1245,11 @@ commands):
   - **The sidecar** (`Transcript`): `<source path>.<model
     slug>.transcript.json`, created exclusively (`ScopedFs::create_file`),
     so it is written once and never replaced — the slug (`ggml-base.en.bin`
-    → `base.en`) keeps one per model. It holds `version`, `source` (`name`,
-    `blake3`, `size`, `duration_ms`), `tool` (`backend`, `version`,
+    → `base-en`) keeps one per model. **The name is the link**: a slug
+    never has a `.`, so the source's name is the sidecar's name before
+    the slug, and renaming the pair rewrites no content; the source's
+    `blake3` is its identity. It holds `version` (2), `source` (`blake3`,
+    `size`, `duration_ms`), `tool` (`backend`, `version`,
     `model`, `model_blake3`, `params`), `language`, and `segments`
     (`start_ms`, `end_ms`, `text`, `words`). The model's hash is cached per
     file version, since a model is gigabytes. It's a text file like any

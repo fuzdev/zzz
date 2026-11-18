@@ -67,12 +67,12 @@ describe('Jobs.receive_changed', () => {
 			started_at: 2000,
 			ended_at: 5500,
 			progress: 1,
-			output_path: parse_or_throw(DiskfilePath, '/w/a.webm.base.en.transcript.json')
+			output_path: parse_or_throw(DiskfilePath, '/w/a.webm.base-en.transcript.json')
 		});
 		assert.ok(job.finished);
 		assert.ok(!job.cancellable);
 		assert.strictEqual(job.run_duration, 3500);
-		assert.strictEqual(job.output_path, '/w/a.webm.base.en.transcript.json');
+		assert.strictEqual(job.output_path, '/w/a.webm.base-en.transcript.json');
 	});
 
 	test('keeps the live segments across updates', () => {

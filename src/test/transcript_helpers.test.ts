@@ -3,25 +3,26 @@ import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, assert } from 'vitest';
 
 import {
+	find_transcript_candidate_paths,
 	find_transcripts,
 	format_transcript_time,
 	is_transcript_path,
 	parse_transcript,
 	to_transcript_copy_path,
+	to_transcript_source_name,
 	to_transcript_source_path,
 	transcript_to_paragraphs,
 	transcript_to_text
 } from '#lib/transcript_helpers.ts';
-import type { Transcript, TranscriptSegment } from '#lib/transcript_types.ts';
+import {
+	TRANSCRIPT_MODEL_SLUG_REGEX,
+	type Transcript,
+	type TranscriptSegment
+} from '#lib/transcript_types.ts';
 
-const create_transcript = (
-	source_name: string,
-	model: string,
-	segments: Array<TranscriptSegment> = []
-): Transcript => ({
-	version: 1,
+const create_transcript = (model: string, segments: Array<TranscriptSegment> = []): Transcript => ({
+	version: 2,
 	source: {
-		name: source_name,
 		blake3: parse_or_throw(FactHashSchema, `blake3:${'ab'.repeat(32)}`),
 		size: 10,
 		duration_ms: 1000
@@ -58,7 +59,7 @@ describe('is_transcript_path', () => {
 
 describe('parse_transcript', () => {
 	test('parses a transcript, keeping fields it does not know', () => {
-		const transcript = { ...create_transcript('a.webm', 'base.en'), future_field: 1 };
+		const transcript = { ...create_transcript('base.en'), future_field: 1 };
 		const parsed = parse_transcript(JSON.stringify(transcript));
 		assert.deepEqual(parsed, transcript);
 	});
@@ -67,34 +68,12 @@ describe('parse_transcript', () => {
 		for (const content of [null, '', 'not json', '[]', '{}', '{"version": 1}']) {
 			assert.strictEqual(parse_transcript(content), null, String(content));
 		}
-		const bad_segment = { ...create_transcript('a.webm', 'm'), segments: [{ text: 5 }] };
+		const bad_segment = { ...create_transcript('m'), segments: [{ text: 5 }] };
 		assert.strictEqual(parse_transcript(JSON.stringify(bad_segment)), null);
 	});
 
-	// a sidecar is a file anyone can write, and its source name becomes a path
-	// the app plays from and creates the editable copy beside
-	test('refuses a source name that is a path', () => {
-		for (const name of [
-			'../../other/.claude/commands/ship',
-			'sub/a.webm',
-			'/etc/passwd',
-			'..',
-			'.',
-			'',
-			'a\\b.webm',
-			'a\0.webm'
-		]) {
-			const transcript = create_transcript(name, 'base.en');
-			assert.strictEqual(parse_transcript(JSON.stringify(transcript)), null, JSON.stringify(name));
-		}
-		// dots and spaces in a plain name are fine
-		for (const name of ['a.webm', '..a.webm', 'my recording (2).ogg', '.hidden.wav']) {
-			assert.ok(parse_transcript(JSON.stringify(create_transcript(name, 'm'))), name);
-		}
-	});
-
 	test('refuses a hash that is not a fact hash', () => {
-		const transcript = create_transcript('a.webm', 'base.en');
+		const transcript = create_transcript('base.en');
 		for (const hash of [
 			'blake3:ab',
 			`blake3:${'AB'.repeat(32)}`,
@@ -110,15 +89,80 @@ describe('parse_transcript', () => {
 	});
 });
 
+describe('to_transcript_source_name', () => {
+	test('is the sidecar name before the model slug', () => {
+		for (const [sidecar, source] of [
+			['/w/sub/a.webm.base-en.transcript.json', 'a.webm'],
+			['a.webm.large-v3-turbo.transcript.json', 'a.webm'],
+			['/w/my recording (2).ogg.m.transcript.json', 'my recording (2).ogg'],
+			['/w/..a.webm.m.transcript.json', '..a.webm'],
+			['/w/.hidden.wav.m.transcript.json', '.hidden.wav'],
+			// a dotted slug can't be one, so its last segment is the slug
+			['/w/a.webm.base.en.transcript.json', 'a.webm.base']
+		] as const) {
+			assert.strictEqual(to_transcript_source_name(sidecar), source, sidecar);
+		}
+	});
+
+	// a sidecar is a file anyone can name, and its source name becomes a path the app plays from
+	// and creates the editable copy beside
+	test('is null for a name that names no plain file beside it', () => {
+		for (const sidecar of [
+			'/w/a.webm',
+			'/w/transcript.json',
+			'/w/m.transcript.json',
+			'/w/..m.transcript.json',
+			'/w/...m.transcript.json',
+			'/w/.m.transcript.json',
+			'/w/a\\b.webm.m.transcript.json',
+			'/w/a\0.webm.m.transcript.json',
+			'/w/a.webm.BASE.transcript.json',
+			'/w/a.webm.b+c.transcript.json',
+			'/w/a.webm..transcript.json'
+		]) {
+			assert.strictEqual(to_transcript_source_name(sidecar), null, JSON.stringify(sidecar));
+		}
+	});
+	// mirrors the backend's `whisper_cpp::model_slugs_name_the_model`: a slug it writes must parse
+	test('accepts every slug the backend emits', () => {
+		for (const slug of [
+			'large-v3-turbo',
+			'base-en',
+			'a--b',
+			'large-v3-turbo-q5_0',
+			'my-model--v2',
+			'custom',
+			'model'
+		]) {
+			assert.ok(TRANSCRIPT_MODEL_SLUG_REGEX.test(slug), slug);
+		}
+	});
+});
+
+describe('find_transcript_candidate_paths', () => {
+	test('only names beside the source that parse back to it', () => {
+		assert.deepEqual(
+			find_transcript_candidate_paths(
+				[
+					'/w/a.webm.m.transcript.json',
+					'/w/a.webm.d/x.m.transcript.json',
+					'/w/a.webm.x.webm.m.transcript.json',
+					'/w/a.webm.m.json'
+				],
+				'/w/a.webm'
+			),
+			['/w/a.webm.m.transcript.json']
+		);
+	});
+});
+
 describe('to_transcript_source_path', () => {
 	test('is the named file beside the sidecar', () => {
 		assert.strictEqual(
-			to_transcript_source_path(
-				'/w/sub/a.webm.base.en.transcript.json',
-				create_transcript('a.webm', 'base.en')
-			),
+			to_transcript_source_path('/w/sub/a.webm.base-en.transcript.json'),
 			'/w/sub/a.webm'
 		);
+		assert.strictEqual(to_transcript_source_path('/w/sub/m.transcript.json'), null);
 	});
 });
 
@@ -131,29 +175,28 @@ describe('find_transcripts', () => {
 				: JSON.stringify(transcript)
 	});
 
-	test('finds the sidecars made from the source, by model', () => {
+	test('finds the sidecars named for the source, by model', () => {
 		const turbo = file(
 			'/w/a.webm.large-v3-turbo.transcript.json',
-			create_transcript('a.webm', 'large-v3-turbo')
+			create_transcript('large-v3-turbo')
 		);
-		const base = file('/w/a.webm.base.en.transcript.json', create_transcript('a.webm', 'base.en'));
+		const base = file('/w/a.webm.base-en.transcript.json', create_transcript('base-en'));
 		const found = find_transcripts(
 			[
 				turbo,
 				base,
 				file('/w/a.webm', null),
 				// another source whose name starts the same way
-				file(
-					'/w/a.webm.bak.webm.base.en.transcript.json',
-					create_transcript('a.webm.bak.webm', 'base.en')
-				),
+				file('/w/a.webm.bak.webm.base-en.transcript.json', create_transcript('base-en')),
+				// a dotted slug names another source, `a.webm.base`
+				file('/w/a.webm.base.en.transcript.json', create_transcript('base.en')),
 				// named right, but not a transcript
 				file('/w/a.webm.junk.transcript.json', 'not json'),
 				// not loaded
 				file('/w/a.webm.huge.transcript.json', null),
 				// another directory's
-				file('/x/a.webm.base.en.transcript.json', create_transcript('a.webm', 'base.en')),
-				file('/w/b.webm.base.en.transcript.json', create_transcript('b.webm', 'base.en'))
+				file('/x/a.webm.base-en.transcript.json', create_transcript('base-en')),
+				file('/w/b.webm.base-en.transcript.json', create_transcript('base-en'))
 			],
 			'/w/a.webm'
 		);
@@ -161,7 +204,7 @@ describe('find_transcripts', () => {
 			found.map((f) => f.file.path),
 			[base.path, turbo.path]
 		);
-		assert.strictEqual(found[0]!.transcript.tool.model, 'base.en');
+		assert.strictEqual(found[0]!.transcript.tool.model, 'base-en');
 	});
 
 	test('finds nothing for a source with no sidecar', () => {
@@ -211,18 +254,18 @@ describe('transcript_to_paragraphs', () => {
 
 describe('transcript_to_text', () => {
 	test('links the source, then the paragraphs', () => {
-		const transcript = create_transcript('standup.webm', 'base.en', [
+		const transcript = create_transcript('base.en', [
 			segment(0, 1000, 'Hello there.'),
 			segment(9000, 10_000, 'Later.')
 		]);
 		assert.strictEqual(
-			transcript_to_text(transcript),
+			transcript_to_text(transcript, 'standup.webm'),
 			'./standup.webm\n\nHello there.\n\nLater.\n'
 		);
 	});
 
 	test('is just the link for no speech', () => {
-		assert.strictEqual(transcript_to_text(create_transcript('a.ogg', 'm')), './a.ogg\n');
+		assert.strictEqual(transcript_to_text(create_transcript('m'), 'a.ogg'), './a.ogg\n');
 	});
 });
 

@@ -969,9 +969,12 @@ its version, the model and its hash, the parameters. It's tool output, so it
 is **written once and never edited**: the model's name is in the file name,
 so a better model's transcript sits beside it rather than replacing it, and
 transcribing again with the same model is refused until the sidecar is
-deleted. A sidecar is found for an audio file by its name and by what it
-says it was made from (`find_transcripts`) — a model's name has dots in it,
-so the name alone can't say.
+deleted. **The name is the link** between a sidecar and its audio:
+`<audio name>.<model slug>.transcript.json`, the slug never holding a `.`,
+so the audio's name parses back out of the sidecar's
+(`to_transcript_source_name`) and a sidecar is found for an audio file by
+name alone (`find_transcripts`). The audio's hash in the content is its
+identity, wherever it lives.
 
 **Batch, with a preview.** The transcript is made from the finished file.
 The recognizer decodes in windows and reports segments as it goes, so

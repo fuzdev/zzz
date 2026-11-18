@@ -280,12 +280,12 @@ describe('DiskfileDetailsDrawer', () => {
 });
 
 const TRANSCRIPT = JSON.stringify({
-	version: 1,
-	source: { name: 'a.webm', blake3: `blake3:${'ab'.repeat(32)}`, size: 1, duration_ms: 1 },
+	version: 2,
+	source: { blake3: `blake3:${'ab'.repeat(32)}`, size: 1, duration_ms: 1 },
 	tool: {
 		backend: 'whisper.cpp',
 		version: null,
-		model: 'base.en',
+		model: 'base-en',
 		model_blake3: `blake3:${'cd'.repeat(32)}`,
 		params: { language: 'en' }
 	},
@@ -335,7 +335,7 @@ describe('every file view keeps its details in the drawer', () => {
 		{
 			name: 'DiskfileTranscriptView',
 			component: DiskfileTranscriptView,
-			path: '/w/a.webm.transcript.json',
+			path: '/w/a.webm.base-en.transcript.json',
 			contents: TRANSCRIPT,
 			details: 'read-only — a transcript is tool output'
 		}
@@ -407,7 +407,7 @@ describe('a file view shows what its drawer would, with the drawer closed', () =
 		{
 			name: "DiskfileTranscriptView's text editor, for a file that isn't a transcript",
 			component: DiskfileTranscriptView,
-			path: '/w/a.webm.transcript.json',
+			path: '/w/a.webm.base-en.transcript.json',
 			contents: 'not a transcript'
 		}
 	];
@@ -434,7 +434,7 @@ describe('a file view shows what its drawer would, with the drawer closed', () =
 	}
 
 	test('DiskfileTranscriptView shows a failed copy once, with the drawer open or closed', async () => {
-		const diskfile = await write_file('/w/a.webm.transcript.json', TRANSCRIPT);
+		const diskfile = await write_file('/w/a.webm.base-en.transcript.json', TRANSCRIPT);
 		vi.spyOn(app.diskfiles, 'create_file_at').mockRejectedValue(new Error('disk full'));
 		const view = render(DiskfileTranscriptView, { diskfile });
 		const button = Array.from(view.target.querySelectorAll('button')).find(

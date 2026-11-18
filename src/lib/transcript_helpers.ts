@@ -8,7 +8,9 @@
 import { parse } from '@fuzdev/fuz_schema/schema.ts';
 
 import {
+	is_plain_file_name,
 	Transcript,
+	TRANSCRIPT_MODEL_SLUG_REGEX,
 	TRANSCRIPT_SIDECAR_SUFFIX,
 	type TranscriptSegment
 } from './transcript_types.ts';
@@ -42,17 +44,42 @@ const to_dir = (path: string): string => path.slice(0, path.lastIndexOf('/') + 1
 const to_name = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 
 /**
- * The path of the audio a sidecar was made from: the file its `source.name`
- * names, beside it. The sidecar's own name can't say — a model's name has
- * dots in it too. `source.name` is always a single path component (the
- * `Transcript` schema refuses anything else), so this never leaves the
- * sidecar's directory.
+ * The name of the audio file a sidecar was made from, parsed from the
+ * sidecar's own name, `<source name>.<model>.transcript.json`: the model's
+ * slug never has a `.`, so the source's name is everything before the last
+ * one. The name is the link between the two (the content's `source.blake3`
+ * is the source's identity), so renaming the pair rewrites no content.
+ *
+ * @param sidecar_path - the sidecar's path, or its name
+ * @returns the source's name, `null` when the name isn't a sidecar's
+ */
+export const to_transcript_source_name = (sidecar_path: string): string | null => {
+	const name = to_name(sidecar_path);
+	if (!name.endsWith(TRANSCRIPT_SIDECAR_SUFFIX)) return null;
+	const stem = name.slice(0, -TRANSCRIPT_SIDECAR_SUFFIX.length);
+	const dot = stem.lastIndexOf('.');
+	if (dot === -1) return null;
+	const source_name = stem.slice(0, dot);
+	if (!TRANSCRIPT_MODEL_SLUG_REGEX.test(stem.slice(dot + 1))) return null;
+	return is_plain_file_name(source_name) ? source_name : null;
+};
+
+/**
+ * The path of the audio a sidecar was made from: the file its name names,
+ * beside it (`to_transcript_source_name`) — never outside the sidecar's
+ * directory.
  *
  * @param sidecar_path - the sidecar's absolute path
- * @param transcript - the sidecar, parsed
+ * @returns the source's path, `null` when the name isn't a sidecar's
  */
-export const to_transcript_source_path = (sidecar_path: string, transcript: Transcript): string =>
-	to_dir(sidecar_path) + transcript.source.name;
+export const to_transcript_source_path = (sidecar_path: string): string | null => {
+	const source_name = to_transcript_source_name(sidecar_path);
+	return source_name === null ? null : to_dir(sidecar_path) + source_name;
+};
+
+/** Whether the file at `path` is named as a transcript sidecar of `source_path`. */
+const is_transcript_of = (path: string, source_path: string): boolean =>
+	path.startsWith(source_path + '.') && to_transcript_source_path(path) === source_path;
 
 /** A file that might be a transcript sidecar: its path and loaded text. */
 export interface TranscriptCandidate {
@@ -67,10 +94,10 @@ export interface FoundTranscript<T extends TranscriptCandidate = TranscriptCandi
 }
 
 /**
- * The files that could be transcript sidecars of the audio file at
- * `source_path`, by name alone: the ones beside it named
- * `<source name>.<model>.transcript.json`. Their contents settle which are
- * (`find_transcripts`), so a caller loads these first.
+ * The files that are named as transcript sidecars of the audio file at
+ * `source_path`: the ones beside it named
+ * `<source name>.<model>.transcript.json`. Their contents are read for the
+ * transcript itself (`find_transcripts`), so a caller loads these first.
  *
  * @param files - the files to look through
  * @param source_path - the audio file's absolute path
@@ -79,17 +106,16 @@ export const find_transcript_candidates = <T extends { readonly path: string }>(
 	files: Iterable<T>,
 	source_path: string
 ): Array<T> => {
-	const prefix = source_path + '.';
 	const candidates: Array<T> = [];
 	for (const file of files) {
-		if (file.path.startsWith(prefix) && is_transcript_path(file.path)) candidates.push(file);
+		if (is_transcript_of(file.path, source_path)) candidates.push(file);
 	}
 	return candidates;
 };
 
 /**
- * The paths among `paths` that could be transcript sidecars of the audio
- * file at `source_path` — `find_transcript_candidates` over bare paths.
+ * The paths among `paths` named as transcript sidecars of the audio file at
+ * `source_path` — `find_transcript_candidates` over bare paths.
  *
  * @param paths - the paths to look through
  * @param source_path - the audio file's absolute path
@@ -98,10 +124,9 @@ export const find_transcript_candidate_paths = (
 	paths: Iterable<string>,
 	source_path: string
 ): Array<string> => {
-	const prefix = source_path + '.';
 	const candidates: Array<string> = [];
 	for (const path of paths) {
-		if (path.startsWith(prefix) && is_transcript_path(path)) candidates.push(path);
+		if (is_transcript_of(path, source_path)) candidates.push(path);
 	}
 	return candidates;
 };
@@ -109,9 +134,9 @@ export const find_transcript_candidate_paths = (
 /**
  * Finds the transcript sidecars of the audio file at `source_path` among
  * `files`: the files beside it named `<source name>.<model>.transcript.json`
- * whose content says they were made from it. Sorted by model name. A
- * candidate whose content isn't loaded isn't found — load the
- * `find_transcript_candidates` first.
+ * whose content is a transcript. Sorted by model name. A candidate whose
+ * content isn't loaded isn't found — load the `find_transcript_candidates`
+ * first.
  *
  * @param files - the files to look through
  * @param source_path - the audio file's absolute path
@@ -120,12 +145,10 @@ export const find_transcripts = <T extends TranscriptCandidate>(
 	files: Iterable<T>,
 	source_path: string
 ): Array<FoundTranscript<T>> => {
-	const source_name = to_name(source_path);
 	const found: Array<FoundTranscript<T>> = [];
 	for (const file of find_transcript_candidates(files, source_path)) {
 		const transcript = parse_transcript(file.content);
-		if (transcript?.source.name !== source_name) continue;
-		found.push({ file, transcript });
+		if (transcript) found.push({ file, transcript });
 	}
 	return found.sort((a, b) => a.transcript.tool.model.localeCompare(b.transcript.tool.model));
 };
@@ -187,10 +210,11 @@ export const transcript_to_paragraphs = (
  * itself is tool output and is never edited — this is what gets edited.
  *
  * @param transcript - the transcript to copy
+ * @param source_name - the audio's file name (`to_transcript_source_name`)
  */
-export const transcript_to_text = (transcript: Transcript): string => {
+export const transcript_to_text = (transcript: Transcript, source_name: string): string => {
 	const paragraphs = transcript_to_paragraphs(transcript.segments);
-	return [`./${transcript.source.name}`, ...paragraphs].join('\n\n') + '\n';
+	return [`./${source_name}`, ...paragraphs].join('\n\n') + '\n';
 };
 
 /**

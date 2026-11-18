@@ -19,6 +19,9 @@
 //! 4. write the result as a **sidecar** beside the source,
 //!    `<source name>.<model>.transcript.json` ([`Transcript`]) — created
 //!    exclusively, so a transcript is written once and never replaced.
+//!    The name is the link to the source (the model slug has no `.`, so the
+//!    source's name parses back out of it); the content's source hash is
+//!    its identity.
 //!
 //! The sidecar is tool output: it records what it was made from (the
 //! source's hash and size) and what made it (backend, version, model and its
@@ -43,8 +46,9 @@ use crate::scoped_fs::TEMP_FILE_PREFIX;
 use crate::tool::{ToolError, ToolLine, ToolRun, Tools, run_tool_lines};
 use whisper_cpp::WhisperCpp;
 
-/// The transcript format this writes.
-pub const TRANSCRIPT_VERSION: u32 = 1;
+/// The transcript format this writes. Version 2 dropped `source.name`: the
+/// sidecar's own name links it to its source.
+pub const TRANSCRIPT_VERSION: u32 = 2;
 
 /// What every transcript sidecar's name ends with.
 pub const TRANSCRIPT_SIDECAR_SUFFIX: &str = ".transcript.json";
@@ -66,11 +70,12 @@ pub struct Transcript {
 }
 
 /// The audio a transcript was made from, as it was then.
+///
+/// Its name isn't here: the sidecar's own name carries it
+/// ([`transcript_sidecar_path`]), so renaming the pair rewrites no content.
 #[derive(Debug, Clone, Serialize)]
 pub struct TranscriptSource {
-    /// The source's file name — it sits beside the sidecar.
-    pub name: String,
-    /// `blake3:<hex>` of the source's bytes.
+    /// `blake3:<hex>` of the source's bytes — its identity, wherever it lives.
     pub blake3: String,
     pub size: u64,
     pub duration_ms: u64,
@@ -118,8 +123,11 @@ pub struct TranscriptWord {
 }
 
 /// The sidecar path for a transcript of `source_path` by the model
-/// `model_slug`: `<source path>.<model slug>.transcript.json`. The slug is in
-/// the name so one source can hold a transcript per model.
+/// `model_slug`: `<source path>.<model slug>.transcript.json`.
+///
+/// The slug is in the name so one source can hold a transcript per model,
+/// and has no `.` ([`whisper_cpp::model_slug`]), so the source's name is
+/// everything before the slug's `.`.
 #[must_use]
 pub fn transcript_sidecar_path(source_path: &str, model_slug: &str) -> String {
     format!("{source_path}.{model_slug}{TRANSCRIPT_SIDECAR_SUFFIX}")
@@ -284,7 +292,6 @@ pub async fn run_transcription(
     let transcript = Transcript {
         version: TRANSCRIPT_VERSION,
         source: TranscriptSource {
-            name: file_name(&path).to_owned(),
             blake3: source_blake3,
             size: source_meta.len(),
             duration_ms,
@@ -516,11 +523,6 @@ fn read_bounded(path: &Path, max_bytes: u64) -> std::io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// The last component of an absolute path.
-fn file_name(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or(path)
-}
-
 fn io_failure(step: &str, error: &std::io::Error) -> JobFailure {
     JobFailure::new(format!("failed to {step}: {error}"))
 }
@@ -547,7 +549,7 @@ mod tests {
             "/w/standup.webm.large-v3-turbo.transcript.json"
         );
         assert!(
-            transcript_sidecar_path("/w/a.ogg", "base.en").ends_with(TRANSCRIPT_SIDECAR_SUFFIX)
+            transcript_sidecar_path("/w/a.ogg", "base-en").ends_with(TRANSCRIPT_SIDECAR_SUFFIX)
         );
     }
 
@@ -568,7 +570,6 @@ mod tests {
         let transcript = Transcript {
             version: TRANSCRIPT_VERSION,
             source: TranscriptSource {
-                name: "standup.webm".to_owned(),
                 blake3: source_blake3.clone(),
                 size: 10,
                 duration_ms: 4200,
@@ -576,7 +577,7 @@ mod tests {
             tool: TranscriptTool {
                 backend: "whisper_cpp",
                 version: Some("1.9.4".to_owned()),
-                model: "base.en".to_owned(),
+                model: "base-en".to_owned(),
                 model_blake3: model_blake3.clone(),
                 params: TranscriptParams {
                     language: "auto".to_owned(),
@@ -606,12 +607,12 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&transcript).unwrap(),
             serde_json::json!({
-                "version": 1,
-                "source": {"name": "standup.webm", "blake3": source_blake3, "size": 10, "duration_ms": 4200},
+                "version": 2,
+                "source": {"blake3": source_blake3, "size": 10, "duration_ms": 4200},
                 "tool": {
                     "backend": "whisper_cpp",
                     "version": "1.9.4",
-                    "model": "base.en",
+                    "model": "base-en",
                     "model_blake3": model_blake3,
                     "params": {"language": "auto"}
                 },

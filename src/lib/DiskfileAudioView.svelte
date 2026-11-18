@@ -61,8 +61,8 @@
 		if (!result.ok) finalize_error = result.error.message;
 	};
 
-	// the transcripts on disk, one per model, and the job writing another — named
-	// like one, a file's content says whether it's this audio's, so they load on view
+	// the transcripts on disk, one per model, and the job writing another — named for this audio,
+	// they load on view so their content can be read
 	const candidate_paths = $derived(diskfiles.to_transcript_candidate_paths(diskfile.path));
 	$effect(() => diskfiles.hold_all(candidate_paths));
 	const transcript_candidates: Array<Diskfile> = $derived(
@@ -112,7 +112,10 @@
 		try {
 			await diskfiles.create_file_at(
 				parse_or_throw(DiskfilePath, path),
-				transcript_to_text(selected.transcript)
+				transcript_to_text(
+					selected.transcript,
+					diskfile.path.slice(diskfile.path.lastIndexOf('/') + 1)
+				)
 			);
 		} catch (error) {
 			copy_error = to_error_message(error);

@@ -39,6 +39,7 @@ import {
 } from '#lib/action_specs.ts';
 import { is_job_finished, type JobSnapshot } from '#lib/job_types.ts';
 import { Transcript, TRANSCRIPT_SIDECAR_SUFFIX } from '#lib/transcript_types.ts';
+import { to_transcript_source_path } from '#lib/transcript_helpers.ts';
 
 const handle = inject_backend_handle();
 const setup_test = default_cross_process_setup(handle);
@@ -397,8 +398,10 @@ describe('transcription cross-backend', () => {
 				Transcript,
 				JSON.parse(await readFile(sidecar_path, 'utf-8'))
 			);
-			assert.equal(transcript.version, 1);
-			assert.equal(transcript.source.name, path.slice(path.lastIndexOf('/') + 1));
+			assert.equal(transcript.version, 2);
+			// the sidecar's own name is its link to the audio
+			assert.equal(to_transcript_source_path(sidecar_path), path);
+			assert.notProperty(transcript.source, 'name');
 			assert.equal(transcript.source.size, audio.length);
 			assert.equal(transcript.source.blake3, `blake3:${hash_blake3(audio)}`);
 			assert.ok(
