@@ -50,7 +50,8 @@
 
 	const OVERSCAN = 10;
 
-	const { diskfiles } = frontend_context.get();
+	const app = frontend_context.get();
+	const { diskfiles } = app;
 	const { tree } = diskfiles.editor;
 	const get_contextmenu = contextmenu_context.get_maybe();
 
@@ -149,7 +150,7 @@
 		if (row.kind === 'file') {
 			const path = row.path as DiskfilePath;
 			// the second click of a double click opens the preview for good, like the list's rows
-			if (diskfiles.has_path(path)) diskfiles.select(path, e.detail === 2);
+			if (diskfiles.has_path(path)) app.intents.tab_open({ path, permanent: e.detail === 2 });
 		} else if (row.kind === 'unfocused') {
 			if (e.detail <= 1) void tree.focus_repo(row);
 		} else if (e.detail <= 1) {

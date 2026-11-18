@@ -208,7 +208,7 @@
 								type="button"
 								class="plain sized_sm"
 								title="open the transcript file"
-								onclick={() => diskfiles.select(selected.file.path, true)}
+								onclick={() => app.intents.tab_open({ path: selected.file.path, permanent: true })}
 							>
 								open file
 							</button>

@@ -70,7 +70,7 @@
 	});
 
 	const open = (path: DiskfilePath): void => {
-		diskfiles.select(path, true);
+		app.intents.tab_open({ path, permanent: true });
 		void goto(resolve('/files'));
 	};
 

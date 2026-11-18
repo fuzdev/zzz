@@ -1740,12 +1740,13 @@ explorer (the accessible name says "unsaved changes", or "changed on disk").
 
 **Closing tabs.** Like VS Code: closing the last tab of a file with a draft
 (the close button, Ctrl+Q, or the contextmenu) asks **save**, **don't
-save**, or **cancel** (`DiskfilesEditor.request_close_tab`,
-`DiskfileCloseDialog`). "Don't save" discards the draft into the history
-(`discard_draft`) — for a file deleted on disk, the file is forgotten with
-it. The question lapses if the draft goes away meanwhile (saved or discarded
-elsewhere), and a cancel during the save keeps the tab. A reopen shows the
-draft if there is one, else the disk content. Unlike VS Code a draft doesn't
+save**, or **cancel** (the `tab_close` intent answers `asking`;
+`DiskfilesEditor.request_close_tab`, `DiskfileCloseDialog`). "Don't save"
+discards the draft into the history (`discard_draft`) — for a file deleted
+on disk, the file is forgotten with it. The question lapses if the draft
+goes away meanwhile (saved or discarded elsewhere), and a cancel during the
+save keeps the tab. A reopen shows the draft if there is one, else the disk
+content. Unlike VS Code a draft doesn't
 depend on its tab — it's app-level — so programmatic closes (`close_tab`,
 `close_all_tabs`, a preview tab reused for another file) close without
 asking and keep the draft, reachable from the explorer's ● and file parts.

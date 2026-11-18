@@ -11,7 +11,7 @@
 
 	const open_file = (path: DiskfilePath): void => {
 		if (!app.diskfiles.has_path(path)) return;
-		app.diskfiles.select(path, true);
+		app.intents.tab_open({ path, permanent: true });
 		void goto(resolve('/files'));
 	};
 </script>

@@ -263,6 +263,36 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'diskfile_details_toggle', 'execute', 'handling'>
 		) => ActionOutputs['diskfile_details_toggle'];
 	};
+	tab_open?: {
+		execute?: (
+			action_event: TypedActionEvent<'tab_open', 'execute', 'handling'>
+		) => ActionOutputs['tab_open'];
+	};
+	tab_select?: {
+		execute?: (
+			action_event: TypedActionEvent<'tab_select', 'execute', 'handling'>
+		) => ActionOutputs['tab_select'];
+	};
+	tab_pin?: {
+		execute?: (
+			action_event: TypedActionEvent<'tab_pin', 'execute', 'handling'>
+		) => ActionOutputs['tab_pin'];
+	};
+	tab_close?: {
+		execute?: (
+			action_event: TypedActionEvent<'tab_close', 'execute', 'handling'>
+		) => ActionOutputs['tab_close'];
+	};
+	tab_move?: {
+		execute?: (
+			action_event: TypedActionEvent<'tab_move', 'execute', 'handling'>
+		) => ActionOutputs['tab_move'];
+	};
+	tab_reopen_closed?: {
+		execute?: (
+			action_event: TypedActionEvent<'tab_reopen_closed', 'execute', 'handling'>
+		) => ActionOutputs['tab_reopen_closed'];
+	};
 	provider_load_status?: {
 		send_request?: (
 			action_event: TypedActionEvent<'provider_load_status', 'send_request', 'handling'>

@@ -56,7 +56,7 @@
 			reveal_in_tree
 			onselect={(path, open_not_preview) => {
 				// TODO this needs to navigate to the path of the file (so should be a link, not this onselect callback)
-				diskfiles.select(path, open_not_preview);
+				app.intents.tab_open({ path, permanent: open_not_preview });
 			}}
 		/>
 	{/snippet}

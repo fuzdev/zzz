@@ -915,7 +915,7 @@ export class DiskfileTreeState {
 
 	/**
 	 * Enter and Space: opens the active file — in a permanent tab if
-	 * `open_not_preview`, else a preview (see `Diskfiles.select`) — toggles
+	 * `open_not_preview`, else a preview, through the `tab_open` intent — toggles
 	 * the active folder, or focuses the active unfocused repo. Does nothing on
 	 * `creating`'s input row.
 	 */
@@ -928,7 +928,7 @@ export class DiskfileTreeState {
 			const path = row.path as DiskfilePath;
 			// a file row is a file on disk, or one kept for a draft or a tab
 			if (untrack(() => this.app.diskfiles.has_path(path))) {
-				this.app.diskfiles.select(path, open_not_preview);
+				this.app.intents.tab_open({ path, permanent: open_not_preview });
 			}
 		} else {
 			this.toggle(row);

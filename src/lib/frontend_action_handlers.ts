@@ -222,6 +222,54 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		execute: ({ data: { input } }) => ({ pinned: frontend.ui.toggle_desk_pinned(input?.pinned) })
 	},
 
+	tab_open: {
+		execute: ({ data: { input } }) => {
+			frontend.diskfiles.open_in_tab(input.path, {
+				permanent: input.permanent,
+				fragment: input.fragment
+			});
+		}
+	},
+
+	tab_select: {
+		execute: ({ data: { input } }) => {
+			const { diskfiles } = frontend;
+			if (!diskfiles.editor.tabs.by_path.has(input.path)) return { found: false };
+			// a file with a tab selects that tab, a preview staying a preview
+			diskfiles.select(input.path);
+			return { found: true };
+		}
+	},
+
+	tab_pin: {
+		execute: ({ data: { input } }) => {
+			const { editor } = frontend.diskfiles;
+			const tab = editor.tabs.by_path.get(input.path);
+			if (!tab) return { found: false };
+			editor.open_tab(tab.id);
+			return { found: true };
+		}
+	},
+
+	tab_close: {
+		execute: ({ data: { input } }) => {
+			const { editor } = frontend.diskfiles;
+			const tab = editor.tabs.by_path.get(input.path);
+			if (!tab) return { result: 'no_tab' };
+			return { result: editor.request_close_tab(tab.id) ? 'closed' : 'asking' };
+		}
+	},
+
+	tab_move: {
+		execute: ({ data: { input } }) => ({
+			moved: frontend.diskfiles.editor.tabs.move_tab(input.path, input.before_path)
+		})
+	},
+
+	tab_reopen_closed: {
+		execute: () => ({ path: frontend.diskfiles.editor.reopen_last_closed_tab() })
+	},
+
 	diskfile_details_toggle: {
 		execute: ({ data: { input } }) => ({
 			show: frontend.ui.toggle_diskfile_details(input?.show)

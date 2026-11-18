@@ -74,7 +74,7 @@
 						<ContextmenuEntry
 							icon={icon_file}
 							run={() => {
-								diskfiles.select(path, true);
+								app.intents.tab_open({ path, permanent: true });
 							}}
 						>
 							<span>select tab</span>
@@ -85,7 +85,7 @@
 						<ContextmenuEntry
 							icon={icon_file}
 							run={() => {
-								diskfiles.select(path, false);
+								app.intents.tab_open({ path });
 							}}
 						>
 							<span>preview tab</span>
@@ -96,7 +96,7 @@
 						<ContextmenuEntry
 							icon={icon_remove}
 							run={() => {
-								diskfiles.editor.request_close_tab(tab.id);
+								app.intents.tab_close({ path });
 							}}
 						>
 							<span>close tab</span>

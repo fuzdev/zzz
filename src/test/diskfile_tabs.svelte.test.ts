@@ -290,7 +290,7 @@ describe('DiskfileTabs', () => {
 			assert.deepEqual(tabs.tab_order, [tab1.id, preview.id, tab2.id, tab3.id]);
 		});
 
-		test('reorder_tabs changes tab order', () => {
+		test('move_tab moves a tab in front of another, or to the end', () => {
 			// Create three tabs
 			const tab1 = tabs.open_diskfile(TEST_PATH_1);
 			const tab2 = tabs.open_diskfile(TEST_PATH_2);
@@ -299,8 +299,8 @@ describe('DiskfileTabs', () => {
 			// Initial order
 			assert.deepEqual(tabs.tab_order, [tab1.id, tab2.id, tab3.id]);
 
-			// Reorder: move tab1 to position 2
-			tabs.reorder_tabs(0, 2);
+			// to the end
+			assert.ok(tabs.move_tab(TEST_PATH_1, null));
 
 			// New order should be: tab2, tab3, tab1
 			assert.deepEqual(tabs.tab_order, [tab2.id, tab3.id, tab1.id]);
@@ -309,6 +309,32 @@ describe('DiskfileTabs', () => {
 			assert.strictEqual(tabs.ordered_tabs[0]!.id, tab2.id);
 			assert.strictEqual(tabs.ordered_tabs[1]!.id, tab3.id);
 			assert.strictEqual(tabs.ordered_tabs[2]!.id, tab1.id);
+
+			// in front of another
+			assert.ok(tabs.move_tab(TEST_PATH_1, TEST_PATH_3));
+			assert.deepEqual(tabs.tab_order, [tab2.id, tab1.id, tab3.id]);
+			// already there, onto itself, or an unknown tab: nothing moves
+			assert.ok(!tabs.move_tab(TEST_PATH_1, TEST_PATH_3));
+			assert.ok(!tabs.move_tab(TEST_PATH_1, TEST_PATH_1));
+			assert.ok(!tabs.move_tab(TEST_PATH_1, parse_or_throw(DiskfilePath, '/test/none.ts')));
+			assert.ok(!tabs.move_tab(parse_or_throw(DiskfilePath, '/test/none.ts'), null));
+			assert.deepEqual(tabs.tab_order, [tab2.id, tab1.id, tab3.id]);
+		});
+
+		test('move_tab compares against the visible order, not a lagging `tab_order`', () => {
+			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			// a tab missing from `tab_order` shows last
+			tabs.tab_order = [tab1.id];
+			assert.deepEqual(
+				tabs.ordered_tabs.map((t) => t.id),
+				[tab1.id, tab2.id]
+			);
+			// already last in view: nothing moves, nothing is written
+			assert.ok(!tabs.move_tab(TEST_PATH_2, null));
+			assert.deepEqual(tabs.tab_order, [tab1.id]);
+			assert.ok(tabs.move_tab(TEST_PATH_2, TEST_PATH_1));
+			assert.deepEqual(tabs.tab_order, [tab2.id, tab1.id]);
 		});
 	});
 
@@ -1125,7 +1151,7 @@ describe('DiskfileTabs', () => {
 
 			// Time some operations to ensure they're reasonably fast
 			const start_reorder = performance.now();
-			tabs.reorder_tabs(0, tab_count - 1);
+			tabs.move_tab(created_tabs[0]!.path, null);
 			const reorder_time = performance.now() - start_reorder;
 
 			// Close all tabs
@@ -1217,8 +1243,7 @@ describe('DiskfileTabs', () => {
 			// Initial order
 			assert.deepEqual(tabs.tab_order, [tab1.id, tab2.id, tab3.id]);
 
-			// Use private method through public API - reorder simulates position_tab behavior
-			tabs.reorder_tabs(2, 0); // Move tab3 to position after tab1 (index 1)
+			tabs.move_tab(TEST_PATH_3, TEST_PATH_1);
 
 			assert.strictEqual(tabs.tab_order[0], tab3.id);
 			assert.strictEqual(tabs.tab_order[1], tab1.id);

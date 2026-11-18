@@ -1373,14 +1373,29 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	): boolean {
 		// on disk in the index — never one kept off it for a draft or a tab
 		if (!untrack(() => this.index.has(path))) return false;
-		const diskfile_path = path as DiskfilePath;
+		this.open_in_tab(path as DiskfilePath, {
+			permanent: options?.open_not_preview,
+			fragment: options?.fragment
+		});
+		return true;
+	}
+
+	/**
+	 * Opens the file at `path` in a tab and selects it — a preview unless
+	 * `permanent` — whether or not it's indexed (a tab may name a path the
+	 * index doesn't hold). A markdown file's view then reveals the heading
+	 * `fragment` names. The `tab_open` intent's implementation.
+	 */
+	open_in_tab(
+		path: DiskfilePath,
+		options?: { permanent?: boolean | undefined; fragment?: string | null | undefined }
+	): void {
 		const fragment = options?.fragment;
-		if (fragment && to_diskfile_content_kind(diskfile_path) === 'markdown') {
-			const editor_state = this.get_editor_state_at(diskfile_path);
+		if (fragment && to_diskfile_content_kind(path) === 'markdown') {
+			const editor_state = this.get_editor_state_at(path);
 			if (editor_state) editor_state.markdown_pending_fragment = fragment;
 		}
-		this.select(diskfile_path, options?.open_not_preview);
-		return true;
+		this.select(path, options?.permanent ?? false);
 	}
 
 	/**

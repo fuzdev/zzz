@@ -323,6 +323,48 @@ export type UiToggleInput = Infer<typeof UiToggleInput>;
 export const UiToggleOutput = object({ show: boolean });
 export type UiToggleOutput = Infer<typeof UiToggleOutput>;
 
+/**
+ * Input for `tab_open`: the file to open in a tab — a preview unless
+ * `permanent` — and a heading for a markdown file's view to reveal.
+ */
+export const TabOpenInput = object({
+	path: DiskfilePath,
+	permanent: optional(boolean),
+	fragment: optional(string)
+});
+export type TabOpenInput = Infer<typeof TabOpenInput>;
+
+/** Input for the intents that act on one tab, addressed by its file's path. */
+export const TabPathInput = object({ path: DiskfilePath });
+export type TabPathInput = Infer<typeof TabPathInput>;
+
+/** Output for `tab_select` and `tab_pin`: whether a tab for the path was there to act on. */
+export const TabFoundOutput = object({ found: boolean });
+export type TabFoundOutput = Infer<typeof TabFoundOutput>;
+
+/**
+ * Output for `tab_close`: `closed`, or `asking` — the file has a draft, so
+ * the close dialog asks first — or `no_tab`.
+ */
+export const TabCloseOutput = object({ result: one_of(['closed', 'asking', 'no_tab']) });
+export type TabCloseOutput = Infer<typeof TabCloseOutput>;
+
+/**
+ * Input for `tab_move`: the tab to move, and the tab it moves in front of
+ * (`null` for the end) — by path, so an entry replayed later can't hit
+ * whatever tab came to sit at an index.
+ */
+export const TabMoveInput = object({ path: DiskfilePath, before_path: nullable(DiskfilePath) });
+export type TabMoveInput = Infer<typeof TabMoveInput>;
+
+/** Output for `tab_move`: whether both tabs were there and the order changed. */
+export const TabMoveOutput = object({ moved: boolean });
+export type TabMoveOutput = Infer<typeof TabMoveOutput>;
+
+/** Output for `tab_reopen_closed`: the reopened tab's path, `null` with nothing to reopen. */
+export const TabReopenClosedOutput = object({ path: nullable(DiskfilePath) });
+export type TabReopenClosedOutput = Infer<typeof TabReopenClosedOutput>;
+
 /** Input for `desk_pin_toggle`. Optional — omit it to toggle, pass `{pinned}` to set. */
 export const DeskPinToggleInput = optional(object({ pinned: optional(boolean) }));
 export type DeskPinToggleInput = Infer<typeof DeskPinToggleInput>;
@@ -885,6 +927,92 @@ export const desk_pin_toggle_action_spec = {
 	description: 'Pin or unpin the desk menu: a pinned one stays open beside the page.'
 } satisfies IntentActionSpec;
 
+export const tab_open_action_spec = {
+	method: 'tab_open',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: TabOpenInput,
+	output: fuz_void,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description:
+		'Open a file in a tab and select it: a preview tab, which the next preview replaces, unless `permanent`. A file already in a tab selects that tab.'
+} satisfies IntentActionSpec;
+
+export const tab_select_action_spec = {
+	method: 'tab_select',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: TabPathInput,
+	output: TabFoundOutput,
+	async: false,
+	version: 1,
+	history: 'navigation',
+	description: "Select a file's tab."
+} satisfies IntentActionSpec;
+
+export const tab_pin_action_spec = {
+	method: 'tab_pin',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: TabPathInput,
+	output: TabFoundOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description: "Make a file's preview tab permanent, and select it."
+} satisfies IntentActionSpec;
+
+export const tab_close_action_spec = {
+	method: 'tab_close',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: TabPathInput,
+	output: TabCloseOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description:
+		"Close a file's tab — or, for a file with a draft, ask first: save, don't save, or cancel."
+} satisfies IntentActionSpec;
+
+export const tab_move_action_spec = {
+	method: 'tab_move',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: TabMoveInput,
+	output: TabMoveOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description: 'Move a tab in front of another, or to the end.'
+} satisfies IntentActionSpec;
+
+export const tab_reopen_closed_action_spec = {
+	method: 'tab_reopen_closed',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: fuz_void,
+	output: TabReopenClosedOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description: 'Reopen the most recently closed tab whose file is not open.'
+} satisfies IntentActionSpec;
+
 export const diskfile_details_toggle_action_spec = {
 	method: 'diskfile_details_toggle',
 	kind: 'local_call',
@@ -1113,7 +1241,13 @@ export const all_intent_specs: Array<IntentActionSpec> = [
 	sidebar_toggle_action_spec,
 	desk_toggle_action_spec,
 	desk_pin_toggle_action_spec,
-	diskfile_details_toggle_action_spec
+	diskfile_details_toggle_action_spec,
+	tab_open_action_spec,
+	tab_select_action_spec,
+	tab_pin_action_spec,
+	tab_close_action_spec,
+	tab_move_action_spec,
+	tab_reopen_closed_action_spec
 ];
 
 /**

@@ -37,6 +37,12 @@ export const ActionSpecs: ActionSpecs = {
 	desk_toggle: specs.desk_toggle_action_spec,
 	desk_pin_toggle: specs.desk_pin_toggle_action_spec,
 	diskfile_details_toggle: specs.diskfile_details_toggle_action_spec,
+	tab_open: specs.tab_open_action_spec,
+	tab_select: specs.tab_select_action_spec,
+	tab_pin: specs.tab_pin_action_spec,
+	tab_close: specs.tab_close_action_spec,
+	tab_move: specs.tab_move_action_spec,
+	tab_reopen_closed: specs.tab_reopen_closed_action_spec,
 	provider_load_status: specs.provider_load_status_action_spec,
 	terminal_create: specs.terminal_create_action_spec,
 	terminal_data_send: specs.terminal_data_send_action_spec,
@@ -78,6 +84,12 @@ export type ActionSpecs = {
 	readonly desk_toggle: typeof specs.desk_toggle_action_spec;
 	readonly desk_pin_toggle: typeof specs.desk_pin_toggle_action_spec;
 	readonly diskfile_details_toggle: typeof specs.diskfile_details_toggle_action_spec;
+	readonly tab_open: typeof specs.tab_open_action_spec;
+	readonly tab_select: typeof specs.tab_select_action_spec;
+	readonly tab_pin: typeof specs.tab_pin_action_spec;
+	readonly tab_close: typeof specs.tab_close_action_spec;
+	readonly tab_move: typeof specs.tab_move_action_spec;
+	readonly tab_reopen_closed: typeof specs.tab_reopen_closed_action_spec;
 	readonly provider_load_status: typeof specs.provider_load_status_action_spec;
 	readonly terminal_create: typeof specs.terminal_create_action_spec;
 	readonly terminal_data_send: typeof specs.terminal_data_send_action_spec;
@@ -126,6 +138,12 @@ export interface ActionInputs {
 	desk_toggle: Infer<typeof specs.desk_toggle_action_spec.input>;
 	desk_pin_toggle: Infer<typeof specs.desk_pin_toggle_action_spec.input>;
 	diskfile_details_toggle: Infer<typeof specs.diskfile_details_toggle_action_spec.input>;
+	tab_open: Infer<typeof specs.tab_open_action_spec.input>;
+	tab_select: Infer<typeof specs.tab_select_action_spec.input>;
+	tab_pin: Infer<typeof specs.tab_pin_action_spec.input>;
+	tab_close: Infer<typeof specs.tab_close_action_spec.input>;
+	tab_move: Infer<typeof specs.tab_move_action_spec.input>;
+	tab_reopen_closed: Infer<typeof specs.tab_reopen_closed_action_spec.input>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.input>;
@@ -172,6 +190,12 @@ export interface ActionCallInputs {
 	desk_toggle: InferInput<typeof specs.desk_toggle_action_spec.input>;
 	desk_pin_toggle: InferInput<typeof specs.desk_pin_toggle_action_spec.input>;
 	diskfile_details_toggle: InferInput<typeof specs.diskfile_details_toggle_action_spec.input>;
+	tab_open: InferInput<typeof specs.tab_open_action_spec.input>;
+	tab_select: InferInput<typeof specs.tab_select_action_spec.input>;
+	tab_pin: InferInput<typeof specs.tab_pin_action_spec.input>;
+	tab_close: InferInput<typeof specs.tab_close_action_spec.input>;
+	tab_move: InferInput<typeof specs.tab_move_action_spec.input>;
+	tab_reopen_closed: InferInput<typeof specs.tab_reopen_closed_action_spec.input>;
 	provider_load_status: InferInput<typeof specs.provider_load_status_action_spec.input>;
 	terminal_create: InferInput<typeof specs.terminal_create_action_spec.input>;
 	terminal_data_send: InferInput<typeof specs.terminal_data_send_action_spec.input>;
@@ -218,6 +242,12 @@ export interface ActionOutputs {
 	desk_toggle: Infer<typeof specs.desk_toggle_action_spec.output>;
 	desk_pin_toggle: Infer<typeof specs.desk_pin_toggle_action_spec.output>;
 	diskfile_details_toggle: Infer<typeof specs.diskfile_details_toggle_action_spec.output>;
+	tab_open: Infer<typeof specs.tab_open_action_spec.output>;
+	tab_select: Infer<typeof specs.tab_select_action_spec.output>;
+	tab_pin: Infer<typeof specs.tab_pin_action_spec.output>;
+	tab_close: Infer<typeof specs.tab_close_action_spec.output>;
+	tab_move: Infer<typeof specs.tab_move_action_spec.output>;
+	tab_reopen_closed: Infer<typeof specs.tab_reopen_closed_action_spec.output>;
 	provider_load_status: Infer<typeof specs.provider_load_status_action_spec.output>;
 	terminal_create: Infer<typeof specs.terminal_create_action_spec.output>;
 	terminal_data_send: Infer<typeof specs.terminal_data_send_action_spec.output>;
@@ -338,6 +368,32 @@ export interface ActionEventDatas {
 		'diskfile_details_toggle',
 		ActionInputs['diskfile_details_toggle'],
 		ActionOutputs['diskfile_details_toggle']
+	>;
+	tab_open: ActionEventLocalCallData<
+		'tab_open',
+		ActionInputs['tab_open'],
+		ActionOutputs['tab_open']
+	>;
+	tab_select: ActionEventLocalCallData<
+		'tab_select',
+		ActionInputs['tab_select'],
+		ActionOutputs['tab_select']
+	>;
+	tab_pin: ActionEventLocalCallData<'tab_pin', ActionInputs['tab_pin'], ActionOutputs['tab_pin']>;
+	tab_close: ActionEventLocalCallData<
+		'tab_close',
+		ActionInputs['tab_close'],
+		ActionOutputs['tab_close']
+	>;
+	tab_move: ActionEventLocalCallData<
+		'tab_move',
+		ActionInputs['tab_move'],
+		ActionOutputs['tab_move']
+	>;
+	tab_reopen_closed: ActionEventLocalCallData<
+		'tab_reopen_closed',
+		ActionInputs['tab_reopen_closed'],
+		ActionOutputs['tab_reopen_closed']
 	>;
 	provider_load_status: ActionEventRequestResponseData<
 		'provider_load_status',

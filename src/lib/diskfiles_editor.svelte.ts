@@ -112,13 +112,6 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	}
 
 	/**
-	 * Reorders tabs.
-	 */
-	reorder_tabs(from_index: number, to_index: number): void {
-		this.tabs.reorder_tabs(from_index, to_index);
-	}
-
-	/**
 	 * Navigates back or forward to a tab (see `DiskfileTabs.navigate_to_tab`),
 	 * and selects its file.
 	 *
@@ -180,8 +173,11 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	 * Reopens the last closed tab whose file isn't open (see
 	 * `DiskfileTabs.reopen_last_closed_tab`), and selects its file.
 	 */
-	reopen_last_closed_tab(): void {
-		if (this.tabs.reopen_last_closed_tab()) this.app.diskfiles.follow_selected_tab();
+	reopen_last_closed_tab(): DiskfilePath | null {
+		const tab = this.tabs.reopen_last_closed_tab();
+		if (!tab) return null;
+		this.app.diskfiles.follow_selected_tab();
+		return tab.path;
 	}
 
 	/**

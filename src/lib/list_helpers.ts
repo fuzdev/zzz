@@ -141,3 +141,25 @@ export const find_scroll_container = (el: Element): HTMLElement | null => {
 	}
 	return null;
 };
+
+/**
+ * A drag's index move, as a move by key: the item at `from_index`, and the
+ * key it lands in front of once it's at `to_index` (`null` for the end) —
+ * the same result as `to_reordered_list(keys, from_index, to_index)` for
+ * indices within the list, stated so it can't hit another item when
+ * replayed after the list changed.
+ *
+ * @returns `null` for indices outside the list, or a move to where it is
+ */
+export const to_keyed_move = <T>(
+	keys: ReadonlyArray<T>,
+	from_index: number,
+	to_index: number
+): { key: T; before: T | null } | null => {
+	if (from_index === to_index) return null;
+	if (from_index < 0 || to_index < 0 || from_index >= keys.length || to_index >= keys.length) {
+		return null;
+	}
+	const rest = keys.filter((_, i) => i !== from_index);
+	return { key: keys[from_index]!, before: rest[to_index] ?? null };
+};

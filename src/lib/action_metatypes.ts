@@ -33,6 +33,12 @@ export const ActionMethod = one_of([
 	'desk_toggle',
 	'desk_pin_toggle',
 	'diskfile_details_toggle',
+	'tab_open',
+	'tab_select',
+	'tab_pin',
+	'tab_close',
+	'tab_move',
+	'tab_reopen_closed',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -108,7 +114,13 @@ export const LocalCallActionMethod = one_of([
 	'sidebar_toggle',
 	'desk_toggle',
 	'desk_pin_toggle',
-	'diskfile_details_toggle'
+	'diskfile_details_toggle',
+	'tab_open',
+	'tab_select',
+	'tab_pin',
+	'tab_close',
+	'tab_move',
+	'tab_reopen_closed'
 ]);
 export type LocalCallActionMethod = Infer<typeof LocalCallActionMethod>;
 
@@ -139,6 +151,12 @@ export const FrontendActionMethod = one_of([
 	'desk_toggle',
 	'desk_pin_toggle',
 	'diskfile_details_toggle',
+	'tab_open',
+	'tab_select',
+	'tab_pin',
+	'tab_close',
+	'tab_move',
+	'tab_reopen_closed',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -349,6 +367,12 @@ export interface FrontendActionsApi {
 	diskfile_details_toggle: (
 		input?: ActionCallInputs['diskfile_details_toggle']
 	) => ActionOutputs['diskfile_details_toggle'];
+	tab_open: (input: ActionCallInputs['tab_open']) => ActionOutputs['tab_open'];
+	tab_select: (input: ActionCallInputs['tab_select']) => ActionOutputs['tab_select'];
+	tab_pin: (input: ActionCallInputs['tab_pin']) => ActionOutputs['tab_pin'];
+	tab_close: (input: ActionCallInputs['tab_close']) => ActionOutputs['tab_close'];
+	tab_move: (input: ActionCallInputs['tab_move']) => ActionOutputs['tab_move'];
+	tab_reopen_closed: (input?: void) => ActionOutputs['tab_reopen_closed'];
 	provider_load_status: (
 		input: ActionCallInputs['provider_load_status'],
 		options?: RpcClientCallOptions

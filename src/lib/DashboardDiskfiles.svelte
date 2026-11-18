@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { swallow, is_editable } from '@fuzdev/fuz_util/dom.ts';
-	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 	import { random_item } from '@fuzdev/fuz_util/random.ts';
 	import PendingAnimation from '@fuzdev/fuz_ui/PendingAnimation.svelte';
 	import {
@@ -21,6 +20,8 @@
 	import DiskfilePickerDialog from './DiskfilePickerDialog.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import { prompt_create_diskfile } from './diskfile_helpers.ts';
+	import type { DiskfilePath } from './diskfile_types.ts';
+	import { to_keyed_move } from './list_helpers.ts';
 
 	const app = frontend_context.get();
 	const { diskfiles, capabilities } = app;
@@ -46,11 +47,24 @@
 	 * dialog handles focus — then focuses the newly selected tab's editor, since
 	 * the removed tab (and its close button) would otherwise drop focus to `body`.
 	 */
-	const close_tab = (tab_id: Uuid): void => {
-		editor.request_close_tab(tab_id);
-		if (editor.tabs.items.by_id.has(tab_id)) return; // asking first
-		const path = editor.tabs.selected_path;
-		if (path) app.ui.pending_element_to_focus_key = path;
+	const close_tab = (path: DiskfilePath): void => {
+		if (app.intents.tab_close({ path }).result !== 'closed') return; // asking first, or gone
+		const selected = editor.tabs.selected_path;
+		if (selected) app.ui.pending_element_to_focus_key = selected;
+	};
+
+	/**
+	 * Moves the tab dragged from `from_index` to `to_index`, as the
+	 * `tab_move` intent wants it: by path, in front of the tab that follows it
+	 * there (or to the end).
+	 */
+	const move_tab = (from_index: number, to_index: number): void => {
+		const move = to_keyed_move(
+			editor.tabs.ordered_tabs.map((tab) => tab.path),
+			from_index,
+			to_index
+		);
+		if (move) app.intents.tab_move({ path: move.key, before_path: move.before });
 	};
 </script>
 
@@ -65,14 +79,14 @@
 			swallow(e);
 			const selected_tab = editor.tabs.selected_tab;
 			if (selected_tab) {
-				close_tab(selected_tab.id);
+				close_tab(selected_tab.path);
 			}
 		}
 
 		// ctrl+shift+Q: reopen last closed tab
 		if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
 			swallow(e);
-			editor.reopen_last_closed_tab();
+			app.intents.tab_reopen_closed();
 		}
 	}}
 />
@@ -119,7 +133,7 @@
 				<menu
 					class="unstyled flex flex:1 min-width:0 overflow-x:auto scrollbar-width:thin"
 					{@attach tabs_reorderable.list({
-						onreorder: (from_index, to_index) => editor.reorder_tabs(from_index, to_index)
+						onreorder: move_tab
 					})}
 				>
 					{#each editor.tabs.ordered_tabs as tab, index (tab.id)}
@@ -128,9 +142,9 @@
 								<!-- TODO notice the different APIs here, needs fixing, diskfiles is higher in the tree -->
 								<DiskfileTabListitem
 									{tab}
-									onselect={(tab) => diskfiles.select(tab.path)}
-									onclose={(tab) => close_tab(tab.id)}
-									onopen={(tab) => editor.open_tab(tab.id)}
+									onselect={(tab) => app.intents.tab_select({ path: tab.path })}
+									onclose={(tab) => close_tab(tab.path)}
+									onopen={(tab) => app.intents.tab_pin({ path: tab.path })}
 								/>
 							</div>
 						</li>
@@ -202,7 +216,7 @@
 								class="inline palette_f"
 								onclick={() => {
 									const record = random_item(app.diskfiles.on_disk);
-									diskfiles.select(record.id);
+									app.intents.tab_open({ path: record.id });
 								}}
 							>
 								go fish
@@ -236,7 +250,7 @@
 	bind:show={show_diskfile_picker}
 	onpick={(path) => {
 		if (!path) return false;
-		diskfiles.select(path);
+		app.intents.tab_open({ path });
 		return true;
 	}}
 />

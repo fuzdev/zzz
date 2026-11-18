@@ -14,7 +14,6 @@ import { create_uuid, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
 import { IndexedCollection } from './indexed_collection.svelte.ts';
-import { to_reordered_list } from './list_helpers.ts';
 import { DiskfileTab } from './diskfile_tab.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { create_map_by_property } from './iterable_helpers.ts';
@@ -459,10 +458,25 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	}
 
 	/**
-	 * Reorders tabs by dragging.
+	 * Moves the tab of `path` in front of the tab of `before_path`, or to the
+	 * end for `null` — addressed by path, not index, so the move means the same
+	 * whatever else moved meanwhile.
+	 *
+	 * @returns whether both tabs exist and the order changed
 	 */
-	reorder_tabs(from_index: number, to_index: number): void {
-		this.tab_order = to_reordered_list(this.tab_order, from_index, to_index);
+	move_tab(path: DiskfilePath, before_path: DiskfilePath | null): boolean {
+		const tab = this.by_path.get(path);
+		if (!tab) return false;
+		const before = before_path === null ? null : this.by_path.get(before_path);
+		if (before === undefined || before === tab) return false;
+		// the visible order, which `tab_order` may lag (a tab missing from it)
+		const current = this.ordered_tabs.map((t) => t.id);
+		const order = current.filter((id) => id !== tab.id);
+		const index = before === null ? order.length : order.indexOf(before.id);
+		order.splice(index, 0, tab.id);
+		if (order.every((id, i) => id === current[i])) return false;
+		this.tab_order = order;
+		return true;
 	}
 
 	/**

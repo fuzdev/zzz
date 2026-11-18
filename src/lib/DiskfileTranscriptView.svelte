@@ -162,7 +162,7 @@
 							type="button"
 							class="plain"
 							title="open the audio file"
-							onclick={() => diskfiles.select(source.path, true)}
+							onclick={() => app.intents.tab_open({ path: source.path, permanent: true })}
 						>
 							open audio
 						</button>
