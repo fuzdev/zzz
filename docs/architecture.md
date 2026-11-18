@@ -1085,7 +1085,8 @@ writable (the boot refuses an app dir inside a credential directory).
 `.env` files elsewhere are ordinary files.
 
 The daemon home holds the CLI's files beside it: `config.json`, `.env`,
-`bootstrap_token`, `static/` (the UI build), `bin/`, and `run/`
+`bootstrap_token`, `static/` (the UI build), an optional `bin/` (searched
+for `zzzd`), and `run/`
 (`daemon.json` — boot id, pid, start time, port — `daemon.log`, and an
 opener's `opener.log`).
 
@@ -1141,8 +1142,8 @@ to models.
 Two separate concerns:
 
 - App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files: `cache/` holds scratch
-  for tool runs, `recordings/` what the recordings page records, and
-  `state/` and `run/` are reserved
+  for tool runs, `recordings/` what the recordings page records, `run/`
+  the test binary's `daemon_token`, and `state/` is reserved
 - Scoped dirs (`PUBLIC_ZZZ_SCOPED_DIRS`) — User file access (comma-separated paths)
 
 ### Root scope

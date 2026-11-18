@@ -310,8 +310,9 @@ create the admin account with the token in `~/.zzz/bootstrap_token`.
 
 `~/.zzz/.env` names `postgres://localhost/zzz`, and `.env.development`
 `zzz_dev`, so dev's accounts and migrations never reach the daemon you use.
-A `.env.development` written before the split still names `zzz`; change its
-`DATABASE_URL` (and `createdb zzz_dev`) to separate them.
+A `.env.development` whose `DATABASE_URL` names `zzz` shares the CLI
+daemon's database; point it at `zzz_dev` (and `createdb zzz_dev`) to keep
+them apart.
 
 To upgrade, run `cargo xtask install` again, then `zzz daemon restart`: a
 running daemon keeps serving the binary it started from, and `zzz` reuses
@@ -336,6 +337,7 @@ zzz daemon start             # start daemon (foreground)
 zzz daemon stop              # stop the recorded daemon
 zzz daemon restart           # stop it, then start one detached (a rebuilt zzzd, a changed ~/.zzz/.env)
 zzz daemon status            # show daemon info (exit 0 running, 1 not responding, 3 not running, 4 unknown)
+zzz status                   # the same report (--json for machine-readable output, on either)
 zzz init                     # initialize ~/.zzz/
 zzz version                  # print the CLI's version (also --version / -v)
 ```
@@ -814,6 +816,9 @@ Create `src/routes/my_route/+page.svelte`:
 
 <h1>My Route</h1>
 ```
+
+To list it in the main nav, add an entry to `main_nav_items_default` in
+`src/lib/nav.ts`.
 
 ## Common Patterns
 

@@ -68,7 +68,8 @@ the setup.
 Browse to `http://localhost:5460`.
 
 On first run Zzz has no account yet, so it shows a bootstrap form. Copy the
-one-time token it points to (`cat .zzz/bootstrap_token`), paste it in, and pick a
+one-time token it points to (`cat .zzz/bootstrap_token` in dev, or
+`~/.zzz/bootstrap_token` for the CLI's daemon), paste it in, and pick a
 username and password to create your admin account — then you're logged in and
 ready.
 

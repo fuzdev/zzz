@@ -635,9 +635,7 @@ commands):
   an open socket never re-checks its session.
 - **error.data omits validation details** — for -32602 (invalid params)
   errors, `error.data` omits the schema issues for security (no schema leak to
-  unauthenticated callers). The integration test `normalize_error_data`
-  function tolerates either shape. Future: env-conditional — include the
-  issues in dev, strip in prod.
+  unauthenticated callers).
 - **filer skips symlinks** — the walker and event handling never follow or
   index a symlink (file or directory), and no watch is added through one
   (watches go only on real directories the walker lists), consistent with
