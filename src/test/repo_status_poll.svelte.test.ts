@@ -245,7 +245,7 @@ describe('format_repo_status', () => {
 					stashes: 7
 				})
 			),
-			'on wip, rebase, 4 conflicted, 1 staged, 2 modified, 3 untracked, 5 ahead, 6 behind, 7 stashed'
+			'on wip, rebase in progress, 1 staged, 2 unstaged, 3 untracked, 4 conflicted, diverged +5 −6, stashes 7'
 		);
 		assert.strictEqual(
 			format_repo_status(status({ detached: true, branch: null, on_branch: false })),
@@ -262,16 +262,79 @@ describe('format_repo_status', () => {
 		);
 		assert.strictEqual(
 			format_repo_status(status({ followed: { kind: 'unmapped', ahead: 0, behind: 0 } })),
-			'upstream unmapped'
+			'outside refspec'
 		);
 		assert.strictEqual(
 			format_repo_status(status({ followed: { kind: 'shallow', ahead: 0, behind: 0 } })),
-			'shallow'
+			'shallow, tips differ'
 		);
-		assert.strictEqual(format_repo_status(status({ in_progress: 'cherry_pick' })), 'cherry pick');
+		assert.strictEqual(
+			format_repo_status(status({ followed: { kind: 'ahead', ahead: 3, behind: 0 } })),
+			'ahead 3'
+		);
+		assert.strictEqual(
+			format_repo_status(status({ followed: { kind: 'behind', ahead: 0, behind: 2 } })),
+			'behind 2'
+		);
+		assert.strictEqual(
+			format_repo_status(status({ in_progress: 'cherry_pick' })),
+			'cherry pick in progress'
+		);
 		assert.strictEqual(
 			format_repo_status(status({ followed: { kind: 'gone', ahead: 0, behind: 0 } })),
 			'upstream gone'
+		);
+	});
+
+	test('names why repos sync would leave it to a person, inline, not what the line already says', () => {
+		assert.strictEqual(
+			format_repo_status(
+				status({
+					in_progress: 'merge',
+					needs_human: ['origin_mismatch', 'some_new_reason']
+				})
+			),
+			'merge in progress, origin mismatch, some new reason'
+		);
+	});
+
+	test('a worktree operation shows by its reason; a followed relation is said once', () => {
+		assert.strictEqual(
+			format_repo_status(status({ needs_human: ['operation_in_progress'] })),
+			'operation in progress in a worktree'
+		);
+		assert.strictEqual(
+			format_repo_status(status({ in_progress: 'merge', needs_human: ['operation_in_progress'] })),
+			'merge in progress, operation in progress in a worktree',
+			"the primary's and a worktree's, both said"
+		);
+		assert.strictEqual(
+			format_repo_status(
+				status({
+					followed: { kind: 'gone', ahead: 0, behind: 0 },
+					needs_human: ['default_branch_gone']
+				})
+			),
+			'upstream gone'
+		);
+		assert.strictEqual(
+			format_repo_status(
+				status({
+					followed: { kind: 'untracked', ahead: 0, behind: 0 },
+					needs_human: ['default_branch_no_upstream']
+				})
+			),
+			'no upstream'
+		);
+		assert.strictEqual(
+			format_repo_status(status({ followed: null, needs_human: ['default_branch_gone'] })),
+			"default branch's upstream gone",
+			'without a followed relation, the reason is the only signal'
+		);
+		assert.strictEqual(
+			format_repo_status(status({ needs_human: ['constructor'] })),
+			'constructor',
+			'an unknown kind, never an object built-in'
 		);
 	});
 });

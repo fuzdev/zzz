@@ -129,4 +129,32 @@ describe('?open= on the projects page', () => {
 		assert.deepEqual(opened, []);
 		assert.include(target.textContent, 'only your own "~" is expanded');
 	});
+
+	test('the open form opens a file in a tab too, as the param does', async () => {
+		indexed.add('/home/me/dev/zzz/README.md');
+		mount_at('');
+		const input = target.querySelector('input')!;
+		input.value = '~/dev/zzz/README.md';
+		input.dispatchEvent(new Event('input'));
+		flushSync();
+		target.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+		await tick();
+		assert.deepEqual(opened, ['/home/me/dev/zzz/README.md']);
+		assert.deepEqual(selected, [['/home/me/dev/zzz/README.md', true]]);
+		assert.deepEqual(gone_to(), ['/files']);
+	});
+
+	test('the open form leaves a directory on the projects page, the input cleared', async () => {
+		mount_at('');
+		const input = target.querySelector('input')!;
+		input.value = '~/dev/zzz/';
+		input.dispatchEvent(new Event('input'));
+		flushSync();
+		target.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+		await tick();
+		assert.deepEqual(opened, ['/home/me/dev/zzz/']);
+		assert.deepEqual(selected, []);
+		assert.deepEqual(gone_to(), []);
+		assert.strictEqual(target.querySelector('input')!.value, '');
+	});
 });

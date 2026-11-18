@@ -4,11 +4,7 @@
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { DiskfileDirectoryPath } from './diskfile_types.ts';
 	import type { Project } from './project.svelte.ts';
-	import {
-		format_status_kind,
-		format_repo_status,
-		RepoStatusPoll
-	} from './repo_status_poll.svelte.ts';
+	import { format_repo_status, RepoStatusPoll } from './repo_status_poll.svelte.ts';
 
 	const {
 		project,
@@ -91,18 +87,13 @@
 					<small class="text_50">…</small>
 				{:else if status.state === 'ok'}
 					{@const summary = format_repo_status(status)}
-					<small
-						class:text_50={!summary}
-						title={status.needs_human.map(format_status_kind).join(', ') || undefined}
-					>
-						{summary || 'clean'}{status.needs_human.length ? ' — needs you' : ''}
-					</small>
+					<small class:text_50={!summary}>{summary || 'clean'}</small>
 				{:else if status.state === 'failed'}
 					<small class="color_c_60" title={status.error ?? undefined}>status failed</small>
 				{:else if status.state === 'not_a_repo'}
 					<small class="text_50">not a repo</small>
 				{:else if status.state === 'missing'}
-					<small class="text_50">gone</small>
+					<small class="text_50">not cloned</small>
 				{/if}
 				{#if status?.probing && status.state !== 'pending'}
 					<small class="text_50" title="reading its status">…</small>

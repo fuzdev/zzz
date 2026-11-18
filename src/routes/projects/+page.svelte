@@ -32,14 +32,23 @@
 	};
 
 	/**
-	 * Open the project holding `path` and activate it — by the project the
-	 * daemon returns, whose root may be far above `path` — saying where it
-	 * landed and why.
+	 * Open what `path` names, as the form and the `?open=` param both do: the
+	 * project holding it, activated — by the project the daemon returns,
+	 * whose root may be far above `path` — saying where it landed and why;
+	 * then a file the open indexed in a tab on `/files`. A directory, or a
+	 * file the index skips (an ignored one), leaves the projects page showing
+	 * where it landed.
 	 *
+	 * @param before_file - settled before going on to `/files` (the param's
+	 * strip of itself from the URL)
 	 * @returns an error message, or `null` on success
 	 */
-	const open_and_activate = async (path: DiskfilePath): Promise<string | null> => {
+	const open_path = async (
+		path: DiskfilePath,
+		before_file?: Promise<unknown>
+	): Promise<string | null> => {
 		opened_message = null;
+		// always opened, even under an open root: the path may focus another repo
 		const result = await app.projects.open(path);
 		if (!result.ok) return result.error.message;
 		if (result.value.project) {
@@ -47,6 +56,12 @@
 		}
 		// `null` when it's closed already — a close this client applied after the open landed
 		if (result.value.project) app.projects.activate(result.value.project.id);
+		await before_file?.catch(() => undefined);
+		// left the page while it opened: stay where the user went
+		if (page.url.pathname !== resolve('/projects')) return null;
+		if (app.diskfiles.open_path(path, { open_not_preview: true })) {
+			void goto(resolve('/files'));
+		}
 		return null;
 	};
 
@@ -85,20 +100,8 @@
 			error_message = `can't open from URL: ${parsed.message}`;
 			return;
 		}
-		// always opened, even under an open root: the path may focus another repo
-		const error = await open_and_activate(parsed.path);
-		if (error !== null) {
-			error_message = error;
-			return;
-		}
-		await stripped.catch(() => undefined);
-		// left the page while it opened: stay where the user went
-		if (page.url.pathname !== resolve('/projects')) return;
-		// a file the open indexed opens in a tab; a directory, or a file the
-		// index skips (ignored), leaves the projects page showing where it landed
-		if (app.diskfiles.open_path(parsed.path, { open_not_preview: true })) {
-			void goto(resolve('/files'));
-		}
+		const error = await open_path(parsed.path, stripped);
+		if (error !== null) error_message = error;
 	};
 
 	const handle_open = async (): Promise<void> => {
@@ -115,7 +118,7 @@
 
 		opening = true;
 		try {
-			const error = await open_and_activate(parsed.path);
+			const error = await open_path(parsed.path);
 			if (error === null) {
 				new_path = '';
 			} else {
@@ -147,18 +150,19 @@
 	<header class="mb_xl">
 		<h1><Icon data={icon_project} /> Projects</h1>
 		<p class="text_50">
-			Open a file or directory to open its project: a trusted <code>repos.toml</code> found above
-			it, else its git repo, else the directory. A path below the registry's folder in none of its
-			repos opens as its git repo or directory instead, as does one under a registry in a checkout
-			that can't be used — each says why. The repo holding the path is focused — its files are
-			indexed and watched. A registry's own folder indexes only its loose files and its focused
-			repos; focus or unfocus its other repos here or from the file tree.
+			Open a file or directory to open its project — and a file in a tab: a trusted
+			<code>repos.toml</code> found above it, else its git repo, else the directory. A path below
+			the registry's folder in none of its repos opens as its git repo or directory instead, as does
+			one under a registry in a checkout that can't be used — each says why. The repo holding the
+			path is focused — its files are indexed and watched. A registry's own folder indexes only its
+			loose files and its focused repos; focus or unfocus its other repos here or from the file
+			tree.
 		</p>
 	</header>
 
 	<!-- open a project -->
 	<section class="mb_xl">
-		<h2 class="mt_0"><Icon data={icon_add} /> Open Project</h2>
+		<h2 class="mt_0"><Icon data={icon_add} /> Open a File or Folder</h2>
 		<form
 			class="row gap_sm"
 			onsubmit={(e) => {

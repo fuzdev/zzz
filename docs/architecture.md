@@ -2237,21 +2237,22 @@ concerns":
   access in place.
 
 One open project is the **active** one on each client (`Projects.active`):
-new files and folders default into it (`Project.new_files_dir` — its last
-open's focus while that's still focused, else its root). `DeskMenu.svelte` lists the open
-projects to switch it. Opening happens on `/projects`, the projects page
-(path input → `project_open`; the `?open=<path>` query param
-auto-opens — this is how the CLI's `zzz <path>` lands the browser on a
-project, and a file the open indexed then opens in a tab on `/files`).
-It lists each open project with its kind, and a registry's registry file
+new files and folders default into it (`Project.new_files_dir` — its
+last open's focus while that's still focused, else its root).
+`DeskMenu.svelte` lists the open projects to switch it. Opening happens on
+`/projects`, the projects page, from its open form or the `?open=<path>`
+query param — this is how the CLI's `zzz <path>` lands the browser there.
+Both run `project_open`, activate the project it returns, and then open a
+file the open indexed in a tab on `/files`; a directory, or a file the
+index skips, leaves the page showing where it landed. Both take an
+absolute path or one starting `~` or `~/`, expanded to the daemon's home
+(`session_load`'s `home_dir`; the param waits for the session) — `~user`
+is refused. The query param is handled once and then stripped from the
+URL, so a reload doesn't reopen a project the user has since closed. The
+page lists each open project with its kind, and a registry's registry file
 and each of its entries: a present one with a button to focus or unfocus
 it and its git status (§ Repo status below), a missing or refused one with
-why. Both paths take an absolute path or one starting `~` or `~/`, expanded to the
-daemon's home (`session_load`'s `home_dir`; the param waits for the
-session) — `~user` is refused — and activate
-the project `project_open` returns, and the query param is handled once and
-then stripped from the URL, so a reload doesn't reopen a project the user
-has since closed.
+why.
 
 **The lifecycle rev.** Every change to the open projects — an open that
 changed something, a focus, an unfocus, a close — bumps the daemon's
@@ -2397,9 +2398,9 @@ stamp, no git run), when its focused checkout's filer broadcast a change
 seconds), when it was never probed, on a refresh, or — one per poll — when
 its status is past the sweep age, which is how an unfocused repo edited by
 another program catches up. A "refresh status" button re-probes every
-entry at once; a failed poll shows its error above the list, and an entry
-`repos sync` would leave to a person is flagged, its reasons in the
-tooltip. Only registry projects have status; the daemon
+entry at once; a failed poll shows its error above the list. The status
+line of a present repo uses `repos status`'s words, the reasons `repos
+sync` would leave it to a person included. Only registry projects have status; the daemon
 holds each registry's resolved entries while it's open, set and dropped
 under the projects lock with the open and close.
 

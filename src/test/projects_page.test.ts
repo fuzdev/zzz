@@ -151,13 +151,13 @@ describe('a registry project on the projects page', () => {
 		});
 		await tick();
 		assert.deepEqual(entry_texts().slice(0, 3), [
-			'app/ unfocus 2 modified',
+			'app/ unfocus 2 unstaged',
 			'site/ focus clean',
 			'gone/ not cloned'
 		]);
 	});
 
-	test('a status says gone, needs you, or failed, and marks a probe beside a known status', async () => {
+	test('a status names its needs-human reason, says not cloned, and marks a probe beside a known status', async () => {
 		const base = {
 			probed_at: 1,
 			branch: 'main',
@@ -179,7 +179,7 @@ describe('a registry project on the projects page', () => {
 						key: 'app',
 						state: 'ok',
 						probing: true,
-						needs_human: ['operation_in_progress']
+						needs_human: ['origin_mismatch']
 					},
 					{ ...base, key: 'site', state: 'missing', probing: false, needs_human: [] }
 				]
@@ -187,13 +187,9 @@ describe('a registry project on the projects page', () => {
 		});
 		await tick();
 		assert.deepEqual(entry_texts().slice(0, 2), [
-			'app/ unfocus clean — needs you …',
-			'site/ focus gone'
+			'app/ unfocus origin mismatch …',
+			'site/ focus not cloned'
 		]);
-		const needs = Array.from(target.querySelectorAll('li li small')).find((el) =>
-			el.textContent?.includes('needs you')
-		);
-		assert.strictEqual(needs?.getAttribute('title'), 'operation in progress');
 	});
 
 	test('focus and unfocus buttons call the daemon, disabled while in flight', async () => {

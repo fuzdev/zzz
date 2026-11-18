@@ -43,7 +43,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fuz_git::Git;
-use fuz_repos::classify::Refresh;
+use fuz_repos::classify::{NeedsHuman, Refresh};
 use fuz_repos::registry::{Entry, RegistryDirs};
 use fuz_repos::report::EntryStatus;
 use fuz_repos::sessions::LiveSessions;
@@ -97,7 +97,8 @@ pub struct RepoStatusInfo {
     pub stashes: u32,
     /// The newest fetch's time (unix seconds), as `repos status` reads it.
     pub fetched_at: Option<u64>,
-    /// Why `repos sync` would leave the entry to a person, by kind.
+    /// Why `repos sync` would leave the entry to a person, by kind, deduped —
+    /// but the primary checkout's operation, which `in_progress` says.
     pub needs_human: Vec<String>,
     /// What failed, for a failed probe.
     pub error: Option<String>,
@@ -191,7 +192,13 @@ fn to_info(key: &str, status: &EntryStatus, probed_at: u64) -> RepoStatusInfo {
     info.stashes = status.stashes;
     info.fetched_at = status.fetched_at;
     // the reasons' own serde tags, so a reason fuz_repos adds names itself
-    for kind in status.needs_human.iter().filter_map(serde_tag) {
+    // the primary's own operation is `in_progress`; a worktree's is said only
+    // by its reason, so it stays
+    let primary = status.checkouts.iter().find(|c| c.primary).map(|c| &c.path);
+    let reasons = status.needs_human.iter().filter(|reason| {
+        !matches!(reason, NeedsHuman::OperationInProgress { checkout, .. } if Some(checkout) == primary)
+    });
+    for kind in reasons.filter_map(serde_tag) {
         // a reason per checkout can repeat a kind
         if !info.needs_human.contains(&kind) {
             info.needs_human.push(kind);
@@ -1156,6 +1163,54 @@ purpose = "a site"
         fs::create_dir_all(f.root.join("site")).unwrap();
         let polled = manager.poll(&git, &root, false).await.unwrap();
         assert_eq!(find(&polled, "site").state, RepoStatusState::Missing);
+    }
+
+    #[test]
+    fn the_primary_operation_is_in_progress_and_a_worktrees_is_its_reason() {
+        let f = Fixture::new();
+        let git = f.runner();
+        let source = f.source();
+        // a merge stopped in the primary: said by `in_progress` alone
+        let head = fs::read_to_string(f.app().join(".git/HEAD")).unwrap();
+        let commit = {
+            let r = head.trim().strip_prefix("ref: ").unwrap();
+            fs::read_to_string(f.app().join(".git").join(r)).unwrap()
+        };
+        fs::write(f.app().join(".git/MERGE_HEAD"), &commit).unwrap();
+        let info = probe_entry(&git, &source, "app").unwrap();
+        assert_eq!(info.in_progress.as_deref(), Some("merge"));
+        assert!(
+            !info
+                .needs_human
+                .iter()
+                .any(|k| k == "operation_in_progress"),
+            "{:?}",
+            info.needs_human
+        );
+
+        // and one in a linked worktree too: that one is the reason
+        let linked = f.root.join("linked");
+        f.git(&[
+            "worktree",
+            "add",
+            "-q",
+            linked.to_str().unwrap(),
+            "-b",
+            "wt",
+        ]);
+        let wt_git = f.app().join(".git/worktrees/linked");
+        fs::write(wt_git.join("MERGE_HEAD"), &commit).unwrap();
+        let info = probe_entry(&git, &source, "app").unwrap();
+        assert_eq!(info.in_progress.as_deref(), Some("merge"));
+        assert_eq!(
+            info.needs_human
+                .iter()
+                .filter(|k| *k == "operation_in_progress")
+                .count(),
+            1,
+            "{:?}",
+            info.needs_human
+        );
     }
 
     #[test]

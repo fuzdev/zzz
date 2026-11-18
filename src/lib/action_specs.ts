@@ -565,7 +565,10 @@ export const RepoStatusJson = object({
 	stashes: safe_integer,
 	/** The newest fetch's time (unix seconds). */
 	fetched_at: nullable(safe_integer),
-	/** Why `repos sync` would leave it to a person, by kind. */
+	/**
+	 * Why `repos sync` would leave it to a person, by kind — but the primary
+	 * checkout's operation, which `in_progress` says.
+	 */
 	needs_human: array(string),
 	/** What failed, for a failed probe. */
 	error: nullable(string)
