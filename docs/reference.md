@@ -44,15 +44,17 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `transcription_create` — Queue a transcription of an audio file by the local speech model, and return its job. The transcript is written beside the file as `<name>.<model>.transcript.json`; fails with `conflict` (`already_exists`) if that model's transcript is already there. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `transcription_progress` — Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds. Kind: remote_notification. Initiator: backend. Auth: public
 
-## Intents (22)
+## Intents (24)
 
 UI intents — `local_call` specs called through `app.intents`, run in the
 page, never sent over the wire. History: what a later undo makes of them.
 
 - `desk_pin_toggle` (pin or unpin the desk menu) — Pin or unpin the desk menu: a pinned one stays open beside the page. Version: 1. History: layout
 - `desk_toggle` (toggle the desk menu) — Toggle or set the visibility of the desk menu. Version: 1. History: layout
+- `diff_split_toggle` (show diffs side by side or in one column) — Show diffs with the two versions side by side, or as one column of changes — a preference every diff shares. Version: 1. History: layout
 - `diskfile_details_toggle` (toggle the file details) — Toggle or set the visibility of the file views' details drawer. Version: 1. History: layout
 - `explorer_mode_set` (show the files as a list or a tree) — Show the file explorer as a flat list or a folder tree. Version: 1. History: layout
+- `file_compare_set` (compare the file) — Show a file's changes: a diff from its version on disk, or from an entry of its history, to the content being edited — or stop showing it. Version: 1. History: layout
 - `file_rename` (rename the file) — Rename a file within its folder (`diskfile_rename`, carrying its transcripts), its tab, draft, history, and file parts following — refused for a file that's saving, recording, or not on disk, and onto a name open here. Version: 1. History: none
 - `file_reveal` (reveal the file in the tree) — Show the file explorer's tree and reveal a file or folder there: expand its folders and make its row active. Version: 1. History: navigation
 - `main_menu_toggle` (toggle the main menu) — Toggle or set the visibility of the main menu. Version: 1. History: layout

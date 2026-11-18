@@ -227,6 +227,10 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		execute: ({ data: { input } }) => ({ pinned: frontend.ui.toggle_desk_pinned(input?.pinned) })
 	},
 
+	diff_split_toggle: {
+		execute: ({ data: { input } }) => ({ split: frontend.ui.toggle_diff_split(input?.split) })
+	},
+
 	tab_open: {
 		execute: ({ data: { input } }) => {
 			frontend.diskfiles.open_in_tab(input.path, {
@@ -298,6 +302,12 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 	markdown_mode_set: {
 		execute: ({ data: { input } }) => ({
 			markdown: frontend.diskfiles.set_markdown_view_mode(input.path, input.mode)
+		})
+	},
+
+	file_compare_set: {
+		execute: ({ data: { input } }) => ({
+			comparing: frontend.diskfiles.set_compare_base(input.path, input.base)
 		})
 	},
 

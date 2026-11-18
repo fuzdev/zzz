@@ -108,6 +108,46 @@ describe('create_palette_commands', () => {
 		assert.notOk(labels(create_palette_commands(app)).some((l) => l.includes('markdown')));
 	});
 
+	test("a file's tab offers comparing it, then stopping, and runs the intent", () => {
+		app.intents.tab_open({ path: TXT, permanent: true });
+		assert.notInclude(labels(create_palette_commands(app)), 'stop comparing the file');
+		find('compare the file with the disk').run();
+		assert.strictEqual(app.diskfiles.compare_bases.get(TXT), 'disk');
+		const all = labels(create_palette_commands(app));
+		assert.notInclude(all, 'compare the file with the disk');
+		find('stop comparing the file').run();
+		assert.isFalse(app.diskfiles.compare_bases.has(TXT));
+	});
+
+	test("an audio file's tab offers no compare, its view having no diff", () => {
+		const audio = parse_or_throw(DiskfilePath, '/w/c.mp3');
+		write_diskfile(app, audio);
+		app.intents.tab_open({ path: audio, permanent: true });
+		const all = labels(create_palette_commands(app));
+		assert.notInclude(all, 'compare the file with the disk');
+		assert.notInclude(all, 'stop comparing the file');
+	});
+
+	test('a file that can not load, or a transcript, offers no compare', () => {
+		const binary = write_diskfile(app, '/w/d.bin');
+		binary.content = null;
+		binary.unloaded_status = 'unloadable';
+		app.intents.tab_open({ path: binary.path, permanent: true });
+		assert.notInclude(labels(create_palette_commands(app)), 'compare the file with the disk');
+		const transcript = write_diskfile(app, '/w/e.mp3.transcript.json');
+		app.intents.tab_open({ path: transcript.path, permanent: true });
+		assert.notInclude(labels(create_palette_commands(app)), 'compare the file with the disk');
+	});
+
+	test('while comparing, the palette switches the diff between one column and two', () => {
+		app.intents.tab_open({ path: TXT, permanent: true });
+		app.intents.file_compare_set({ path: TXT, base: 'disk' });
+		find('show the diff side by side').run();
+		assert.isTrue(app.ui.diff_split);
+		find('show the diff in one column').run();
+		assert.isFalse(app.ui.diff_split);
+	});
+
 	test('a history holding only the selected file offers no back', () => {
 		app.intents.tab_open({ path: MD, permanent: true });
 		app.diskfiles.editor.tabs.back_paths = [MD];

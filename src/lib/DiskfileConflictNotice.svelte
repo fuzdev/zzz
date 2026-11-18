@@ -1,5 +1,5 @@
 <script module lang="ts">
-	import { tick } from 'svelte';
+	import { flushSync, tick } from 'svelte';
 
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 
@@ -39,23 +39,34 @@
 	import type { SvelteHTMLElements } from 'svelte/elements';
 
 	import ToggleButton from './ToggleButton.svelte';
+	import { frontend_context } from './frontend.svelte.ts';
 
 	const {
 		editor_state,
 		onresolve,
+		compare = false,
 		attrs
 	}: {
 		editor_state: DiskfileEditorState;
 		/**
-		 * Called after the user overwrites or keeps the disk version, e.g. to
-		 * refocus the editor — not after an overwrite that leaves the conflict
-		 * standing (refused, or failed): the notice takes the focus back then
-		 * (its button, disabled while the save waited, lost it), unless the
-		 * user moved it elsewhere meanwhile.
+		 * Whether to offer comparing the two versions — only where the host
+		 * shows the diff (`DiskfileCompareView`) while the file is compared.
+		 */
+		compare?: boolean | undefined;
+		/**
+		 * Called after the user overwrites or keeps the disk version (ending a
+		 * compare that has nothing left to show), e.g. to refocus the editor —
+		 * not after an overwrite that leaves the conflict standing (refused, or
+		 * failed): the notice takes the focus back then (its button, disabled
+		 * while the save waited, lost it), unless the user moved it elsewhere
+		 * meanwhile. While a compare stays, the host focuses it, not the hidden
+		 * editor.
 		 */
 		onresolve?: (() => void) | undefined;
 		attrs?: SvelteHTMLElements['div'] | undefined;
 	} = $props();
+
+	const app = frontend_context.get();
 
 	let notice_el: HTMLDivElement | undefined = $state.raw();
 
@@ -66,6 +77,23 @@
 			? 'your draft'
 			: 'your version'
 	);
+
+	/**
+	 * The conflict is settled: a compare left with nothing to show — the disk
+	 * against itself, now that the editor holds it — ends, and the editor shows
+	 * again before `onresolve` focuses it. A compare from a history entry stays,
+	 * still showing what changed since.
+	 */
+	const resolve = (): void => {
+		if (
+			editor_state.comparing &&
+			editor_state.compare_base_content === editor_state.current_content
+		) {
+			app.intents.file_compare_set({ path: editor_state.path, base: null });
+			flushSync();
+		}
+		onresolve?.();
+	};
 
 	/**
 	 * Moves focus to the notice, so a blocked save (Ctrl+S) points at it and
@@ -79,8 +107,6 @@
 </script>
 
 <!-- the file changed on disk under the user's edit: saving waits for an explicit choice -->
-<!-- TODO a "compare" diff view, once zzz has one — for now the disk version can be shown in place,
-and both versions are in the history -->
 {#if editor_state.has_conflict}
 	<div {...attrs} role="alert" tabindex="-1" bind:this={notice_el}>
 		<small class="color_c_60">
@@ -92,8 +118,8 @@ and both versions are in the history -->
 			{/if}
 		</small>
 		<div class="flex gap_xs mt_xs">
-			<!-- a file deleted on disk has no disk version to show -->
-			{#if !editor_state.diskfile.deleted_on_disk}
+			<!-- a file deleted on disk has no disk version to show, and the diff covers the editor -->
+			{#if !editor_state.diskfile.deleted_on_disk && !editor_state.comparing}
 				<!-- sized to its wider label, so toggling doesn't shift the buttons after it -->
 				<ToggleButton
 					bind:active={() => editor_state.showing_disk, (v) => editor_state.set_showing_disk(v)}
@@ -105,6 +131,25 @@ and both versions are in the history -->
 						? `show ${yours} again, editable`
 						: `show the file on disk, read-only — ${yours} stays as it is`}
 				/>
+			{/if}
+			<!-- a toggle that stays put, so the focus does too -->
+			{#if compare && !editor_state.diskfile.deleted_on_disk}
+				<button
+					type="button"
+					class="sized_sm"
+					class:selected={editor_state.comparing}
+					aria-pressed={editor_state.comparing}
+					title={editor_state.comparing
+						? 'stop comparing, back to the editor'
+						: `show the changes from the file on disk to ${yours}`}
+					onclick={() =>
+						app.intents.file_compare_set({
+							path: editor_state.path,
+							base: editor_state.comparing ? null : 'disk'
+						})}
+				>
+					compare
+				</button>
 			{/if}
 			<button
 				type="button"
@@ -118,7 +163,7 @@ and both versions are in the history -->
 					// the draft, even if the editor shows an older entry or the disk (it's shown first)
 					const saved = await editor_state.save_draft({ overwrite: true });
 					if (saved || !editor_state.has_conflict) {
-						onresolve?.();
+						resolve();
 						return;
 					}
 					// refused — say a newer version landed — and the notice stays, with the
@@ -141,7 +186,7 @@ and both versions are in the history -->
 				title="keep the file on disk, setting your edit aside in the history"
 				onclick={() => {
 					editor_state.discard_draft();
-					onresolve?.();
+					resolve();
 				}}
 			>
 				keep the disk version

@@ -49,6 +49,7 @@ import { DiskfilesEditor } from './diskfiles_editor.svelte.ts';
 import { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
 import { Drafts } from './drafts.svelte.ts';
 import type { MarkdownViewMode } from './markdown_view_mode.ts';
+import type { DiskfileCompareBase } from './diskfile_compare.ts';
 import { create_detached } from './reactive_helpers.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { DiskfileIndex } from './diskfile_index.svelte.ts';
@@ -137,6 +138,33 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	set_markdown_view_mode(path: DiskfilePath, mode: MarkdownViewMode): boolean {
 		if (to_diskfile_content_kind(path) !== 'markdown') return false;
 		this.markdown_view_modes.set(path, mode);
+		return true;
+	}
+
+	/**
+	 * What each compared file's diff is from
+	 * (`DiskfileEditorState.compare_choice`), by path — a file not here isn't
+	 * being compared. Kept apart from the editing states, like
+	 * `markdown_view_modes`, so comparing a clean file makes none — but a
+	 * look, not a preference: dropped when the file's tab closes or its cell
+	 * goes (`handle_diskfile_detached`, `#remove_cell`), so a file never
+	 * reopens on a diff. Page memory only.
+	 */
+	readonly compare_bases: SvelteMap<DiskfilePath, DiskfileCompareBase> = new SvelteMap();
+
+	/**
+	 * Compares the file at `path` against `base` (`compare_bases`), or stops
+	 * comparing it with `null`. A history entry that's gone by the time the
+	 * view reads it falls back to the disk version.
+	 *
+	 * @returns whether the file is compared now
+	 */
+	set_compare_base(path: DiskfilePath, base: DiskfileCompareBase | null): boolean {
+		if (base === null) {
+			this.compare_bases.delete(path);
+			return false;
+		}
+		this.compare_bases.set(path, base);
 		return true;
 	}
 
@@ -316,13 +344,15 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.#unindexed_files.delete(diskfile.id);
 		if (!keep_record) this.index.delete(path);
 		this.#remove_editor_state(diskfile);
+		this.compare_bases.delete(path);
 		diskfile.dispose();
 	}
 
-	/** Drops every cell, record, draft, and view-mode choice. */
+	/** Drops every cell, record, draft, view-mode choice, and compare. */
 	#clear(): void {
 		this.drafts.clear();
 		this.markdown_view_modes.clear();
+		this.compare_bases.clear();
 		for (const diskfile of Array.from(this.#cells.values())) this.#remove_cell(diskfile, false);
 		for (const record of Array.from(this.index.values())) this.index.delete(record.id);
 	}
@@ -1043,10 +1073,12 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	/**
 	 * Called when the last tab of the file at `path` closes. A diskfile deleted on disk or
 	 * uncovered with no draft is forgotten now (see `release_if_unneeded`). Otherwise its
-	 * editing state resets what it shows (`DiskfileEditorState.reset_view`), so
-	 * a reopen shows the draft if there is one, else the disk content.
+	 * editing state resets what it shows (`DiskfileEditorState.reset_view`) and a
+	 * compare ends (`compare_bases`), so a reopen shows the draft if there is
+	 * one, else the disk content.
 	 */
 	handle_diskfile_detached(path: DiskfilePath): void {
+		this.compare_bases.delete(path);
 		this.release_if_unneeded(path);
 		this.#editor_states.get(path)?.reset_view();
 	}
@@ -1358,6 +1390,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		if (mode !== undefined) {
 			this.markdown_view_modes.delete(from);
 			if (to_diskfile_content_kind(to) === 'markdown') this.markdown_view_modes.set(to, mode);
+		}
+		const compare_base = untrack(() => this.compare_bases.get(from));
+		if (compare_base !== undefined) {
+			this.compare_bases.delete(from);
+			this.compare_bases.set(to, compare_base);
 		}
 		if (this.#select_on_arrival === from) this.#select_on_arrival = to;
 		this.drafts.move(from, to);

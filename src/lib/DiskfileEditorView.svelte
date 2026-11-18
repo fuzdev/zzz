@@ -16,6 +16,7 @@
 	import DiskfileDormantNotice from './DiskfileDormantNotice.svelte';
 	import DiskfileConflictNotice, { save_from_view } from './DiskfileConflictNotice.svelte';
 	import DiskfileSaveErrorNotice from './DiskfileSaveErrorNotice.svelte';
+	import DiskfileCompareView from './DiskfileCompareView.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
 	import DiskfileLoadingNotice from './DiskfileLoadingNotice.svelte';
 	import { DISKFILE_UNCOVERED_LABEL, to_diskfile_unloaded_message } from './diskfile_helpers.ts';
@@ -41,6 +42,7 @@
 	// Reference to the content editor component
 	let content_editor: { focus: () => void } | undefined = $state.raw();
 	let conflict_notice: { focus: () => boolean } | undefined = $state.raw();
+	let compare_view: { focus: () => void } | undefined = $state.raw();
 
 	// a blocked save points at the conflict notice rather than doing nothing silently
 	const save = (): Promise<void> => save_from_view(editor_state, () => conflict_notice);
@@ -93,29 +95,41 @@
 			<DiskfileConflictNotice
 				bind:this={conflict_notice}
 				{editor_state}
-				onresolve={() => content_editor?.focus()}
+				onresolve={() => (editor_state.comparing ? compare_view?.focus() : content_editor?.focus())}
+				compare
 				attrs={{ class: 'px_md py_xs' }}
 			/>
 			<DiskfileSaveErrorNotice {editor_state} attrs={{ class: 'px_md py_xs' }} />
-			<ContentEditor
-				bind:this={content_editor}
-				bind:content={
-					() => editor_state.shown_content,
-					(content) => (editor_state.current_content = content)
-				}
-				focus_key={diskfile.path}
-				bind:pending_element_to_focus_key={app.ui.pending_element_to_focus_key}
-				token_count={editor_state.current_token_count}
-				placeholder={editor_state.content_loaded
-					? format_placeholder(diskfile.path_relative)
-					: editor_state.content_loading
-						? ''
-						: '[content not loaded]'}
-				readonly={!editor_state.can_edit}
-				attrs={{ class: 'height:100% border-radius:0' }}
-				save_shortcut="page"
-				onsave={save}
-			/>
+			{#if editor_state.comparing}
+				<DiskfileCompareView
+					bind:this={compare_view}
+					{editor_state}
+					onclose={() => content_editor?.focus()}
+					attrs={{ class: 'flex:1 min-height:0' }}
+				/>
+			{/if}
+			<!-- hidden while comparing, not unmounted, so the textarea keeps its undo -->
+			<div class="flex:1 column {editor_state.comparing ? 'display:none' : ''}">
+				<ContentEditor
+					bind:this={content_editor}
+					bind:content={
+						() => editor_state.shown_content,
+						(content) => (editor_state.current_content = content)
+					}
+					focus_key={diskfile.path}
+					bind:pending_element_to_focus_key={app.ui.pending_element_to_focus_key}
+					token_count={editor_state.current_token_count}
+					placeholder={editor_state.content_loaded
+						? format_placeholder(diskfile.path_relative)
+						: editor_state.content_loading
+							? ''
+							: '[content not loaded]'}
+					readonly={!editor_state.can_edit}
+					attrs={{ class: 'height:100% border-radius:0' }}
+					save_shortcut="page"
+					onsave={save}
+				/>
+			</div>
 		</div>
 
 		<DiskfileDetailsDrawer>
@@ -126,6 +140,7 @@
 					{editor_state}
 					readonly={!editor_state.content_loaded}
 					delete_position="right"
+					compare
 				/>
 			</div>
 

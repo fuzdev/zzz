@@ -19,7 +19,8 @@
 		editor_state,
 		readonly = false,
 		auto_save = false,
-		delete_position
+		delete_position,
+		compare = false
 	}: {
 		diskfile: Diskfile;
 		editor_state: DiskfileEditorState;
@@ -30,6 +31,11 @@
 		 * the row's first button, so a container that clips at its left edge opens it elsewhere.
 		 */
 		delete_position?: Position | undefined;
+		/**
+		 * Whether to offer comparing the file's versions — only where the host
+		 * shows the diff (`DiskfileCompareView`) while the file is compared.
+		 */
+		compare?: boolean | undefined;
 	} = $props();
 
 	const app = frontend_context.get();
@@ -53,6 +59,25 @@
 		</PasteFromClipboard>
 
 		<ClearRestoreButton bind:value={editor_state.current_content} />
+	{/if}
+
+	{#if compare && editor_state.content_loaded}
+		<button
+			type="button"
+			class="plain sized_sm selectable"
+			class:selected={editor_state.comparing}
+			aria-pressed={editor_state.comparing}
+			title={editor_state.comparing
+				? 'stop comparing, back to the editor'
+				: 'show the changes from the file on disk to the version you are editing'}
+			onclick={() =>
+				app.intents.file_compare_set({
+					path: diskfile.path,
+					base: editor_state.comparing ? null : 'disk'
+				})}
+		>
+			compare
+		</button>
 	{/if}
 
 	<!-- Delete button is always available -->

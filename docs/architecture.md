@@ -1378,6 +1378,23 @@ a modal dialog is open. The markdown view's details add the document's
 outline and its broken links: clicking either scrolls the preview to it and
 puts the editor's caret at its source, in whichever panes are shown.
 
+Either view can show a **compare** in place of the editor
+(`DiskfileCompareView`, fuz_code's `CodeDiff`): the diff from a base — the
+disk version, or any entry of the file's history, picked in the view — to
+the content being edited, unified or split (`Ui.diff_split`, the
+`diff_split_toggle` intent, shared by every diff). It's opened by the
+`file_compare_set` intent — from the actions in the details, the conflict
+notice, or the palette — and its base is kept by path
+(`Diskfiles.compare_bases`), but as a look, not a preference: closing the
+file's last tab ends it, and so does settling a conflict when it leaves the
+compare nothing to show (a compare from a history entry stays). The editor
+stays mounted beneath it, hidden, so its undo survives. The diff is computed
+in the browser; above `DISKFILE_COMPARE_FOLD_MAX_LENGTH` a diff leaves its
+unchanged regions out rather than folding them, which would still render
+every line, and isn't highlighted. A base with CRLF or CR line endings is
+compared as LF, as the editor reads it, with a note saying whether saving
+converts the file's endings or only that version's differ.
+
 Every file view keeps its details — the file's actions, info, and history —
 in one drawer at its right edge (`DiskfileDetailsDrawer`). The drawer is
 open by default and its state is app-wide (`Ui.show_diskfile_details`), so
@@ -1559,7 +1576,9 @@ per-file editing state, the drafts store, and the metadata index:
   content, no discarded edit, no save under way, no heading to reveal) —
   closing a clean file's last tab drops it with the cell, and its saved and
   disk history goes with it — or the diskfile is removed. A markdown view mode chosen is kept by
-  path (`Diskfiles.markdown_view_modes`), so it outlives the state.
+  path (`Diskfiles.markdown_view_modes`), so it outlives the state; a
+  compare's base is kept by path too (`Diskfiles.compare_bases`), until
+  the file's last tab closes.
   The `/files` editor, file-part editors, and tabs are views over it, so a
   tab switch or remount shows the same draft, selection, and save state; a
   file part sends its draft (see "What gets saved and sent")
@@ -1673,11 +1692,11 @@ strings), so a resync raises no spurious conflict.
 The `file_rename` intent (`Diskfiles.rename`) renames a file within its
 folder through `diskfile_rename` (§ Renaming Files) and moves everything
 here that follows the file, for the file and each sidecar the daemon moved
-with it: the same cell, editing state, and draft (its id kept), the tab
-with its place, preview state, selection, back / forward history, and
-reopen entry, the tree's active row, the markdown view mode, and every chat
-turn's and prompt's file part. The filer reports the rename as a delete and
-an add, which can arrive before the reply: a delete of the file, or of a
+with it: the same cell, editing state, and draft (its id kept), the tab with
+its place, preview state, selection, back / forward history, and reopen
+entry, the tree's active row, the markdown view mode, the compare, and every
+chat turn's and prompt's file part. The filer reports the rename as a delete
+and an add, which can arrive before the reply: a delete of the file, or of a
 sidecar named for it, changes nothing until the reply moves it, so nothing
 reads it as deleted, and is applied if the rename fails. A save started
 meanwhile waits for the rename to settle, then writes at wherever the file
@@ -1685,11 +1704,11 @@ is. Refused here, before the daemon, for a name that isn't one plain path
 component, a file that's saving, being recorded, dormant, or deleted on
 disk, and a new name — the file's or a sidecar's — with a draft or a tab
 here. A new name the index skips (git-ignored in a focused checkout) keeps
-the file as uncovered. The tree renames inline (§ Renaming in the tree);
-the file's menu elsewhere ("rename file" on the list, tabs, and file views)
-and the palette ("rename the file", for the selected tab) ask by a prompt.
-Both parse the name alike (`parse_diskfile_rename_name`: surrounding
-whitespace dropped, no `/` or `\`, and not `.` or `..`).
+the file as uncovered. The tree renames inline (§ Renaming in the tree); the
+file's menu elsewhere ("rename file" on the list, tabs, and file views) and
+the palette ("rename the file", for the selected tab) ask by a prompt. Both
+parse the name alike (`parse_diskfile_rename_name`: surrounding whitespace
+dropped, no `/` or `\`, and not `.` or `..`).
 
 ### Disk changes and drafts
 
@@ -1748,37 +1767,37 @@ it with `\n` throughout, with no indicator.
 
 ### Conflicts
 
-A disk change under the user's content (the draft, or a
-picked older entry) keeps that content and sets `disk_conflict`; a draft
-whose `base_hash` isn't the disk's is stale too, even one made before this
-editing state (it outlived an earlier one). While the
-editor shows content that differs from the disk (`has_conflict`), saving is
-paused: Ctrl+S (which moves focus to the notice) and the save button write
-nothing, and a notice offers **overwrite with your draft**
-(`save_draft({overwrite: true})`) or **keep the disk version**
-(`discard_draft`, the draft set aside in the history); either returns
-focus to the editor, and both versions are in the history to compare. Its
-**show disk version** toggle (while it shows, it reads **show your draft**,
-or **show your version** for a picked entry) shows the file on disk in
-place of the draft — in the editor, the markdown preview, and file-part
-editors alike, read-only (`showing_disk`, `shown_content`): a look, not a
-choice. It never changes the draft, the history, what's marked ●, what a
-save writes, or what a file part sends — only the views read
+A disk change under the user's content (the draft, or a picked older entry)
+keeps that content and sets `disk_conflict`; a draft whose `base_hash` isn't
+the disk's is stale too, even one made before this editing state (it
+outlived an earlier one). While the editor shows content that differs from
+the disk (`has_conflict`), saving is paused: Ctrl+S (which moves focus to
+the notice) and the save button write nothing, and a notice offers
+**overwrite with your draft** (`save_draft({overwrite: true})`) or **keep
+the disk version** (`discard_draft`, the draft set aside in the history);
+either returns focus to the editor, and both versions are in the history to
+compare. Its **show disk version** toggle (while it shows, it reads **show
+your draft**, or **show your version** for a picked entry) shows the file on
+disk in place of the draft — in the editor, the markdown preview, and
+file-part editors alike, read-only (`showing_disk`, `shown_content`): a
+look, not a choice. It never changes the draft, the history, what's marked
+●, what a save writes, or what a file part sends — only the views read
 `shown_content`; a newer disk change shows as it lands, and in the markdown
-view a click on the preview only moves the read-only editor's caret. It
-ends with the conflict — however that resolves — when an entry is picked
-from the history, or when the file is deleted on disk (so its return shows
-the draft), and isn't offered while the file is gone. A disk change equal
-to the draft settles the conflict, the content of our own save in flight
-landing on disk (our broadcast, with typing continuing past it) resolves
-rather than raises a conflict, and a new draft typed on the new disk
-content starts clean. VS Code keeps a dirty
-buffer on an external change too, but only reports the conflict when saving
-("the content of the file is newer", with Compare / Overwrite); zzz shows it
-as soon as it lands, since agents and tools write files while you edit, and
-keeps both versions in its history instead of opening a diff view (zzz has
-none yet). A change on disk arrives as metadata and its content by a read,
-so a save first waits for any read of the file in flight or queued
+view a click on the preview only moves the read-only editor's caret. It ends
+with the conflict — however that resolves — when an entry is picked from the
+history, or when the file is deleted on disk (so its return shows the
+draft), and isn't offered while the file is gone. A disk change equal to the
+draft settles the conflict, the content of our own save in flight landing on
+disk (our broadcast, with typing continuing past it) resolves rather than
+raises a conflict, and a new draft typed on the new disk content starts
+clean. VS Code keeps a dirty buffer on an external change too, but only
+reports the conflict when saving ("the content of the file is newer", with
+Compare / Overwrite); zzz shows it as soon as it lands, since agents and
+tools write files while you edit, and keeps both versions in its history;
+the notice's compare toggle shows the diff from the disk version to yours in
+place of the editor (see the compare view above), and settling the conflict
+ends it. A change on disk arrives as metadata and its content by a read, so
+a save first waits for any read of the file in flight or queued
 (`Diskfiles.pending_read`) — the re-read a `filer_change` or a reconnect's
 snapshot starts — then decides on the content it brought; the save buttons
 are busy meanwhile (`save_pending`), and a conflict the wait uncovers takes
@@ -2386,6 +2405,11 @@ Population, per capability:
   while the flood lasts. Nothing times a stalled client out: a tab that stays
   connected and stops acking (its JavaScript frozen) keeps the terminals it
   alone shows blocked until it resumes or its socket closes
+- **Compares are diffed and rendered whole, in the browser** — a large
+  file's compare leaves out unchanged regions and highlighting, but a
+  rewrite of most of its lines (a reformat, a re-indent) still renders tens
+  of MB of HTML for a file near the 4 MiB read cap, and again on each edit
+  while it shows; there's no cap on the changed lines yet
 - **Unloadable files are read-only** — a file's content loads only when it's
   UTF-8 text up to 4 MiB the backend could read; any other file is
   `unloadable` (`Diskfile.content_status`). The editor shows it read-only and

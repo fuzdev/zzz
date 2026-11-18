@@ -55,6 +55,7 @@ import {
 } from './diskfile_types.ts';
 import { ERROR_INVALID_PATH, is_path_absolute } from './diskfile_helpers.ts';
 import { MarkdownViewMode } from './markdown_view_mode.ts';
+import { DiskfileCompareBase } from './diskfile_compare.ts';
 import { ERROR_TERMINAL_COMMAND_NOT_FOUND } from './terminal_helpers.ts';
 import { ProviderStatus, ProviderName } from './provider_types.ts';
 import { JobSnapshot } from './job_types.ts';
@@ -403,6 +404,24 @@ export type MarkdownModeSetInput = Infer<typeof MarkdownModeSetInput>;
 export const MarkdownModeSetOutput = object({ markdown: boolean });
 export type MarkdownModeSetOutput = Infer<typeof MarkdownModeSetOutput>;
 
+/**
+ * Input for `file_compare_set`: the file, and what to compare its content
+ * against — `'disk'` for the version on disk, a history entry's id for that
+ * entry — or `null` to stop comparing.
+ */
+export const FileCompareSetInput = object({
+	path: DiskfilePath,
+	base: nullable(DiskfileCompareBase)
+});
+export type FileCompareSetInput = Infer<typeof FileCompareSetInput>;
+
+/**
+ * Output for `file_compare_set`: whether a compare base is set now — shown
+ * once the file's content is loaded (`DiskfileEditorState.comparing`).
+ */
+export const FileCompareSetOutput = object({ comparing: boolean });
+export type FileCompareSetOutput = Infer<typeof FileCompareSetOutput>;
+
 /** Input for `file_reveal`: a file's path, or a folder's with a trailing `/`. */
 export const FileRevealInput = object({ path: DiskfilePath });
 export type FileRevealInput = Infer<typeof FileRevealInput>;
@@ -499,6 +518,14 @@ export type DeskPinToggleInput = Infer<typeof DeskPinToggleInput>;
 /** Output for `desk_pin_toggle`: whether the desk menu is pinned now. */
 export const DeskPinToggleOutput = object({ pinned: boolean });
 export type DeskPinToggleOutput = Infer<typeof DeskPinToggleOutput>;
+
+/** Input for `diff_split_toggle`. Optional — omit it to toggle, pass `{split}` to set. */
+export const DiffSplitToggleInput = optional(object({ split: optional(boolean) }));
+export type DiffSplitToggleInput = Infer<typeof DiffSplitToggleInput>;
+
+/** Output for `diff_split_toggle`: whether diffs show side by side now. */
+export const DiffSplitToggleOutput = object({ split: boolean });
+export type DiffSplitToggleOutput = Infer<typeof DiffSplitToggleOutput>;
 
 /** Input for `provider_load_status`. */
 export const ProviderLoadStatusInput = object({
@@ -1086,6 +1113,22 @@ export const desk_pin_toggle_action_spec = {
 	description: 'Pin or unpin the desk menu: a pinned one stays open beside the page.'
 } satisfies IntentActionSpec;
 
+export const diff_split_toggle_action_spec = {
+	method: 'diff_split_toggle',
+	kind: 'local_call',
+	label: 'show diffs side by side or in one column',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: DiffSplitToggleInput,
+	output: DiffSplitToggleOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description:
+		'Show diffs with the two versions side by side, or as one column of changes — a preference every diff shares.'
+} satisfies IntentActionSpec;
+
 export const tab_open_action_spec = {
 	method: 'tab_open',
 	kind: 'local_call',
@@ -1269,6 +1312,22 @@ export const markdown_mode_set_action_spec = {
 	history: 'layout',
 	description:
 		"Choose a markdown file's view: its source beside a preview, the preview alone, or the source alone."
+} satisfies IntentActionSpec;
+
+export const file_compare_set_action_spec = {
+	method: 'file_compare_set',
+	kind: 'local_call',
+	label: 'compare the file',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: FileCompareSetInput,
+	output: FileCompareSetOutput,
+	async: false,
+	version: 1,
+	history: 'layout',
+	description:
+		"Show a file's changes: a diff from its version on disk, or from an entry of its history, to the content being edited — or stop showing it."
 } satisfies IntentActionSpec;
 
 export const path_open_action_spec = {
@@ -1565,6 +1624,7 @@ export const all_intent_specs: Array<IntentActionSpec> = [
 	sidebar_toggle_action_spec,
 	desk_toggle_action_spec,
 	desk_pin_toggle_action_spec,
+	diff_split_toggle_action_spec,
 	diskfile_details_toggle_action_spec,
 	tab_open_action_spec,
 	tab_select_action_spec,
@@ -1577,6 +1637,7 @@ export const all_intent_specs: Array<IntentActionSpec> = [
 	explorer_mode_set_action_spec,
 	file_reveal_action_spec,
 	markdown_mode_set_action_spec,
+	file_compare_set_action_spec,
 	tab_close_resolve_action_spec,
 	path_open_action_spec,
 	project_activate_action_spec,

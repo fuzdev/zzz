@@ -99,6 +99,15 @@ describe('Diskfiles.rename', () => {
 		assert_followed(draft_id, part);
 	});
 
+	test('a compare follows the file', async () => {
+		app.intents.file_compare_set({ path: A, base: 'disk' });
+		const renaming = app.diskfiles.rename(A, 'b.txt');
+		reply.resolve(moved([A, B]));
+		await renaming;
+		assert.strictEqual(app.diskfiles.compare_bases.get(B), 'disk');
+		assert.isFalse(app.diskfiles.compare_bases.has(A));
+	});
+
 	test('the filer first, in either order: nothing reads as deleted', async () => {
 		for (const delete_first of [true, false]) {
 			app = monkeypatch_zzz_for_tests(new Frontend());

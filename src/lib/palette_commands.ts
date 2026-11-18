@@ -81,8 +81,8 @@ const intent_labels: ReadonlyMap<string, string> = new Map(
 
 /**
  * The key a call is recognized by when ranking recently used commands: the
- * method and its input without its `path` and its show / hide or pin
- * direction, so closing one file's tab counts as using "close the tab"
+ * method and its input without its `path` and its show / hide, pin, or
+ * split direction, so closing one file's tab counts as using "close the tab"
  * whatever the file, and a backtick's `sidebar_toggle` counts for the
  * palette's sidebar entry whichever way it goes.
  */
@@ -90,7 +90,13 @@ export const to_palette_recent_key = (method: string, input: unknown): string =>
 	if (input === null || input === undefined) return method;
 	if (typeof input !== 'object' || Array.isArray(input))
 		return `${method} ${JSON.stringify(input)}`;
-	const { path: _path, show: _show, pinned: _pinned, ...rest } = input as Record<string, unknown>;
+	const {
+		path: _path,
+		show: _show,
+		pinned: _pinned,
+		split: _split,
+		...rest
+	} = input as Record<string, unknown>;
 	const keys = Object.keys(rest).sort();
 	if (!keys.length) return method;
 	return `${method} ${JSON.stringify(rest, keys)}`;
@@ -160,6 +166,23 @@ export const create_palette_commands = (
 			add_command('file_rename', intent_labels.get('file_rename') ?? 'rename the file', () => {
 				void prompt_rename_diskfile(app.intents, path);
 			});
+		}
+		// only the editor and markdown views show a diff, and only of content that can load
+		const kind = to_diskfile_content_kind(path);
+		if (
+			(kind === 'other' || kind === 'markdown') &&
+			diskfiles.peek(path)?.content_status !== 'unloadable'
+		) {
+			if (diskfiles.compare_bases.has(path)) {
+				add_intent('file_compare_set', { path, base: null }, 'stop comparing the file');
+				add_intent(
+					'diff_split_toggle',
+					{ split: !ui.diff_split },
+					ui.diff_split ? 'show the diff in one column' : 'show the diff side by side'
+				);
+			} else {
+				add_intent('file_compare_set', { path, base: 'disk' }, 'compare the file with the disk');
+			}
 		}
 	}
 	if (tabs.recently_closed_tabs.length) add_intent('tab_reopen_closed', undefined);

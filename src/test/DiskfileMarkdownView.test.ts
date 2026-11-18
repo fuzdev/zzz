@@ -288,9 +288,10 @@ describe('DiskfileMarkdownView', () => {
 	test('the mode buttons show their shortcuts', async () => {
 		const a = await disk.load(PATH_A, '# a');
 		const view = render(DiskfileMarkdownView, { diskfile: a });
-		const titles = Array.from(view.target.querySelectorAll('button[aria-pressed]')).map((b) =>
-			b.getAttribute('title')
-		);
+		// the mode buttons, not the drawer's compare toggle
+		const titles = Array.from(view.target.querySelectorAll('button[aria-pressed]'))
+			.filter((b) => to_visible_text(b) !== 'compare')
+			.map((b) => b.getAttribute('title'));
 		assert.deepEqual(titles, [
 			'split view [Ctrl+Shift+1]',
 			'preview [Ctrl+Shift+2]',

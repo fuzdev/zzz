@@ -277,6 +277,11 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'desk_pin_toggle', 'execute', 'handling'>
 		) => ActionOutputs['desk_pin_toggle'];
 	};
+	diff_split_toggle?: {
+		execute?: (
+			action_event: TypedActionEvent<'diff_split_toggle', 'execute', 'handling'>
+		) => ActionOutputs['diff_split_toggle'];
+	};
 	diskfile_details_toggle?: {
 		execute?: (
 			action_event: TypedActionEvent<'diskfile_details_toggle', 'execute', 'handling'>
@@ -336,6 +341,11 @@ export interface FrontendActionHandlers {
 		execute?: (
 			action_event: TypedActionEvent<'markdown_mode_set', 'execute', 'handling'>
 		) => ActionOutputs['markdown_mode_set'];
+	};
+	file_compare_set?: {
+		execute?: (
+			action_event: TypedActionEvent<'file_compare_set', 'execute', 'handling'>
+		) => ActionOutputs['file_compare_set'];
 	};
 	tab_close_resolve?: {
 		execute?: (

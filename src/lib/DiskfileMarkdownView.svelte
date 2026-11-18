@@ -45,6 +45,7 @@
 	import DiskfileDormantNotice from './DiskfileDormantNotice.svelte';
 	import DiskfileConflictNotice, { save_from_view } from './DiskfileConflictNotice.svelte';
 	import DiskfileSaveErrorNotice from './DiskfileSaveErrorNotice.svelte';
+	import DiskfileCompareView from './DiskfileCompareView.svelte';
 	import TutorialForDiskfiles from './TutorialForDiskfiles.svelte';
 	import DiskfileLoadingNotice from './DiskfileLoadingNotice.svelte';
 	import Icon from './Icon.svelte';
@@ -130,6 +131,7 @@
 		| undefined = $state.raw();
 	let root_el: HTMLElement | undefined = $state.raw();
 	let conflict_notice: { focus: () => boolean } | undefined = $state.raw();
+	let compare_view: { focus: () => void } | undefined = $state.raw();
 
 	// the text the editor holds - a CRLF file's line breaks read as the textarea reads them, so its
 	// caret and mdz's offsets agree; typing writes the textarea's text to the draft, as it always has.
@@ -433,11 +435,24 @@
 			<DiskfileConflictNotice
 				bind:this={conflict_notice}
 				{editor_state}
-				onresolve={() => source_editor?.focus()}
+				onresolve={() => (editor_state.comparing ? compare_view?.focus() : source_editor?.focus())}
+				compare
 				attrs={{ class: 'px_md py_xs' }}
 			/>
 			<DiskfileSaveErrorNotice {editor_state} attrs={{ class: 'px_md py_xs' }} />
-			<div class="flex flex:1 min-height:0" {@attach scroll_sync.attach}>
+			{#if editor_state.comparing}
+				<DiskfileCompareView
+					bind:this={compare_view}
+					{editor_state}
+					onclose={() => source_editor?.focus()}
+					attrs={{ class: 'flex:1 min-height:0' }}
+				/>
+			{/if}
+			<!-- hidden while comparing, not unmounted, so the editor keeps its undo -->
+			<div
+				class="flex flex:1 min-height:0 {editor_state.comparing ? 'display:none' : ''}"
+				{@attach scroll_sync.attach}
+			>
 				{#if mode !== 'preview'}
 					<!-- a wrapper keeps the editor its last child, so `CodeTextarea` adds no flow margin below -->
 					<div class="flex:1 min-width:0 column">
@@ -486,6 +501,7 @@
 					{editor_state}
 					readonly={!editor_state.content_loaded}
 					delete_position="right"
+					compare
 				/>
 			</div>
 

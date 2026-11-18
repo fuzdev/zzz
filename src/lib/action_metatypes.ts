@@ -34,6 +34,7 @@ export const ActionMethod = one_of([
 	'sidebar_toggle',
 	'desk_toggle',
 	'desk_pin_toggle',
+	'diff_split_toggle',
 	'diskfile_details_toggle',
 	'tab_open',
 	'tab_select',
@@ -46,6 +47,7 @@ export const ActionMethod = one_of([
 	'explorer_mode_set',
 	'file_reveal',
 	'markdown_mode_set',
+	'file_compare_set',
 	'tab_close_resolve',
 	'path_open',
 	'project_activate',
@@ -128,6 +130,7 @@ export const LocalCallActionMethod = one_of([
 	'sidebar_toggle',
 	'desk_toggle',
 	'desk_pin_toggle',
+	'diff_split_toggle',
 	'diskfile_details_toggle',
 	'tab_open',
 	'tab_select',
@@ -140,6 +143,7 @@ export const LocalCallActionMethod = one_of([
 	'explorer_mode_set',
 	'file_reveal',
 	'markdown_mode_set',
+	'file_compare_set',
 	'tab_close_resolve',
 	'path_open',
 	'project_activate',
@@ -176,6 +180,7 @@ export const FrontendActionMethod = one_of([
 	'sidebar_toggle',
 	'desk_toggle',
 	'desk_pin_toggle',
+	'diff_split_toggle',
 	'diskfile_details_toggle',
 	'tab_open',
 	'tab_select',
@@ -188,6 +193,7 @@ export const FrontendActionMethod = one_of([
 	'explorer_mode_set',
 	'file_reveal',
 	'markdown_mode_set',
+	'file_compare_set',
 	'tab_close_resolve',
 	'path_open',
 	'project_activate',
@@ -407,6 +413,9 @@ export interface FrontendActionsApi {
 	desk_pin_toggle: (
 		input?: ActionCallInputs['desk_pin_toggle']
 	) => ActionOutputs['desk_pin_toggle'];
+	diff_split_toggle: (
+		input?: ActionCallInputs['diff_split_toggle']
+	) => ActionOutputs['diff_split_toggle'];
 	diskfile_details_toggle: (
 		input?: ActionCallInputs['diskfile_details_toggle']
 	) => ActionOutputs['diskfile_details_toggle'];
@@ -425,6 +434,9 @@ export interface FrontendActionsApi {
 	markdown_mode_set: (
 		input: ActionCallInputs['markdown_mode_set']
 	) => ActionOutputs['markdown_mode_set'];
+	file_compare_set: (
+		input: ActionCallInputs['file_compare_set']
+	) => ActionOutputs['file_compare_set'];
 	tab_close_resolve: (
 		input: ActionCallInputs['tab_close_resolve'],
 		options?: RpcClientCallOptions

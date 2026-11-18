@@ -15,7 +15,9 @@ export const UiJson = cell_json_schema(
 		show_desk_menu: with_default(boolean, false),
 		desk_pinned: with_default(boolean, false),
 		/** Every file view's details drawer, a layout preference shared by every file. */
-		show_diskfile_details: with_default(boolean, true)
+		show_diskfile_details: with_default(boolean, true),
+		/** Whether diffs show the two versions side by side, a preference shared by every diff. */
+		diff_split: with_default(boolean, false)
 	},
 	'Ui'
 );
@@ -34,6 +36,7 @@ export class Ui extends Cell<typeof UiJson> {
 	show_desk_menu: boolean = $state.raw()!;
 	desk_pinned: boolean = $state.raw()!;
 	show_diskfile_details: boolean = $state.raw()!;
+	diff_split: boolean = $state.raw()!;
 
 	// TODO revisit this API, maybe with an associated attachment?
 	/** Consumed by components like `ContentEditor` for focusing elements. */
@@ -97,6 +100,16 @@ export class Ui extends Cell<typeof UiJson> {
 	 */
 	toggle_diskfile_details(value: boolean = !this.show_diskfile_details): boolean {
 		this.show_diskfile_details = value;
+		return value;
+	}
+
+	/**
+	 * Toggle whether diffs show side by side. The `diff_split_toggle`
+	 * intent's implementation — UI calls `app.intents.diff_split_toggle`,
+	 * not this.
+	 */
+	toggle_diff_split(value: boolean = !this.diff_split): boolean {
+		this.diff_split = value;
 		return value;
 	}
 }

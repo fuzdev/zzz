@@ -17,6 +17,7 @@ import type { Frontend } from './frontend.svelte.ts';
 import { DiskfileHistory, type HistoryEntry } from './diskfile_history.svelte.ts';
 import type { Draft } from './drafts.svelte.ts';
 import { to_default_markdown_view_mode, type MarkdownViewMode } from './markdown_view_mode.ts';
+import type { DiskfileCompareBase } from './diskfile_compare.ts';
 
 /** `save_error` for a save of a file in no open project (`DiskfileEditorState.dormant`). */
 export const SAVE_ERROR_DORMANT = "not saved — its project isn't open; reopen it to save";
@@ -216,6 +217,15 @@ export class DiskfileEditorState {
 	}
 
 	/**
+	 * What the file's diff is from while it's compared, `null` when it isn't.
+	 * Kept by path (`Diskfiles.compare_bases`), like the markdown view's mode,
+	 * and chosen through the `file_compare_set` intent. See `comparing`.
+	 */
+	get compare_choice(): DiskfileCompareBase | null {
+		return this.app.diskfiles.compare_bases.get(this.path) ?? null;
+	}
+
+	/**
 	 * The id of a heading the markdown view reveals once it shows this file,
 	 * then clears — set by following a link with a `#fragment` here from
 	 * another file (`Diskfiles.open_path`).
@@ -359,6 +369,29 @@ export class DiskfileEditorState {
 		merged.splice(index, 0, draft_entry);
 		return merged;
 	});
+	/**
+	 * The history entry the diff is from, when `compare_choice` names one
+	 * still in `content_history` — `null` for the disk version, which an entry
+	 * gone from the history falls back to.
+	 */
+	readonly compare_base_entry: HistoryEntry | null = $derived.by(() => {
+		const choice = this.compare_choice;
+		if (choice === null || choice === 'disk') return null;
+		return this.content_history.find((entry) => entry.id === choice) ?? null;
+	});
+	/**
+	 * Whether the views show the diff (`DiskfileCompareView`) in place of the
+	 * editor: the file is compared (`compare_choice`) and its content loaded.
+	 */
+	readonly comparing: boolean = $derived(this.compare_choice !== null && this.content_loaded);
+	/**
+	 * The text the diff is from: the entry's (`compare_base_entry`), else the
+	 * disk content — `null` while the content isn't loaded. The diff is to
+	 * `current_content`, the user's version, whatever the views show.
+	 */
+	readonly compare_base_content: string | null = $derived(
+		this.compare_base_entry?.content ?? this.original_content
+	);
 	/** The history's entries — every one but the draft. */
 	readonly saved_history_entries: Array<HistoryEntry> = $derived.by(() => this.history.entries);
 	/** The draft as the one unsaved entry, or none. */

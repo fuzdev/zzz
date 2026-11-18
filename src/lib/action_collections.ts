@@ -38,6 +38,7 @@ export const ActionSpecs: ActionSpecs = {
 	sidebar_toggle: specs.sidebar_toggle_action_spec,
 	desk_toggle: specs.desk_toggle_action_spec,
 	desk_pin_toggle: specs.desk_pin_toggle_action_spec,
+	diff_split_toggle: specs.diff_split_toggle_action_spec,
 	diskfile_details_toggle: specs.diskfile_details_toggle_action_spec,
 	tab_open: specs.tab_open_action_spec,
 	tab_select: specs.tab_select_action_spec,
@@ -50,6 +51,7 @@ export const ActionSpecs: ActionSpecs = {
 	explorer_mode_set: specs.explorer_mode_set_action_spec,
 	file_reveal: specs.file_reveal_action_spec,
 	markdown_mode_set: specs.markdown_mode_set_action_spec,
+	file_compare_set: specs.file_compare_set_action_spec,
 	tab_close_resolve: specs.tab_close_resolve_action_spec,
 	path_open: specs.path_open_action_spec,
 	project_activate: specs.project_activate_action_spec,
@@ -97,6 +99,7 @@ export type ActionSpecs = {
 	readonly sidebar_toggle: typeof specs.sidebar_toggle_action_spec;
 	readonly desk_toggle: typeof specs.desk_toggle_action_spec;
 	readonly desk_pin_toggle: typeof specs.desk_pin_toggle_action_spec;
+	readonly diff_split_toggle: typeof specs.diff_split_toggle_action_spec;
 	readonly diskfile_details_toggle: typeof specs.diskfile_details_toggle_action_spec;
 	readonly tab_open: typeof specs.tab_open_action_spec;
 	readonly tab_select: typeof specs.tab_select_action_spec;
@@ -109,6 +112,7 @@ export type ActionSpecs = {
 	readonly explorer_mode_set: typeof specs.explorer_mode_set_action_spec;
 	readonly file_reveal: typeof specs.file_reveal_action_spec;
 	readonly markdown_mode_set: typeof specs.markdown_mode_set_action_spec;
+	readonly file_compare_set: typeof specs.file_compare_set_action_spec;
 	readonly tab_close_resolve: typeof specs.tab_close_resolve_action_spec;
 	readonly path_open: typeof specs.path_open_action_spec;
 	readonly project_activate: typeof specs.project_activate_action_spec;
@@ -163,6 +167,7 @@ export interface ActionInputs {
 	sidebar_toggle: Infer<typeof specs.sidebar_toggle_action_spec.input>;
 	desk_toggle: Infer<typeof specs.desk_toggle_action_spec.input>;
 	desk_pin_toggle: Infer<typeof specs.desk_pin_toggle_action_spec.input>;
+	diff_split_toggle: Infer<typeof specs.diff_split_toggle_action_spec.input>;
 	diskfile_details_toggle: Infer<typeof specs.diskfile_details_toggle_action_spec.input>;
 	tab_open: Infer<typeof specs.tab_open_action_spec.input>;
 	tab_select: Infer<typeof specs.tab_select_action_spec.input>;
@@ -175,6 +180,7 @@ export interface ActionInputs {
 	explorer_mode_set: Infer<typeof specs.explorer_mode_set_action_spec.input>;
 	file_reveal: Infer<typeof specs.file_reveal_action_spec.input>;
 	markdown_mode_set: Infer<typeof specs.markdown_mode_set_action_spec.input>;
+	file_compare_set: Infer<typeof specs.file_compare_set_action_spec.input>;
 	tab_close_resolve: Infer<typeof specs.tab_close_resolve_action_spec.input>;
 	path_open: Infer<typeof specs.path_open_action_spec.input>;
 	project_activate: Infer<typeof specs.project_activate_action_spec.input>;
@@ -227,6 +233,7 @@ export interface ActionCallInputs {
 	sidebar_toggle: InferInput<typeof specs.sidebar_toggle_action_spec.input>;
 	desk_toggle: InferInput<typeof specs.desk_toggle_action_spec.input>;
 	desk_pin_toggle: InferInput<typeof specs.desk_pin_toggle_action_spec.input>;
+	diff_split_toggle: InferInput<typeof specs.diff_split_toggle_action_spec.input>;
 	diskfile_details_toggle: InferInput<typeof specs.diskfile_details_toggle_action_spec.input>;
 	tab_open: InferInput<typeof specs.tab_open_action_spec.input>;
 	tab_select: InferInput<typeof specs.tab_select_action_spec.input>;
@@ -239,6 +246,7 @@ export interface ActionCallInputs {
 	explorer_mode_set: InferInput<typeof specs.explorer_mode_set_action_spec.input>;
 	file_reveal: InferInput<typeof specs.file_reveal_action_spec.input>;
 	markdown_mode_set: InferInput<typeof specs.markdown_mode_set_action_spec.input>;
+	file_compare_set: InferInput<typeof specs.file_compare_set_action_spec.input>;
 	tab_close_resolve: InferInput<typeof specs.tab_close_resolve_action_spec.input>;
 	path_open: InferInput<typeof specs.path_open_action_spec.input>;
 	project_activate: InferInput<typeof specs.project_activate_action_spec.input>;
@@ -291,6 +299,7 @@ export interface ActionOutputs {
 	sidebar_toggle: Infer<typeof specs.sidebar_toggle_action_spec.output>;
 	desk_toggle: Infer<typeof specs.desk_toggle_action_spec.output>;
 	desk_pin_toggle: Infer<typeof specs.desk_pin_toggle_action_spec.output>;
+	diff_split_toggle: Infer<typeof specs.diff_split_toggle_action_spec.output>;
 	diskfile_details_toggle: Infer<typeof specs.diskfile_details_toggle_action_spec.output>;
 	tab_open: Infer<typeof specs.tab_open_action_spec.output>;
 	tab_select: Infer<typeof specs.tab_select_action_spec.output>;
@@ -303,6 +312,7 @@ export interface ActionOutputs {
 	explorer_mode_set: Infer<typeof specs.explorer_mode_set_action_spec.output>;
 	file_reveal: Infer<typeof specs.file_reveal_action_spec.output>;
 	markdown_mode_set: Infer<typeof specs.markdown_mode_set_action_spec.output>;
+	file_compare_set: Infer<typeof specs.file_compare_set_action_spec.output>;
 	tab_close_resolve: Infer<typeof specs.tab_close_resolve_action_spec.output>;
 	path_open: Infer<typeof specs.path_open_action_spec.output>;
 	project_activate: Infer<typeof specs.project_activate_action_spec.output>;
@@ -434,6 +444,11 @@ export interface ActionEventDatas {
 		ActionInputs['desk_pin_toggle'],
 		ActionOutputs['desk_pin_toggle']
 	>;
+	diff_split_toggle: ActionEventLocalCallData<
+		'diff_split_toggle',
+		ActionInputs['diff_split_toggle'],
+		ActionOutputs['diff_split_toggle']
+	>;
 	diskfile_details_toggle: ActionEventLocalCallData<
 		'diskfile_details_toggle',
 		ActionInputs['diskfile_details_toggle'],
@@ -489,6 +504,11 @@ export interface ActionEventDatas {
 		'markdown_mode_set',
 		ActionInputs['markdown_mode_set'],
 		ActionOutputs['markdown_mode_set']
+	>;
+	file_compare_set: ActionEventLocalCallData<
+		'file_compare_set',
+		ActionInputs['file_compare_set'],
+		ActionOutputs['file_compare_set']
 	>;
 	tab_close_resolve: ActionEventLocalCallData<
 		'tab_close_resolve',

@@ -8,6 +8,10 @@
 	// @fuz-variables palette_g_50 palette_h_50 palette_i_50 palette_j_50 text_50
 	import '@fuzdev/fuz_code/theme.css';
 	import '@fuzdev/fuz_code/theme_highlight.css';
+	// then its `theme_diff.css`, for `CodeDiff`
+	// @fuz-variables positive_05 positive_20 negative_05 negative_20
+	// @fuz-variables font_family_mono space_lg space_xs space_xs3
+	import '@fuzdev/fuz_code/theme_diff.css';
 	// then zzz's own `style.css`
 	// @fuz-variables border_color_30 border_radius_xs2 border_width_1 border_width_2
 	// @fuz-variables outline_color outline_width
