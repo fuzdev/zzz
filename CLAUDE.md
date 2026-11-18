@@ -264,44 +264,24 @@ Details: ./docs/development.md § Adding a New Action.
   symlinks, absolute paths only. Roots: the app directory, `PUBLIC_ZZZ_SCOPED_DIRS`,
   and each open project's root.
 - **Projects**: `project_open` (and so `zzz <path>`) opens the project
-  holding a file or directory (`project.rs`): a trusted `repos.toml`
-  registry found walking up (strictly below `$HOME`, or within the
-  allowlisted root; owned by you or root, never `o+w`, `g+w` only by your
-  private group — `file_trust.rs`), else the git checkout holding it,
-  else the directory; a path under a `.git` component opens as the
-  directory holding the outermost one. A path under a registry's root in
-  none of its present entries opens as its checkout or directory instead,
-  never above the registry's root, as do the root of a checkout with none
-  present and a linked worktree of it; an untrusted, unconfined, or
-  invalid registry refuses the open with its reason, unless it's kept
-  inside a checkout (with no link above), which then opens as a checkout
-  holding the path at or below the registry's directory. Either fallback
-  is the project's `fallback`, shown as why it's rooted there. A registry
-  entry escaping the root, or in a git dir, is refused alone.
-  Opening a path **focuses** the repo holding it, and `repo_focus` /
-  `repo_unfocus` focus or unfocus a registry's present entries one by one
-  (the file tree's lazy rows, the projects page) — daemon-wide, until
-  unfocused or the project closes; a checkout's or plain directory's root
-  stays focused while it's open. A focused directory is indexed whole, a
-  registry's root at its top level only (its loose files), and an
-  unfocused repo or an unregistered directory under it not at all as part
-  of the registry's project — an unregistered directory opened by a path
-  in it is its own project, indexed whole. File access is the whole
-  root regardless: opening a path in a registry puts all of it (say all
-  of `~/dev`) in scope, unfocused repos and unregistered directories
-  included.
+  holding a path (`project.rs`): a trusted `repos.toml` registry found
+  walking up (`file_trust.rs`: Debian sshd's ownership and mode rule), else
+  the git checkout holding it, else the directory. A path in no present
+  registry entry, or under a refused in-checkout registry, falls back to
+  its checkout or directory — never above the registry's root — and the
+  project's `fallback` says why. Opening a path **focuses** its repo;
+  `repo_focus` / `repo_unfocus` do it per entry, daemon-wide. A focused
+  directory is indexed whole, a registry's root at its top level only,
+  anything else not at all — but **file access is the whole root**: a path
+  in `~/dev`'s registry puts all of `~/dev` in scope. Full rules:
+  ./docs/architecture.md § Projects.
 - **A focused checkout is indexed by git's ignore rule** (`.gitignore`,
-  `info/exclude`, global excludes): listed at start, new paths vetted
-  live with `check-ignore` (a burst past `VET_MAX_PATHS` re-prunes), the
-  set re-pruned when a rule file changes; nested repos and submodules
-  aren't indexed. Everything else skips fixed names (`node_modules`,
+  `info/exclude`, global excludes; nested repos and submodules aren't
+  indexed); everything else skips fixed names (`node_modules`,
   `.svelte-kit`, `target`, `dist`), and `.git`, `.zzz`, and the credential
-  directories are skipped everywhere. Each project carries git's set per
-  focused checkout (`ignored`: `paths`, `nested`, `resyncs`), which the
-  client reads through one predicate (`to_unindexed_part`); a re-prune
-  past `REPRUNE_BROADCAST_MAX` changes sends none and bumps `resyncs`, and
-  clients pull the repo instead. When git is unusable or keeps failing, the
-  filer falls back to fixed names (./docs/architecture.md § Filer).
+  directories are skipped everywhere. The client reads git's set through
+  one predicate, `to_unindexed_part`. Mechanism and fallbacks:
+  ./docs/architecture.md § Filer.
 - **Roots are strictly inside `$HOME`** (the daemon's, canonicalized at
   boot) unless `ZZZ_ROOTS_OUTSIDE_HOME` names them, and never `/`, `$HOME`
   or an ancestor of it, or under `/proc`, `/sys`, or `/dev`, allowlisted or
@@ -419,12 +399,9 @@ The main ones; detail in ./docs/architecture.md § Known Limitations:
 
 - **Domain state is in memory** — lost on a daemon restart; the frontend
   resyncs after every reconnect and reopens the projects a restart lost.
-- **Focus is by hand** — a repo is indexed only once focused (opening a
-  path in it, the file tree, the projects page), and stays focused until
-  unfocused, its project closes, or a later open finds its entry missing;
-  nothing else under a registry's root is indexed by the registry's
-  project — an unregistered directory only as its own project, once a path
-  in it is opened — and a new file where nothing is indexed is refused.
+- **Focus is by hand** — a repo is indexed only once focused, until
+  unfocused or its project closes; a new file where nothing is indexed is
+  refused (§ Files, scope, and the app directory).
 - **Chats, prompts, terminal presets, and file drafts** live in page
   memory, lost on reload — a draft outlives its project's close (dormant),
   not the page.

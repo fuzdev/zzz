@@ -555,66 +555,17 @@ joined after the drain, before PTY teardown.
 
 ## Known Limitations
 
-- RPC methods: `ping`, `session_load`, `project_*`, `repo_focus`,
-  `repo_unfocus`, `repo_files`, `diskfile_read`,
-  `diskfile_update`, `diskfile_create`, `diskfile_delete`, `directory_create`,
-  `media_finalize`,
-  `transcription_create`, `job_cancel`, `terminal_*`, `provider_load_status`,
-  `completion_create`, `account_verify`, `account_session_list`,
-  `account_session_revoke`, `account_session_revoke_all`,
-  `account_token_create`, `account_token_list`, `account_token_revoke`,
-  `admin_session_revoke_all` (admin-only), `admin_token_revoke_all`
-  (admin-only) — plus the rest of the spine-registered `fuz_auth` standard
-  bundle and protocol specs (see ../docs/backend.md § Crates)
-- zzz-domain `remote_notification` actions: `job_changed` (a job's full
-  state on every change) and `transcription_progress` (segments a
-  running transcription just decoded), both sent only to the owning
-  account's sockets, `project_changed` (broadcast on open, update — a
-  focus added or dropped, or its ignored set changed — and close), `filer_change` (`FilerManager`
-  with `notify` crate — per-directory watches (see ../docs/backend.md §
-  Known Issues → Filer watches), per-path debounced broadcasts (80ms
-  quiet, capped at 500ms) with immediate index updates (delete+create
-  inside the window becomes `change`, create+delete becomes a bare
-  `delete`), every event resolved by `lstat` so late or reordered
-  removes can't drop an existing file, rename-aware (old path `delete`,
-  new path `add`), metadata only — each `disknode` is
-  `{id, source_dir, size, ctime, mtime}` (timestamps in whole
-  milliseconds), never contents, which clients read with
-  `diskfile_read`; the index is stat-only — it reads no file — and a
-  file whose `lstat` stamp moved, or whose indexed stamp was too fresh
-  to trust (git's racily-clean rule, ../docs/backend.md § Known Issues →
-  Filer watches), is a `change`, a `touch` included), ignored paths
-  filtered before the bounded event channel with a coalesced root rescan
-  on overflow, per-watcher ignore config, in-memory file index returned
-  (as metadata) by `session_load`, `project_open`, `repo_focus`, and
-  `repo_files`, symlinks skipped; ignores `.git`/`.zzz` and the
-  credential directories (`.ssh`/`.gnupg`/`.aws`/
-  `.kube`/`.docker`/`.password-store`) by name under every root (`.zzz`
-  keeps the CLI daemon home's `.env` / `bootstrap_token` out of a root
-  that covers it); under a checkout root indexed whole, everything else
-  is git's answer (`.gitignore`, `info/exclude`, global excludes —
-  listed at start, each listing taken again after its walk, each burst's
-  adds vetted (at most `VET_MAX_PATHS`, past which it re-prunes),
-  re-pruned once a `.gitignore` / `info/exclude` change settles or at
-  once on an overflow; nested repos and submodules not indexed; the set
-  on the wire per focused checkout as `ignored` — `paths`, `nested` (so
-  a client tells a repo of its own from a missing path), and `resyncs`,
-  bumped by a re-prune past `REPRUNE_BROADCAST_MAX` that sends no
-  `filer_change`s, so clients pull the repo; git unusable or failing
-  falls back to fixed names; ../docs/backend.md § Known Issues → Filer
-  ignore rule), elsewhere `node_modules`/`.svelte-kit`/`target`/`dist`
-  by name too; `ScopedFs`'s `.zzz-tmp-*` staging files (the walk also
-  deletes orphaned ones — exact `.zzz-tmp-<uuid>` names, regular files
-  over an hour old), and every non-UTF-8 path, plus `zzz_dir` by its
-  full path for a project/scoped_dir watcher whose root contains it;
-  startup filers on `zzz_dir` and `scoped_dirs`, per-project filers with
-  dedup and lifetime tracking), `terminal_data` (PTY output) and
-  `terminal_exited` (process exit), both sent only to the owning
-  account's sockets, `completion_progress` (streaming completion chunks
-  to requesting WS connection); the spine's role-grant-offer bundle
-  carries its own notification set (`role_grant_offer_received` /
-  `_retracted` / `_accepted` / `_declined` / `_supersede`)
-- AI providers: Anthropic, OpenAI, and Gemini all fully implemented (non-streaming + SSE streaming)
+- RPC methods: the list in the intro above (../docs/backend.md § Crates for
+  the spine's full bundle).
+- zzz-domain `remote_notification` actions: `job_changed` and
+  `transcription_progress`, `terminal_data` and `terminal_exited` (each to
+  the owning account's sockets), `completion_progress` (to the requesting
+  connection), `project_changed` (broadcast on open, update — a focus added
+  or dropped, or its ignored set changed — and close), and `filer_change`
+  (broadcast; metadata only — the filer's watches, debounce, stamp rule,
+  and ignore rules are ../docs/architecture.md § Filer and
+  ../docs/backend.md § Known Issues → Filer watches / Filer ignore rule).
+  The spine's role-grant-offer bundle carries its own notification set.
 - No batch request support (JSON arrays)
 - `/api/account/signup` is mounted via `fuz_auth::signup_routes`. Invite-gated
   by default (`app_settings.open_signup=false`); admins flip the setting via
