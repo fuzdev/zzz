@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
-import { test, beforeEach, assert } from 'vitest';
+import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
+import { flushSync, mount, unmount } from 'svelte';
 
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
-import { create_diskfile_picker_sorters } from '#lib/DiskfilePickerDialog.svelte';
+import DiskfilePickerDialog, {
+	create_diskfile_picker_sorters
+} from '#lib/DiskfilePickerDialog.svelte';
 
+import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { ResizeObserverStub, write_diskfile } from './diskfile_tree_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
@@ -84,4 +89,52 @@ test('equal values tie by path, in both directions', () => {
 	];
 	assert.deepEqual(sort_by('size_largest', files), ['big', 'x', 'y', 'z', 'unknown1', 'unknown2']);
 	assert.deepEqual(sort_by('size_smallest', files), ['x', 'y', 'z', 'big', 'unknown1', 'unknown2']);
+});
+
+describe('the dialog', () => {
+	// jsdom has no modal dialogs
+	const dialog_proto = HTMLDialogElement.prototype as Partial<HTMLDialogElement>;
+	const originals = { showModal: dialog_proto.showModal, close: dialog_proto.close };
+	const cleanups: Array<() => void> = [];
+	beforeEach(() => {
+		vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+		dialog_proto.showModal = function (this: HTMLDialogElement) {
+			this.open = true;
+		};
+		dialog_proto.close = function (this: HTMLDialogElement) {
+			this.open = false;
+		};
+	});
+	afterEach(() => {
+		for (const cleanup of cleanups.splice(0)) cleanup();
+		dialog_proto.showModal = originals.showModal;
+		dialog_proto.close = originals.close;
+		vi.unstubAllGlobals();
+	});
+
+	test('its rows are options Tab passes over, the filter input keeping the focus', () => {
+		write_diskfile(app, '/w/a.md');
+		write_diskfile(app, '/w/b.md');
+		const target = document.createElement('div');
+		document.body.append(target);
+		const mounted = mount(FrontendContextHarness, {
+			target,
+			props: {
+				app,
+				component: DiskfilePickerDialog,
+				props: { show: true, onpick: () => undefined }
+			}
+		});
+		flushSync();
+		cleanups.push(() => {
+			void unmount(mounted);
+			target.remove();
+		});
+		const rows = Array.from(
+			document.querySelectorAll<HTMLElement>('[role="option"] [role="button"]')
+		);
+		assert.strictEqual(rows.length, 2);
+		for (const row of rows) assert.strictEqual(row.tabIndex, -1);
+		assert.ok(document.querySelector('input[role="combobox"]'), 'the filter input');
+	});
 });

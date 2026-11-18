@@ -92,7 +92,8 @@ export const handle_dashboard_shortcut = (
 		// the browser's own Ctrl+K (its search bar) stays shut wherever the focus is
 		if (ui.show_palette) {
 			// the open palette closes itself on the chord through its own close, which returns the
-			// focus — so the event goes on to its input, unstopped (from its padding, nothing closes)
+			// focus — so the event goes on to its input, unstopped (with the focus out of the input,
+			// which a click can't take but Tab can, nothing closes)
 			event.preventDefault();
 			return false;
 		}

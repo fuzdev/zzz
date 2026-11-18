@@ -13,8 +13,8 @@ import { one_of, type Infer } from '@fuzdev/fuz_schema/schema.ts';
 export const MarkdownViewMode = one_of(['split', 'preview', 'source']);
 export type MarkdownViewMode = Infer<typeof MarkdownViewMode>;
 
-/** The markdown view's modes, in the order the UI offers them. */
-export const MARKDOWN_VIEW_MODES: ReadonlyArray<MarkdownViewMode> = ['split', 'preview', 'source'];
+/** The markdown view's modes, in the order the UI offers them — the schema's own. */
+export const MARKDOWN_VIEW_MODES: ReadonlyArray<MarkdownViewMode> = MarkdownViewMode.def;
 
 /** What each mode is called in the UI. */
 export const MARKDOWN_VIEW_MODE_LABELS: Readonly<Record<MarkdownViewMode, string>> = {

@@ -3,6 +3,7 @@ import { describe, test, assert } from 'vitest';
 import {
 	MARKDOWN_VIEW_MODES,
 	MARKDOWN_VIEW_MODE_SHORTCUTS,
+	MarkdownViewMode,
 	to_markdown_view_mode_for_shortcut
 } from '#lib/markdown_view_mode.ts';
 
@@ -21,6 +22,10 @@ describe('to_markdown_view_mode_for_shortcut', () => {
 		assert.strictEqual(to_markdown_view_mode_for_shortcut(key('Digit2')), 'preview');
 		assert.strictEqual(to_markdown_view_mode_for_shortcut(key('Digit3')), 'source');
 		assert.strictEqual(to_markdown_view_mode_for_shortcut(key('Numpad2')), 'preview');
+	});
+
+	test('the modes are the schema’s', () => {
+		assert.strictEqual(MARKDOWN_VIEW_MODES, MarkdownViewMode.def);
 	});
 
 	test('the shortcuts shown match the order', () => {

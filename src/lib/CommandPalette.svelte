@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import Dialog from '@fuzdev/fuz_ui/Dialog.svelte';
 	import DialogContent from '@fuzdev/fuz_ui/DialogContent.svelte';
@@ -27,7 +28,8 @@
 	 * active command by `aria-activedescendant`, like the file tree names its
 	 * active row; Up and Down move it, Enter runs it, a click runs the one
 	 * clicked, and Escape, Ctrl+K or Ctrl+Space, or a click outside closes
-	 * the palette — through the dialog's own close, which returns the focus.
+	 * the palette — through the dialog's own close, which returns the focus,
+	 * as does the intent closing it from code (`palette_toggle {show: false}`).
 	 *
 	 * Running a command closes the palette first — the native dialog's close
 	 * returns focus to where it was — so the command acts on the page as the
@@ -66,6 +68,14 @@
 	const active = $derived(Math.min(active_index, matches.length - 1));
 
 	let list_el: HTMLUListElement | undefined = $state.raw();
+	let input_el: HTMLInputElement | undefined = $state.raw();
+
+	// new results start at the top, not wherever the old ones were scrolled to — the active row's
+	// scroll into view doesn't run when it was the first already
+	const reset_list = (): void => {
+		active_index = 0;
+		if (list_el) list_el.scrollTop = 0;
+	};
 
 	// the active option stays in view as the keyboard moves it
 	$effect(() => {
@@ -76,8 +86,25 @@
 		el?.scrollIntoView?.({ block: 'nearest' });
 	});
 
-	const close = (): void => {
-		app.intents.palette_toggle({ show: false });
+	// the open dialog's own close, which the intent closing the palette from code goes through:
+	// unmounting closes the native dialog detached, which returns no focus, so the dialog shows
+	// while `shown` does, cleared only after that close ran — whatever order the intent's caller
+	// (an event handler, another component's effect) puts it in against the markup's update
+	let open_dialog_close: (() => void) | null = null;
+	let shown = $state.raw(false);
+	$effect.pre(() => {
+		if (app.ui.show_palette) {
+			shown = true;
+		} else {
+			untrack(() => open_dialog_close?.());
+			shown = false;
+		}
+	});
+
+	// the dialog closed — by Escape, a click outside, a chord, a command, or the intent from code
+	const onclose = (): void => {
+		open_dialog_close = null;
+		if (app.ui.show_palette) app.intents.palette_toggle({ show: false });
 	};
 
 	const run = (command: PaletteCommand, close_dialog: () => void): void => {
@@ -85,7 +112,7 @@
 			// a switch of what the palette lists keeps it open, starting afresh
 			mode = command.mode;
 			query = '';
-			active_index = 0;
+			reset_list();
 			return;
 		}
 		close_dialog();
@@ -109,7 +136,7 @@
 			// a held Backspace that emptied the filter stops there
 			if (e.repeat) return;
 			mode = 'commands';
-			active_index = 0;
+			reset_list();
 			return;
 		}
 		if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
@@ -135,16 +162,23 @@
 	};
 </script>
 
-{#if app.ui.show_palette}
-	<Dialog onclose={close} align="top">
+{#if shown}
+	<Dialog {onclose} align="top">
 		{#snippet children(dialog)}
-			<DialogContent close_button={false} class="width:100%">
+			<!-- a press anywhere on the palette but its input keeps the focus in the input, which keeps
+			the keys — a click on a row runs it, one on the padding or a note does nothing -->
+			<DialogContent
+				close_button={false}
+				class="width:100%"
+				onmousedown={(e) => {
+					if (e.target !== input_el) e.preventDefault();
+				}}
+			>
 				<input
+					bind:this={input_el}
 					type="text"
 					bind:value={query}
-					oninput={() => {
-						active_index = 0;
-					}}
+					oninput={reset_list}
 					onkeydown={(e) => onkeydown(e, dialog.close)}
 					role="combobox"
 					aria-label={mode === 'files' ? 'file' : 'command'}
@@ -163,17 +197,16 @@
 						query = '';
 						active_index = 0;
 						mode = 'commands';
+						open_dialog_close = dialog.close;
 						el.focus();
 					}}
 				/>
-				<!-- a press on the list keeps the focus in the input, which keeps the keys -->
 				<ul
 					bind:this={list_el}
 					id={listbox_id}
 					role="listbox"
 					aria-label={mode === 'files' ? 'files' : 'commands'}
 					class="command-palette-list unstyled"
-					onmousedown={(e) => e.preventDefault()}
 				>
 					{#each matches as command, index (command.key)}
 						<!-- the input keeps the focus and the keys; a click runs the command -->

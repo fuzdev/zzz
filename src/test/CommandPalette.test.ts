@@ -10,6 +10,8 @@ import CommandPalette from '#lib/CommandPalette.svelte';
 import { PALETTE_FILES_MAX } from '#lib/palette_commands.ts';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
+import CommandPaletteSiblingHarness from './CommandPaletteSiblingHarness.svelte';
+import { palette_close_trigger } from './palette_close_trigger.svelte.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import { write_diskfile } from './diskfile_tree_test_helpers.ts';
 
@@ -226,14 +228,40 @@ describe('CommandPalette', () => {
 		}
 	});
 
-	test('a press on the list keeps the focus in the input', () => {
+	test('a press anywhere on the palette but its input keeps the focus in the input', () => {
 		const target = render();
 		open();
-		const list = target.querySelector('[role="listbox"]');
-		assert.ok(list);
-		const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
-		options(target)[0]!.dispatchEvent(press);
-		assert.isTrue(press.defaultPrevented);
+		const mousedown = (el: Element): boolean => {
+			const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+			el.dispatchEvent(press);
+			return press.defaultPrevented;
+		};
+		assert.isTrue(mousedown(options(target)[0]!), 'a row');
+		const input = get_input(target);
+		const surface = input.parentElement!;
+		assert.isTrue(mousedown(surface), 'the padding');
+		assert.isFalse(mousedown(input), 'the input’s own, so a caret or a selection can be placed');
+		type(input, 'nothing like this');
+		const note = Array.from(surface.querySelectorAll('p')).find((p) =>
+			p.textContent.includes('[no matching commands]')
+		);
+		assert.ok(note);
+		assert.isTrue(mousedown(note), 'the empty note');
+	});
+
+	test('a mode switch, and a new query, start the list scrolled to the top', () => {
+		const target = render();
+		open();
+		const list = target.querySelector<HTMLElement>('[role="listbox"]')!;
+		list.scrollTop = 120;
+		type(get_input(target), 'go to a file');
+		assert.strictEqual(list.scrollTop, 0, 'typing');
+		list.scrollTop = 120;
+		key(get_input(target), 'Enter');
+		assert.strictEqual(list.scrollTop, 0, 'into the files');
+		list.scrollTop = 120;
+		key(get_input(target), 'Backspace');
+		assert.strictEqual(list.scrollTop, 0, 'back to the commands');
 	});
 
 	test('"go to a file" lists the files, keeping the palette open; Backspace goes back', () => {
@@ -285,6 +313,57 @@ describe('CommandPalette', () => {
 		);
 		type(get_input(target), 'nothing like this');
 		assert.include(target.textContent, '[no matching files]');
+	});
+
+	test('closed by its intent from code, it closes through the dialog, still connected', () => {
+		const connected_at_close: Array<boolean> = [];
+		dialog_proto.close = function (this: HTMLDialogElement) {
+			connected_at_close.push(this.isConnected);
+			this.open = false;
+		};
+		const target = render();
+		open();
+		const before = app.recent_intents.entries.length;
+		app.intents.palette_toggle({ show: false });
+		flushSync();
+		// the native close returns the focus only on a dialog still in the page
+		assert.deepEqual(connected_at_close, [true]);
+		assert.isNull(target.querySelector('dialog'));
+		assert.isFalse(app.ui.show_palette);
+		assert.strictEqual(app.recent_intents.entries.length, before + 1, 'one intent, not two');
+
+		open();
+		assert.ok(target.querySelector('dialog'), 'opens again');
+	});
+
+	test('closed by its intent from another component’s effect, still connected', () => {
+		const connected_at_close: Array<boolean> = [];
+		dialog_proto.close = function (this: HTMLDialogElement) {
+			connected_at_close.push(this.isConnected);
+			this.open = false;
+		};
+		palette_close_trigger.requested = false;
+		const target = document.createElement('div');
+		document.body.append(target);
+		const mounted = mount(FrontendContextHarness, {
+			target,
+			props: { app, component: CommandPaletteSiblingHarness, props: {} }
+		});
+		flushSync();
+		cleanups.push(() => {
+			void unmount(mounted);
+			target.remove();
+			flushSync();
+		});
+		open();
+		const before = app.recent_intents.entries.length;
+		palette_close_trigger.requested = true;
+		flushSync();
+		assert.deepEqual(connected_at_close, [true]);
+		assert.isNull(target.querySelector('dialog'));
+		assert.strictEqual(app.recent_intents.entries.length, before + 1, 'one intent, not two');
+		palette_close_trigger.requested = false;
+		flushSync();
 	});
 
 	test('reopening starts afresh', () => {

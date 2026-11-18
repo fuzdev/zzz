@@ -114,6 +114,21 @@ describe('create_palette_commands', () => {
 		assert.notInclude(labels(create_palette_commands(app)), 'go back');
 	});
 
+	test('with no tab selected, a history holding only the last file offers no back', () => {
+		app.intents.tab_open({ path: MD, permanent: true });
+		app.intents.tab_close({ path: MD });
+		assert.isNull(app.diskfiles.editor.tabs.selected_path);
+		// the last file stays the history's current one, which a step skips
+		app.diskfiles.editor.tabs.back_paths = [MD];
+		assert.isFalse(app.diskfiles.editor.tabs.can_go_back);
+		assert.notInclude(labels(create_palette_commands(app)), 'go back');
+		app.diskfiles.editor.tabs.forward_paths = [MD];
+		assert.notInclude(labels(create_palette_commands(app)), 'go forward');
+		app.diskfiles.editor.tabs.back_paths = [TXT, MD];
+		assert.isTrue(app.diskfiles.editor.tabs.can_go_back);
+		assert.include(labels(create_palette_commands(app)), 'go back');
+	});
+
 	test('back, forward, and reopen show only with somewhere to go', () => {
 		app.intents.tab_open({ path: MD, permanent: true });
 		app.intents.tab_open({ path: TXT, permanent: true });

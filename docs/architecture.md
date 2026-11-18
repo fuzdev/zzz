@@ -267,30 +267,36 @@ meaning changes; and `history` —
 ### The command palette
 
 Ctrl+K or Ctrl+Space opens the command palette (`CommandPalette`, the
-`palette_toggle` intent) from anywhere, a text field included (not while
-an input method holds the key), but a terminal view taking keys, which
-keeps both chords (a shell's kill-line and NUL), and not over another
-modal dialog; inside it, either chord, Escape, or a click outside closes
-it. While a modal dialog is open, Escape is the dialog's, never the desk
-menu's behind it. It lists the commands the app's state
-can fill the input of (`create_palette_commands`): the selected tab's
-close, pin, reveal, and markdown modes, back / forward and reopen when
-there's somewhere to go, the explorer's other mode, the panels, "collapse
-all folders" (a tree command that isn't an intent — expanded folders are
-view state), the other open projects (`project_activate`), and the pages
-but the one shown (`view_show`). A command that would do nothing is left
-out. Typing filters by the label — a match at its start first, then at a
-word's start, then inside a word — and the recently used lead
-(`recent_intents`). Focus stays in the input, which names the active
-command by `aria-activedescendant`; Up and Down move it, Enter or a click
-runs it, after closing the palette, so the command acts on the page as it
-was and lands in the recent intents after the close. "go to a file"
-switches the palette, still open, to the indexed files by path (the home
-directory as `~`; a match at a name's start first), at most
-`PALETTE_FILES_MAX` of them with a count of the rest; one opens in a
-preview tab (`tab_open`) and shows the files page (`view_show`), and
-Backspace in an empty filter goes back to the commands. `Picker`'s filter
-input names its active item the same way (`SortableList`'s `listbox`).
+`palette_toggle` intent) from anywhere, a text field included (not while an
+input method holds the key), but a terminal view taking keys, which keeps
+both chords (a shell's kill-line and NUL), and not over another modal
+dialog; inside it, either chord, Escape, or a click outside closes it —
+through the dialog's own close, which returns the focus, as does
+`palette_toggle {show: false}` from code. While a modal dialog is open,
+Escape is the dialog's, never the desk menu's behind it. It lists the
+commands the app's state can fill the input of (`create_palette_commands`):
+the selected tab's close, pin, reveal, rename, and markdown modes, back /
+forward when there's somewhere to go (`DiskfileTabs.can_go_back` /
+`can_go_forward`: an entry other than the current file, which a step skips)
+and reopen when there's a closed tab, the explorer's other mode, the panels,
+"collapse all folders" (a tree command that isn't an intent — expanded
+folders are view state), the other open projects (`project_activate`), and
+the pages but the one shown (`view_show`). A command that would do nothing
+is left out. Typing filters by the label — a match at its start first, then
+at a word's start, then inside a word — and the recently used lead
+(`recent_intents`). Focus stays in the input, which names the active command
+by `aria-activedescendant`; a press anywhere on the palette but the input
+leaves it there, and a new query or a switch of what it lists starts the
+list at the top; Up and Down move it, Enter or a click runs it, after
+closing the palette, so the command acts on the page as it was and lands in
+the recent intents after the close. "go to a file" switches the palette,
+still open, to the indexed files by path (the home directory as `~`; a match
+at a name's start first), at most `PALETTE_FILES_MAX` of them with a count
+of the rest; one opens in a preview tab (`tab_open`) and shows the files
+page (`view_show`), and Backspace in an empty filter goes back to the
+commands. `Picker`'s filter input names its active item the same way
+(`SortableList`'s `listbox`), and the file picker's rows stay out of the Tab
+order, the filter input keeping the focus.
 
 ## Cell System
 
@@ -1510,16 +1516,20 @@ per-file editing state, the drafts store, and the metadata index:
   closed editor". Closing all tabs pushes them onto the reopen stack above
   the earlier closed ones (reopening one by one restores their order); the
   stack keeps the 50 most recent. Back / forward (`tab_back`,
-  `tab_forward`) walks the files the selection visited, by path — a preview
-  tab reused for another file is a step, and going back to a file whose
-  tab closed previews it — kept on `DiskfileTabs`, 50 each way. The
+  `tab_forward`) walks the files the selection visited, by path — a
+  preview tab reused for another file is a step, and going back to a file
+  whose tab closed previews it — kept on `DiskfileTabs`, 50 each way. The
+  editor nav's buttons and the palette offer a step only when there's one
+  to take (`can_go_back` / `can_go_forward`): the last file selected stays
+  the history's current one when its tab closes, so a history holding only
+  it offers none, and the next file selected steps away from it. The
   selected file is the selected tab's (`Diskfiles.selected_path` derives
   from it). A file appearing on disk — seeded by a snapshot or created by
   another tool — never moves the selection or opens a tab; only a file
   created from zzz (`Diskfiles.create_file`) is selected and opened in a
   permanent tab — at once if its `filer_change` already arrived, else when
-  it arrives (under the path as the backend normalizes it), unless the user
-  selects another file or tab or closes its project first
+  it arrives (under the path as the backend normalizes it), unless the
+  user selects another file or tab or closes its project first
 - `Drafts` (`Diskfiles.drafts`, plain classes, not Cells) — each file's
   draft, keyed by path: its text, the innermost root it was made under
   (`root`, recorded, not part of the key, since a path can sit under

@@ -156,16 +156,15 @@ export const create_palette_commands = (
 		if (tabs.preview_tab?.path === path) add_intent('tab_pin', { path });
 		add_intent('tab_close', { path });
 		// the name is asked for, so the command runs the prompt, which calls the intent
-		if (!diskfiles.peek(path)?.deleted_on_disk && !diskfiles.is_dormant(path)) {
+		if (diskfiles.can_rename(path)) {
 			add_command('file_rename', intent_labels.get('file_rename') ?? 'rename the file', () => {
 				void prompt_rename_diskfile(app.intents, path);
 			});
 		}
 	}
 	if (tabs.recently_closed_tabs.length) add_intent('tab_reopen_closed', undefined);
-	// a history entry that's the selected file again is skipped by the step, so it doesn't count
-	if (tabs.back_paths.some((p) => p !== path)) add_intent('tab_back', undefined);
-	if (tabs.forward_paths.some((p) => p !== path)) add_intent('tab_forward', undefined);
+	if (tabs.can_go_back) add_intent('tab_back', undefined);
+	if (tabs.can_go_forward) add_intent('tab_forward', undefined);
 
 	// the explorer
 	if (editor.explorer_mode === 'tree') {

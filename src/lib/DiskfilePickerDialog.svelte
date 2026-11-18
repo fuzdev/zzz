@@ -76,8 +76,10 @@
 	windowed
 >
 	{#snippet children(record, pick)}
+		<!-- the filter input keeps the focus and the keys, so Tab never stops on a row -->
 		<DiskfileListitem
 			path={record.id}
+			attrs={{ tabindex: -1 }}
 			selected={!!selected_paths && selected_paths.includes(record.id)}
 			onselect={() => pick(record)}
 		/>

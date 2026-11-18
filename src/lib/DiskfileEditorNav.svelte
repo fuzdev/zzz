@@ -13,9 +13,6 @@
 	const app = frontend_context.get();
 	// the history lives on the tabs, so it survives this component remounting per file
 	const { tabs } = app.diskfiles.editor;
-
-	const can_go_back = $derived(tabs.back_paths.length > 0);
-	const can_go_forward = $derived(tabs.forward_paths.length > 0);
 </script>
 
 <div class="flex gap_xs align-items:center">
@@ -24,7 +21,7 @@
 		class="icon-button plain p_xs border_radius_lg"
 		title="previous diskfile"
 		onclick={() => app.intents.tab_back()}
-		disabled={!can_go_back}
+		disabled={!tabs.can_go_back}
 	>
 		<Icon data={icon_arrow_left} />
 	</button>
@@ -33,7 +30,7 @@
 		class="icon-button plain p_xs border_radius_lg"
 		title="next diskfile"
 		onclick={() => app.intents.tab_forward()}
-		disabled={!can_go_forward}
+		disabled={!tabs.can_go_forward}
 	>
 		<Icon data={icon_arrow_right} />
 	</button>

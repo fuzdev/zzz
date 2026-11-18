@@ -136,8 +136,25 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	back_paths: ReadonlyArray<DiskfilePath> = $state.raw([]);
 	forward_paths: ReadonlyArray<DiskfilePath> = $state.raw([]);
 
-	/** The path the history last recorded as selected. */
-	#history_current: DiskfilePath | null = null;
+	/**
+	 * The path the history last recorded as selected — kept when the
+	 * selection clears, so the next file selected steps away from it.
+	 */
+	#history_current: DiskfilePath | null = $state.raw(null);
+
+	/**
+	 * Whether `go_back` has somewhere to go: an entry that isn't the current
+	 * file, which a step skips — so a history holding only the last selected
+	 * file, its tab closed, offers no step.
+	 */
+	readonly can_go_back: boolean = $derived(
+		this.back_paths.some((path) => path !== this.#history_current)
+	);
+
+	/** Whether `go_forward` has somewhere to go — see `can_go_back`. */
+	readonly can_go_forward: boolean = $derived(
+		this.forward_paths.some((path) => path !== this.#history_current)
+	);
 
 	/** Set while `go_back` / `go_forward` select, so they don't record a new step. */
 	#navigating = false;
