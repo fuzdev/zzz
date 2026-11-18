@@ -57,6 +57,7 @@ beforeEach(() => {
 	session = {
 		zzz_dir: parse_or_throw(DiskfileDirectoryPath, '/zzz/'),
 		scoped_dirs: [],
+		home_dir: null,
 		files: [],
 		file_roots: [parse_or_throw(DiskfileDirectoryPath, '/zzz/')],
 		provider_status: [],

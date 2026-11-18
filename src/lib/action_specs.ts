@@ -98,6 +98,11 @@ export type PingOutput = Infer<typeof PingOutput>;
 export const SessionLoadData = object({
 	zzz_dir: DiskfileDirectoryPath,
 	scoped_dirs: array(DiskfileDirectoryPath),
+	/**
+	 * The daemon's home directory, canonical, which a `~` in a path the
+	 * client is given (`?open=~/…`) expands to; null when it has none.
+	 */
+	home_dir: nullable(DiskfileDirectoryPath),
 	/** Every indexed file's metadata, grouped by filer dir (`decode_snapshot_files`). */
 	files: SnapshotFiles,
 	/**

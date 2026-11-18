@@ -20,7 +20,7 @@
 //!      group, log-file stdio), wait until it serves, record `daemon.json`.
 //!      This differs from `daemon start`, which runs the server in the
 //!      foreground and forwards signals to it.
-//!   6. Open the daemon's URL, with a `?project=<path>` param when a path
+//!   6. Open the daemon's URL, with a `?open=<path>` param when a path
 //!      was given: the configured opener (the URL as its final argument),
 //!      else the browser (`xdg-open` / `open` / `start`). Whatever opens it
 //!      authenticates and opens the project (the CLI holds no credential
@@ -99,11 +99,11 @@ fn resolve_target(raw: &str, cwd: &Path) -> Result<String, CliError> {
     Ok(path)
 }
 
-/// The daemon's URL, with the project param when a path was given.
+/// The daemon's URL, with the open param when a path was given.
 fn build_url(port: u16, path: Option<&str>) -> String {
     let mut url = format!("http://localhost:{port}");
     if let Some(path) = path {
-        url.push_str("/projects?project=");
+        url.push_str("/projects?open=");
         url.push_str(&encode_uri_component(path));
     }
     url
@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(build_url(4460, None), "http://localhost:4460");
         assert_eq!(
             build_url(4460, Some("/home/a b/")),
-            "http://localhost:4460/projects?project=%2Fhome%2Fa%20b%2F"
+            "http://localhost:4460/projects?open=%2Fhome%2Fa%20b%2F"
         );
     }
 

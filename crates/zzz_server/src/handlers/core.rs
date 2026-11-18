@@ -6,9 +6,10 @@
 //! `session_load`, whose large output is serialized once by the transport.
 //! `ping` is public (no auth); `session_load` is authenticated and returns the
 //! session snapshot (open projects, the file trees and their roots,
-//! `scoped_dirs`, provider status, the caller's terminals and jobs, and the
-//! server instance id) — loaded at boot and again after every reconnect to resync.
+//! `scoped_dirs`, the daemon's home, provider status, the caller's terminals
+//! and jobs, and the server instance id) — loaded at boot and again after every reconnect to resync.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionOutput};
@@ -50,6 +51,10 @@ struct SessionLoadData {
     file_roots: Vec<String>,
     zzz_dir: String,
     scoped_dirs: Vec<String>,
+    /// The daemon's home directory (canonical, trailing `/`), which a `~`
+    /// in a path the client is given expands to; `None` when the daemon
+    /// has none it can use.
+    home_dir: Option<String>,
     provider_status: Vec<Value>,
     projects: Vec<ProjectInfo>,
     /// The project manager's rev when `projects` was read: every project
@@ -163,6 +168,11 @@ pub async fn session_load(
             file_roots: roots,
             zzz_dir: app.zzz_dir.clone(),
             scoped_dirs: app.scoped_dirs.clone(),
+            home_dir: app
+                .root_policy
+                .home()
+                .and_then(Path::to_str)
+                .map(|home| format!("{}/", home.trim_end_matches('/'))),
             provider_status,
             projects,
             projects_rev: published.rev,
@@ -227,6 +237,7 @@ mod tests {
                 file_roots: vec!["/s/".to_owned()],
                 zzz_dir: "/z".to_owned(),
                 scoped_dirs: vec!["/s".to_owned()],
+                home_dir: Some("/h/".to_owned()),
                 provider_status: vec![json!({"name": "claude", "available": false})],
                 projects: vec![
                     OpenProject {
@@ -263,6 +274,7 @@ mod tests {
                 "file_roots": ["/s/"],
                 "zzz_dir": "/z",
                 "scoped_dirs": ["/s"],
+                "home_dir": "/h/",
                 "provider_status": [{"name": "claude", "available": false}],
                 "projects": [{
                     "root": "/w/",

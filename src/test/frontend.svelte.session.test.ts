@@ -38,6 +38,7 @@ const SERVER_INSTANCE_ID = create_uuid();
 const create_session = (files: Array<SerializableDisknode> = []): SessionLoadData => ({
 	zzz_dir: ZZZ_DIR,
 	scoped_dirs: [],
+	home_dir: null,
 	files: encode_snapshot_files(files),
 	file_roots: [ZZZ_DIR],
 	provider_status: [],

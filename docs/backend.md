@@ -577,7 +577,7 @@ commands):
   build (`STATIC_FIXTURE_FILES` in `zzz_backend_config.ts`, via
   `ZZZ_STATIC_DIR`); covers root / prerendered pages (incl. `docs.html` beside
   a `docs/` dir), the `200.html` fallback for dynamic routes and
-  `?project=` queries, HEAD, cache headers, and the 404s for missing
+  `?open=` queries, HEAD, cache headers, and the 404s for missing
   `_app/` assets and backend paths. `static_files.rs` unit tests cover the
   same resolution plus path traversal.
 - **`proxy.cross.test.ts`** — runs only in the `cross_backend_rust_proxy`

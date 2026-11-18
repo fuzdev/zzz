@@ -62,6 +62,7 @@ let server_instance_id: Uuid;
 const create_session = (data: Partial<SessionLoadData> = {}): SessionLoadData => ({
 	zzz_dir: ZZZ_DIR,
 	scoped_dirs: [],
+	home_dir: null,
 	files: [],
 	file_roots: [ZZZ_DIR],
 	provider_status: [],

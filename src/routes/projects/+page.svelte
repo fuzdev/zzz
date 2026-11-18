@@ -50,39 +50,55 @@
 		return null;
 	};
 
-	// Auto-open/activate a project from the query param (e.g. from `zzz <path>`)
-	const project_param = $derived(page.url.searchParams.get('project'));
+	// Open the path in the `?open=` param (e.g. from `zzz <path>`): its
+	// project, and a file in a tab
+	const open_param = $derived(page.url.searchParams.get('open'));
 
 	// Non-reactive: each param value is handled once, then stripped from the URL.
 	// Reset when the param clears so navigating to the same value again reopens.
 	let last_handled_param: string | null = null;
 
 	$effect(() => {
-		const param = project_param;
+		const param = open_param;
 		if (param === null) {
 			last_handled_param = null;
 			return;
 		}
+		// after the session loads: `~` expands to the daemon's home from it
+		if (app.session_status !== 'success') return;
 		if (param === last_handled_param) return;
 		last_handled_param = param;
 		// untracked so project collection changes (a close, another open)
 		// never re-run this — which would reopen a just-closed project or
 		// steal the user's selection
-		untrack(() => void handle_project_param(param));
+		untrack(() => void handle_open_param(param));
 	});
 
-	const handle_project_param = async (param: string): Promise<void> => {
-		// strip first so a reload never re-opens a project the user has since closed
-		void goto(resolve('/projects'), { replace: true, reset: false });
+	const handle_open_param = async (param: string): Promise<void> => {
+		// strip first so a reload never re-opens a project the user has since
+		// closed; awaited before going on to `/files`, so the strip can't be
+		// overtaken and leave the param in history under it
+		const stripped = goto(resolve('/projects'), { replace: true, reset: false });
 
-		const parsed = parse_project_path(param);
+		const parsed = parse_project_path(param, app.home_dir);
 		if (!parsed.ok) {
-			error_message = `can't open project from URL: ${parsed.message}`;
+			error_message = `can't open from URL: ${parsed.message}`;
 			return;
 		}
 		// always opened, even under an open root: the path may focus another repo
 		const error = await open_and_activate(parsed.path);
-		if (error !== null) error_message = error;
+		if (error !== null) {
+			error_message = error;
+			return;
+		}
+		await stripped.catch(() => undefined);
+		// left the page while it opened: stay where the user went
+		if (page.url.pathname !== resolve('/projects')) return;
+		// a file the open indexed opens in a tab; a directory, or a file the
+		// index skips (ignored), leaves the projects page showing where it landed
+		if (app.diskfiles.open_path(parsed.path, { open_not_preview: true })) {
+			void goto(resolve('/files'));
+		}
 	};
 
 	const handle_open = async (): Promise<void> => {
@@ -91,7 +107,7 @@
 		if (!raw) return;
 
 		error_message = null;
-		const parsed = parse_project_path(raw);
+		const parsed = parse_project_path(raw, app.home_dir);
 		if (!parsed.ok) {
 			error_message = parsed.message;
 			return;
@@ -153,7 +169,7 @@
 			<input
 				type="text"
 				bind:value={new_path}
-				placeholder="/home/user/dev/project"
+				placeholder="~/dev/project or /home/you/dev/project"
 				class="flex:1"
 				disabled={opening}
 			/>

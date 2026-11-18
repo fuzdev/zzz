@@ -1960,12 +1960,15 @@ One open project is the **active** one on each client (`Projects.active`):
 new files and folders default into it (`Project.new_files_dir` — its last
 open's focus while that's still focused, else its root). `DeskMenu.svelte` lists the open
 projects to switch it. Opening happens on `/projects`, the projects page
-(path input → `project_open`; the `?project=<path>` query param
+(path input → `project_open`; the `?open=<path>` query param
 auto-opens — this is how the CLI's `zzz <path>` lands the browser on a
-project). It lists each open project with its kind, and a registry's
-registry file and each of its entries: a present one with a button to
+project, and a file the open indexed then opens in a tab on `/files`).
+It lists each open project with its kind, and a registry's registry file
+and each of its entries: a present one with a button to
 focus or unfocus it, a missing or refused one with why. Both
-paths require an absolute path (a leading `~` isn't expanded) and activate
+paths take an absolute path or one starting `~` or `~/`, expanded to the
+daemon's home (`session_load`'s `home_dir`; the param waits for the
+session) — `~user` is refused — and activate
 the project `project_open` returns, and the query param is handled once and
 then stripped from the URL, so a reload doesn't reopen a project the user
 has since closed.

@@ -1024,7 +1024,7 @@ fn open_auto_starts_a_detached_daemon() {
     // a file is passed as itself — the daemon opens the project holding it
     let encoded = format!("{}/file.txt", project.display()).replace('/', "%2F");
     assert!(
-        text.contains(&format!("/projects?project={encoded}")),
+        text.contains(&format!("/projects?open={encoded}")),
         "{text}"
     );
     assert!(record.exists(), "daemon spawned");
@@ -1067,7 +1067,7 @@ fn take_record(record: &Path) -> Vec<String> {
     lines
 }
 
-/// `encodeURIComponent`, as the CLI encodes the project param.
+/// `encodeURIComponent`, as the CLI encodes the open param.
 fn encode_uri_component(input: &str) -> String {
     input
         .bytes()
@@ -1132,7 +1132,7 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     // the canonical directory, not the symlink
     let project_url = format!(
-        "http://localhost:{port}/projects?project={}",
+        "http://localhost:{port}/projects?open={}",
         encode_uri_component(&format!("{}/", project.display()))
     );
     assert!(project_url.contains("a%20b's%20(x)%20*!%24HOME%3B%26"));

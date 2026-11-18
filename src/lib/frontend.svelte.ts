@@ -222,6 +222,9 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.#zzz_dir = parsed == null ? parsed : parsed.ok ? parsed.value : undefined;
 	}
 
+	/** The daemon's home directory, which `~` expands to; null when it has none. */
+	home_dir: DiskfileDirectoryPath | null = $state.raw(null);
+
 	#scoped_dirs: ReadonlyArray<DiskfileDirectoryPath> = $state.raw([]);
 
 	/**
@@ -648,6 +651,7 @@ export class Frontend extends Cell<typeof FrontendJson> implements ActionEventEn
 		this.server_instance_id = data.server_instance_id;
 		this.zzz_dir = data.zzz_dir;
 		this.scoped_dirs = data.scoped_dirs;
+		this.home_dir = data.home_dir;
 		this.provider_status = data.provider_status;
 
 		// what a restart's reopen restores is the focus held before the snapshot

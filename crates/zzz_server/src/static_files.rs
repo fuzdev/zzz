@@ -345,12 +345,9 @@ mod tests {
             &get_path(&fixture, "/chats/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d").await,
             FALLBACK,
         );
+        assert_html(&get_path(&fixture, "/projects?open=/tmp/").await, FALLBACK);
         assert_html(
-            &get_path(&fixture, "/projects?project=/tmp/").await,
-            FALLBACK,
-        );
-        assert_html(
-            &get_path(&fixture, "/projects?project=%2Ftmp%2F").await,
+            &get_path(&fixture, "/projects?open=%2Ftmp%2F").await,
             FALLBACK,
         );
         // dotted dynamic segments (model slugs) are routes, not assets

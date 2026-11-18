@@ -354,8 +354,8 @@ PTY terminals don't get `SECRET_*`, `FUZ_*`, `ZZZ_*`, `PUBLIC_ZZZ_*`,
 
 `zzz` (crate `crates/zzz`) starts or finds the daemon (`~/.zzz/` home,
 port 4460) and opens the UI — the browser, or a configured opener; `zzz
-<path>` opens the project holding a file or directory (a file isn't
-opened in a tab yet); `zzz daemon start|stop|status`; `zzz init`. It
+<path>` opens the project holding a file or directory, and a file in a
+tab; `zzz daemon start|stop|status`; `zzz init`. It
 never searches the current directory for `zzzd` or an opener, so an
 untrusted checkout can't get its own binary run with your secrets. Full
 rules (discovery, env, port, exit codes, `daemon.json`, the opener):

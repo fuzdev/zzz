@@ -288,7 +288,7 @@ crates (`fuz_auth`, `fuz_http`).
   the prerendered page (`{path}.html`, or `{path}index.html` for a trailing
   `/`), then the `200.html` SPA shell (`static_files::SPA_FALLBACK_FILE`,
   matching the adapter's `fallback` in `vite.config.ts`) — so
-  `/projects?project=…`, reloads, deep links, and dynamic routes
+  `/projects?open=…`, reloads, deep links, and dynamic routes
   (`/chats/<id>`) all load. `/api`, `/health`, and paths below them never get
   the shell (an unknown `/api/foo` is an empty 404), nor does a missing asset
   under `/_app/` or `/fuz_terminal/` (404 — a stale tab's chunk load fails

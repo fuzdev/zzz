@@ -420,9 +420,13 @@ export const to_markdown_links = (
 	options: ToMarkdownLinksOptions = {}
 ): Array<MarkdownLink> => {
 	const { file_path, index } = options;
-	// TODO root-relative links resolve against the innermost indexed tree — a registry project's
-	// focused repo, a checkout's root — not the repository's root as such: a plain directory
-	// opened inside a repository reads them from there
+	// root-relative links resolve against the innermost indexed tree, which for a project is its
+	// repo's root as GitHub reads them: a registry's focused repo, a checkout's root (the resolver
+	// roots a path inside a checkout at it). TODO where the project isn't rooted at the repo, they
+	// read from the project's root: a checkout outside the walk's bound (at or above `$HOME`,
+	// or above an allowlisted root), an unregistered dir under a registry root that is itself
+	// a checkout, a registry kept inside a checkout, a symlinked `.git`, a scoped dir, or the app
+	// dir — telling would need the daemon to report the repo above it
 	const root_dir =
 		file_path && index ? to_root_dir(file_path, [...index.roots, ...index.top_level_roots]) : null;
 	const links: Array<MarkdownLink> = [];

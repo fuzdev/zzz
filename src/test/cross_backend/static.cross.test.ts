@@ -44,7 +44,7 @@ describe('static frontend serving', () => {
 
 	test('other routes get the SPA fallback, query intact', async () => {
 		await assert_html(`/chats/${randomUUID()}`, FALLBACK);
-		await assert_html('/projects?project=/tmp/', FALLBACK);
+		await assert_html('/projects?open=/tmp/', FALLBACK);
 		await assert_html('/docs/', FALLBACK);
 	});
 
