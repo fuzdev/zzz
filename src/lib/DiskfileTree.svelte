@@ -7,9 +7,10 @@
 	} from '@fuzdev/fuz_ui/contextmenu_state.svelte.ts';
 
 	import { frontend_context } from './frontend.svelte.ts';
+	import { is_diskfile_tree_naming_row } from './diskfile_tree_state.svelte.ts';
 	import type { DiskfilePath } from './diskfile_types.ts';
 	import DiskfileTreeitem from './DiskfileTreeitem.svelte';
-	import DiskfileTreeCreateInput from './DiskfileTreeCreateInput.svelte';
+	import DiskfileTreeNameInput from './DiskfileTreeNameInput.svelte';
 	import { compute_list_window } from './list_helpers.ts';
 	import { ListViewport } from './list_viewport.svelte.ts';
 
@@ -32,15 +33,18 @@
 	 *
 	 * Keys: Up and Down move, Right expands or moves into a folder, Left
 	 * collapses or moves to the parent, Home and End jump, Enter opens a file
-	 * (a permanent tab), Space previews it, and either toggles a folder; the
-	 * ContextMenu key or Shift+F10 opens the active row's menu, a file's, a
+	 * (a permanent tab), Space previews it, and either toggles a folder; F2
+	 * renames the active file inline, as its menu's "rename file" does here;
+	 * the ContextMenu key or Shift+F10 opens the active row's menu, a file's, a
 	 * folder's, or an unfocused repo's. A click previews a file and a double
-	 * click opens it; a click toggles a folder. Keys and clicks inside a row's own controls — the
-	 * inline create's input (`DiskfileTreeCreateInput`) — are the control's,
-	 * and the keyboard passes over that input's row. A note on a create the
-	 * tree can't show (`DiskfileTreeState.notice`) stays in view above the rows
-	 * until it's dismissed, the next key in the tree, or the next create — not
-	 * a click, which would shift the rows between a double click's two clicks.
+	 * click opens it; a click toggles a folder. Keys and clicks inside a row's
+	 * own controls — the inline create's or rename's input
+	 * (`DiskfileTreeNameInput`) — are the control's, and the keyboard passes
+	 * over that input's row. A note on a create or rename the tree can't
+	 * show, or that failed with its input gone (`DiskfileTreeState.notice`),
+	 * stays in view above the rows until it's dismissed, the next key in the
+	 * tree, or the next create or rename — not a click, which would shift the
+	 * rows between a double click's two clicks.
 	 *
 	 * Like `SortableList`'s `windowed`, it needs the nearest scrolling ancestor
 	 * to scroll it, with a constrained height.
@@ -90,12 +94,12 @@
 
 	// an input open when the tree goes — a switch to the list, another page — ends with it: its
 	// blur never comes, and an open input would hold off `DiskfileTreeState.reveal_created`
-	onDestroy(() => tree.cancel_create());
+	onDestroy(() => tree.cancel_naming());
 
-	// an input whose folder no longer shows — collapsed, emptied, its root closed — is dropped, so
-	// it doesn't come back later and take focus
+	// an input whose row no longer shows — its folder collapsed, emptied, or its root closed, a
+	// renamed file gone — is dropped, so it doesn't come back later and take focus
 	$effect(() => {
-		if (tree.creating && tree.create_index === -1) untrack(() => tree.cancel_create());
+		if (tree.naming && tree.naming_index === -1) untrack(() => tree.cancel_naming());
 	});
 
 	// keyboard moves and `reveal` ask for the active row to scroll into view, clicks don't
@@ -106,7 +110,7 @@
 	});
 
 	const onkeydown = (e: KeyboardEvent): void => {
-		// a key typed in a row's control, the inline create's input, is the control's
+		// a key typed in a row's control, the inline input, is the control's
 		if (e.target !== e.currentTarget) return;
 		tree.notice = null;
 		if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
@@ -135,6 +139,9 @@
 			case ' ':
 				tree.open_active(false);
 				break;
+			case 'F2':
+				if (!tree.rename_active()) return;
+				break;
 			default:
 				return;
 		}
@@ -144,7 +151,7 @@
 	const onclick = (e: MouseEvent): void => {
 		const item = (e.target as Element | null)?.closest<HTMLElement>('[role="treeitem"]');
 		const row = item ? tree.rows[Number(item.dataset.index)] : undefined;
-		if (!row || row.kind === 'create') return;
+		if (!row || is_diskfile_tree_naming_row(row)) return;
 		swallow(e);
 		tree.active_key = row.key;
 		if (row.kind === 'file') {
@@ -223,8 +230,8 @@ announces; empty, it takes no height -->
 >
 	{#each rendered_rows as row, i (row.key)}
 		{@const index = list_window.start + i}
-		{#if row.kind === 'create'}
-			<DiskfileTreeCreateInput {row} id={to_row_id(index)} {index} />
+		{#if is_diskfile_tree_naming_row(row)}
+			<DiskfileTreeNameInput {row} id={to_row_id(index)} {index} />
 		{:else}
 			<DiskfileTreeitem {row} id={to_row_id(index)} {index} active={index === tree.active_index} />
 		{/if}

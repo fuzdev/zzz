@@ -29,13 +29,14 @@ export class ResizeObserverStub {
 
 /**
  * Each row as `depth label`, with `+`/`-` for a collapsed or expanded folder, `~` for an
- * unfocused repo's lazy row, and an inline create's input as `[new file]` or `[new folder]` —
- * the tree at a glance.
+ * unfocused repo's lazy row, an inline create's input as `[new file]` or `[new folder]`, and an
+ * inline rename's as `[rename x.md]` — the tree at a glance.
  */
 export const outline = (rows: ReadonlyArray<DiskfileTreeRow>): Array<string> =>
 	rows.map((row) => {
 		const indent = '  '.repeat(row.depth);
 		if (row.kind === 'create') return `${indent}[new ${row.create_kind}]`;
+		if (row.kind === 'rename') return `${indent}[rename ${row.label}]`;
 		if (row.kind === 'unfocused') return `${indent}~ ${row.label}`;
 		return `${indent}${row.kind === 'file' ? '' : row.expanded ? '- ' : '+ '}${row.label}`;
 	});

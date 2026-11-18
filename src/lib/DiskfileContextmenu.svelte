@@ -6,6 +6,7 @@
 	import type { OmitStrict } from '@fuzdev/fuz_util/types.ts';
 
 	import type { DiskfilePath } from './diskfile_types.ts';
+	import type { DiskfileTreeFileRow } from './diskfile_tree_state.svelte.ts';
 	import {
 		icon_checkmark,
 		icon_delete,
@@ -31,6 +32,7 @@
 	const {
 		path,
 		reveal_in_tree = false,
+		tree_row,
 		children,
 		...rest
 	}: OmitStrict<ComponentProps<typeof Contextmenu>, 'entries'> & {
@@ -41,6 +43,11 @@
 		 * tabs, beside the explorer, not on the tree's own rows.
 		 */
 		reveal_in_tree?: boolean | undefined;
+		/**
+		 * The tree row the menu was opened from, if any: "rename file" renames
+		 * there, inline (`DiskfileTreeState.start_rename`), not by a prompt.
+		 */
+		tree_row?: DiskfileTreeFileRow | undefined;
 		children: Snippet;
 	} = $props();
 
@@ -160,11 +167,15 @@
 						<span>delete file</span>
 					</ContextmenuEntry>
 
-					{#if !diskfile?.deleted_on_disk && !diskfiles.is_dormant(path)}
+					{#if diskfiles.can_rename(path)}
 						<ContextmenuEntry
 							icon={icon_edit}
 							run={async () => {
-								await prompt_rename_diskfile(app.intents, path);
+								if (tree_row) {
+									diskfiles.editor.tree.start_rename(tree_row);
+								} else {
+									await prompt_rename_diskfile(app.intents, path);
+								}
 							}}
 						>
 							<span>rename file</span>

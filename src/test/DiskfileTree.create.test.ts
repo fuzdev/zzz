@@ -395,6 +395,35 @@ describe('the inline create', () => {
 		assert.isUndefined(note(), 'cleared by a key in the tree');
 	});
 
+	test('a failed create whose input is gone says why in the note, by its path in the root', async () => {
+		write('/w/a/x.md');
+		let reject: (error: Error) => void = () => undefined;
+		vi.spyOn(app.diskfiles, 'create_file_at').mockImplementation(
+			() =>
+				new Promise((_resolve, rejecting) => {
+					reject = rejecting;
+				})
+		);
+		const target = render_tree();
+		const input = await start(target, 'a', 'new file…');
+		type(input, 'y.md');
+		press(target, 'Enter', input);
+		flushSync();
+		// its folder collapsed in flight: the input is dropped
+		const tree = app.diskfiles.editor.tree;
+		const folder = tree.rows.find((row) => row.kind === 'dir');
+		assert.ok(folder?.kind === 'dir');
+		tree.set_expanded(folder, false);
+		flushSync();
+		assert.isNull(target.querySelector('[role="tree"] input'));
+		reject(new Error('already exists'));
+		await tick();
+		assert.strictEqual(
+			target.querySelector('[role="status"] small')?.textContent.trim(),
+			'couldn’t create a/y.md: already exists'
+		);
+	});
+
 	test('switching to the list ends an open input', async () => {
 		write('/w/a/x.md');
 		const target = render_tree();
@@ -402,7 +431,7 @@ describe('the inline create', () => {
 		type(input, 'later.md');
 		mode_button(target).click();
 		flushSync();
-		assert.isNull(app.diskfiles.editor.tree.creating);
+		assert.isNull(app.diskfiles.editor.tree.naming);
 		mode_button(target).click();
 		flushSync();
 		assert.isNull(target.querySelector('[role="tree"] input'), 'not back with the tree');
@@ -434,7 +463,7 @@ describe('the inline create', () => {
 		scroll_to(1000);
 		header_button.focus();
 		scroll_to(0);
-		assert.isNull(app.diskfiles.editor.tree.creating, 'focus moved on: it ends');
+		assert.isNull(app.diskfiles.editor.tree.naming, 'focus moved on: it ends');
 		assert.isNull(target.querySelector('[role="tree"] input'));
 		assert.strictEqual(document.activeElement, header_button);
 	});
@@ -447,7 +476,7 @@ describe('the inline create', () => {
 		// collapsing its folder from the code, with focus still in the input
 		app.diskfiles.editor.tree.collapse_all();
 		flushSync();
-		assert.isNull(app.diskfiles.editor.tree.creating);
+		assert.isNull(app.diskfiles.editor.tree.naming);
 		const root_row = app.diskfiles.editor.tree.rows[0];
 		assert.ok(root_row?.kind === 'root');
 		app.diskfiles.editor.tree.expand_all_below(root_row);
@@ -473,7 +502,7 @@ describe('the inline create', () => {
 		assert.strictEqual(second.getAttribute('aria-label'), 'new folder name in /ws/');
 		assert.strictEqual(document.activeElement, second, 'focused, not left on the button');
 		assert.strictEqual(second.value, '');
-		assert.isFalse(app.diskfiles.editor.tree.creating!.focus_pending);
+		assert.isFalse(app.diskfiles.editor.tree.naming!.focus_pending);
 	});
 
 	test('dismissing the note puts focus on the tree, not the page', async () => {

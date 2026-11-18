@@ -13,6 +13,7 @@ import {
 } from './diskfile_types.ts';
 import type { Diskfile } from './diskfile.svelte.ts';
 import type { Diskfiles } from './diskfiles.svelte.ts';
+import { is_plain_file_name } from './transcript_types.ts';
 import type { FrontendIntentsApi } from './intent_spec.ts';
 
 /**
@@ -540,6 +541,33 @@ export const parse_new_diskfile_name = (
 	return { ok: true, value };
 };
 
+/**
+ * Parses a new name entered for a file, one path component in its own
+ * folder (`Diskfiles.rename`) — a rename never moves a file elsewhere.
+ * Surrounding whitespace is dropped, as for a new file's name
+ * (`parse_new_diskfile_name`). Refused: a blank name, `.` and `..`, and a
+ * name holding a `/`, `\`, or NUL.
+ *
+ * @param name - the entered name
+ * @returns the name to rename to, or a message saying why it's refused
+ */
+export const parse_diskfile_rename_name = (
+	name: string
+): Result<{ value: string }, { message: string }> => {
+	const value = name.trim();
+	if (!value) return { ok: false, message: 'file name must not be blank' };
+	if (value === '.' || value === '..') {
+		return { ok: false, message: `file name must not be "${value}"` };
+	}
+	if (!is_plain_file_name(value)) {
+		return {
+			ok: false,
+			message: 'file name must not hold a "/" or "\\" — a rename stays in its folder'
+		};
+	}
+	return { ok: true, value };
+};
+
 // TODO improve UX to not use alert/prompt
 /**
  * Asks for a name and creates a file or folder of that name in
@@ -571,9 +599,12 @@ export const prompt_create_diskfile = async (
 /**
  * Asks for a new name for the file at `path`, its current name filled in,
  * and renames it (the `file_rename` intent), alerting on failure with the
- * name first (`couldn't rename a.txt: <reason>`). Cancelling, or leaving
- * the name as it was or empty, does nothing. The tree renames inline
- * instead; this is the list's, the tabs', and the palette's way.
+ * name first (`couldn't rename a.txt: <reason>`). The name is parsed as the
+ * tree's inline rename parses it (`parse_diskfile_rename_name`, surrounding
+ * whitespace dropped). Cancelling, or leaving the name as it was or empty,
+ * does nothing. The tree renames inline instead
+ * (`DiskfileTreeState.start_rename`); this is the list's, the tabs', the
+ * file views', and the palette's way.
  *
  * @param intents - the app's intents
  * @param path - the file to rename
@@ -584,8 +615,16 @@ export const prompt_rename_diskfile = async (
 	path: DiskfilePath
 ): Promise<DiskfilePath | null> => {
 	const current = path.slice(path.lastIndexOf('/') + 1);
-	const name = prompt(`rename ${current} to:`, current); // eslint-disable-line no-alert
-	if (!name || name === current) return null;
+	const entered = prompt(`rename ${current} to:`, current); // eslint-disable-line no-alert
+	// an untouched name, though it holds whitespace the parse would trim, renames nothing
+	if (!entered?.trim() || entered === current) return null;
+	const parsed = parse_diskfile_rename_name(entered);
+	if (!parsed.ok) {
+		alert(`couldn't rename ${current}: ${parsed.message}`); // eslint-disable-line no-alert
+		return null;
+	}
+	const name = parsed.value;
+	if (name === current) return null;
 	const result = await intents.file_rename({ path, name });
 	if (result.ok) return result.value.path;
 	alert(`couldn't rename ${current}: ${result.error.message}`); // eslint-disable-line no-alert

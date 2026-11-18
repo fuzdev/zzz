@@ -112,8 +112,8 @@ describe('the inline create', () => {
 		assert.strictEqual(tree.active_key, to_diskfile_tree_create_key('/w/', '/w/a/'));
 		assert.strictEqual(tree.active_row?.kind, 'create');
 
-		tree.cancel_create();
-		assert.isNull(tree.creating);
+		tree.cancel_naming();
+		assert.isNull(tree.naming);
 		assert.deepEqual(outline(tree.rows), ['- /w/', '  - a', '    x.md']);
 		assert.strictEqual(tree.active_row?.path, '/w/a/', 'the folder is active again');
 	});
@@ -123,7 +123,7 @@ describe('the inline create', () => {
 		const { tree } = app.diskfiles.editor;
 		tree.start_create(dir_row('/w/a/b/'), 'folder');
 		assert.deepEqual(outline(tree.rows), ['- /w/', '  - a/b', '    [new folder]', '    x.md']);
-		assert.strictEqual(tree.creating?.dir, '/w/a/b/');
+		assert.strictEqual(tree.naming?.kind === 'create' && tree.naming.dir, '/w/a/b/');
 	});
 
 	test('the keyboard does nothing on the input row', () => {
@@ -145,17 +145,17 @@ describe('the inline create', () => {
 		const { tree } = app.diskfiles.editor;
 
 		tree.start_create(dir_row('/w/a/'), 'file');
-		tree.creating!.name = ' new.md ';
-		assert.isTrue(await tree.commit_create());
+		tree.naming!.name = ' new.md ';
+		assert.isTrue(await tree.commit_naming());
 		tree.start_create(dir_row('/w/a/'), 'file');
-		tree.creating!.name = 'sub/deep.md';
-		assert.isTrue(await tree.commit_create());
+		tree.naming!.name = 'sub/deep.md';
+		assert.isTrue(await tree.commit_naming());
 
 		assert.deepEqual(
 			create_file_at.mock.calls.map((call) => call[0]),
 			['/w/a/new.md', '/w/a/sub/deep.md']
 		);
-		assert.isNull(tree.creating);
+		assert.isNull(tree.naming);
 	});
 
 	test('an empty name ends it creating nothing', async () => {
@@ -165,8 +165,8 @@ describe('the inline create', () => {
 			.mockImplementation(() => Promise.resolve());
 		const { tree } = app.diskfiles.editor;
 		tree.start_create(dir_row('/w/a/'), 'file');
-		assert.isFalse(await tree.commit_create());
-		assert.isNull(tree.creating);
+		assert.isFalse(await tree.commit_naming());
+		assert.isNull(tree.naming);
 		assert.deepEqual(create_file_at.mock.calls, []);
 	});
 
@@ -177,15 +177,15 @@ describe('the inline create', () => {
 			.mockImplementation(() => Promise.resolve());
 		const { tree } = app.diskfiles.editor;
 		tree.start_create(dir_row('/w/a/'), 'file');
-		const { creating } = tree;
+		const creating = tree.naming;
 		assert.ok(creating);
 		creating.name = 'sub/';
-		assert.isFalse(await tree.commit_create());
-		assert.strictEqual(tree.creating, creating, 'still open');
+		assert.isFalse(await tree.commit_naming());
+		assert.strictEqual(tree.naming, creating, 'still open');
 		assert.include(creating.error, 'file name must end with a file name');
 
 		creating.name = '../../out.md';
-		assert.isFalse(await tree.commit_create());
+		assert.isFalse(await tree.commit_naming());
 		assert.include(creating.error, 'must stay inside the directory');
 		assert.deepEqual(create_file_at.mock.calls, []);
 	});
@@ -197,11 +197,11 @@ describe('the inline create', () => {
 		);
 		const { tree } = app.diskfiles.editor;
 		tree.start_create(dir_row('/w/a/'), 'file');
-		tree.creating!.name = 'x.md';
-		assert.isFalse(await tree.commit_create());
-		assert.ok(tree.creating);
-		assert.strictEqual(tree.creating.error, 'already exists');
-		assert.isFalse(tree.creating.pending);
+		tree.naming!.name = 'x.md';
+		assert.isFalse(await tree.commit_naming());
+		assert.ok(tree.naming);
+		assert.strictEqual(tree.naming.error, 'already exists');
+		assert.isFalse(tree.naming.pending);
 	});
 
 	test('a new folder, empty, shows anyway: revealed, expanded, and active', async () => {
@@ -213,8 +213,8 @@ describe('the inline create', () => {
 		tree.collapse_all();
 
 		tree.start_create(dir_row('/w/'), 'folder');
-		tree.creating!.name = 'p/q';
-		assert.isTrue(await tree.commit_create());
+		tree.naming!.name = 'p/q';
+		assert.isTrue(await tree.commit_naming());
 		assert.deepEqual(
 			create_directory_at.mock.calls.map((call) => call[0]),
 			['/w/p/q']
@@ -254,14 +254,14 @@ describe('the inline create', () => {
 		);
 		const { tree } = app.diskfiles.editor;
 		tree.start_create(dir_row('/w/a/'), 'folder');
-		tree.creating!.name = 'n';
-		const committing = tree.commit_create();
+		tree.naming!.name = 'n';
+		const committing = tree.commit_naming();
 		tree.start_create(dir_row('/w/b/'), 'file');
-		const newer = tree.creating;
+		const newer = tree.naming;
 		resolve_create();
 		assert.isTrue(await committing);
 
-		assert.strictEqual(tree.creating, newer, 'the newer input stays open');
+		assert.strictEqual(tree.naming, newer, 'the newer input stays open');
 		assert.strictEqual(tree.active_key, to_diskfile_tree_create_key('/w/', '/w/b/'));
 		assert.isTrue(tree.created_dirs.has('/w/a/n/'), 'the folder is still kept');
 		assert.isFalse(tree.expanded.has('/w/a/n/'), 'but not revealed');
@@ -311,8 +311,8 @@ describe('the inline create', () => {
 		for (const [kind, name, notice] of cases) {
 			tree.start_create(dir_row('/w/a/'), kind);
 			assert.isNull(tree.notice, 'a new create clears it');
-			tree.creating!.name = name;
-			assert.isTrue(await tree.commit_create());
+			tree.naming!.name = name;
+			assert.isTrue(await tree.commit_naming());
 			assert.strictEqual(tree.notice, notice, name);
 		}
 	});

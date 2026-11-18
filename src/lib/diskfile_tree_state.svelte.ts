@@ -2,11 +2,13 @@ import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { to_error_message } from '@fuzdev/fuz_util/error.ts';
+import type { Result } from '@fuzdev/fuz_util/result.ts';
 
 import type { Frontend } from './frontend.svelte.ts';
 import { DiskfilePath, type DiskfileDirectoryPath } from './diskfile_types.ts';
 import {
 	normalize_path,
+	parse_diskfile_rename_name,
 	parse_new_diskfile_name,
 	to_file_directories,
 	to_innermost_root,
@@ -16,8 +18,8 @@ import {
 
 /**
  * The file tree as the explorer's tree mode shows it: the expanded folders,
- * the active row the keyboard moves, the inline create in progress, and the
- * visible rows derived from them. Lives on `DiskfilesEditor`, so the expanded
+ * the active row the keyboard moves, the inline create or rename in progress,
+ * and the visible rows derived from them. Lives on `DiskfilesEditor`, so the expanded
  * set outlives a switch to the list and back, and any remount of the tree.
  *
  * The rows come from `DiskfileIndex.tree_index`, kept in step as files come and go,
@@ -257,10 +259,11 @@ export interface DiskfileTreeUnfocusedRow extends DiskfileTreeRowBase {
 }
 
 /**
- * The inline input naming a new file or folder (`DiskfileTreeState.creating`),
- * shown as the first child of the folder it creates in. Not a file-system
- * row: its `label` is empty, its `path` is the folder's, and it isn't counted
- * among its siblings (`setsize` and `posinset` are `0`, not rendered).
+ * The inline input naming a new file or folder (`DiskfileTreeState.naming`
+ * holding a `DiskfileTreeCreate`), shown as the first child of the folder it
+ * creates in. Not a file-system row: its `label` is empty, its `path` is the
+ * folder's, and it isn't counted among its siblings (`setsize` and
+ * `posinset` are `0`, not rendered).
  */
 export interface DiskfileTreeCreateRow extends DiskfileTreeRowBase {
 	readonly kind: 'create';
@@ -268,9 +271,30 @@ export interface DiskfileTreeCreateRow extends DiskfileTreeRowBase {
 	readonly create_kind: DiskfileCreateKind;
 }
 
+/**
+ * The inline input renaming a file (`DiskfileTreeState.naming` holding a
+ * `DiskfileTreeRename`), in place of the file's row: the same `key`,
+ * `path`, `label`, and position among its siblings.
+ */
+export interface DiskfileTreeRenameRow extends DiskfileTreeRowBase {
+	readonly kind: 'rename';
+}
+
 /** One visible row of the file tree. */
 export type DiskfileTreeRow =
-	DiskfileTreeDirRow | DiskfileTreeFileRow | DiskfileTreeUnfocusedRow | DiskfileTreeCreateRow;
+	| DiskfileTreeDirRow
+	| DiskfileTreeFileRow
+	| DiskfileTreeUnfocusedRow
+	| DiskfileTreeCreateRow
+	| DiskfileTreeRenameRow;
+
+/** A row of the tree's inline input, which the keyboard passes over. */
+export type DiskfileTreeNamingRow = DiskfileTreeCreateRow | DiskfileTreeRenameRow;
+
+/** Whether `row` is the inline input's row (`DiskfileTreeNamingRow`). */
+export const is_diskfile_tree_naming_row = (
+	row: DiskfileTreeRow | undefined
+): row is DiskfileTreeNamingRow => row?.kind === 'create' || row?.kind === 'rename';
 
 /** A folder that's a repo of an open registry project — see `DiskfileTreeSource.get_repo`. */
 export interface DiskfileTreeRepo {
@@ -284,30 +308,74 @@ export interface DiskfileTreeRepo {
 export type DiskfileCreateKind = 'file' | 'folder';
 
 /**
- * An inline create in progress: where, what, and the name being typed. The
- * name lives here, not in the input, so it survives the input's row scrolling
- * out of the tree's window and back.
+ * A name being typed in the tree's inline input, for a create or a rename —
+ * see `DiskfileTreeState.naming`. The name lives here, not in the input, so
+ * it survives the input's row scrolling out of the tree's window and back.
  */
-export class DiskfileTreeCreate {
+export abstract class DiskfileTreeNaming {
 	readonly root: string;
-	/** The folder it creates in, with a trailing `/`. */
-	readonly dir: string;
-	readonly kind: DiskfileCreateKind;
 	name: string = $state.raw('');
 	/** Why the last attempt was refused, by the name's parse or the backend. */
 	error: string | null = $state.raw(null);
-	/** Whether a create is in flight. */
+	/** Whether the create or rename is in flight. */
 	pending: boolean = $state.raw(false);
 	/**
 	 * Whether the input should take focus when it mounts — at the start, not
 	 * when it remounts after scrolling. Not reactive.
 	 */
 	focus_pending: boolean = true;
+	/**
+	 * Whether its input is mounted to show `error` — not while its row is
+	 * scrolled out of the tree's window. Not reactive.
+	 */
+	mounted: boolean = false;
 
-	constructor(root: string, dir: string, kind: DiskfileCreateKind) {
+	constructor(root: string, name: string) {
 		this.root = root;
+		this.name = name;
+	}
+
+	/** Parses `name` as the commit would: the name to use, or why it's refused. */
+	abstract parse(): Result<{ value: string }, { message: string }>;
+}
+
+/** An inline create in progress: where, what, and the name being typed. */
+export class DiskfileTreeCreate extends DiskfileTreeNaming {
+	readonly kind = 'create';
+	/** The folder it creates in, with a trailing `/`. */
+	readonly dir: string;
+	readonly create_kind: DiskfileCreateKind;
+
+	constructor(root: string, dir: string, create_kind: DiskfileCreateKind) {
+		super(root, '');
 		this.dir = dir;
-		this.kind = kind;
+		this.create_kind = create_kind;
+	}
+
+	parse(): Result<{ value: string }, { message: string }> {
+		return parse_new_diskfile_name(this.name, this.create_kind);
+	}
+}
+
+/**
+ * An inline rename in progress: the file, under the root whose row shows it,
+ * and its new name being typed, starting as its current one.
+ */
+export class DiskfileTreeRename extends DiskfileTreeNaming {
+	readonly kind = 'rename';
+	readonly path: DiskfilePath;
+	/** The file's name as it was when the rename started. */
+	readonly current: string;
+
+	constructor(root: string, path: DiskfilePath) {
+		const current = path.slice(path.lastIndexOf('/') + 1);
+		super(root, current);
+		this.path = path;
+		this.current = current;
+	}
+
+	parse(): Result<{ value: string }, { message: string }> {
+		return parse_diskfile_rename_name(this.name);
 	}
 }
 
@@ -508,28 +576,33 @@ export class DiskfileTreeState {
 	}
 
 	/**
-	 * Bumped when the active row should scroll into view: by keyboard moves and
-	 * `reveal`, not by clicks, so it never fights the user's own scrolling.
+	 * Bumped when the active row should scroll into view: by keyboard moves,
+	 * `reveal`, and the inline input's start and failure — never by clicks, so
+	 * it never fights the user's own scrolling.
 	 */
 	scroll_request: number = $state.raw(0);
 
 	/**
-	 * The folders created here this page load (`commit_create`), each with a
+	 * The folders created here this page load (`commit_naming`), each with a
 	 * trailing `/`. The index lists files only, so an empty folder exists for
 	 * the tree only through this; it lasts until a reload, and a folder later
 	 * deleted by another program stays until then too.
 	 */
 	readonly created_dirs: SvelteSet<string> = new SvelteSet();
 
-	/** The inline create in progress, if any — see `start_create`. */
-	creating: DiskfileTreeCreate | null = $state.raw(null);
+	/**
+	 * The inline create or rename in progress, if any — see `start_create`
+	 * and `start_rename`. One at a time: starting either replaces the other.
+	 */
+	naming: DiskfileTreeCreate | DiskfileTreeRename | null = $state.raw(null);
 
 	/**
-	 * A note on the last inline create, when what it made won't show — the
-	 * file index skips it (`Diskfiles.to_unindexed`) — or on a repo focus or
-	 * unfocus that failed (`focus_repo`, `unfocus_repo`). Cleared by the next
-	 * create, focus, or unfocus, and by the tree on the next key or the note's
-	 * dismiss button.
+	 * A note on the last inline create or rename — what it made won't show,
+	 * the file index skipping it (`Diskfiles.to_unindexed`), or it failed with
+	 * no input to show why (`commit_naming`) — or on a repo focus or unfocus
+	 * that failed (`focus_repo`, `unfocus_repo`). Cleared by the next create,
+	 * rename, focus, or unfocus, and by the tree on the next key or the
+	 * note's dismiss button.
 	 */
 	notice: string | null = $state.raw(null);
 
@@ -594,37 +667,43 @@ export class DiskfileTreeState {
 
 	/**
 	 * The visible rows, in display order — see `to_diskfile_tree_rows` — with
-	 * `creating`'s input as the first child of its folder while that's shown
-	 * and expanded.
+	 * `naming`'s input: a create's as the first child of its folder while
+	 * that's shown and expanded, a rename's in place of its file's row while
+	 * that's shown.
 	 */
 	readonly rows: Array<DiskfileTreeRow> = $derived.by(() => {
 		const rows = to_diskfile_tree_rows(this.app.diskfiles.indexed_roots, this.#source);
-		const { creating } = this;
-		if (creating) {
-			const parent_key = to_diskfile_tree_row_key(creating.root, creating.dir);
+		const { naming } = this;
+		if (naming?.kind === 'create') {
+			const parent_key = to_diskfile_tree_row_key(naming.root, naming.dir);
 			const index = rows.findIndex((row) => row.key === parent_key);
 			const parent = rows[index];
 			if (parent && (parent.kind === 'root' || parent.kind === 'dir') && parent.expanded) {
 				rows.splice(index + 1, 0, {
 					kind: 'create',
-					key: to_diskfile_tree_create_key(creating.root, creating.dir),
-					root: creating.root,
-					path: creating.dir,
+					key: to_diskfile_tree_create_key(naming.root, naming.dir),
+					root: naming.root,
+					path: naming.dir,
 					label: '',
 					depth: parent.depth + 1,
 					setsize: 0,
 					posinset: 0,
 					parent_key,
-					create_kind: creating.kind
+					create_kind: naming.create_kind
 				});
 			}
+		} else if (naming) {
+			const key = to_diskfile_tree_row_key(naming.root, naming.path);
+			const index = rows.findIndex((row) => row.key === key);
+			const row = rows[index];
+			if (row?.kind === 'file') rows[index] = { ...row, kind: 'rename' };
 		}
 		return rows;
 	});
 
-	/** The index of `creating`'s input row in `rows`, `-1` when none shows. */
-	readonly create_index: number = $derived(
-		this.creating ? this.rows.findIndex((row) => row.kind === 'create') : -1
+	/** The index of `naming`'s input row in `rows`, `-1` when none shows. */
+	readonly naming_index: number = $derived(
+		this.naming ? this.rows.findIndex((row) => is_diskfile_tree_naming_row(row)) : -1
 	);
 
 	/**
@@ -764,92 +843,188 @@ export class DiskfileTreeState {
 	 * Starts naming a new file or folder inline, inside root or folder `row`
 	 * (a compact row's innermost folder): expands it and shows the input as its
 	 * first child, made active so the tree scrolls to it. Replaces any create
-	 * in progress.
+	 * or rename in progress.
 	 */
 	start_create(row: DiskfileTreeDirRow, kind: DiskfileCreateKind): void {
 		this.notice = null;
 		this.set_expanded(row, true);
-		this.creating = new DiskfileTreeCreate(row.root, row.path, kind);
+		this.naming = new DiskfileTreeCreate(row.root, row.path, kind);
 		this.active_key = to_diskfile_tree_create_key(row.root, row.path);
 		this.scroll_request++;
 	}
 
-	/** Ends the create in progress, the active row going back to its folder. */
-	cancel_create(): void {
-		const { creating } = this;
-		if (!creating) return;
-		this.creating = null;
-		if (this.active_key === to_diskfile_tree_create_key(creating.root, creating.dir)) {
-			this.active_key = to_diskfile_tree_row_key(creating.root, creating.dir);
+	/**
+	 * Starts renaming the file `row` shows inline: the input replaces its row,
+	 * made active so the tree scrolls to it, its current name filled in.
+	 * Replaces any create or rename in progress. Not for a file that isn't on
+	 * disk to rename (`Diskfiles.can_rename`).
+	 *
+	 * @returns whether it started
+	 */
+	start_rename(row: DiskfileTreeFileRow): boolean {
+		const path = row.path as DiskfilePath;
+		if (!untrack(() => this.app.diskfiles.can_rename(path))) return false;
+		this.notice = null;
+		this.naming = new DiskfileTreeRename(row.root, path);
+		this.active_key = row.key;
+		this.scroll_request++;
+		return true;
+	}
+
+	/** F2: starts renaming the active row's file inline — see `start_rename`. */
+	rename_active(): boolean {
+		const row = this.#take_active_row();
+		return row?.kind === 'file' ? this.start_rename(row) : false;
+	}
+
+	/**
+	 * Ends the create or rename in progress. A create's active row goes back
+	 * to its folder; a rename's is its file's row already.
+	 */
+	cancel_naming(): void {
+		const { naming } = this;
+		if (!naming) return;
+		this.naming = null;
+		if (
+			naming.kind === 'create' &&
+			this.active_key === to_diskfile_tree_create_key(naming.root, naming.dir)
+		) {
+			this.active_key = to_diskfile_tree_row_key(naming.root, naming.dir);
 		}
 	}
 
 	/**
-	 * Creates what `creating` names inside its folder, then ends it. The name is
-	 * parsed by `parse_new_diskfile_name`, so `a/b.ts` creates the folders on
-	 * the way. A new file is selected in a permanent tab and revealed
-	 * (`Diskfiles.create_file_at`); a new folder joins `created_dirs` — it's
-	 * empty, so the index won't list it — and is revealed and expanded. An
-	 * empty name ends it creating nothing; a refused name or a failed create
-	 * keeps it open with `error` set. What the file index skips can't show, so
-	 * `notice` says why. A create started while this one was in flight keeps
-	 * the tree at its input: nothing is revealed.
+	 * Commits what `naming` names, then ends it. An empty name ends it doing
+	 * nothing, as does a rename to the file's own name — untouched, or the
+	 * same once trimmed; a refused name or a failed create or rename keeps it
+	 * open with `error` set — and when its input isn't there to show it
+	 * (gone meanwhile, scrolled out, or left for another row), says why in
+	 * `notice` too. A create or rename started while this one was in flight
+	 * keeps the tree at its input: nothing is revealed and no note shows.
 	 *
-	 * @returns whether something was created
+	 * A create's name is parsed by `parse_new_diskfile_name`, so `a/b.ts`
+	 * creates the folders on the way. A new file is selected in a permanent
+	 * tab and revealed (`Diskfiles.create_file_at`); a new folder joins
+	 * `created_dirs` — it's empty, so the index won't list it — and is
+	 * revealed and expanded. What the file index skips can't show, so
+	 * `notice` says why.
+	 *
+	 * A rename's name is parsed by `parse_diskfile_rename_name` and sent
+	 * through the `file_rename` intent, which moves everything that follows
+	 * the file, the tree's active row included; the file is revealed at its
+	 * new name, or `notice` says why it can't show there.
+	 *
+	 * @returns whether something was created or renamed
 	 */
-	async commit_create(): Promise<boolean> {
-		const { creating } = this;
-		if (!creating || creating.pending) return false;
-		if (!creating.name) {
-			this.cancel_create();
+	async commit_naming(): Promise<boolean> {
+		const { naming } = this;
+		if (!naming || naming.pending) return false;
+		// an untouched name, though it holds whitespace the parse would trim, renames nothing
+		if (!naming.name || (naming.kind === 'rename' && naming.name === naming.current)) {
+			this.cancel_naming();
 			return false;
 		}
-		const parsed = parse_new_diskfile_name(creating.name, creating.kind);
+		const parsed = naming.parse();
 		if (!parsed.ok) {
-			creating.error = parsed.message;
+			naming.error = parsed.message;
 			return false;
 		}
-		// `dir` has a trailing slash, and the parsed name has no leading one
-		const path = parse_or_throw(DiskfilePath, creating.dir + parsed.value);
-		const { diskfiles } = this.app;
-		creating.error = null;
-		creating.pending = true;
+		if (naming.kind === 'rename' && parsed.value === naming.current) {
+			this.cancel_naming();
+			return false;
+		}
+		naming.error = null;
+		naming.pending = true;
+		let path: DiskfilePath;
 		try {
-			if (creating.kind === 'file') {
-				await diskfiles.create_file_at(path);
+			if (naming.kind === 'rename') {
+				const result = await this.app.intents.file_rename({
+					path: naming.path,
+					name: parsed.value
+				});
+				if (!result.ok) {
+					this.#fail(naming, result.error.message);
+					return false;
+				}
+				path = result.value.path;
 			} else {
-				await diskfiles.create_directory_at(path);
+				// `dir` has a trailing slash, and the parsed name has no leading one
+				path = parse_or_throw(DiskfilePath, naming.dir + parsed.value);
+				if (naming.create_kind === 'file') {
+					await this.app.diskfiles.create_file_at(path);
+				} else {
+					await this.app.diskfiles.create_directory_at(path);
+				}
 			}
 		} catch (error) {
-			creating.error = to_error_message(error);
+			this.#fail(naming, to_error_message(error));
 			return false;
 		} finally {
-			creating.pending = false;
+			naming.pending = false;
 		}
-		// a create started meanwhile keeps the tree at its input
-		const replaced = this.creating !== null && this.creating !== creating;
-		if (this.creating === creating) this.cancel_create();
+		// a create or rename started meanwhile keeps the tree at its input
+		const replaced = this.naming !== null && this.naming !== naming;
+		if (this.naming === naming) this.cancel_naming();
+		if (naming.kind === 'rename') {
+			if (!replaced && !this.reveal(path)) this.#note_unshown(path, 'renamed');
+			return true;
+		}
 		const created = normalize_path(path);
-		const root = to_innermost_root(created, this.app.diskfiles.indexed_roots);
-		if (creating.kind === 'folder') {
-			const dir = created + '/';
-			this.created_dirs.add(dir);
-			if (!replaced && this.reveal(dir)) {
+		const shown = naming.create_kind === 'folder' ? created + '/' : created;
+		if (naming.create_kind === 'folder') {
+			this.created_dirs.add(shown);
+			if (!replaced && this.reveal(shown)) {
 				const row = this.active_row;
-				if (row?.kind === 'dir' && row.path === dir) this.set_expanded(row, true);
+				if (row?.kind === 'dir' && row.path === shown) this.set_expanded(row, true);
 			}
 		}
-		const skipped =
-			root && diskfiles.to_unindexed(creating.kind === 'folder' ? created + '/' : created);
-		if (skipped && !replaced) {
-			this.notice = `created ${to_relative_path(created, root)}, which the tree doesn’t show: ${to_unindexed_reason(skipped, root)}`;
-		}
+		if (!replaced) this.#note_unshown(shown, 'created');
 		return true;
 	}
 
 	/**
+	 * Records why `naming`'s commit failed: on it, for its input to show,
+	 * scrolled into view (a mounted input may sit just off screen, among the
+	 * rows the tree renders past its edges) — and, when no input shows it
+	 * (its row stopped showing, the tree went, another create or rename
+	 * started, its row is scrolled out and may never come back, or the user
+	 * moved on to another row), in `notice`, so the failure isn't silent. A
+	 * create's note names its path in the root; a rename's, the file's name.
+	 */
+	#fail(naming: DiskfileTreeCreate | DiskfileTreeRename, message: string): void {
+		naming.error = message;
+		if (this.naming === naming && naming.mounted && this.active_index === this.naming_index) {
+			this.scroll_request++;
+			return;
+		}
+		this.notice =
+			naming.kind === 'rename'
+				? `couldn’t rename ${naming.current}: ${message}`
+				: `couldn’t create ${to_relative_path(naming.dir + naming.name.trim(), naming.root)}: ${message}`;
+	}
+
+	/**
+	 * Says in `notice` why the file or folder at `path`, just created or
+	 * renamed, won't show, when the file index skips it.
+	 *
+	 * @param path - a file's path, or a folder's with a trailing `/`
+	 */
+	#note_unshown(path: string, done: 'created' | 'renamed'): void {
+		const { diskfiles } = this.app;
+		const unslashed = path.endsWith('/') ? path.slice(0, -1) : path;
+		const root = to_innermost_root(unslashed, diskfiles.indexed_roots);
+		const skipped = root && diskfiles.to_unindexed(path);
+		if (!skipped) return;
+		const what =
+			done === 'renamed'
+				? `renamed to ${unslashed.slice(unslashed.lastIndexOf('/') + 1)}`
+				: `created ${to_relative_path(unslashed, root)}`;
+		this.notice = `${what}, which the tree doesn’t show: ${to_unindexed_reason(skipped, root)}`;
+	}
+
+	/**
 	 * Makes row `index` (clamped to the rows) active and asks for it to scroll
-	 * into view. The keyboard passes over `creating`'s input row, which it
+	 * into view. The keyboard passes over `naming`'s input row, which it
 	 * can't act on — to the next row in `direction`, else the one before — so
 	 * focus never moves into the input without the user choosing it.
 	 *
@@ -859,12 +1034,12 @@ export class DiskfileTreeState {
 		const { rows } = this;
 		if (!rows.length) return;
 		let i = Math.max(0, Math.min(rows.length - 1, index));
-		if (rows[i]!.kind === 'create') {
+		if (is_diskfile_tree_naming_row(rows[i])) {
 			const past = i + direction;
 			i = past >= 0 && past < rows.length ? past : i - direction;
 		}
 		const row = rows[i];
-		if (!row || row.kind === 'create') return;
+		if (!row || is_diskfile_tree_naming_row(row)) return;
 		this.active_key = row.key;
 		this.scroll_request++;
 	}
@@ -900,14 +1075,14 @@ export class DiskfileTreeState {
 			void this.focus_repo(row);
 			return;
 		}
-		if (row.kind === 'file' || row.kind === 'create') return;
+		if (row.kind === 'file' || is_diskfile_tree_naming_row(row)) return;
 		if (!row.expanded) {
 			this.set_expanded(row, true);
 			return;
 		}
-		// into its first child past `creating`'s input row — none, when the input is all it holds
+		// into its first child past the inline input's row — none, when the input is all it holds
 		let next = this.active_index + 1;
-		if (this.rows[next]?.kind === 'create') next++;
+		if (is_diskfile_tree_naming_row(this.rows[next])) next++;
 		if (this.rows[next]?.parent_key === row.key) this.move_to(next);
 	}
 
@@ -932,11 +1107,11 @@ export class DiskfileTreeState {
 	 * Enter and Space: opens the active file — in a permanent tab if
 	 * `open_not_preview`, else a preview, through the `tab_open` intent — toggles
 	 * the active folder, or focuses the active unfocused repo. Does nothing on
-	 * `creating`'s input row.
+	 * `naming`'s input row.
 	 */
 	open_active(open_not_preview: boolean): void {
 		const row = this.#take_active_row();
-		if (!row || row.kind === 'create') return;
+		if (!row || is_diskfile_tree_naming_row(row)) return;
 		if (row.kind === 'unfocused') {
 			void this.focus_repo(row);
 		} else if (row.kind === 'file') {
@@ -998,14 +1173,14 @@ export class DiskfileTreeState {
 
 	/**
 	 * Reveals a file this client just created (`Diskfiles.create_file_at`) —
-	 * unless an inline create other than one in flight is open, which keeps the
-	 * tree at its input.
+	 * unless an inline create or rename other than one in flight is open,
+	 * which keeps the tree at its input.
 	 *
 	 * @returns whether it was revealed
 	 */
 	reveal_created(path: string): boolean {
-		const { creating } = this;
-		if (creating && !creating.pending) return false;
+		const { naming } = this;
+		if (naming && !naming.pending) return false;
 		return this.reveal(path);
 	}
 

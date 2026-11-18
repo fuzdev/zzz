@@ -194,8 +194,8 @@ describe('creating', () => {
 		];
 		for (const [root, kind, name, notice] of cases) {
 			tree.start_create(dir_row(root, root), kind);
-			tree.creating!.name = name;
-			assert.isTrue(await tree.commit_create());
+			tree.naming!.name = name;
+			assert.isTrue(await tree.commit_naming());
 			assert.strictEqual(tree.notice, notice, `${root}${name}`);
 		}
 	});

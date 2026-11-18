@@ -27,12 +27,13 @@
 	 * One row of `DiskfileTree`: a `treeitem` with its ARIA state, indented by
 	 * its depth. Presentational — the tree handles its pointer and keyboard
 	 * input, so the row is never focused itself (`aria-activedescendant`).
-	 * A file row has the file contextmenu, a folder, root, or unfocused repo
-	 * row the folder one (`DiskfileDirectoryContextmenu`). An unfocused repo's
-	 * row is dimmed, says it's not focused to assistive tech, and shows
-	 * "focusing…" while a focus is in flight; a focused repo's row shows
-	 * "unfocusing…" while an unfocus is. Each row is its own `li`, never
-	 * inside another's, so a row's menu gathers no other row's entries.
+	 * A file row has the file contextmenu (renaming inline), a folder, root,
+	 * or unfocused repo row the folder one (`DiskfileDirectoryContextmenu`).
+	 * An unfocused repo's row is dimmed, says it's not focused to assistive
+	 * tech, and shows "focusing…" while a focus is in flight; a focused
+	 * repo's row shows "unfocusing…" while an unfocus is. Each row is its
+	 * own `li`, never inside another's, so a row's menu gathers no other
+	 * row's entries.
 	 *
 	 * @module
 	 */
@@ -95,7 +96,7 @@
 			: undefined}
 >
 	{#if file_path}
-		<DiskfileContextmenu path={file_path}>
+		<DiskfileContextmenu path={file_path} tree_row={row.kind === 'file' ? row : undefined}>
 			{@render content()}
 		</DiskfileContextmenu>
 	{:else if row.kind !== 'file'}

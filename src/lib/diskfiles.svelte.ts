@@ -1174,6 +1174,16 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
+	 * Whether the file at `path` is on disk to rename — not a dormant draft's
+	 * nor deleted on disk — so the rename entries show for it. `rename`
+	 * refuses more (a file saving or being recorded, a taken new name), with
+	 * a reason.
+	 */
+	can_rename(path: DiskfilePath): boolean {
+		return !this.is_dormant(path) && !this.#cells.get(path)?.deleted_on_disk;
+	}
+
+	/**
 	 * Renames the file at `path` to `name` in its own directory
 	 * (`diskfile_rename`), the daemon carrying its transcript sidecars, and
 	 * moves everything here that follows a file (`#move_path`) for each file

@@ -1675,8 +1675,11 @@ is. Refused here, before the daemon, for a name that isn't one plain path
 component, a file that's saving, being recorded, dormant, or deleted on
 disk, and a new name — the file's or a sidecar's — with a draft or a tab
 here. A new name the index skips (git-ignored in a focused checkout) keeps
-the file as uncovered. The file's menu ("rename file", a prompt for now) and the palette
-("rename the file", for the selected tab) call it.
+the file as uncovered. The tree renames inline (§ Renaming in the tree);
+the file's menu elsewhere ("rename file" on the list, tabs, and file views)
+and the palette ("rename the file", for the selected tab) ask by a prompt.
+Both parse the name alike (`parse_diskfile_rename_name`: surrounding
+whitespace dropped, no `/` or `\`, and not `.` or `..`).
 
 ### Disk changes and drafts
 
@@ -2007,12 +2010,11 @@ on one is lost when it scrolls away.
 
 ### The explorer's two modes
 
-The files page's explorer (`DiskfileExplorer`)
-shows the same files as a flat, sortable list (`DiskfileList`) or as a
-folder tree (`DiskfileTree`), switched by the folder toggle in its header
-(the `explorer_mode_set` intent, `DiskfilesEditor.explorer_mode`); the
-sort controls belong to the list, and "collapse all" to the tree. The
-tree has one top row per indexed root — the
+The files page's explorer (`DiskfileExplorer`) shows the same files as a
+flat, sortable list (`DiskfileList`) or as a folder tree (`DiskfileTree`),
+switched by the folder toggle in its header (the `explorer_mode_set` intent,
+`DiskfilesEditor.explorer_mode`); the sort controls belong to the list, and
+"collapse all" to the tree. The tree has one top row per indexed root — the
 app directory, each scoped directory, each open project's root — labeled
 with the root's path, and under it folders before files, each sorted by name
 (case-insensitive, numbers by value), with names relative to their folder. A
@@ -2039,8 +2041,9 @@ and deriving them walks only the expanded folders, so a large index costs
 what is open, not what is indexed. Keyboard: Up and Down move, Right expands
 a folder or moves into it, Left collapses it or moves to the parent, Home
 and End jump, Enter opens a file in a permanent tab, Space previews it, and
-either toggles a folder; the ContextMenu key (or Shift+F10) opens the active
-row's menu. Focus stays on the tree, which names the active row by
+either toggles a folder; F2 renames the active file inline (§ Renaming in
+the tree); the ContextMenu key (or Shift+F10) opens the active row's menu.
+Focus stays on the tree, which names the active row by
 `aria-activedescendant`, so it survives the row scrolling away. A click
 previews a file, a double click opens it, and a click toggles a folder. A
 registry's repos that aren't focused show as lazy rows that expanding
@@ -2071,23 +2074,25 @@ a folder wait on backend actions.
 
 ### Creating in the tree
 
-A create in the tree names the new file or folder inline, VS Code style:
-an input (`DiskfileTreeCreateInput`) shows as the folder's first child,
-expanded first; in tree mode the header's create buttons open it at the
-active project's root row. Enter creates and Escape cancels, both returning
-focus to the tree unless the user has moved it elsewhere meanwhile; the tree
+A create in the tree names the new file or folder inline, VS Code style: an
+input (`DiskfileTreeNameInput`) shows as the folder's first child, expanded
+first; in tree mode the header's create buttons open it at the active
+project's root row. Enter creates and Escape cancels, both returning focus
+to the tree unless the user has moved it elsewhere meanwhile; the tree
 leaves every key typed in the input to it, and its own arrows pass over the
 input's row. Leaving the input creates a valid name and drops a blank or
 refused one (a name the backend already refused isn't sent again), but not
 when the whole window lost focus or the row scrolled out of the window — the
-name being typed lives on the state (`DiskfileTreeState.creating`), and the
+name being typed lives on the state (`DiskfileTreeState.naming`), and the
 input refocuses when it remounts with focus lost — if focus went elsewhere
 meanwhile, it's dropped instead. An input is dropped too when its folder
 stops showing (collapsed, emptied, its root closed) or the tree goes (a
 switch to the list). A name's problem shows under the row as it's typed,
 announced politely, except a file name's trailing `/`, a step on the way to
-`sub/x.md`; a refused commit's shows the same place as an alert. The box
-sits over the rows below — they keep one height for windowing — and lets
+`sub/x.md`; a refused commit's shows the same place as an alert, or in the
+tree's note when no input shows it (gone meanwhile, scrolled out, or left
+for another row) — after a switch to the list, once the tree is back. The
+box sits over the rows below — they keep one height for windowing — and lets
 clicks through. A `/` in the name creates the folders on the way. A new file
 opens in a permanent tab and is revealed in the tree, now or when its
 `filer_change` arrives, unless another input has opened meanwhile; a new
@@ -2102,6 +2107,25 @@ not a click, which would shift the rows under a double click — and a file
 there isn't waited for. Any file this client creates
 (`Diskfiles.create_file_at`) is revealed the same way, an audio or
 transcript view's "edit a copy" included.
+
+### Renaming in the tree
+
+F2 on the active file, or a file row's "rename file", renames it inline
+through the same input as a create (`DiskfileTreeNameInput`, the state's
+`naming` — one create or rename at a time, either replacing the other). The
+input takes the file's row in place, its name filled in and the part before
+the extension selected (a dotfile's whole name). Enter, Escape, leaving the
+input, a scroll out and back, the row ceasing to show, and the problem notes
+behave as for a create; the name is parsed as one plain name in the file's
+folder (`parse_diskfile_rename_name`), and an empty name or the file's own
+(untouched, or once trimmed) ends it sending nothing. It commits through the
+`file_rename` intent (§ Renaming a file), read-only while in flight; the
+daemon's refusal shows as an alert, the input kept — and, when no input
+shows it (its folder collapsed, it failed scrolled out or after the user
+moved to another row, the tree switched to the list), in the tree's note
+too, as for a create. The renamed file is revealed at its new name, the
+keyboard on it, unless another input has opened meanwhile — or, when the
+index skips the new name and nothing keeps it in the tree, a note says why.
 
 ## Projects
 
