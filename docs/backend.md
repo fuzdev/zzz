@@ -8,29 +8,30 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
 ## Crates
 
 - `zzz_server/` — library (`zzz_server`) + production daemon binary (the
-  `[[bin]]` target is named `zzzd`). `pub async fn run_app(options:
-  RunAppOptions)` in `src/lib.rs` owns the full lifecycle over the spine's
-  server toolkit (`fuz_actions::server`: `create_app_backend` boots the core —
-  keyring, the READ COMMITTED guard, the pre-migration hook, the auth
-  migrations, the keeper, bootstrap availability, the revocation listeners —
-  then `serve_until_shutdown` binds, runs the auth cleanup beside the server,
-  and drains; zzz's jobs and PTYs are torn down after). `RunAppOptions`
-  carries: `spine` (the toolkit's `SpineRunOptions` — the password hasher, the
-  `fuz_auth::RateLimiterMode` every spine limiter is built through (`Enforced`
-  in production, `DisabledForTesting` in the test binary only), the
-  daemon-token state (the test binary's keeper credential; production `None`),
-  the pre-migration hook (the test binary's
-  `fuz_testing::startup_reset_hook`), in-flight audit tracking (so the test
-  binary's `_testing_drain_effects` awaits detached audit writes),
-  `default_addr` (bind address when `--port`/`ZZZ_PORT` don't supply one; host
-  stays loopback, only the port is overridable), and `drain_timeout`), `args`
-  (the parsed command line), `force_test_actions` (overrides the
-  `ZZZ_ENABLE_TEST_ACTIONS` env flag), and `extra_action_specs_factory` (lets
-  the test binary inject `_testing_reset`, `_testing_drain_effects`, and
-  `_testing_action_manifest` without putting `fuz_testing` in the production
-  dep graph). The core's emitter is also held on `App` (`audit_emitter`),
-  where the test binary's specs factory reaches it. `src/main.rs` is the thin production entry — parses the command
-  line, constructs `Argon2idHasher`, calls `run_app` with
+  `[[bin]]` target is named `zzzd`).
+  `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the
+  full lifecycle over the spine's server toolkit (`fuz_actions::server`:
+  `create_app_backend` boots the core — keyring, the READ COMMITTED guard,
+  the pre-migration hook, the auth migrations, the keeper, bootstrap
+  availability, the revocation listeners — then `serve_until_shutdown`
+  binds, runs the auth cleanup beside the server, and drains; zzz's jobs and
+  PTYs are torn down after). `RunAppOptions` carries: `spine` (the toolkit's
+  `SpineRunOptions` — the password hasher, the `fuz_auth::RateLimiterMode`
+  every spine limiter is built through (`Enforced` in production,
+  `DisabledForTesting` in the test binary only), the daemon-token state (the
+  test binary's keeper credential; production `None`), the pre-migration
+  hook (the test binary's `fuz_testing::startup_reset_hook`), in-flight
+  audit tracking (so the test binary's `_testing_drain_effects` awaits
+  detached audit writes), `default_addr` (bind address when
+  `--port`/`ZZZ_PORT` don't supply one; host stays loopback, only the port
+  is overridable), and `drain_timeout`), `args` (the parsed command line),
+  `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag),
+  and `extra_action_specs_factory` (lets the test binary inject
+  `_testing_reset`, `_testing_drain_effects`, and `_testing_action_manifest`
+  without putting `fuz_testing` in the production dep graph). The core's
+  emitter is also held on `App` (`audit_emitter`), where the test binary's
+  specs factory reaches it. `src/main.rs` is the thin production entry —
+  parses the command line, constructs `Argon2idHasher`, calls `run_app` with
   `SpineRunOptions::production`.
 - `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target
   is named `testing_zzzd`) wiring `fuz_testing::TestingArgon2idHasher` (~1-5
@@ -666,42 +667,41 @@ commands):
   gitfile, or symlink, even one git wouldn't read as a repo — makes the dir
   a repo of its own here), and reports each one it stopped at
   (`DirScan::nested`): the `SharedRule` keeps them beside the rule, each
-  sync replacing those at and under the dir it walked
-  (`set_nested_under`) — so the start's walk, a rescan, and the sync a
-  `.git` appearing triggers (`RuleMarker::RepoDir`) keep the list current,
-  a dir gone or no longer a dir drops those under it (`remove_children`),
-  and a nested `.git` removed is seen at the next rescan (no watch is in the
-  repo) — under the same version, so a change is one the wire sees. Live, the event loop drains each burst and vets
-  its adds of paths not yet indexed (`FilerState::vet_adds`: one
-  `check_ignore`, a missing path asked about as a file, a path that turned
-  into a dir re-asked, an ignored dir's path that's a file now asked about
-  as the file, then an `ls_ignored` scoped to each new dir git doesn't
-  ignore); a path inside an unpopulated submodule, which git refuses, drops
-  that submodule's paths from the batch and asks again — once per distinct
-  submodule, up to `CHECK_MAX_SUBMODULES` (8) — leaving each unindexed until
-  the next re-prune. A scan's new files no event vetted (a `session_load`
-  rescan, a degraded poll) get one `check_ignore` too (`vet_scanned`),
-  re-pruning when one of them sits in a watched dir — a dir no event vetted,
-  such as one a `.git` left, which a listing would prune whole. Both vet at
-  most `VET_MAX_PATHS` (128) paths and re-prune past it: git's check costs
-  about 1.8 µs per path per index entry, so on a 160k-entry index (sparse
-  wpt) 1024 paths took 1.8 s against the 2 s `CHECK_TIMEOUT`, while a
-  re-prune of that tree takes about 0.3 s — the cheaper past about 150
-  paths. A
-  `.gitignore` event (passed through the callback's filter even when ignored
-  itself, `rule_marker`) or an `info/exclude` change (the filer's own
-  watcher keeps a fixed watch on `<root>/.git/info/`,
-  `DirWatches::watch_git_info`, through every reset; a gitfile root isn't
-  watched), or a `.gitignore` a scan finds changed, requests a re-prune once
-  the changes settle (`REPRUNE_SETTLE` 400 ms of quiet, at most
-  `REPRUNE_SETTLE_MAX_WAIT` 5 s), bursts dropped meanwhile (the watches
-  their removes and renames took dropped with them, as applying them would);
-  a failed or oversized vetting — more than `VET_MAX_PATHS` (128) paths,
-  more than `VET_MAX_NEW_DIRS` (8) new dirs, or paths still turning into
-  dirs after `VET_ROUNDS` (3) asks; a failed one drops those watches too —
-  an overflow, and the set outgrowing `LIVE_ADDED_MAX` request one at once.
-  A re-prune runs inline on the event loop after the current step
-  (`FilerState::reprune`): it relists, swaps the set, rescans the root
+  sync replacing those at and under the dir it walked (`set_nested_under`) —
+  so the start's walk, a rescan, and the sync a `.git` appearing triggers
+  (`RuleMarker::RepoDir`) keep the list current, a dir gone or no longer a
+  dir drops those under it (`remove_children`), and a nested `.git` removed
+  is seen at the next rescan (no watch is in the repo) — under the same
+  version, so a change is one the wire sees. Live, the event loop drains
+  each burst and vets its adds of paths not yet indexed
+  (`FilerState::vet_adds`: one `check_ignore`, a missing path asked about as
+  a file, a path that turned into a dir re-asked, an ignored dir's path
+  that's a file now asked about as the file, then an `ls_ignored` scoped to
+  each new dir git doesn't ignore); a path inside an unpopulated submodule,
+  which git refuses, drops that submodule's paths from the batch and asks
+  again — once per distinct submodule, up to `CHECK_MAX_SUBMODULES` (8) —
+  leaving each unindexed until the next re-prune. A scan's new files no
+  event vetted (a `session_load` rescan, a degraded poll) get one
+  `check_ignore` too (`vet_scanned`), re-pruning when one of them sits in a
+  watched dir — a dir no event vetted, such as one a `.git` left, which a
+  listing would prune whole. Both vet at most `VET_MAX_PATHS` (128) paths
+  and re-prune past it: git's check costs about 1.8 µs per path per index
+  entry, so on a 160k-entry index (sparse wpt) 1024 paths took 1.8 s against
+  the 2 s `CHECK_TIMEOUT`, while a re-prune of that tree takes about 0.3 s —
+  the cheaper past about 150 paths. A `.gitignore` event (passed through the
+  callback's filter even when ignored itself, `rule_marker`) or an
+  `info/exclude` change (the filer's own watcher keeps a fixed watch on
+  `<root>/.git/info/`, `DirWatches::watch_git_info`, through every reset; a
+  gitfile root isn't watched), or a `.gitignore` a scan finds changed,
+  requests a re-prune once the changes settle (`REPRUNE_SETTLE` 400 ms of
+  quiet, at most `REPRUNE_SETTLE_MAX_WAIT` 5 s), bursts dropped meanwhile
+  (the watches their removes and renames took dropped with them, as applying
+  them would); a failed or oversized vetting — more than `VET_MAX_PATHS`
+  (128) paths, more than `VET_MAX_NEW_DIRS` (8) new dirs, or paths still
+  turning into dirs after `VET_ROUNDS` (3) asks; a failed one drops those
+  watches too — an overflow, and the set outgrowing `LIVE_ADDED_MAX` request
+  one at once. A re-prune runs inline on the event loop after the current
+  step (`FilerState::reprune`): it relists, swaps the set, rescans the root
   without vetting, and lists again, broadcasting the diff — inline because
   the loop is the index's only writer, and a re-prune beside it would race
   the events applied meanwhile. A start whose second listing un-ignores
@@ -715,63 +715,64 @@ commands):
   the latest. Its own rescan vets what it finds, and new files git can't vet
   there stay unindexed until a pass vets them; what that rescan requests is
   dropped, so a failure never retries itself and `REPRUNE_MAX_FAILURES`
-  counts separate triggers — any re-prune a change on disk asked for: a
-  rule edit, lost events, new files git couldn't vet, or a set grown past
-  its budget (`RepruneTrigger::Change`). A load's or poll's retry that
-  fails doesn't count (`RepruneTrigger::Retry`), so reloads alone never
-  give up git's rule, and a git that never answers costs a listing's
-  timeout per degraded poll and per load until such changes fail too — on
-  a quiet degraded tree, possibly never. Each load waits out that 5 s with
-  the filer's loop blocked; the polls are bounded by
+  counts separate triggers — any re-prune a change on disk asked for: a rule
+  edit, lost events, new files git couldn't vet, or a set grown past its
+  budget (`RepruneTrigger::Change`). A load's or poll's retry that fails
+  doesn't count (`RepruneTrigger::Retry`), so reloads alone never give up
+  git's rule, and a git that never answers costs a listing's timeout per
+  degraded poll and per load until such changes fail too — on a quiet
+  degraded tree, possibly never. Each load waits out that 5 s with the
+  filer's loop blocked; the polls are bounded by
   `DEGRADED_RESCAN_COST_FACTOR`, which spaces them by ten times their own
-  duration — about 50 s apart, roughly a 10% duty cycle. That many
-  counted failures in a row, or a root no longer the checkout it was, fall
-  back to fixed names for good. Every git call runs on `spawn_blocking` with
-  the root's parent as discovery ceiling, `refuse_implicit_bare`, and a
-  timeout (`LIST_TIMEOUT` 5 s per listing call, `CHECK_TIMEOUT` 2 s per
-  vetting call — a FIFO `.gitignore` stalls git until it), after re-checking
-  that the dir it runs in is still the real, canonical directory and the
-  root still a checkout (`GitRoot::check_confined`). A burst's vetting can
-  stall the loop for a check, a listing, and the re-prune's listing in turn
-  — about 12 s when git never answers. `session_load` waits on every filer's
-  rescan (`FilerManager::rescan_all`) with no timeout, so a git root stalled
-  that way delays every client's `session_load` by up to the stall's bound —
-  and, while a re-prune has failed, by the re-prune it runs in place of the
+  duration — about 50 s apart, roughly a 10% duty cycle. That many counted
+  failures in a row, or a root no longer the checkout it was, fall back to
+  fixed names for good. Every git call runs on `spawn_blocking` with the
+  root's parent as discovery ceiling, `refuse_implicit_bare`, and a timeout
+  (`LIST_TIMEOUT` 5 s per listing call, `CHECK_TIMEOUT` 2 s per vetting call
+  — a FIFO `.gitignore` stalls git until it), after re-checking that the dir
+  it runs in is still the real, canonical directory and the root still a
+  checkout (`GitRoot::check_confined`). A burst's vetting can stall the loop
+  for a check, a listing, and the re-prune's listing in turn — about 12 s
+  when git never answers. `session_load` waits on every filer's rescan
+  (`FilerManager::rescan_all`) with no timeout, so a git root stalled that
+  way delays every client's `session_load` by up to the stall's bound — and,
+  while a re-prune has failed, by the re-prune it runs in place of the
   rescan.
-- **Ignored paths on the wire** — `Filer::ignored_on_wire` is the set as
-  an open project carries it (`filer::IgnoredPaths`: the paths relative to
-  the root, sorted, dirs with a trailing `/`; `nested`, the repos of their
-  own the walks stopped at and the unpopulated submodules, relative,
-  sorted, each with a trailing `/` (`IgnoredSet::nested_on_wire`) — both
-  cached per rule version; and the resync count, `resyncs` on the wire), `None` on fixed names. Every `ProjectManager` commit,
-  after ensuring its filers and under the lock, reads it for every focused
-  dir of every project in the next state (`refresh_ignored_of`, through
-  `FilerManager::ignored_on_wire`, which also marks each filer on or off the
-  wire) — lock order: the projects mutex, the filer map (read), each
-  filer's rule (read), as `focused_files` takes them. A project whose set
-  moved is a change (`OpenProject::ignored` is in the state's equality):
-  stamped and broadcast as `update`, even by a commit its caller meant as
-  a no-op. A filer whose set changes on its own signals from its event
-  loop, between whole steps — the rule's version or the resync count moved
-  since the last signal — through a coalescing flag (`RescanSignal`, as
-  the overflow rescan uses) to a publisher task per git filer
-  (`publish_ignored_changes`), which calls `FilerConfig::on_ignored_change`
-  at once and then at most every `IGNORED_REFRESH_INTERVAL` (1 s): live
-  vetting changes the set a file at a time, and each refresh resends every
-  changed project's whole set. The hook (`FilerManager`'s, holding the app
-  weakly) spawns `ProjectManager::refresh_ignored` — the open projects
-  committed unchanged — on a task of its own, since a commit may stop the
-  filer whose publisher called it (aborting that task) and must run to
-  completion; the filer never awaits the projects mutex. **The flood
-  guard**: a re-prune that would queue more than `REPRUNE_BROADCAST_MAX`
-  (1024) `filer_change`s on a filer on the wire queues none, drops those
-  paths' pending changes (a stale one after the client's pull would undo
-  it), and bumps the resync count, which the loop then signals; each
-  client sees the count move and pulls the dir (`repo_files`), reading the
-  index the re-prune left. 1024 changes are about 350 KiB per socket —
-  about one `repo_files` reply of a repo of a few thousand files — far
-  under the 32 MiB socket budget (about 95,000). Off the wire (a permanent
-  filer alone) nobody would pull, so every change is sent.
+- **Ignored paths on the wire** — `Filer::ignored_on_wire` is the set as an
+  open project carries it (`filer::IgnoredPaths`: the paths relative to the
+  root, sorted, dirs with a trailing `/`; `nested`, the repos of their own
+  the walks stopped at and the unpopulated submodules, relative, sorted,
+  each with a trailing `/` (`IgnoredSet::nested_on_wire`) — both cached per
+  rule version; and the resync count, `resyncs` on the wire), `None` on
+  fixed names. Every `ProjectManager` commit, after ensuring its filers and
+  under the lock, reads it for every focused dir of every project in the
+  next state (`refresh_ignored_of`, through `FilerManager::ignored_on_wire`,
+  which also marks each filer on or off the wire) — lock order: the projects
+  mutex, the filer map (read), each filer's rule (read), as `focused_files`
+  takes them. A project whose set moved is a change (`OpenProject::ignored`
+  is in the state's equality): stamped and broadcast as `update`, even by a
+  commit its caller meant as a no-op. A filer whose set changes on its own
+  signals from its event loop, between whole steps — the rule's version or
+  the resync count moved since the last signal — through a coalescing flag
+  (`RescanSignal`, as the overflow rescan uses) to a publisher task per git
+  filer (`publish_ignored_changes`), which calls
+  `FilerConfig::on_ignored_change` at once and then at most every
+  `IGNORED_REFRESH_INTERVAL` (1 s): live vetting changes the set a file at a
+  time, and each refresh resends every changed project's whole set. The hook
+  (`FilerManager`'s, holding the app weakly) spawns
+  `ProjectManager::refresh_ignored` — the open projects committed unchanged
+  — on a task of its own, since a commit may stop the filer whose publisher
+  called it (aborting that task) and must run to completion; the filer never
+  awaits the projects mutex. **The flood guard**: a re-prune that would
+  queue more than `REPRUNE_BROADCAST_MAX` (1024) `filer_change`s on a filer
+  on the wire queues none, drops those paths' pending changes (a stale one
+  after the client's pull would undo it), and bumps the resync count, which
+  the loop then signals; each client sees the count move and pulls the dir
+  (`repo_files`), reading the index the re-prune left. 1024 changes are
+  about 350 KiB per socket — about one `repo_files` reply of a repo of a few
+  thousand files — far under the 32 MiB socket budget (about 95,000). Off
+  the wire (a permanent filer alone) nobody would pull, so every change is
+  sent.
 - **Filer watches** — each filer adds one non-recursive notify watch per
   directory it indexes, from its own walk (`filer::watches::DirWatches`), so ignored,
   symlinked, and non-UTF-8 directories and the app dir get none — the watch
@@ -885,45 +886,46 @@ commands):
   (-32602; `invalid_path`, `is_a_directory`, `not_a_regular_file`,
   `not_a_directory`); out of scope, a symlink, an OS permission refusal
   (including a read-only target file or filesystem), or a new file or
-  directory in a non-writable directory → `forbidden` (-32002; `path_not_allowed`,
-  `symlink_not_allowed`, `permission_denied`, `directory_not_writable`); a
-  missing path → `not_found` (-32003; `path_not_found`); `diskfile_create`
-  or `directory_create` over an existing path, a save whose file was replaced mid-save, or a
-  save whose file no longer holds the bytes its `expected_hash` names →
-  `conflict` (-32004; `already_exists`, `replaced_during_save`,
-  `disk_changed`, and the byte routes' `offset_mismatch`); any other
-  I/O failure → `internal_error` (-32603, no
-  reason). Messages keep the `failed to … : …` prefix. `project_open`
-  carries the resolver's `ProjectError::reason` (`handlers::project::open_error`):
-  missing → `not_found` / `path_not_found`; a relative path, a symlink loop,
-  or an over-long name → `invalid_params` / `invalid_path` (a NUL byte never
-  reaches it — `params_nul`); a path the OS refuses → `forbidden` /
-  `permission_denied`; a registry that can't be read or doesn't parse →
-  `invalid_params` / `registry_unreadable`, `registry_invalid`; an
-  untrusted or unconfined one → `forbidden` / `registry_untrusted`,
-  `registry_not_confined`; one replaced while it was checked → `conflict`
-  / `registry_changed` — each but the last falling back instead for a
-  registry kept inside a checkout, no link above naming it, to a checkout
-  at or below its directory (the project's `fallback`, `registry_refused`
-  with that reason; ./architecture.md § Projects → Fallbacks); an unusable
-  walk bound → `internal_error` / `bound_unusable`; the root or the path's own focus whose listing is
-  refused → `forbidden` / `permission_denied`. A refused registry entry fails
-  nothing: its `entry_*` reason is on the entry. Nor does a focus the open
-  requested (`focus`) that doesn't land: each is reported in the reply's
-  `refused` with the reason `repo_focus` would give it
-  (`handlers::project::focus_refusal_reason` — `repo_not_in_project`,
+  directory in a non-writable directory → `forbidden` (-32002;
+  `path_not_allowed`, `symlink_not_allowed`, `permission_denied`,
+  `directory_not_writable`); a missing path → `not_found` (-32003;
+  `path_not_found`); `diskfile_create` or `directory_create` over an
+  existing path, a save whose file was replaced mid-save, or a save whose
+  file no longer holds the bytes its `expected_hash` names → `conflict`
+  (-32004; `already_exists`, `replaced_during_save`, `disk_changed`, and the
+  byte routes' `offset_mismatch`); any other I/O failure → `internal_error`
+  (-32603, no reason). Messages keep the `failed to … : …` prefix.
+  `project_open` carries the resolver's `ProjectError::reason`
+  (`handlers::project::open_error`): missing → `not_found` /
+  `path_not_found`; a relative path, a symlink loop, or an over-long name →
+  `invalid_params` / `invalid_path` (a NUL byte never reaches it —
+  `params_nul`); a path the OS refuses → `forbidden` / `permission_denied`;
+  a registry that can't be read or doesn't parse → `invalid_params` /
+  `registry_unreadable`, `registry_invalid`; an untrusted or unconfined one
+  → `forbidden` / `registry_untrusted`, `registry_not_confined`; one
+  replaced while it was checked → `conflict` / `registry_changed` — each but
+  the last falling back instead for a registry kept inside a checkout, no
+  link above naming it, to a checkout at or below its directory (the
+  project's `fallback`, `registry_refused` with that reason;
+  ./architecture.md § Projects → Fallbacks); an unusable walk bound →
+  `internal_error` / `bound_unusable`; the root or the path's own focus
+  whose listing is refused → `forbidden` / `permission_denied`. A refused
+  registry entry fails nothing: its `entry_*` reason is on the entry. Nor
+  does a focus the open requested (`focus`) that doesn't land: each is
+  reported in the reply's `refused` with the reason `repo_focus` would give
+  it (`handlers::project::focus_refusal_reason` — `repo_not_in_project`,
   `repo_not_present`, `project_not_registry`, `permission_denied`), or
   `repo_index_failed` (`ERROR_REPO_INDEX_FAILED`) for a listing that failed
-  otherwise, the one a client retries. On canonical paths, so no
-  symlink or `..` spelling gets around either, it holds the opened
-  directory and the project root to the root rules (`root_policy::RootPolicy::admit`: strictly inside `$HOME` or
-  in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an ancestor of it, or
-  under `/proc`, `/sys`, `/dev`) — `forbidden` / `root_outside_home`
-  (`root_policy::ERROR_ROOT_OUTSIDE_HOME`) where the allowlist would
-  admit it, else `root_not_allowed` (`ERROR_ROOT_NOT_ALLOWED`) — and refuses
-  a path that is, or is inside, a protected directory
-  (`scoped_fs::protected_dir`): a credential directory (`.ssh`, `.gnupg`,
-  `.aws`, `.kube`, `.docker`, `.password-store` —
+  otherwise, the one a client retries. On canonical paths, so no symlink or
+  `..` spelling gets around either, it holds the opened directory and the
+  project root to the root rules (`root_policy::RootPolicy::admit`: strictly
+  inside `$HOME` or in `ZZZ_ROOTS_OUTSIDE_HOME`, never `/`, `$HOME` or an
+  ancestor of it, or under `/proc`, `/sys`, `/dev`) — `forbidden` /
+  `root_outside_home` (`root_policy::ERROR_ROOT_OUTSIDE_HOME`) where the
+  allowlist would admit it, else `root_not_allowed`
+  (`ERROR_ROOT_NOT_ALLOWED`) — and refuses a path that is, or is inside, a
+  protected directory (`scoped_fs::protected_dir`): a credential directory
+  (`.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, `.password-store` —
   `scoped_fs::CREDENTIAL_DIR_NAMES`) or a directory named `.zzz` other than
   the app dir (the CLI's daemon home holds `.env` and `bootstrap_token`),
   with `forbidden` / `protected_dir_not_allowed`
@@ -940,9 +942,8 @@ commands):
   one). A filer started on such a root refuses too
   (`FilerConfig::root_protected`); a scoped dir there, or one the root rules
   refuse, fails boot before any filer starts (`PUBLIC_ZZZ_SCOPED_DIRS`
-  below).
-  `project_close`, `repo_focus`, or `repo_unfocus` of a root that isn't
-  open → `invalid_params` / `project_not_open`
+  below). `project_close`, `repo_focus`, or `repo_unfocus` of a root that
+  isn't open → `invalid_params` / `project_not_open`
   (`handlers::project::ERROR_PROJECT_NOT_OPEN`). `repo_focus` /
   `repo_unfocus` on a checkout or plain directory → `invalid_params` /
   `project_not_registry`, of a directory that's none of the registry's
@@ -952,12 +953,12 @@ commands):
   fails otherwise → as for `project_open`'s focused directory, the message
   `failed to focus repo: …`. `project_status` of a root that isn't open →
   `invalid_params` / `project_not_open`, of a checkout or plain directory →
-  `invalid_params` / `project_not_registry`. `repo_files` of a root that isn't open →
-  `invalid_params` / `project_not_open`, of a directory the project doesn't
-  focus → `invalid_params` / `repo_not_focused`
+  `invalid_params` / `project_not_registry`. `repo_files` of a root that
+  isn't open → `invalid_params` / `project_not_open`, of a directory the
+  project doesn't focus → `invalid_params` / `repo_not_focused`
   (`handlers::project::ERROR_REPO_NOT_FOCUSED`) — never an empty answer,
-  which an empty repo would read as. The check and the read happen under
-  the projects' lock (`ProjectManager::focused_files`): a commit stops or
+  which an empty repo would read as. The check and the read happen under the
+  projects' lock (`ProjectManager::focused_files`): a commit stops or
   narrows filers before it publishes, so a read checked against the
   published snapshot could find a filer already stopped (no files) or
   narrowed (a nested registry's top level alone).

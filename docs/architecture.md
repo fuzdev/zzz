@@ -1,10 +1,16 @@
 # Architecture
 
-Core systems: actions, cells, content model, data flow, terminals and fuz_terminal, recording, indexed collections, the app directory, filesystem, file editing, projects, the auth gate, security posture, capabilities, and known limitations.
+Core systems: actions, cells, content model, data flow, terminals and
+fuz_terminal, recording, indexed collections, the app directory, filesystem,
+file editing, projects, the auth gate, security posture, capabilities, and
+known limitations.
 
 ## Action System
 
-Symmetric peer-to-peer JSON-RPC 2.0 — by design either end can initiate. The frontend runs the TypeScript `ActionDispatcher` (from `@fuzdev/fuz_app`); the Rust `zzz_server` backend implements the same spec + wire contract via `fuz_actions`.
+Symmetric peer-to-peer JSON-RPC 2.0 — by design either end can initiate. The
+frontend runs the TypeScript `ActionDispatcher` (from `@fuzdev/fuz_app`);
+the Rust `zzz_server` backend implements the same spec + wire contract via
+`fuz_actions`.
 
 ### Action Spec
 
@@ -27,8 +33,11 @@ export const completion_create_action_spec = {
 
 ### Action Kinds
 
-- `request_response` — Standard RPC. Phases: `send_request` → `receive_request` → `send_response` → `receive_response`. Transport: HTTP or WebSocket
-- `remote_notification` — Backend → frontend push (progress, broadcast). Phases: `send` → `receive`. Transport: WebSocket only
+- `request_response` — Standard RPC. Phases: `send_request` →
+  `receive_request` → `send_response` → `receive_response`. Transport: HTTP
+  or WebSocket
+- `remote_notification` — Backend → frontend push (progress, broadcast).
+  Phases: `send` → `receive`. Transport: WebSocket only
 - `local_call` — Frontend-only UI actions. Phases: `execute`. Transport: None
 
 `remote_notification` actions have three routing paths on the backend:
@@ -52,23 +61,32 @@ export const completion_create_action_spec = {
 - `method` (`string`) — Action name (e.g. `'completion_create'`)
 - `kind` (`ActionKind`) — `'request_response'` | `'remote_notification'` | `'local_call'`
 - `initiator` (`ActionInitiator`) — `'frontend'` | `'backend'` | `'both'`
-- `auth` (`RouteAuth | null`) — `{account, actor, roles?, credential_types?, required_scope?}`; required on `request_response` specs, `null` on `remote_notification` / `local_call`
-- `side_effects` (`boolean`) — Whether action mutates state (also keeps it off the side-effect-free `GET /api/rpc` path)
+- `auth` (`RouteAuth | null`) —
+  `{account, actor, roles?, credential_types?, required_scope?}`; required
+  on `request_response` specs, `null` on `remote_notification` /
+  `local_call`
+- `side_effects` (`boolean`) — Whether action mutates state (also keeps it
+  off the side-effect-free `GET /api/rpc` path)
 - `input` (`ValidationSchema`) — schema for request params (zzz's are fuz_schema)
 - `output` (`ValidationSchema`) — schema for response
 - `async` (`boolean`) — Whether handler is async
 - `description` (`string`) — What the action does (rendered into ./reference.md)
-- `streams` (`string` (optional)) — Name of the companion request-scoped `remote_notification` method this action emits (e.g. `'completion_progress'`)
+- `streams` (`string` (optional)) — Name of the companion request-scoped
+  `remote_notification` method this action emits (e.g.
+  `'completion_progress'`)
 - `error_reasons`, `rate_limit` (optional) — see fuz_app's `ActionSpec`
 
 ### Core Components
 
 - `ActionSpec` (`action_spec.ts`) — Action metadata schema
-- `ActionEvent` (`action_event.ts`) — Lifecycle state machine (initial → parsed → handling → handled/failed)
+- `ActionEvent` (`action_event.ts`) — Lifecycle state machine (initial →
+  parsed → handling → handled/failed)
 - `ActionDispatcher` (`action_dispatcher.ts`) — Send/receive on both sides
 - `ActionRegistry` (`action_registry.ts`) — Type-safe action lookup
 
-These live in `@fuzdev/fuz_app/actions/` — the SAES runtime lives in fuz_app, and zzz imports it. Cell patterns (the `Cell` base class, `IndexedCollection`) remain in zzz.
+These live in `@fuzdev/fuz_app/actions/` — the SAES runtime lives in
+fuz_app, and zzz imports it. Cell patterns (the `Cell` base class,
+`IndexedCollection`) remain in zzz.
 
 ### Action Event Lifecycle
 
@@ -136,7 +154,9 @@ interface Transport {
 }
 ```
 
-Frontend implementations: `FrontendHttpTransport`, `FrontendWebsocketTransport`. The Rust backend serves the matching `/api/rpc` + `/api/ws` endpoints directly.
+Frontend implementations: `FrontendHttpTransport`,
+`FrontendWebsocketTransport`. The Rust backend serves the matching
+`/api/rpc` + `/api/ws` endpoints directly.
 
 ### JSON-RPC 2.0
 
@@ -151,19 +171,29 @@ MCP-compatible subset, no batching:
 
 ### Actions
 
-Defined in `src/lib/action_specs.ts`. A representative subset below — several families are omitted here; see [reference.md](./reference.md) (generated from the specs) for the full list:
+Defined in `src/lib/action_specs.ts`. A representative subset below —
+several families are omitted here; see [reference.md](./reference.md)
+(generated from the specs) for the full list:
 
 - `ping` — Health check. Kind: `request_response`. Initiator: `both`
-- `session_load` — Load the session snapshot, at boot and after each reconnect. Kind: `request_response`. Initiator: `frontend`
-- `filer_change` — File system change notification. Kind: `remote_notification`. Initiator: `backend`
-- `diskfile_read` — Read a file's contents as text, with their hash, its size, and timestamps. Kind: `request_response`. Initiator: `frontend`
-- `diskfile_update` — Write file content, only if the file still holds what the edit was based on (`expected_hash`). Kind: `request_response`. Initiator: `frontend`
+- `session_load` — Load the session snapshot, at boot and after each
+  reconnect. Kind: `request_response`. Initiator: `frontend`
+- `filer_change` — File system change notification. Kind:
+  `remote_notification`. Initiator: `backend`
+- `diskfile_read` — Read a file's contents as text, with their hash, its
+  size, and timestamps. Kind: `request_response`. Initiator: `frontend`
+- `diskfile_update` — Write file content, only if the file still holds what
+  the edit was based on (`expected_hash`). Kind: `request_response`.
+  Initiator: `frontend`
 - `diskfile_delete` — Delete a file. Kind: `request_response`. Initiator: `frontend`
-- `directory_create` — Create a new directory (and missing parents); a taken name is `conflict`. Kind: `request_response`. Initiator: `frontend`
+- `directory_create` — Create a new directory (and missing parents); a taken
+  name is `conflict`. Kind: `request_response`. Initiator: `frontend`
 - `completion_create` — Start AI completion. Kind: `request_response`. Initiator: `frontend`
-- `completion_progress` — Stream completion chunks. Kind: `remote_notification`. Initiator: `backend`
+- `completion_progress` — Stream completion chunks. Kind:
+  `remote_notification`. Initiator: `backend`
 - `toggle_main_menu` — Toggle main menu UI. Kind: `local_call`. Initiator: `frontend`
-- `provider_load_status` — Check provider availability. Kind: `request_response`. Initiator: `frontend`
+- `provider_load_status` — Check provider availability. Kind:
+  `request_response`. Initiator: `frontend`
 
 ### Actions Log
 
@@ -334,23 +364,30 @@ is not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 - `Capabilities` (`capabilities.svelte.ts`) — Feature capability tracking
 - `Chat` (`chat.svelte.ts`) — Chat container with threads
 - `Chats` (`chats.svelte.ts`) — Collection of chats
-- `Diskfile` (`diskfile.svelte.ts`) — Single file on disk (its content when loaded, its `size` in bytes, and its `mtime`)
+- `Diskfile` (`diskfile.svelte.ts`) — Single file on disk (its content when
+  loaded, its `size` in bytes, and its `mtime`)
 - `DiskfileTab` (`diskfile_tab.svelte.ts`) — Editor tab for a file
 - `DiskfileTabs` (`diskfile_tabs.svelte.ts`) — Tab manager
-- `DiskfileHistory` (`diskfile_history.svelte.ts`) — File edit history (owned by the file's app-level `DiskfileEditorState`)
+- `DiskfileHistory` (`diskfile_history.svelte.ts`) — File edit history
+  (owned by the file's app-level `DiskfileEditorState`)
 - `Diskfiles` (`diskfiles.svelte.ts`) — Collection of disk files
 - `DiskfilesEditor` (`diskfiles_editor.svelte.ts`) — Multi-file editor state
-- `Job` (`job.svelte.ts`) — A backend job: long-running work on a file (a transcription), its status and progress
+- `Job` (`job.svelte.ts`) — A backend job: long-running work on a file (a
+  transcription), its status and progress
 - `Jobs` (`jobs.svelte.ts`) — The account's jobs, mirroring the backend's
 - `Model` (`model.svelte.ts`) — AI model definition
 - `Models` (`models.svelte.ts`) — Model catalog with indexes
 - `Action` (`action.svelte.ts`) — Single action event state
-- `Actions` (`actions.svelte.ts`) — Action history: the newest 512 calls, payloads over 8192 characters of JSON replaced by markers (§ Actions Log)
+- `Actions` (`actions.svelte.ts`) — Action history: the newest 512 calls,
+  payloads over 8192 characters of JSON replaced by markers (§ Actions Log)
 - `Prompt` (`prompt.svelte.ts`) — Reusable prompt template
 - `Prompts` (`prompts.svelte.ts`) — Collection of prompts
 - `Provider` (`provider.svelte.ts`) — AI provider config
 - `Providers` (`providers.svelte.ts`) — Collection of providers
-- `Recorder` (`recorder.svelte.ts`) — App-level microphone recording to a file: the upload sink, finalize, transcribe-on-stop, over an `AudioCapture` (`audio_capture.svelte.ts`, app-free: microphone, pause / resume, duration, level, chunks to any sink)
+- `Recorder` (`recorder.svelte.ts`) — App-level microphone recording to a
+  file: the upload sink, finalize, transcribe-on-stop, over an
+  `AudioCapture` (`audio_capture.svelte.ts`, app-free: microphone, pause /
+  resume, duration, level, chunks to any sink)
 - `Turn` (`turn.svelte.ts`) — Single conversation message
 - `Thread` (`thread.svelte.ts`) — Linear conversation with one model
 - `Threads` (`threads.svelte.ts`) — Collection of threads
@@ -360,7 +397,8 @@ is not a Cell — it's a plain `.svelte.ts` wrapper around fuz_app's
 - `TerminalPresets` (`terminal_presets.svelte.ts`) — Collection of terminal presets
 - `Time` (`time.svelte.ts`) — Reactive time state
 - `Ui` (`ui.svelte.ts`) — UI state (menus, layout)
-- `Project` (`project.svelte.ts`) — Open project: its root, kind, registry entries, and focused directories
+- `Project` (`project.svelte.ts`) — Open project: its root, kind, registry
+  entries, and focused directories
 - `Projects` (`projects.svelte.ts`) — Collection of open projects, keyed by root
 
 ## Content Model
@@ -453,7 +491,9 @@ class Thread extends Cell<typeof ThreadJson> {
 
 ### Chats
 
-Container for multi-model comparison. Holds `thread_ids`, resolves to Thread instances. `view_mode: 'simple' | 'multi'` controls single-thread vs side-by-side display.
+Container for multi-model comparison. Holds `thread_ids`, resolves to Thread
+instances. `view_mode: 'simple' | 'multi'` controls single-thread vs
+side-by-side display.
 
 ## Data Flow
 
@@ -629,67 +669,27 @@ and their output buffering, and coming back reattaches to them.
 - **The view** — `TerminalView` fills the height its host gives it (the
   terminals page gives each run a fixed height) and lays the emulator's box
   over a stretched flex item absolutely, so the box has a definite size. It
-  hosts one `FuzTerminal`, whose module comes from `load_fuz_terminal_module`
-  (`fuz_terminal_module.ts`): `static/fuz_terminal/ghostty-vt.wasm`, fetched
-  and compiled once per page and shared by every view, a failed load dropped
-  so the next view retries. A missing module — a 404, or an HTML page in its
-  place — leaves the view `failed` with a message naming `cargo xtask
-  ghostty-vt`, and so does a load that hasn't settled within
-  `FUZ_TERMINAL_MODULE_LOAD_TIMEOUT_MS` (about 30 seconds; the fetch is
-  aborted), which is what ends a load that would never finish: the view
-  fails, the output it held is released, and its retry is offered; the process runs regardless and its output buffers, though
-  nothing answers its queries, so a shell that waits for a reply at startup
-  stalls until its own timeout. A view whose emulator is `poisoned` shows
-  "reopen", and a `failed` one "retry": either remounts it — a fresh
+  hosts one `FuzTerminal`, whose module comes from
+  `load_fuz_terminal_module` (`fuz_terminal_module.ts`):
+  `static/fuz_terminal/ghostty-vt.wasm`, fetched and compiled once per page
+  and shared by every view, a failed load dropped so the next view retries.
+  A missing module — a 404, or an HTML page in its place — leaves the view
+  `failed` with a message naming `cargo xtask ghostty-vt`, and so does a
+  load that hasn't settled within `FUZ_TERMINAL_MODULE_LOAD_TIMEOUT_MS`
+  (about 30 seconds; the fetch is aborted), which is what ends a load that
+  would never finish: the view fails, the output it held is released, and
+  its retry is offered; the process runs regardless and its output buffers,
+  though nothing answers its queries, so a shell that waits for a reply at
+  startup stalls until its own timeout. A view whose emulator is `poisoned`
+  shows "reopen", and a `failed` one "retry": either remounts it — a fresh
   instance, replayed from the cell's buffer — and a retry loads the module
   again, so building it and retrying recovers without a page reload. The
   view takes keys (`accepts_input`) exactly while `send_input` takes bytes,
   so a terminal whose process ended leaves keys — Tab included — to the
   browser. It never takes focus on its own: a click or Tab focuses it. A
   view taking keys marks its root (`data-fuz-terminal-keys`), and the
-  dashboard's global shortcuts (`dashboard_shortcuts.ts`: `` ` ``, `~`,
-  Escape) leave keys whose target is inside one
-  (`is_fuz_terminal_key_target`) to the terminal, as they leave a text
-  field's — so with focus in a terminal, Escape goes to the program and
-  leaves an open desk menu open. The app's other global key handlers are on
-  pages that host no terminal, and a context menu takes keys only while
-  it's open; a new global shortcut makes the same check. The copy button
-  and the context menu's "copy output" read the emulator's text
-  (`get_text`: the scrollback and screen, soft wraps joined). The view passes
-  `TERMINAL_SCROLLBACK_MAX_BYTES` (2 MiB) as the emulator's
-  `scrollback_max_bytes`: the limit counts the emulator's memory, pruned in
-  whole pages, so a wider or more styled terminal keeps fewer lines,
-  dropping the oldest; the library's default keeps a single page. A remount
-  replays the whole output buffer, which usually holds more than that, so
-  the fresh emulator keeps the newest history up to the limit.
-  The context menu's "paste" (enabled
-  exactly while the terminal takes input) reads the clipboard
-  (`read_clipboard_text`, `navigator.clipboard.readText`, started in the
-  entry's activation, since a browser allows the read only with a user
-  gesture — Chrome asks for permission once, Firefox shows its own paste
-  button) and hands the read to the view, which runs `paste_terminal_text`
-  (`terminal_paste.ts`) over `FuzTerminal.paste` (./fuz_terminal.md, *Paste*).
-  A paste longer than the terminal's input takes now (`Terminal.input_room`:
-  what's left of `TERMINAL_INPUT_PENDING_MAX_LENGTH` after the input waiting
-  to be sent, which `send_input` would otherwise drop the whole paste past)
-  is refused whole, naming the limit — measured as `send_input` measures, the
-  bracketed frame included, and before the text's safety, so a paste that
-  can't fit is never asked about. Unsafe text (`get_ghostty_paste_hazard`)
-  is pasted only once the person confirms it (`confirm`), and the
-  confirmation covers only the hazard asked about: the second paste allows
-  that hazard in that mode, so if the program toggled bracketed paste while
-  the person was asked and the text is unsafe in the new mode (its hazard,
-  or only the mode, differs from what was asked), nothing is sent and
-  the notice says to paste again, which asks about the text as it is then
-  (text the toggle made safe is pasted). Asking again at once instead could
-  repeat for as long as a program kept toggling; the refusal is bounded. A
-  failed or empty read, a refusal, or a view that takes no input is shown
-  in the view as a notice until the next paste that doesn't fail, or it's
-  dismissed — never thrown. A paste that goes through focuses the terminal.
-  `TerminalViewLink` (`terminal_view_link.ts`)
-  is the wiring between the cell and one view — attach and replay, acks,
-  input decoding, resize — kept out of the component so tests drive it with
-  a real `Terminal` cell.
+  dashboard's global shortcuts (`dashboard_shortcuts.ts`: ``
+  ` ``, `~`, Escape) leave keys whose target is inside one (`is_fuz_terminal_key_target`) to the terminal, as they leave a text field's — so with focus in a terminal, Escape goes to the program and leaves an open desk menu open. The app's other global key handlers are on pages that host no terminal, and a context menu takes keys only while it's open; a new global shortcut makes the same check. The copy button and the context menu's "copy output" read the emulator's text (`get_text`: the scrollback and screen, soft wraps joined). The view passes `TERMINAL_SCROLLBACK_MAX_BYTES` (2 MiB) as the emulator's `scrollback_max_bytes`: the limit counts the emulator's memory, pruned in whole pages, so a wider or more styled terminal keeps fewer lines, dropping the oldest; the library's default keeps a single page. A remount replays the whole output buffer, which usually holds more than that, so the fresh emulator keeps the newest history up to the limit. The context menu's "paste" (enabled exactly while the terminal takes input) reads the clipboard (`read_clipboard_text`, `navigator.clipboard.readText`, started in the entry's activation, since a browser allows the read only with a user gesture — Chrome asks for permission once, Firefox shows its own paste button) and hands the read to the view, which runs `paste_terminal_text` (`terminal_paste.ts`) over `FuzTerminal.paste` (./fuz_terminal.md, *Paste*). A paste longer than the terminal's input takes now (`Terminal.input_room`: what's left of `TERMINAL_INPUT_PENDING_MAX_LENGTH` after the input waiting to be sent, which `send_input` would otherwise drop the whole paste past) is refused whole, naming the limit — measured as `send_input` measures, the bracketed frame included, and before the text's safety, so a paste that can't fit is never asked about. Unsafe text (`get_ghostty_paste_hazard`) is pasted only once the person confirms it (`confirm`), and the confirmation covers only the hazard asked about: the second paste allows that hazard in that mode, so if the program toggled bracketed paste while the person was asked and the text is unsafe in the new mode (its hazard, or only the mode, differs from what was asked), nothing is sent and the notice says to paste again, which asks about the text as it is then (text the toggle made safe is pasted). Asking again at once instead could repeat for as long as a program kept toggling; the refusal is bounded. A failed or empty read, a refusal, or a view that takes no input is shown in the view as a notice until the next paste that doesn't fail, or it's dismissed — never thrown. A paste that goes through focuses the terminal. `TerminalViewLink` (`terminal_view_link.ts`) is the wiring between the cell and one view — attach and replay, acks, input decoding, resize — kept out of the component so tests drive it with a real `Terminal` cell.
 - **Status** — `starting` → `running` → `exited` (natural exit via the
   `terminal_exited` broadcast, with its code) or `closed` (the user's
   `terminal_close`, with the code from its response, or `null` if the process
@@ -713,18 +713,18 @@ running, then disposes the cell. The terminal list is in-memory: a page
 reload loses it while the backend PTYs keep running (`session_load` lists
 their ids, but reattaching would also need their commands and output).
 
-A terminal the backend no longer has becomes `lost`, with an
-`error_message` saying why, and its queued input is dropped: when
-`terminal_data_send` or `terminal_resize` answers `not_found`, or when the
-session snapshot loaded after a reconnect doesn't list a terminal that was
-running (the message tells a zzzd restart — a new `server_instance_id` —
-from a process that ended or was closed from another tab while the
-connection was down, whose `terminal_exited` was missed). A lost terminal
-can be restarted. The backend drops a terminal just before sending its
-`terminal_exited`, so one can be marked lost moments before its real exit
-arrives; the exit then wins (`exited` with its code). Output sent while the socket was down is lost too, so a
-reconnect flags each running terminal's `output_gap`, and its view shows a
-dismissible "connection lost — some output may be missing" notice.
+A terminal the backend no longer has becomes `lost`, with an `error_message`
+saying why, and its queued input is dropped: when `terminal_data_send` or
+`terminal_resize` answers `not_found`, or when the session snapshot loaded
+after a reconnect doesn't list a terminal that was running (the message
+tells a zzzd restart — a new `server_instance_id` — from a process that
+ended or was closed from another tab while the connection was down, whose
+`terminal_exited` was missed). A lost terminal can be restarted. The backend
+drops a terminal just before sending its `terminal_exited`, so one can be
+marked lost moments before its real exit arrives; the exit then wins
+(`exited` with its code). Output sent while the socket was down is lost too,
+so a reconnect flags each running terminal's `output_gap`, and its view
+shows a dismissible "connection lost — some output may be missing" notice.
 
 Each terminal is one backend task that owns the PTY master and the child
 process. Input chunks are written in the order `terminal_data_send` calls
@@ -759,9 +759,18 @@ data, the key mapping, drawing, the host API, and the view's wiring — are in
 
 ## Recording
 
-`Recorder` (`recorder.svelte.ts`) is an app-level cell that records the microphone to a file on disk. Being app-level, a recording carries on across route changes; `RecorderIndicator` in the root layout shows it — status, duration, pause and stop — on every page while the microphone may be open.
+`Recorder` (`recorder.svelte.ts`) is an app-level cell that records the
+microphone to a file on disk. Being app-level, a recording carries on across
+route changes; `RecorderIndicator` in the root layout shows it — status,
+duration, pause and stop — on every page while the microphone may be open.
 
-It's two layers. `AudioCapture` (`audio_capture.svelte.ts`) owns the microphone — the user-gesture check, the format, `MediaRecorder`, pause and resume, duration and level — and hands each chunk to an `AudioCaptureSink` it is given, knowing nothing about the app or where chunks go. `Recorder` supplies the sink (a `ChunkUpload` to a file) and owns what happens after: the path, finalizing, and transcribing. Capture has no backend or AI dependency, so another app can record into its own sink.
+It's two layers. `AudioCapture` (`audio_capture.svelte.ts`) owns the
+microphone — the user-gesture check, the format, `MediaRecorder`, pause and
+resume, duration and level — and hands each chunk to an `AudioCaptureSink`
+it is given, knowing nothing about the app or where chunks go. `Recorder`
+supplies the sink (a `ChunkUpload` to a file) and owns what happens after:
+the path, finalizing, and transcribing. Capture has no backend or AI
+dependency, so another app can record into its own sink.
 
 ```
 click → Recorder.start(dir)
@@ -778,36 +787,93 @@ Recorder.stop()                                                        status: s
           └─ media_finalize           remux, so the file has a duration and seeks
 ```
 
-**The file is the recording.** It is created under its final name — the local time it started, like `2026-01-31_09-05-07.webm` — in the directory `start` is given (the files page passes `Diskfiles.new_files_dir`), and grows in place as chunks arrive. Nothing is buffered for the length of the recording: a crashed tab loses at most the last chunk (`chunk_duration`, a few seconds), and the file left behind still plays.
+**The file is the recording.** It is created under its final name — the
+local time it started, like `2026-01-31_09-05-07.webm` — in the directory
+`start` is given (the files page passes `Diskfiles.new_files_dir`), and
+grows in place as chunks arrive. Nothing is buffered for the length of the
+recording: a crashed tab loses at most the last chunk (`chunk_duration`, a
+few seconds), and the file left behind still plays.
 
-**Chunks land exactly once, in order.** `ChunkUpload` (`chunk_upload.ts`) sends one chunk at a time, each as an append at the offset it expects (see [File Bytes](#file-bytes)). A request that gets no answer, or a server error, is retried with backoff; when the retry is refused because the file already grew by exactly this chunk, the first attempt landed and only its reply was lost. Any other refusal — the file changed on disk, the session ended — fails the upload, which ends the recording with the reason in `Recorder.error`.
+**Chunks land exactly once, in order.** `ChunkUpload` (`chunk_upload.ts`)
+sends one chunk at a time, each as an append at the offset it expects (see
+[File Bytes](#file-bytes)). A request that gets no answer, or a server
+error, is retried with backoff; when the retry is refused because the file
+already grew by exactly this chunk, the first attempt landed and only its
+reply was lost. Any other refusal — the file changed on disk, the session
+ended — fails the upload, which ends the recording with the reason in
+`Recorder.error`.
 
-**Stopping finalizes.** A browser's `MediaRecorder` streams its output, so the file's header has no duration or seek index. Once every chunk has landed, `media_finalize` has the daemon rewrite the file in place with both (an `ffmpeg` stream copy — nothing is re-encoded). If finalizing fails the recording is kept as it is, and `Recorder.error` says so.
+**Stopping finalizes.** A browser's `MediaRecorder` streams its output, so
+the file's header has no duration or seek index. Once every chunk has
+landed, `media_finalize` has the daemon rewrite the file in place with both
+(an `ffmpeg` stream copy — nothing is re-encoded). If finalizing fails the
+recording is kept as it is, and `Recorder.error` says so.
 
-**The microphone.** Capture starts in exactly one place, `AudioCapture.start` (which `Recorder.start` calls), and it refuses unless a user gesture is in effect (`navigator.userActivation`; a browser without that API can't be asked, and is let through) — so it follows a click or a key press, and nothing the backend sends can open the microphone. `Recorder.active` is true from the permission prompt until the recording is saved; while it is, the indicator shows on every page and leaving the page asks first (`confirm_unload_while_recording`). Disposing the app — a logout, a session found revoked — closes the microphone and doesn't finalize; the chunks the uploader already holds, and the last one the browser hands over as it stops, are still sent. A track that ends on its own (the device unplugged, the permission revoked) stops the recording normally.
+**The microphone.** Capture starts in exactly one place,
+`AudioCapture.start` (which `Recorder.start` calls), and it refuses unless a
+user gesture is in effect (`navigator.userActivation`; a browser without
+that API can't be asked, and is let through) — so it follows a click or a
+key press, and nothing the backend sends can open the microphone.
+`Recorder.active` is true from the permission prompt until the recording is
+saved; while it is, the indicator shows on every page and leaving the page
+asks first (`confirm_unload_while_recording`). Disposing the app — a logout,
+a session found revoked — closes the microphone and doesn't finalize; the
+chunks the uploader already holds, and the last one the browser hands over
+as it stops, are still sent. A track that ends on its own (the device
+unplugged, the permission revoked) stops the recording normally.
 
-The browser's side of all this — `getUserMedia`, `MediaRecorder`, the clock — is behind `AudioCaptureDeps`, which `RecorderDeps` extends with `fetch`, so tests stand in for the microphone and the network.
+The browser's side of all this — `getUserMedia`, `MediaRecorder`, the clock
+— is behind `AudioCaptureDeps`, which `RecorderDeps` extends with `fetch`,
+so tests stand in for the microphone and the network.
 
 ### Playing audio
 
-The files page routes a file to its view by content kind (see [File Editing](#file-editing)); audio gets `DiskfileAudioView`.
+The files page routes a file to its view by content kind (see [File
+Editing](#file-editing)); audio gets `DiskfileAudioView`.
 
-The audio view (with its transcript beside it — see [Transcription](#transcription)) is an `<audio>` element whose `src` is the file's byte-route URL (see [File Bytes](#file-bytes)); the browser streams and seeks with `Range` requests, so the file is never loaded into the app. A file's content being unloaded means its `content` can't show that it changed, so `Diskfile.mtime` — the disk node's modification time, kept current by every `filer_change` — keys the player: when the bytes change (a finalize, an external write) it remounts and loads them. While the recorder is writing a file, its view says so and shows no player. The view's finalize button runs `media_finalize` on the file — for a recording cut off before it was saved, which plays but has no duration.
+The audio view (with its transcript beside it — see
+[Transcription](#transcription)) is an `<audio>` element whose `src` is the
+file's byte-route URL (see [File Bytes](#file-bytes)); the browser streams
+and seeks with `Range` requests, so the file is never loaded into the app. A
+file's content being unloaded means its `content` can't show that it
+changed, so `Diskfile.mtime` — the disk node's modification time, kept
+current by every `filer_change` — keys the player: when the bytes change (a
+finalize, an external write) it remounts and loads them. While the recorder
+is writing a file, its view says so and shows no player. The view's finalize
+button runs `media_finalize` on the file — for a recording cut off before it
+was saved, which plays but has no duration.
 
 ### Jobs
 
-Some work takes minutes — a transcription — and can't be tied to one request: closing the tab or dropping the socket would end it. A **job** is that work on the daemon (`crates/zzz_server/src/job_manager.rs`), reported to the frontend as it changes.
+Some work takes minutes — a transcription — and can't be tied to one
+request: closing the tab or dropping the socket would end it. A **job** is
+that work on the daemon (`crates/zzz_server/src/job_manager.rs`), reported
+to the frontend as it changes.
 
-- A job has an id, a kind, a status (`queued`, `running`, `succeeded`, `failed`, `cancelled`), a progress, the file it works on, the file it wrote, the command lines it ran, and — when it failed — why, with the tail of the tool's stderr (`job_types.ts`).
+- A job has an id, a kind, a status (`queued`, `running`, `succeeded`,
+  `failed`, `cancelled`), a progress, the file it works on, the file it
+  wrote, the command lines it ran, and — when it failed — why, with the tail
+  of the tool's stderr (`job_types.ts`).
 - Jobs run **one at a time**, in the order they were asked for. The rest wait as `queued`.
-- A job belongs to the account that created it. Each kind has its own create action (`transcription_create`); what works on any job is generic: `job_cancel`, and the `job_changed` notification, which carries the job's whole state on every change.
-- Jobs live in the daemon's memory, like terminals: a restart forgets them. Finished ones are kept as a bounded history.
+- A job belongs to the account that created it. Each kind has its own create
+  action (`transcription_create`); what works on any job is generic:
+  `job_cancel`, and the `job_changed` notification, which carries the job's
+  whole state on every change.
+- Jobs live in the daemon's memory, like terminals: a restart forgets them.
+  Finished ones are kept as a bounded history.
 
-On the frontend, `Jobs` (`jobs.svelte.ts`) mirrors the backend's list and holds nothing of its own: `job_changed` adds or updates a `Job` in place, and every session snapshot (`session_load`'s `jobs`) replaces the collection — so a reload shows the running job again, and after a daemon restart the list is empty. The `/jobs` page lists them plainly; the place a transcription is actually watched is the audio file's view.
+On the frontend, `Jobs` (`jobs.svelte.ts`) mirrors the backend's list and
+holds nothing of its own: `job_changed` adds or updates a `Job` in place,
+and every session snapshot (`session_load`'s `jobs`) replaces the collection
+— so a reload shows the running job again, and after a daemon restart the
+list is empty. The `/jobs` page lists them plainly; the place a
+transcription is actually watched is the audio file's view.
 
 ### Transcription
 
-`transcription_create` transcribes an audio file with a speech model that runs **on this machine** (whisper.cpp). Nothing is sent anywhere: there is no hosted transcription.
+`transcription_create` transcribes an audio file with a speech model that
+runs **on this machine** (whisper.cpp). Nothing is sent anywhere: there is
+no hosted transcription.
 
 ```
 transcribe → transcription_create {path}         → {job_id}, a queued job
@@ -819,21 +885,53 @@ job runs:    hash the audio (blake3)
              write <name>.<model>.transcript.json  (exclusive)
 ```
 
-**The transcript is a sidecar file** beside the audio (`transcript_types.ts`): timed segments, each with its words and their probabilities, plus provenance — the audio's hash and size, the backend and its version, the model and its hash, the parameters. It's tool output, so it is **written once and never edited**: the model's name is in the file name, so a better model's transcript sits beside it rather than replacing it, and transcribing again with the same model is refused until the sidecar is deleted. A sidecar is found for an audio file by its name and by what it says it was made from (`find_transcripts`) — a model's name has dots in it, so the name alone can't say.
+**The transcript is a sidecar file** beside the audio
+(`transcript_types.ts`): timed segments, each with its words and their
+probabilities, plus provenance — the audio's hash and size, the backend and
+its version, the model and its hash, the parameters. It's tool output, so it
+is **written once and never edited**: the model's name is in the file name,
+so a better model's transcript sits beside it rather than replacing it, and
+transcribing again with the same model is refused until the sidecar is
+deleted. A sidecar is found for an audio file by its name and by what it
+says it was made from (`find_transcripts`) — a model's name has dots in it,
+so the name alone can't say.
 
-**Batch, with a preview.** The transcript is made from the finished file. The recognizer decodes in windows and reports segments as it goes, so `transcription_progress` fills in `Job.live_segments` while the job runs; when it succeeds the sidecar arrives through the file index and replaces the preview.
+**Batch, with a preview.** The transcript is made from the finished file.
+The recognizer decodes in windows and reports segments as it goes, so
+`transcription_progress` fills in `Job.live_segments` while the job runs;
+when it succeeds the sidecar arrives through the file index and replaces the
+preview.
 
-**Reading it.** An audio file's view shows its transcript under the player — the one on disk (a picker when there are several models'), or the running job's preview — and clicking a segment plays from there; with none, a transcribe button. A sidecar opened on its own (`DiskfileTranscriptView`) shows the same segments read-only, with the audio's player when the audio is beside it.
+**Reading it.** An audio file's view shows its transcript under the player —
+the one on disk (a picker when there are several models'), or the running
+job's preview — and clicking a segment plays from there; with none, a
+transcribe button. A sidecar opened on its own (`DiskfileTranscriptView`)
+shows the same segments read-only, with the audio's player when the audio is
+beside it.
 
-**Editing a copy.** "Edit a copy" (`transcript_to_text`) creates `<name>.md` beside the audio — a link to it, then the speech as paragraphs split at pauses — and opens it in the editor. That file is yours; the sidecar stays as the tool wrote it.
+**Editing a copy.** "Edit a copy" (`transcript_to_text`) creates `<name>.md`
+beside the audio — a link to it, then the speech as paragraphs split at
+pauses — and opens it in the editor. That file is yours; the sidecar stays
+as the tool wrote it.
 
-**Transcribe on stop.** The recorder queues a transcription for a recording once it's saved, when its `transcribe_on_stop` toggle is on (the default). That's the person's choice, made by leaving the toggle on — nothing else starts one, and a file that merely appears in a project is never decoded or transcribed.
+**Transcribe on stop.** The recorder queues a transcription for a recording
+once it's saved, when its `transcribe_on_stop` toggle is on (the default).
+That's the person's choice, made by leaving the toggle on — nothing else
+starts one, and a file that merely appears in a project is never decoded or
+transcribed.
 
-A transcript's text is whatever was said near the microphone. It's rendered as text, and nothing places it in a chat, a prompt, or a terminal on its own.
+A transcript's text is whatever was said near the microphone. It's rendered
+as text, and nothing places it in a chat, a prompt, or a terminal on its
+own.
 
 ### The recordings page
 
-`/recordings` is the purpose-built view over the same pieces: a record button with a level meter (`Recorder.level`, read from a Web Audio analyser on the live stream), and the recordings with their transcripts' first lines. It records to `recordings/` in the app directory, so it works with no project open. Recordings, transcripts, and jobs are all ordinary files and cells — the files page and the jobs page show the same things raw.
+`/recordings` is the purpose-built view over the same pieces: a record
+button with a level meter (`Recorder.level`, read from a Web Audio analyser
+on the live stream), and the recordings with their transcripts' first lines.
+It records to `recordings/` in the app directory, so it works with no
+project open. Recordings, transcripts, and jobs are all ordinary files and
+cells — the files page and the jobs page show the same things raw.
 
 ## IndexedCollection
 
@@ -961,7 +1059,9 @@ The app directory stores zzz's own files. Configured via `PUBLIC_ZZZ_DIR`
 is the daemon home `~/.zzz/` (see ./development.md § The `zzz` CLI).
 
 - `state/` — Persistent data (reserved — the Rust backend currently keeps domain state in memory)
-- `cache/` — Regenerable data, safe to delete: scratch for tool runs — unnamed temp files (unlinked as soon as they're created) and, during a transcription, a `.zzz-tmp-<uuid>/` directory removed when it ends
+- `cache/` — Regenerable data, safe to delete: scratch for tool runs —
+  unnamed temp files (unlinked as soon as they're created) and, during a
+  transcription, a `.zzz-tmp-<uuid>/` directory removed when it ends
 - `recordings/` — where the recordings page records: audio files and their transcript sidecars
 - `run/` — Runtime ephemeral (the test binary's `daemon_token`)
 
@@ -990,58 +1090,60 @@ The daemon home holds the CLI's files beside it: `config.json`, `.env`,
 (`daemon.json` — boot id, pid, start time, port — `daemon.log`, and an
 opener's `opener.log`).
 
-All filesystem access goes through `ScopedFs` — path validation, no symlinks, absolute paths only.
-A save based on a read is a compare-and-swap (`expected_hash`, see § File
-Editing, "Conflicts").
-Saves are atomic: `diskfile_update` stages the content in a hidden
-`.zzz-tmp-<uuid>` file beside the target (never indexed or broadcast by the
-filer), fsyncs it, and renames it over the target, so a failed or concurrent
-save never leaves an empty or mixed file. The file's mode is kept — except
-setuid and setgid, which zzz always drops on a save —
-and its owner best-effort (a file owned by another user becomes the daemon user's when
-zzz can't restore it); being a new inode, a saved file **loses its hardlinks**
-(other names keep the old content) and any xattrs/ACLs. An existing file must
-be writable by the daemon — a read-only file is refused (`permission_denied`)
-even though its directory would allow the rename. When the rename can't
-happen but the file itself is writable — its directory isn't writable, or the
-file is a bind mount (`EBUSY`) or in a sticky directory (`EPERM`) — the save
-falls back to writing in place (truncate + write + fsync), which is **not
-atomic**: a failure midway leaves the file truncated or partial. A new file
-in a non-writable directory fails with `directory_not_writable`. Only regular
+All filesystem access goes through `ScopedFs` — path validation, no
+symlinks, absolute paths only. A save based on a read is a compare-and-swap
+(`expected_hash`, see § File Editing, "Conflicts"). Saves are atomic:
+`diskfile_update` stages the content in a hidden `.zzz-tmp-<uuid>` file
+beside the target (never indexed or broadcast by the filer), fsyncs it, and
+renames it over the target, so a failed or concurrent save never leaves an
+empty or mixed file. The file's mode is kept — except setuid and setgid,
+which zzz always drops on a save — and its owner best-effort (a file owned
+by another user becomes the daemon user's when zzz can't restore it); being
+a new inode, a saved file **loses its hardlinks** (other names keep the old
+content) and any xattrs/ACLs. An existing file must be writable by the
+daemon — a read-only file is refused (`permission_denied`) even though its
+directory would allow the rename. When the rename can't happen but the file
+itself is writable — its directory isn't writable, or the file is a bind
+mount (`EBUSY`) or in a sticky directory (`EPERM`) — the save falls back to
+writing in place (truncate + write + fsync), which is **not atomic**: a
+failure midway leaves the file truncated or partial. A new file in a
+non-writable directory fails with `directory_not_writable`. Only regular
 files are written — a directory, FIFO, socket, or device node target is
-refused. A crash mid-save can orphan a staging file; the filer's walk deletes
-exact `.zzz-tmp-<uuid>` regular files older than an hour (ones inside ignored
-directories stay). The files page's header buttons for a new file and a new
-folder create in the active project (`Project.new_files_dir`: the
-directory this client's last open of it focused, while still focused, else
-its root) and are disabled while no project is open; a new file or
-folder in a registry project where the index doesn't look — an unfocused repo, a
-directory no entry names — is refused before anything is written
-(`Diskfiles.is_unfocused_path`: it would never show); the file tree's folder menu creates in
-that folder (see § File Editing, creating in the tree). In the list the
-name is asked for with a prompt, and a failure (say a non-writable
-directory) is reported in an alert, never silent, as is a failed delete (each
-alert leads with the name or path); in the tree it's typed inline, and a
-failure shows there. The entered name is trimmed, leading slashes dropped;
-refused (`parse_new_diskfile_name`):
-a blank name, one naming the root itself, a whitespace-only path
-segment, a `..` climbing out of the root, and a file name whose last
-segment is empty, `.`, or `..`. "New
-file" uses `diskfile_create`, which creates the final name exclusively
+refused. A crash mid-save can orphan a staging file; the filer's walk
+deletes exact `.zzz-tmp-<uuid>` regular files older than an hour (ones
+inside ignored directories stay). The files page's header buttons for a new
+file and a new folder create in the active project (`Project.new_files_dir`:
+the directory this client's last open of it focused, while still focused,
+else its root) and are disabled while no project is open; a new file or
+folder in a registry project where the index doesn't look — an unfocused
+repo, a directory no entry names — is refused before anything is written
+(`Diskfiles.is_unfocused_path`: it would never show); the file tree's folder
+menu creates in that folder (see § File Editing, creating in the tree). In
+the list the name is asked for with a prompt, and a failure (say a
+non-writable directory) is reported in an alert, never silent, as is a
+failed delete (each alert leads with the name or path); in the tree it's
+typed inline, and a failure shows there. The entered name is trimmed,
+leading slashes dropped; refused (`parse_new_diskfile_name`): a blank name,
+one naming the root itself, a whitespace-only path segment, a `..` climbing
+out of the root, and a file name whose last segment is empty, `.`, or `..`.
+"New file" uses `diskfile_create`, which creates the final name exclusively
 (`O_EXCL`) and fails with `conflict` / `already_exists` instead of
 overwriting; "new folder" (`directory_create`) fails the same way when the
 name is taken, directory or not. For both, a symlink at the name is refused
 as `forbidden` / `symlink_not_allowed` (zzz never follows symlinks), and a
 missing parent folder that can't be created under a read-only ancestor
-reports `permission_denied` rather than `directory_not_writable`. The UI shows a path inside the app directory relative to it and
-any other path absolute — including a file part's `path` attribute in the
-prompt XML sent to models.
+reports `permission_denied` rather than `directory_not_writable`. The UI
+shows a path inside the app directory relative to it and any other path
+absolute — including a file part's `path` attribute in the prompt XML sent
+to models.
 
 ## Filesystem
 
 Two separate concerns:
 
-- App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files: `cache/` holds scratch for tool runs, `recordings/` what the recordings page records, and `state/` and `run/` are reserved
+- App directory (`PUBLIC_ZZZ_DIR`) — Zzz's own files: `cache/` holds scratch
+  for tool runs, `recordings/` what the recordings page records, and
+  `state/` and `run/` are reserved
 - Scoped dirs (`PUBLIC_ZZZ_SCOPED_DIRS`) — User file access (comma-separated paths)
 
 ### Root scope
@@ -1072,41 +1174,214 @@ an admitted root stay refused by `ScopedFs` (§ Zzz App Directory).
 
 ### ScopedFs
 
-All filesystem operations go through `ScopedFs` (Rust: `crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against allowed roots, protected directories (credential directories, and `.zzz` directories other than the app dir) refused under every root (see § Zzz App Directory), symlinks rejected, absolute paths required, parent directories checked recursively.
+All filesystem operations go through `ScopedFs` (Rust:
+`crates/zzz_server/src/scoped_fs.rs`). Security: paths validated against
+allowed roots, protected directories (credential directories, and `.zzz`
+directories other than the app dir) refused under every root (see § Zzz App
+Directory), symlinks rejected, absolute paths required, parent directories
+checked recursively.
 
-The allowed roots are the permanent boot-time set (the app directory + scoped dirs) plus one runtime root per open project — its whole root, focused or not (a registry's root is `~/dev`, every repo under it in scope). A path is allowed when any root covers it, and removing a project's root never touches a permanent root — so closing a project rooted at, nested in, or containing the app directory or a scoped dir leaves the access those roots grant intact.
+The allowed roots are the permanent boot-time set (the app directory +
+scoped dirs) plus one runtime root per open project — its whole root,
+focused or not (a registry's root is `~/dev`, every repo under it in scope).
+A path is allowed when any root covers it, and removing a project's root
+never touches a permanent root — so closing a project rooted at, nested in,
+or containing the app directory or a scoped dir leaves the access those
+roots grant intact.
 
 ### Reading Files
 
-`diskfile_read` reads one file as text: `{contents, unloaded_reason, size, ctime, mtime}`. Any regular file in scope can be read, whether the filer indexes it or not — except a file in a protected directory — a credential directory, or a `.zzz` directory other than the app dir (`forbidden` / `protected_dir_not_allowed`, refused whether or not the file exists). It reads the disk as it is now — nothing is cached, and the filer's index holds no contents — so it returns what's there even before the filer has seen the latest write. A file over 4 MiB or not valid UTF-8 comes back with `contents: null` and an `unloaded_reason` (`too_large`, `not_utf8`), and its `size`. The timestamps come from the handle the contents were read from, taken before the read, so a write racing the read leaves them older than the contents, never newer; `size` is the contents' length when they're loaded. Errors carry the file actions' reasons (`path_not_found`, `path_not_allowed`, `symlink_not_allowed`, `is_a_directory`, `not_a_regular_file`, …). Larger files and bytes go over the byte routes below.
+`diskfile_read` reads one file as text:
+`{contents, unloaded_reason, size, ctime, mtime}`. Any regular file in scope
+can be read, whether the filer indexes it or not — except a file in a
+protected directory — a credential directory, or a `.zzz` directory other
+than the app dir (`forbidden` / `protected_dir_not_allowed`, refused whether
+or not the file exists). It reads the disk as it is now — nothing is cached,
+and the filer's index holds no contents — so it returns what's there even
+before the filer has seen the latest write. A file over 4 MiB or not valid
+UTF-8 comes back with `contents: null` and an `unloaded_reason`
+(`too_large`, `not_utf8`), and its `size`. The timestamps come from the
+handle the contents were read from, taken before the read, so a write racing
+the read leaves them older than the contents, never newer; `size` is the
+contents' length when they're loaded. Errors carry the file actions' reasons
+(`path_not_found`, `path_not_allowed`, `symlink_not_allowed`,
+`is_a_directory`, `not_a_regular_file`, …). Larger files and bytes go over
+the byte routes below.
 
 ### File Bytes
 
-The file actions carry contents as UTF-8 strings inside one JSON-RPC message (`diskfile_update`, `diskfile_create`), and `diskfile_read` returns text only for UTF-8 files under its size limit. Bytes have their own path: plain HTTP routes at `/api/files/bytes?path=<absolute path>` (Rust: `crates/zzz_server/src/file_bytes.rs`; `src/lib/file_bytes.ts` builds the URLs).
+The file actions carry contents as UTF-8 strings inside one JSON-RPC message
+(`diskfile_update`, `diskfile_create`), and `diskfile_read` returns text
+only for UTF-8 files under its size limit. Bytes have their own path: plain
+HTTP routes at `/api/files/bytes?path=<absolute path>` (Rust:
+`crates/zzz_server/src/file_bytes.rs`; `src/lib/file_bytes.ts` builds the
+URLs).
 
-- **Read** — `GET` returns the file's bytes and honors one `Range: bytes=` range (206, or 416 past the end), which is what a media element needs to seek. The URL works directly as an `<audio>` or `<img>` `src`: the request carries the session cookie.
+- **Read** — `GET` returns the file's bytes and honors one `Range: bytes=`
+  range (206, or 416 past the end), which is what a media element needs to
+  seek. The URL works directly as an `<audio>` or `<img>` `src`: the request
+  carries the session cookie.
 - **Create** — `POST` creates the file exclusively from the request body, like `diskfile_create`.
-- **Append** — `PATCH` with `&offset=` appends the body only if the file is exactly `offset` bytes long, and otherwise answers 409 `offset_mismatch` with the file's current `size`, having written nothing. A writer that streams a file as chunks sends each at the offset it expects: a retried chunk can't land twice, and the reply's size tells it whether the first attempt landed.
+- **Append** — `PATCH` with `&offset=` appends the body only if the file is
+  exactly `offset` bytes long, and otherwise answers 409 `offset_mismatch`
+  with the file's current `size`, having written nothing. A writer that
+  streams a file as chunks sends each at the offset it expects: a retried
+  chunk can't land twice, and the reply's size tells it whether the first
+  attempt landed.
 
-Paths go through `ScopedFs`, and errors carry the same reasons as the file actions' (`path_not_allowed`, `protected_dir_not_allowed`, `already_exists`, …) in a flat `{error}` body. The routes need a session or a full-scope API token.
+Paths go through `ScopedFs`, and errors carry the same reasons as the file
+actions' (`path_not_allowed`, `protected_dir_not_allowed`, `already_exists`,
+…) in a flat `{error}` body. The routes need a session or a full-scope API
+token.
 
-A file in a project is untrusted content, so a read never hands the browser something to run: only allowlisted raster image, audio, and video extensions are served with their media type, and everything else — HTML, SVG, XML, scripts, text — is an `application/octet-stream` download. Every response that serves or describes a file — a read, a write's reply, a file error — carries `X-Content-Type-Options: nosniff`, a sandboxing `Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`, and is never cached (`no-store`); a refusal at a gate (a bad query, no credential, an oversized body, a foreign origin) is a plain JSON error without them.
+A file in a project is untrusted content, so a read never hands the browser
+something to run: only allowlisted raster image, audio, and video extensions
+are served with their media type, and everything else — HTML, SVG, XML,
+scripts, text — is an `application/octet-stream` download. Every response
+that serves or describes a file — a read, a write's reply, a file error —
+carries `X-Content-Type-Options: nosniff`, a sandboxing
+`Content-Security-Policy`, and `Cross-Origin-Resource-Policy: same-origin`,
+and is never cached (`no-store`); a refusal at a gate (a bad query, no
+credential, an oversized body, a foreign origin) is a plain JSON error
+without them.
 
-These routes are outside the action system — they don't appear in the actions log or in ./reference.md.
+These routes are outside the action system — they don't appear in the
+actions log or in ./reference.md.
 
 ### Filer
 
-`FilerManager` starts one `Filer` watcher per unique directory — the app dir, each scoped dir, and each open project's root and focused directories (§ Projects). A registry's root is watched at its top level alone (`FilerDepth::TopLevel`): its loose files are indexed, its subdirectories never listed or watched — a directory appearing there isn't indexed — so a focused repo's own filer is the only one under it. Every other filer indexes its whole tree. Each filer keeps an in-memory file index and broadcasts changes to clients via debounced `filer_change` notifications over WebSocket. Each file travels as a disknode, `{id, source_dir, size, ctime, mtime}` — metadata only: `id` is its path and `size` its bytes from the filer's `lstat`, `null` only on a `delete`'s node. No disknode carries contents; a client reads them with `diskfile_read` (see [File Editing](#file-editing)). A snapshot — `session_load`, `project_open`, `repo_focus`, `repo_files` — carries its files compactly instead (`SnapshotFiles`): one `{dir, files}` group per filer dir, each file a tuple `[rel, size, mtime, ctime?]` with its path relative to `dir` and `ctime` left off when it equals `mtime`, which the frontend decodes back to disknodes (`decode_snapshot_files`) — about half the bytes of the objects for a large tree. Timestamps are whole milliseconds since the epoch. Notify events are treated as hints: for every event, removes and renames included, the filer `lstat`s the path and decides `add` / `change` / `delete` from the disk and its index, so renames resolve to a delete of the old path plus an add of the new one, and late or reordered events can't delete a file that exists. The index is stat-only — the filer reads no file — and a file is unchanged only when its `lstat` stamp (device, inode, size, mtime, ctime) matches the indexed one; any other is a `change` carrying the new metadata, a `touch` and a rewrite of the same bytes included. The stamp's `ctime` is the inode change time (`st_ctime`), which every write, chmod, and `utimes` moves and userspace can't set on a kernel-managed filesystem; the wire `ctime` is the birth time. So a chmod, chown, or new hard link is a `change` too, with the same wire metadata as before. A stamp is trusted only when its inode change time lay more than three seconds before it was taken (git's "racily clean" rule: same-size writes within one timestamp tick look identical), so a file indexed while it might still have been written is a `change` the next time an event or a rescan looks at it, even with its stamp unmoved. An `mtime` in the future (`touch -d`, `cp -p`) doesn't matter. A client holding the file's content reads it again if it holds it eagerly and otherwise drops it, to load on next access (`Diskfiles.upsert`), and a re-read of the same text changes nothing. Broadcasts are debounced per path (80ms quiet, at most 500ms): a delete then re-create becomes one `change`, and a file created and deleted inside the window is sent only as a `delete` (a no-op for clients that never saw it). Ignored paths (see below) are filtered before the event channel; if events are still dropped (or the OS queue overflows), the filer rebuilds its watches on a fresh watcher, rescans its root, and broadcasts the diff. Symlinks are skipped entirely — never followed, never indexed, never watched — matching `ScopedFs`.
+`FilerManager` starts one `Filer` watcher per unique directory — the app
+dir, each scoped dir, and each open project's root and focused directories
+(§ Projects). A registry's root is watched at its top level alone
+(`FilerDepth::TopLevel`): its loose files are indexed, its subdirectories
+never listed or watched — a directory appearing there isn't indexed — so a
+focused repo's own filer is the only one under it. Every other filer indexes
+its whole tree. Each filer keeps an in-memory file index and broadcasts
+changes to clients via debounced `filer_change` notifications over
+WebSocket. Each file travels as a disknode,
+`{id, source_dir, size, ctime, mtime}` — metadata only: `id` is its path and
+`size` its bytes from the filer's `lstat`, `null` only on a `delete`'s node.
+No disknode carries contents; a client reads them with `diskfile_read` (see
+[File Editing](#file-editing)). A snapshot — `session_load`, `project_open`,
+`repo_focus`, `repo_files` — carries its files compactly instead
+(`SnapshotFiles`): one `{dir, files}` group per filer dir, each file a tuple
+`[rel, size, mtime, ctime?]` with its path relative to `dir` and `ctime`
+left off when it equals `mtime`, which the frontend decodes back to
+disknodes (`decode_snapshot_files`) — about half the bytes of the objects
+for a large tree. Timestamps are whole milliseconds since the epoch. Notify
+events are treated as hints: for every event, removes and renames included,
+the filer `lstat`s the path and decides `add` / `change` / `delete` from the
+disk and its index, so renames resolve to a delete of the old path plus an
+add of the new one, and late or reordered events can't delete a file that
+exists. The index is stat-only — the filer reads no file — and a file is
+unchanged only when its `lstat` stamp (device, inode, size, mtime, ctime)
+matches the indexed one; any other is a `change` carrying the new metadata,
+a `touch` and a rewrite of the same bytes included. The stamp's `ctime` is
+the inode change time (`st_ctime`), which every write, chmod, and `utimes`
+moves and userspace can't set on a kernel-managed filesystem; the wire
+`ctime` is the birth time. So a chmod, chown, or new hard link is a `change`
+too, with the same wire metadata as before. A stamp is trusted only when its
+inode change time lay more than three seconds before it was taken (git's
+"racily clean" rule: same-size writes within one timestamp tick look
+identical), so a file indexed while it might still have been written is a
+`change` the next time an event or a rescan looks at it, even with its stamp
+unmoved. An `mtime` in the future (`touch -d`, `cp -p`) doesn't matter. A
+client holding the file's content reads it again if it holds it eagerly and
+otherwise drops it, to load on next access (`Diskfiles.upsert`), and a
+re-read of the same text changes nothing. Broadcasts are debounced per path
+(80ms quiet, at most 500ms): a delete then re-create becomes one `change`,
+and a file created and deleted inside the window is sent only as a `delete`
+(a no-op for clients that never saw it). Ignored paths (see below) are
+filtered before the event channel; if events are still dropped (or the OS
+queue overflows), the filer rebuilds its watches on a fresh watcher, rescans
+its root, and broadcasts the diff. Symlinks are skipped entirely — never
+followed, never indexed, never watched — matching `ScopedFs`.
 
-Watches are per directory: the filer's own walk (on a blocking thread) adds one non-recursive watch to each directory it indexes — never inside ignored, symlinked, or non-UTF-8 directories — watching each before listing it, so nothing created in between is missed. A directory that appears gets watches for its subtree when it's synced; one that's removed or renamed away has them dropped (two paths sharing one inode, like a renamed directory's old and new path or a bind mount, share one kernel watch, removed only with its last path). An unreadable subdirectory is skipped and logged once, and picked up once it's readable again; one made unreadable later drops out of the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's indexed under it and retries. A walk or a rescan (`session_load`, overflow recovery) costs one `lstat` per file and reads none, and broadcasts only the files whose stamps moved or weren't trusted yet.
+Watches are per directory: the filer's own walk (on a blocking thread) adds
+one non-recursive watch to each directory it indexes — never inside ignored,
+symlinked, or non-UTF-8 directories — watching each before listing it, so
+nothing created in between is missed. A directory that appears gets watches
+for its subtree when it's synced; one that's removed or renamed away has
+them dropped (two paths sharing one inode, like a renamed directory's old
+and new path or a bind mount, share one kernel watch, removed only with its
+last path). An unreadable subdirectory is skipped and logged once, and
+picked up once it's readable again; one made unreadable later drops out of
+the index. A listing that fails transiently (`EMFILE`, `EIO`) keeps what's
+indexed under it and retries. A walk or a rescan (`session_load`, overflow
+recovery) costs one `lstat` per file and reads none, and broadcasts only the
+files whose stamps moved or weren't trusted yet.
 
-What a filer ignores is decided once, when it starts, from its root alone (`filer::ignore`). A root whose own `.git` is a directory or a gitfile by `lstat` — a checkout, as § Projects resolves one — indexed whole takes **git's rule**; anything else (a plain directory, a registry's root at its top level) keeps **fixed names**: `node_modules`, `.svelte-kit`, `target`, and `dist`, wherever they appear. Under both, `.git`, `.zzz`, the credential directories, and `.zzz-tmp-` staging files are never indexed, whatever a `.gitignore` says. Under git's rule everything else is git's call: at start the filer lists what git ignores (`git ls-files --others --ignored --exclude-standard --directory`, every `.gitignore`, `info/exclude`, and the user's global excludes file), confirms each folded directory with one `git check-ignore` (git folds a directory whose untracked contents are all ignored even when nothing names it — zzz's own `.claude/` — so those are walked and watched, their ignored files skipped one by one), and prunes the walk by the result. A tracked file is never ignored, so a tracked `dist/` is indexed, and so is a `node_modules/` no pattern names. A repo of its own below the root — a nested repo, a populated submodule, a directory whose `.git` is a symlink — is neither walked nor indexed. Every listing is taken twice, around its walk, so what was created in between is listed rather than indexed unvetted. Live, a burst of events that adds paths not yet indexed asks one `check-ignore` about them before they're indexed — up to 128 paths; git's check costs per path about what reading its index does, so past that a rebuild of the set (below) is cheaper on a large tree — and a new directory git doesn't ignore has its own ignored paths listed before its walk; a `.gitignore` changing anywhere under the root or `.git/info/exclude` changing (watched by the filer's own watcher, for a root whose `.git` is a directory) rebuilds the set and rescans once the changes settle (400 ms of quiet, at most 5 s), so a checkout's intermediate states aren't applied one by one, and lost events do so at once — removing what's newly ignored and adding what no longer is. git runs with the daemon's allowlisted environment, its discovery ceilinged at the root's parent, implicit bare repos refused, and short timeouts (5 s per listing call, 2 s per vetting call), after re-checking that the root is still the real directory it was. When git is unusable or its first listing fails, the filer keeps fixed names; a later listing that fails keeps the last set until the next rebuild — a `.gitignore` or `info/exclude` change, lost events, or, while the last rebuild failed, the next `session_load` rescan or degraded poll — and the filer keeps fixed names for the rest of its life once three rebuilds in a row that a change on disk asked for fail — a `.gitignore` or `info/exclude` change, lost events, new files git couldn't vet, or a set grown past its budget (a load's or poll's retry failing doesn't count) — or at once when the root is no longer the checkout it was (swapped for a symlink).
+What a filer ignores is decided once, when it starts, from its root alone
+(`filer::ignore`). A root whose own `.git` is a directory or a gitfile by
+`lstat` — a checkout, as § Projects resolves one — indexed whole takes
+**git's rule**; anything else (a plain directory, a registry's root at its
+top level) keeps **fixed names**: `node_modules`, `.svelte-kit`, `target`,
+and `dist`, wherever they appear. Under both, `.git`, `.zzz`, the credential
+directories, and `.zzz-tmp-` staging files are never indexed, whatever a
+`.gitignore` says. Under git's rule everything else is git's call: at start
+the filer lists what git ignores
+(`git ls-files --others --ignored --exclude-standard --directory`, every
+`.gitignore`, `info/exclude`, and the user's global excludes file), confirms
+each folded directory with one `git check-ignore` (git folds a directory
+whose untracked contents are all ignored even when nothing names it — zzz's
+own `.claude/` — so those are walked and watched, their ignored files
+skipped one by one), and prunes the walk by the result. A tracked file is
+never ignored, so a tracked `dist/` is indexed, and so is a `node_modules/`
+no pattern names. A repo of its own below the root — a nested repo, a
+populated submodule, a directory whose `.git` is a symlink — is neither
+walked nor indexed. Every listing is taken twice, around its walk, so what
+was created in between is listed rather than indexed unvetted. Live, a burst
+of events that adds paths not yet indexed asks one `check-ignore` about them
+before they're indexed — up to 128 paths; git's check costs per path about
+what reading its index does, so past that a rebuild of the set (below) is
+cheaper on a large tree — and a new directory git doesn't ignore has its own
+ignored paths listed before its walk; a `.gitignore` changing anywhere under
+the root or `.git/info/exclude` changing (watched by the filer's own
+watcher, for a root whose `.git` is a directory) rebuilds the set and
+rescans once the changes settle (400 ms of quiet, at most 5 s), so a
+checkout's intermediate states aren't applied one by one, and lost events do
+so at once — removing what's newly ignored and adding what no longer is. git
+runs with the daemon's allowlisted environment, its discovery ceilinged at
+the root's parent, implicit bare repos refused, and short timeouts (5 s per
+listing call, 2 s per vetting call), after re-checking that the root is
+still the real directory it was. When git is unusable or its first listing
+fails, the filer keeps fixed names; a later listing that fails keeps the
+last set until the next rebuild — a `.gitignore` or `info/exclude` change,
+lost events, or, while the last rebuild failed, the next `session_load`
+rescan or degraded poll — and the filer keeps fixed names for the rest of
+its life once three rebuilds in a row that a change on disk asked for fail —
+a `.gitignore` or `info/exclude` change, lost events, new files git couldn't
+vet, or a set grown past its budget (a load's or poll's retry failing
+doesn't count) — or at once when the root is no longer the checkout it was
+(swapped for a symlink).
 
-When the OS runs out of watches (inotify's `max_user_watches`), or no watcher can be created at all (`max_user_instances`), the filer runs **degraded**: the index still comes from the scan, and the directories without a watch are rescanned every 5 seconds or more (retrying their watches each time), so changes there show up late. `project_open` returns this as `watch_status` (`'full'` or `'degraded'`, degraded when any of the project's filers is), which the tab that opened it keeps on its `Project` cell and shows on the projects page and in the desk menu. It's reported at open time only (another tab or a reload shows `'full'`) — a filer that degrades or recovers later is just logged. A project root or focused directory that can't be listed fails `project_open` (`forbidden` / `permission_denied`, or `not_found`); a running filer whose root disappears polls it until it's back.
+When the OS runs out of watches (inotify's `max_user_watches`), or no
+watcher can be created at all (`max_user_instances`), the filer runs
+**degraded**: the index still comes from the scan, and the directories
+without a watch are rescanned every 5 seconds or more (retrying their
+watches each time), so changes there show up late. `project_open` returns
+this as `watch_status` (`'full'` or `'degraded'`, degraded when any of the
+project's filers is), which the tab that opened it keeps on its `Project`
+cell and shows on the projects page and in the desk menu. It's reported at
+open time only (another tab or a reload shows `'full'`) — a filer that
+degrades or recovers later is just logged. A project root or focused
+directory that can't be listed fails `project_open` (`forbidden` /
+`permission_denied`, or `not_found`); a running filer whose root disappears
+polls it until it's back.
 
 ### Daemon Info
 
-`~/.zzz/run/daemon.json` tracks the running daemon (boot id, pid, kernel start time, port, version). The Rust CLI (`crates/zzz/src/daemon_lifecycle.rs`) writes it atomically once the spawned `zzzd` holds the listening socket and answers `/health`, reads it back for discovery and `status`, and identifies the daemon by boot id, pid, and start time — a dead or reused pid reads as stale and is never signalled; a record it can't read (an older or newer zzz's, or a corrupt one) is reported and never signalled, removed, or overwritten, so `zzz` and `zzz daemon start` refuse to start a daemon while it's there. The file is removed on `daemon stop`, when the foreground `daemon start` exits, and when found stale, each time only if it still records that same process.
+`~/.zzz/run/daemon.json` tracks the running daemon (boot id, pid, kernel
+start time, port, version). The Rust CLI
+(`crates/zzz/src/daemon_lifecycle.rs`) writes it atomically once the spawned
+`zzzd` holds the listening socket and answers `/health`, reads it back for
+discovery and `status`, and identifies the daemon by boot id, pid, and start
+time — a dead or reused pid reads as stale and is never signalled; a record
+it can't read (an older or newer zzz's, or a corrupt one) is reported and
+never signalled, removed, or overwritten, so `zzz` and `zzz daemon start`
+refuse to start a daemon while it's there. The file is removed on
+`daemon stop`, when the foreground `daemon start` exits, and when found
+stale, each time only if it still records that same process.
 
 ## File Editing
 
@@ -1211,38 +1486,38 @@ mdz gives a paragraph interrupted by a block inside a blockquote an `end`
 that runs into the next line's `> ` prefix, so a caret on that prefix
 marks the paragraph above.
 
-`MarkdownPreview`'s links never navigate the app (`markdown_links.ts` resolves
-them; the preview only acts). An external link opens in a new tab; a
-`#fragment` scrolls the preview; and with the file's `path`, a relative link
-resolves against the file's directory, a root-relative `/docs/x.md` against
-the innermost indexed directory holding the file (a focused repo, or a
-checkout's or directory's root — usually the repository, the way a
+`MarkdownPreview`'s links never navigate the app (`markdown_links.ts`
+resolves them; the preview only acts). An external link opens in a new tab;
+a `#fragment` scrolls the preview; and with the file's `path`, a relative
+link resolves against the file's directory, a root-relative `/docs/x.md`
+against the innermost indexed directory holding the file (a focused repo, or
+a checkout's or directory's root — usually the repository, the way a
 repository host reads it), with any query dropped and the fragment kept. A
 link to an indexed file opens it in the preview tab — a middle- or
 Ctrl/Cmd-click in a kept tab instead — and a fragment on a markdown file
 reveals that heading once its view shows (`markdown_pending_fragment` on the
-target's `DiskfileEditorState`). A link to a folder opens the folder's README
-if the index has one. A link the file index says is missing — inside a root
-it covers and outside what it skips (`to_innermost_unindexed_part`, each
-holding root's rule — § Projects) — is marked broken, and one outside every root, in a
-registry project's unfocused repo (the index covers a registry's root at
-its top level and its focused repos only; a link to an entry's dir counts
-with or without its trailing slash, while an unregistered directory
-linked without one reads as a missing loose file), in what the index skips
-(titled "not indexed" with why: an ignored name, or under a focused git
-root what git ignores or a repo of its own — so a link into a tracked
-`dist/` there can be broken), or
-root-relative and not found is marked unknown, never broken, since the
-index can't see there; each mark has a title saying why,
-and follows the index and the content as they change. Everything else —
-protocol-relative, other schemes, same-origin absolute URLs, a root-relative
-`..` past its root, or any `..` past `/`, and any relative link in a preview
-without a `path` — is inert (a relative `..` climbing out of the root
-reads as outside it, so unknown). The index lists only files, so what it never
-indexes reads as missing — an empty folder, a symlink, a file in an
-unreadable subdirectory, or a path that isn't UTF-8 is marked broken. The preview pairs each link with its rendered anchor by
-their source offsets, not the `href`, since mdz can rewrite a root-relative
-`href` (SvelteKit's `resolve`) — an anchor matching no link node, like one an
+target's `DiskfileEditorState`). A link to a folder opens the folder's
+README if the index has one. A link the file index says is missing — inside
+a root it covers and outside what it skips (`to_innermost_unindexed_part`,
+each holding root's rule — § Projects) — is marked broken, and one outside
+every root, in a registry project's unfocused repo (the index covers a
+registry's root at its top level and its focused repos only; a link to an
+entry's dir counts with or without its trailing slash, while an unregistered
+directory linked without one reads as a missing loose file), in what the
+index skips (titled "not indexed" with why: an ignored name, or under a
+focused git root what git ignores or a repo of its own — so a link into a
+tracked `dist/` there can be broken), or root-relative and not found is
+marked unknown, never broken, since the index can't see there; each mark has
+a title saying why, and follows the index and the content as they change.
+Everything else — protocol-relative, other schemes, same-origin absolute
+URLs, a root-relative `..` past its root, or any `..` past `/`, and any
+relative link in a preview without a `path` — is inert (a relative `..`
+climbing out of the root reads as outside it, so unknown). The index lists
+only files, so what it never indexes reads as missing — an empty folder, a
+symlink, a file in an unreadable subdirectory, or a path that isn't UTF-8 is
+marked broken. The preview pairs each link with its rendered anchor by their
+source offsets, not the `href`, since mdz can rewrite a root-relative `href`
+(SvelteKit's `resolve`) — an anchor matching no link node, like one an
 injected component renders, is left alone — and follows a click from the
 link's reference.
 
@@ -1263,12 +1538,13 @@ and the drafts store:
   again and reopens the next, as a permanent tab, like VS Code's "reopen
   closed editor". Closing all tabs pushes them onto the reopen stack above
   the earlier closed ones (reopening one by one restores their order); the
-  stack, and the back/forward navigation stacks, keep the 50 most recent. A file appearing on disk — seeded by a snapshot or created
-  by another tool — never moves the selection or opens a tab; only a file
-  created from zzz (`Diskfiles.create_file`) is selected and opened in a
-  permanent tab — at once if its `filer_change` already arrived, else when
-  it arrives (under the path as the backend normalizes it), unless the user
-  selects another file or tab or closes its project first
+  stack, and the back/forward navigation stacks, keep the 50 most recent. A
+  file appearing on disk — seeded by a snapshot or created by another tool —
+  never moves the selection or opens a tab; only a file created from zzz
+  (`Diskfiles.create_file`) is selected and opened in a permanent tab — at
+  once if its `filer_change` already arrived, else when it arrives (under
+  the path as the backend normalizes it), unless the user selects another
+  file or tab or closes its project first
 - `Drafts` (`Diskfiles.drafts`, plain classes, not Cells) — each file's
   draft, keyed by path: its text, the innermost root it was made under
   (`root`, recorded, not part of the key, since a path can sit under
@@ -1429,12 +1705,12 @@ explorer (the accessible name says "unsaved changes", or "changed on disk").
 save**, or **cancel** (`DiskfilesEditor.request_close_tab`,
 `DiskfileCloseDialog`). "Don't save" discards the draft into the history
 (`discard_draft`) — for a file deleted on disk, the file is forgotten with
-it. The question lapses if the draft goes away meanwhile (saved or
-discarded elsewhere), and a cancel during the save keeps the tab. A reopen shows the draft if there is one, else the disk
-content. Unlike VS Code a draft doesn't depend on its tab — it's app-level —
-so programmatic closes (`close_tab`, `close_all_tabs`, a preview tab reused
-for another file) close without asking and keep the draft, reachable from
-the explorer's ● and file parts.
+it. The question lapses if the draft goes away meanwhile (saved or discarded
+elsewhere), and a cancel during the save keeps the tab. A reopen shows the
+draft if there is one, else the disk content. Unlike VS Code a draft doesn't
+depend on its tab — it's app-level — so programmatic closes (`close_tab`,
+`close_all_tabs`, a preview tab reused for another file) close without
+asking and keep the draft, reachable from the explorer's ● and file parts.
 
 **What gets saved and sent.** Saving writes what the editor shows
 (`current_content`) — the draft, or an older entry picked to restore it. A
@@ -1541,18 +1817,18 @@ runs inside an effect too). Such state is created with `create_detached`
 The initial file listing comes from `session_load` (the backend rescans and
 flattens the index of every permanent filer and every filer the open
 projects keep, and lists their roots as `file_roots` — a filer an open or
-focus still in flight started isn't listed before its project's change is), and `project_open` returns the index of every filer of the
-opened project so the new tree appears immediately (`repo_focus` and
-`repo_files` a focused repo's alone). `Frontend.load_session` runs `session_load`
-and retries a failure with backoff (1s doubling to 30s) until it succeeds,
-tracking progress in `session_status` / `session_error`; `Projects.open`
-does the same snapshot handling for `project_open`. Both record what
-`filer_change` reports while their request is in flight
-(`Diskfiles.track_changes`) and apply the snapshot around it: a path with an
-`add`, `change`, or `delete` keeps what the notification left — its snapshot
-entry is skipped, so a file deleted mid-request isn't resurrected and newer
-metadata isn't reverted; the change itself re-read or dropped the file's
-content.
+focus still in flight started isn't listed before its project's change is),
+and `project_open` returns the index of every filer of the opened project so
+the new tree appears immediately (`repo_focus` and `repo_files` a focused
+repo's alone). `Frontend.load_session` runs `session_load` and retries a
+failure with backoff (1s doubling to 30s) until it succeeds, tracking
+progress in `session_status` / `session_error`; `Projects.open` does the
+same snapshot handling for `project_open`. Both record what `filer_change`
+reports while their request is in flight (`Diskfiles.track_changes`) and
+apply the snapshot around it: a path with an `add`, `change`, or `delete`
+keeps what the notification left — its snapshot entry is skipped, so a file
+deleted mid-request isn't resurrected and newer metadata isn't reverted; the
+change itself re-read or dropped the file's content.
 
 **Reconnect resync.** Notifications sent while the socket is down —
 `filer_change`, `project_changed`, `terminal_data`, `terminal_exited`,
@@ -1718,41 +1994,42 @@ in both directions, and equal values tie by path (every `sort_by_text` and
 on one is lost when it scrolls away.
 
 **The explorer's two modes.** The files page's explorer (`DiskfileExplorer`)
-shows the same files as a flat, sortable list (`DiskfileList`) or as a folder
-tree (`DiskfileTree`), switched by the folder toggle in its header
+shows the same files as a flat, sortable list (`DiskfileList`) or as a
+folder tree (`DiskfileTree`), switched by the folder toggle in its header
 (`DiskfilesEditor.explorer_mode`); the sort controls belong to the list, and
-"collapse all" to the tree. The tree has one top row per indexed root — the app
-directory, each scoped directory, each open project's root — labeled with the
-root's path, and under it folders before files, each sorted by name (case-insensitive,
-numbers by value), with names relative to their folder. A chain of folders that
-each hold only the next shows as one row, `a/b/c`, expanded or collapsed as one,
-and expanded only while every folder in it is, so a row that joins a folder
-below it (`x` and `a/b` become `x/a/b` when `x`'s other files go) never opens
-one the user didn't.
-Folders come from the files (`DiskfileIndex`, kept in step as files come
-and go), so an empty folder doesn't show — except one created from the tree,
-which it keeps until a reload (`DiskfileTreeState.created_dirs`; one deleted
-meanwhile by another program lingers until then too); a root nested in another
-shows under it as a folder holding the same files, once it holds any, and those
-files stay in the outer root after the nested one closes — unless the outer
-root's walk never enters it (the app directory, whatever its name; what the
-root's rule skips — `to_unindexed_part`: a `.git` or other always-ignored
-name, a `.zzz-tmp-` staging name, and `node_modules` and the other fixed
-names, or under a focused git root what git ignores or a repo of its own
-(`nested`)), where it shows only as
-its own root. Under a focused git root a tracked `dist/` shows. A file deleted on disk or uncovered but kept for its draft or tab stays in its folder,
-marked like in the list. The expanded folders live on `DiskfilesEditor.tree`
-(`DiskfileTreeState`), so they survive a switch to the list and back. The tree
-is one flat, windowed list of its visible rows, and deriving them walks only the
-expanded folders, so a large index costs what is open, not what is indexed.
-Keyboard: Up and Down move, Right expands a folder or moves into it, Left
-collapses it or moves to the parent, Home and End jump, Enter opens a file in a
-permanent tab, Space previews it, and either toggles a folder; the ContextMenu
-key (or Shift+F10) opens the active row's menu. Focus stays on the tree, which
-names the active row by `aria-activedescendant`, so it survives the row
-scrolling away. A click previews a file, a double click opens it, and a click
-toggles a folder. A registry's repos that aren't focused show as lazy rows
-that expanding focuses (§ Projects).
+"collapse all" to the tree. The tree has one top row per indexed root — the
+app directory, each scoped directory, each open project's root — labeled
+with the root's path, and under it folders before files, each sorted by name
+(case-insensitive, numbers by value), with names relative to their folder. A
+chain of folders that each hold only the next shows as one row, `a/b/c`,
+expanded or collapsed as one, and expanded only while every folder in it is,
+so a row that joins a folder below it (`x` and `a/b` become `x/a/b` when
+`x`'s other files go) never opens one the user didn't. Folders come from the
+files (`DiskfileIndex`, kept in step as files come and go), so an empty
+folder doesn't show — except one created from the tree, which it keeps until
+a reload (`DiskfileTreeState.created_dirs`; one deleted meanwhile by another
+program lingers until then too); a root nested in another shows under it as
+a folder holding the same files, once it holds any, and those files stay in
+the outer root after the nested one closes — unless the outer root's walk
+never enters it (the app directory, whatever its name; what the root's rule
+skips — `to_unindexed_part`: a `.git` or other always-ignored name, a
+`.zzz-tmp-` staging name, and `node_modules` and the other fixed names, or
+under a focused git root what git ignores or a repo of its own (`nested`)),
+where it shows only as its own root. Under a focused git root a tracked
+`dist/` shows. A file deleted on disk or uncovered but kept for its draft or
+tab stays in its folder, marked like in the list. The expanded folders live
+on `DiskfilesEditor.tree` (`DiskfileTreeState`), so they survive a switch to
+the list and back. The tree is one flat, windowed list of its visible rows,
+and deriving them walks only the expanded folders, so a large index costs
+what is open, not what is indexed. Keyboard: Up and Down move, Right expands
+a folder or moves into it, Left collapses it or moves to the parent, Home
+and End jump, Enter opens a file in a permanent tab, Space previews it, and
+either toggles a folder; the ContextMenu key (or Shift+F10) opens the active
+row's menu. Focus stays on the tree, which names the active row by
+`aria-activedescendant`, so it survives the row scrolling away. A click
+previews a file, a double click opens it, and a click toggles a folder. A
+registry's repos that aren't focused show as lazy rows that expanding
+focuses (§ Projects).
 
 **The explorer's contextmenus.** A file's menu (`DiskfileContextmenu`, on list
 and tree rows, tabs, and the file views) copies the file's absolute path, its
@@ -1774,35 +2051,37 @@ also unfocuses it; an unfocused repo's lazy row has a "repo" menu instead —
 focus it, open a terminal there, copy its path. Rename, move, and deleting
 a folder wait on backend actions.
 
-**Creating in the tree** names the new file or folder inline, VS Code style: an
-input (`DiskfileTreeCreateInput`) shows as the folder's first child, expanded
-first; in tree mode the header's create buttons open it at the active
-project's root row. Enter creates and Escape cancels, both returning focus to the tree unless
-the user has moved it elsewhere meanwhile; the tree leaves every key typed in
-the input to it, and its own arrows pass over the input's row. Leaving the
-input creates a valid name and drops a blank or refused one (a name the backend
-already refused isn't sent again), but not when the whole window lost focus or
-the row scrolled out of the window — the name being typed lives on the state
-(`DiskfileTreeState.creating`), and the input refocuses when it remounts with
-focus lost — if focus went elsewhere meanwhile, it's dropped instead. An input
-is dropped too when its folder stops showing (collapsed, emptied, its root
-closed) or the tree goes (a switch to the list). A name's problem shows under the row as it's typed,
+**Creating in the tree** names the new file or folder inline, VS Code style:
+an input (`DiskfileTreeCreateInput`) shows as the folder's first child,
+expanded first; in tree mode the header's create buttons open it at the
+active project's root row. Enter creates and Escape cancels, both returning
+focus to the tree unless the user has moved it elsewhere meanwhile; the tree
+leaves every key typed in the input to it, and its own arrows pass over the
+input's row. Leaving the input creates a valid name and drops a blank or
+refused one (a name the backend already refused isn't sent again), but not
+when the whole window lost focus or the row scrolled out of the window — the
+name being typed lives on the state (`DiskfileTreeState.creating`), and the
+input refocuses when it remounts with focus lost — if focus went elsewhere
+meanwhile, it's dropped instead. An input is dropped too when its folder
+stops showing (collapsed, emptied, its root closed) or the tree goes (a
+switch to the list). A name's problem shows under the row as it's typed,
 announced politely, except a file name's trailing `/`, a step on the way to
-`sub/x.md`; a refused commit's shows the same place as an alert. The box sits
-over the rows below — they keep one height for windowing — and lets clicks
-through. A `/` in the name creates the folders on the way. A new file opens in
-a permanent tab and is revealed in the tree, now or when its `filer_change`
-arrives, unless another input has opened meanwhile; a new folder is revealed
-and expanded. What the file index skips (`Diskfiles.to_unindexed`, by every
-holding root's rule: any part with an ignored name, such as a folder
-`node_modules` on the way under fixed names, or a `.zzz-tmp-` name; under a
-focused git root a path git ignores or a repo of its own) is created but
-never shows, so a note says why — the name it skips, the path git ignores,
-or the repo — kept in view at the top of the tree until it's
-dismissed, the next key in the tree, or the next create — not a click, which
-would shift the rows under a double click — and a file there isn't waited for. Any file this client creates
-(`Diskfiles.create_file_at`) is revealed the same way, an audio or transcript
-view's "edit a copy" included.
+`sub/x.md`; a refused commit's shows the same place as an alert. The box
+sits over the rows below — they keep one height for windowing — and lets
+clicks through. A `/` in the name creates the folders on the way. A new file
+opens in a permanent tab and is revealed in the tree, now or when its
+`filer_change` arrives, unless another input has opened meanwhile; a new
+folder is revealed and expanded. What the file index skips
+(`Diskfiles.to_unindexed`, by every holding root's rule: any part with an
+ignored name, such as a folder `node_modules` on the way under fixed names,
+or a `.zzz-tmp-` name; under a focused git root a path git ignores or a repo
+of its own) is created but never shows, so a note says why — the name it
+skips, the path git ignores, or the repo — kept in view at the top of the
+tree until it's dismissed, the next key in the tree, or the next create —
+not a click, which would shift the rows under a double click — and a file
+there isn't waited for. Any file this client creates
+(`Diskfiles.create_file_at`) is revealed the same way, an audio or
+transcript view's "edit a copy" included.
 
 ## Projects
 
@@ -1887,74 +2166,75 @@ concerns":
   it but a root-in-entry registry's entries.
 
   The opened directory and the root must both pass the root rules (§ Root
-  scope) and lie outside every protected directory. The open **focuses**
-  the repo holding the path — the deepest present registry entry containing
-  it, or a checkout's or directory's root; opening a registry's root itself,
-  or a linked worktree outside it, focuses nothing. Focus is daemon-wide; each open of a path in another
-  repo adds its focus (`project_changed` `update`), and `repo_focus` /
-  `repo_unfocus` add or drop a registry's present entries one by one
-  without resolving the registry again. A focus lasts until it's
-  unfocused, the project closes, or a later open finds its entry gone; a
-  checkout's or plain directory's root is its one focus while it's open
-  (`project_not_registry`), and a registry may keep none, as opening its
-  root alone leaves it. An open may also request more focus (`focus`, the
-  shape a reopen after a restart takes): each requested directory is
-  checked against the fresh resolve as a kept focus is (a present entry;
-  a checkout's or plain directory's root lands, anything else on one is
-  `project_not_registry`) and lands or is refused alone, reported in the
-  reply's `refused` with the code `repo_focus` would refuse it with
+  scope) and lie outside every protected directory. The open **focuses** the
+  repo holding the path — the deepest present registry entry containing it,
+  or a checkout's or directory's root; opening a registry's root itself, or
+  a linked worktree outside it, focuses nothing. Focus is daemon-wide; each
+  open of a path in another repo adds its focus (`project_changed`
+  `update`), and `repo_focus` / `repo_unfocus` add or drop a registry's
+  present entries one by one without resolving the registry again. A focus
+  lasts until it's unfocused, the project closes, or a later open finds its
+  entry gone; a checkout's or plain directory's root is its one focus while
+  it's open (`project_not_registry`), and a registry may keep none, as
+  opening its root alone leaves it. An open may also request more focus
+  (`focus`, the shape a reopen after a restart takes): each requested
+  directory is checked against the fresh resolve as a kept focus is (a
+  present entry; a checkout's or plain directory's root lands, anything else
+  on one is `project_not_registry`) and lands or is refused alone, reported
+  in the reply's `refused` with the code `repo_focus` would refuse it with
   (`repo_not_in_project`, `repo_not_present`, `permission_denied`, or
-  `repo_index_failed` for a listing that failed otherwise). A focused directory gets a whole-tree filer; a registry's root
-  gets one at its top level alone (its loose files) — an unfocused repo
-  and an unregistered directory under it aren't indexed by the registry's
-  project (an unregistered directory opened by a path in it is its own
-  project, indexed whole), so a root of
-  hundreds of thousands of files costs only what's focused. Filers are
-  keyed by canonical path, so two entries resolving to one directory share
-  one. The root is one `ScopedFs` root, writable whole.
+  `repo_index_failed` for a listing that failed otherwise). A focused
+  directory gets a whole-tree filer; a registry's root gets one at its top
+  level alone (its loose files) — an unfocused repo and an unregistered
+  directory under it aren't indexed by the registry's project (an
+  unregistered directory opened by a path in it is its own project, indexed
+  whole), so a root of hundreds of thousands of files costs only what's
+  focused. Filers are keyed by canonical path, so two entries resolving to
+  one directory share one. The root is one `ScopedFs` root, writable whole.
 
   The filers start before the project manager's lock is taken (the root or
   the path's own focus that can't be listed fails the open, with nothing
   registered, while a requested focus that can't is refused alone; and
-  concurrent opens of one path share a scan), then, under
-  the lock, the project is recorded — merged into an open one with the
-  same root: the fresh kind, entries, and `fallback` (why it's rooted there
-  now — a change counts as one, stamping a new rev), the union of the focus that the
-  fresh resolve still supports (a present entry's dir, or the root of a
-  checkout or plain directory; a whole-tree filer on a root now indexed
-  at its top level is replaced by a top-level one) — the
-  filers re-ensured, the root added to `ScopedFs`, and `project_changed`
-  broadcast (`open`, or `update` when an open project changed) — one
-  commit and one notification for the open and every focus it requested.
-  Each requested focus's filer is ensured again under the lock before the
-  commit, so one stopped since its scan (a racing unfocus or close) is
-  refused alone rather than failing the commit. The reply carries the
-  project, the open's `focus`, every filer's files (each requested focus
-  that landed included), the `watch_status`, and `refused`. `repo_focus` checks the entry is present as the
-  project's last resolve left it (`repo_not_in_project`, or
-  `repo_not_present` for one not cloned or refused), starts its filer
-  before the lock, then under it records the focus, re-ensures the filers,
-  and broadcasts `update`, replying with the project, the focused repo's
-  files alone (the rest of the project is the client's already), and the
-  project's `watch_status`; focusing a focused repo changes and broadcasts
-  nothing. `repo_files` reads a focused directory's files under the
-  lock, so it never sees a filer a commit has stopped or narrowed but not
-  yet published, refusing a root that isn't open (`project_not_open`)
-  and a directory the project doesn't focus (`repo_not_focused`) rather
-  than answering with no files, as an empty repo would. `repo_unfocus` drops the focus under the lock and releases its
+  concurrent opens of one path share a scan), then, under the lock, the
+  project is recorded — merged into an open one with the same root: the
+  fresh kind, entries, and `fallback` (why it's rooted there now — a change
+  counts as one, stamping a new rev), the union of the focus that the fresh
+  resolve still supports (a present entry's dir, or the root of a checkout
+  or plain directory; a whole-tree filer on a root now indexed at its top
+  level is replaced by a top-level one) — the filers re-ensured, the root
+  added to `ScopedFs`, and `project_changed` broadcast (`open`, or `update`
+  when an open project changed) — one commit and one notification for the
+  open and every focus it requested. Each requested focus's filer is ensured
+  again under the lock before the commit, so one stopped since its scan (a
+  racing unfocus or close) is refused alone rather than failing the commit.
+  The reply carries the project, the open's `focus`, every filer's files
+  (each requested focus that landed included), the `watch_status`, and
+  `refused`. `repo_focus` checks the entry is present as the project's last
+  resolve left it (`repo_not_in_project`, or `repo_not_present` for one not
+  cloned or refused), starts its filer before the lock, then under it
+  records the focus, re-ensures the filers, and broadcasts `update`,
+  replying with the project, the focused repo's files alone (the rest of the
+  project is the client's already), and the project's `watch_status`;
+  focusing a focused repo changes and broadcasts nothing. `repo_files` reads
+  a focused directory's files under the lock, so it never sees a filer a
+  commit has stopped or narrowed but not yet published, refusing a root that
+  isn't open (`project_not_open`) and a directory the project doesn't focus
+  (`repo_not_focused`) rather than answering with no files, as an empty repo
+  would. `repo_unfocus` drops the focus under the lock and releases its
   filer as an open's narrowing does — stopped unless another open project
   keeps it, narrowed to a top-level one if that's all one keeps (a nested
-  registry's root) — then broadcasts `update`. `project_close` reverses
-  an open, stopping the filers no other open project keeps and narrowing
-  a whole-tree one another keeps at its top level alone — except that the boot-time app directory and
-  `PUBLIC_ZZZ_SCOPED_DIRS` keep their permanent filers and `ScopedFs`
-  roots, so closing a project that overlaps one never revokes its access.
-  Backend state is an in-memory map — a restart forgets all projects, and
-  clients reopen the ones they had when they resync after reconnecting (see
-  **Reconnect resync** under File Editing). Scoped dirs aren't listed as
-  projects: they're the operator-configured always-on layer; projects are
-  the user-opened runtime layer. A scoped dir (or the app directory) can
-  still be opened, and closing it leaves its permanent access in place.
+  registry's root) — then broadcasts `update`. `project_close` reverses an
+  open, stopping the filers no other open project keeps and narrowing a
+  whole-tree one another keeps at its top level alone — except that the
+  boot-time app directory and `PUBLIC_ZZZ_SCOPED_DIRS` keep their permanent
+  filers and `ScopedFs` roots, so closing a project that overlaps one never
+  revokes its access. Backend state is an in-memory map — a restart forgets
+  all projects, and clients reopen the ones they had when they resync after
+  reconnecting (see **Reconnect resync** under File Editing). Scoped dirs
+  aren't listed as projects: they're the operator-configured always-on
+  layer; projects are the user-opened runtime layer. A scoped dir (or the
+  app directory) can still be opened, and closing it leaves its permanent
+  access in place.
 
 One open project is the **active** one on each client (`Projects.active`):
 new files and folders default into it (`Project.new_files_dir` — its last
@@ -1988,44 +2268,44 @@ under, so they're the index of exactly the state its rev names.
 
 **Ignored paths on the wire.** Each project carries, for each focused
 directory whose filer is on git's rule (§ Filer), what git ignores there
-(`ProjectInfoJson.ignored`, keyed by the directory): `paths`, relative to
-it and sorted — a directory git prunes whole with a trailing `/` (the
-directory itself as `./`), a file it skips alone without — `nested`, the
-directories the filer leaves unindexed as repos of their own (a nested
-repo, a submodule, populated or not — git's paths never name them),
-relative, sorted, each with a trailing `/`, and `resyncs`, a count. A focused directory on fixed names has no entry, and neither has
-a registry's root (indexed at its top level, on fixed names); a permanent
-filer's set (the app directory, a scoped dir) is on the wire only while an
-open project focuses its directory. Every
-commit reads the sets from the filers under the lock, so a set that moved
-is a change of its project like any other, stamping a new rev, and a
-reply carries the set its rev names. A filer whose set changes on its
-own — a `.gitignore` or `info/exclude` edit re-pruning it, a new file
-vetted as ignored, a `.git` appearing in a directory (one removed is seen
-at the next rescan) — asks for that commit itself (`refresh_ignored`, from a
-task of its own, at most once a second per filer, since each refresh
-resends every changed project's whole set to every client), once the step
-that changed it is done, so a refresh after a re-prune reads the index
-that re-prune left. A re-prune that would send more than 1024
-`filer_change`s for one focused directory (un-ignoring a `node_modules/`
-would be tens of MB to every socket) sends none and bumps `resyncs`
-instead, dropping their pending changes too.
+(`ProjectInfoJson.ignored`, keyed by the directory): `paths`, relative to it
+and sorted — a directory git prunes whole with a trailing `/` (the directory
+itself as `./`), a file it skips alone without — `nested`, the directories
+the filer leaves unindexed as repos of their own (a nested repo, a
+submodule, populated or not — git's paths never name them), relative,
+sorted, each with a trailing `/`, and `resyncs`, a count. A focused
+directory on fixed names has no entry, and neither has a registry's root
+(indexed at its top level, on fixed names); a permanent filer's set (the app
+directory, a scoped dir) is on the wire only while an open project focuses
+its directory. Every commit reads the sets from the filers under the lock,
+so a set that moved is a change of its project like any other, stamping a
+new rev, and a reply carries the set its rev names. A filer whose set
+changes on its own — a `.gitignore` or `info/exclude` edit re-pruning it, a
+new file vetted as ignored, a `.git` appearing in a directory (one removed
+is seen at the next rescan) — asks for that commit itself
+(`refresh_ignored`, from a task of its own, at most once a second per filer,
+since each refresh resends every changed project's whole set to every
+client), once the step that changed it is done, so a refresh after a
+re-prune reads the index that re-prune left. A re-prune that would send more
+than 1024 `filer_change`s for one focused directory (un-ignoring a
+`node_modules/` would be tens of MB to every socket) sends none and bumps
+`resyncs` instead, dropping their pending changes too.
 
 The client reads the sets as each root's rule (`Project.ignore_rules`,
 merged in `Projects.ignore_rules`): one predicate, `to_unindexed_part` in
 `diskfile_helpers.ts`, decides what the index skips for markdown links, the
-file tree, the create notice, and whether a created file is waited for.
-The daemon indexes the union of its filers, so a path is skipped only
-where every root holding it skips it (`to_innermost_unindexed_part`; a
-registry's root holds only its direct children), each by its own rule —
-git's paths and nested repos for a focused directory with an entry (each
-folder prefix and the path itself looked up in a set, never by the
-daemon's sort order), fixed names for every other root — and the
-always-ignored names under both: a `build/` git ignores in a checkout
-that a plain directory around it also indexes reads as indexed. The names are copies of the filer's (`FILE_INDEX_ALWAYS_IGNORED_NAMES`,
-`FILE_INDEX_PLAIN_DIR_IGNORED_NAMES`), which a test holds to its Rust
-source. A refresh replaces `ignored`, so links, the tree, and the notice
-follow it.
+file tree, the create notice, and whether a created file is waited for. The
+daemon indexes the union of its filers, so a path is skipped only where
+every root holding it skips it (`to_innermost_unindexed_part`; a registry's
+root holds only its direct children), each by its own rule — git's paths and
+nested repos for a focused directory with an entry (each folder prefix and
+the path itself looked up in a set, never by the daemon's sort order), fixed
+names for every other root — and the always-ignored names under both: a
+`build/` git ignores in a checkout that a plain directory around it also
+indexes reads as indexed. The names are copies of the filer's
+(`FILE_INDEX_ALWAYS_IGNORED_NAMES`, `FILE_INDEX_PLAIN_DIR_IGNORED_NAMES`),
+which a test holds to its Rust source. A refresh replaces `ignored`, so
+links, the tree, and the notice follow it.
 
 `Projects` applies project state from the daemon by one rule, whatever
 order replies and notifications arrive in — this client's own
@@ -2074,15 +2354,15 @@ a notification, and two clients' changes interleave:
 - A newer state whose `ignored` entry for a directory focused before and
   after has a different `resyncs`, or came or went (a git root falling back
   to fixed names), marks a re-prune whose changes weren't sent
-  (`is_resynced`): the directory goes pending like a new focus, settled by
-  a reply carrying it or pulled once nothing is in flight — a checkout's
-  root too, pulled rather than resyncing the session — and the pull
-  reconciles it whole, pruning what's now ignored and adding what no
-  longer is. The resync's rev becomes the directory's focus rev, so a
-  pull read before it, of the index it replaced, is dropped like one of an
-  earlier focus, in whatever order the pulls land. A change of the paths alone pulls nothing: a re-prune under
-  the threshold sent its changes, and a file vetted as ignored was never
-  indexed.
+  (`is_resynced`): the directory goes pending like a new focus, settled by a
+  reply carrying it or pulled once nothing is in flight — a checkout's root
+  too, pulled rather than resyncing the session — and the pull reconciles it
+  whole, pruning what's now ignored and adding what no longer is. The
+  resync's rev becomes the directory's focus rev, so a pull read before it,
+  of the index it replaced, is dropped like one of an earlier focus, in
+  whatever order the pulls land. A change of the paths alone pulls nothing:
+  a re-prune under the threshold sent its changes, and a file vetted as
+  ignored was never indexed.
 
 `Projects.focus_repo` applies its reply like an open's, reconciling the
 repo's files (a draft kept while it was unfocused whose file is gone is
@@ -2142,19 +2422,19 @@ accounts from each other.
 
 - Every session and every full-scope API token effectively has the daemon OS
   user's powers (a method-scoped token is limited to its listed methods):
-  terminals (a shell as that user), `project_open` of any directory the
-  root rules admit — strictly inside `$HOME`, or allowlisted in
+  terminals (a shell as that user), `project_open` of any directory the root
+  rules admit — strictly inside `$HOME`, or allowlisted in
   `ZZZ_ROOTS_OUTSIDE_HOME`, and never `/`, `$HOME` or an ancestor of it, or
   `/proc`, `/sys`, `/dev` (see § Root scope) — which makes the root it
-  resolves to writable and scans what it focuses, and file reads and writes anywhere in scope but the
-  protected directories (credential directories and `.zzz` directories other
-  than the app dir; the file actions, and the byte routes at
-  `/api/files/bytes`, which a method-scoped token can't use at all). So the
-  file API can't reach `~/.ssh` and the other credential directories, the
-  daemon's own `/proc/<pid>/environ`, or a root over the whole home or
-  filesystem unless the operator allowlists a directory for it — a smaller
-  reach and a guard against mistakes, not a boundary: a terminal is still a
-  shell that can read all of them.
+  resolves to writable and scans what it focuses, and file reads and writes
+  anywhere in scope but the protected directories (credential directories
+  and `.zzz` directories other than the app dir; the file actions, and the
+  byte routes at `/api/files/bytes`, which a method-scoped token can't use
+  at all). So the file API can't reach `~/.ssh` and the other credential
+  directories, the daemon's own `/proc/<pid>/environ`, or a root over the
+  whole home or filesystem unless the operator allowlists a directory for it
+  — a smaller reach and a guard against mistakes, not a boundary: a terminal
+  is still a shell that can read all of them.
 - The daemon's own git calls (resolving a project, the ignore rule,
   `project_status`) never run hooks, an fsmonitor, or background
   maintenance, but `project_status` runs `git status` in each present
@@ -2407,23 +2687,23 @@ Population, per capability:
   (file or directory), and `ScopedFs` rejects symlinked paths, so linked files
   don't appear in the file tree
 - **File watching** — the filer adds one inotify watch per directory it
-  indexes (never inside ignored directories), and those watches come out of the user's `max_user_watches`
-  budget, shared with every other process. An unreadable subdirectory is
-  skipped (logged once) and picked up if it becomes readable; an unreadable
-  root or focused directory fails `project_open` with `forbidden`
-  (`permission_denied`). When the watch limit is reached (or no watcher can
-  be created), the project still opens with every file the scans found, but
-  in **degraded mode**: `project_open` returns `watch_status: 'degraded'`
-  (kept on the opening tab's `Project` cell; the projects page and the desk
-  menu show it —
-  another tab or a reload shows `'full'`), and the directories without a watch
-  are rescanned every 5 seconds or more (retrying their watches each time), so
-  changes there show up late. A project that degrades or recovers after it
-  opened isn't re-announced — only the daemon log says so. A file is
-  re-announced as changed when its `lstat` stamp moves (a `touch` or a
-  chmod included, so clients holding it read it again), and once more at
-  the next look after a change seen within 3 seconds of its inode change
-  time (a stamp that fresh isn't trusted)
+  indexes (never inside ignored directories), and those watches come out of
+  the user's `max_user_watches` budget, shared with every other process. An
+  unreadable subdirectory is skipped (logged once) and picked up if it
+  becomes readable; an unreadable root or focused directory fails
+  `project_open` with `forbidden` (`permission_denied`). When the watch
+  limit is reached (or no watcher can be created), the project still opens
+  with every file the scans found, but in **degraded mode**: `project_open`
+  returns `watch_status: 'degraded'` (kept on the opening tab's `Project`
+  cell; the projects page and the desk menu show it — another tab or a
+  reload shows `'full'`), and the directories without a watch are rescanned
+  every 5 seconds or more (retrying their watches each time), so changes
+  there show up late. A project that degrades or recovers after it opened
+  isn't re-announced — only the daemon log says so. A file is re-announced
+  as changed when its `lstat` stamp moves (a `touch` or a chmod included, so
+  clients holding it read it again), and once more at the next look after a
+  change seen within 3 seconds of its inode change time (a stamp that fresh
+  isn't trusted)
 - **Change detection is by stat stamp** — the filer reads no file, so a
   write that doesn't move the file's `lstat` stamp goes unnoticed until the
   stamp next moves: an `mmap` store to an already-dirty page, or a remote or

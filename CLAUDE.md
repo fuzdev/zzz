@@ -24,14 +24,18 @@ are the user's.
 2. **Edit files** on disk — scoped filesystem, syntax highlighting, multi-tab editor
 3. **Build prompts** — reusable content templates composed from text parts and file references
 4. **Manage models** — Claude/ChatGPT/Gemini via BYOK API keys
-5. **Run terminals** — interactive PTY terminals drawn by zzz's own terminal view over Ghostty's emulator (`fuz_terminal`)
-6. **Record and transcribe audio** — the microphone to a file on disk, transcribed on this machine (whisper.cpp)
+5. **Run terminals** — interactive PTY terminals drawn by zzz's own
+   terminal view over Ghostty's emulator (`fuz_terminal`)
+6. **Record and transcribe audio** — the microphone to a file on disk,
+   transcribed on this machine (whisper.cpp)
 7. **Symmetric actions** — JSON-RPC 2.0 between frontend and backend, same ActionPeer on both sides
 
 ## Key Principles
 
-- **Local-first**: your data stays on your machine, no third-party lock-in; providers are opt-in BYOK
-- **Schema-driven**: Every Cell and Action defined by `@fuzdev/fuz_schema` schemas, validated at boundaries
+- **Local-first**: your data stays on your machine, no third-party
+  lock-in; providers are opt-in BYOK
+- **Schema-driven**: Every Cell and Action defined by
+  `@fuzdev/fuz_schema` schemas, validated at boundaries
 - **Symmetric actions**: Frontend and backend are peers — same ActionPeer code, same spec format
 - **Cell pattern**: All state is Cell subclasses with `$state`/`$derived` runes, JSON-serializable
 
@@ -49,13 +53,18 @@ suites against `zzz_server` over real HTTP. See ./crates/CLAUDE.md, and
 
 ## Docs
 
-- ./docs/architecture.md — actions, cells, content model, data flow, terminals, recording, filesystem and file editing, the app directory, security posture, known limitations
-- ./docs/development.md — setup, commands, production build, the `zzz` CLI, environment variables, extension points, patterns, testing
+- ./docs/architecture.md — actions, cells, content model, data flow,
+  terminals, recording, filesystem and file editing, the app directory,
+  security posture, known limitations
+- ./docs/development.md — setup, commands, production build, the `zzz`
+  CLI, environment variables, extension points, patterns, testing
 - ./docs/fuz_terminal.md — the terminal emulator binding, renderer, and adapter
-- ./docs/backend.md — the Rust backend's internals: each crate, the auth pipeline, the cross-process suites, known issues, design decisions
+- ./docs/backend.md — the Rust backend's internals: each crate, the auth
+  pipeline, the cross-process suites, known issues, design decisions
 - ./docs/providers.md — AI provider integration, adding new providers
 - ./docs/reference.md — generated action-spec + cell-class tables (`gro gen`)
-- ./crates/CLAUDE.md — the Rust backend (`zzzd`), the CLI crate, xtask, the test binary, integration tests
+- ./crates/CLAUDE.md — the Rust backend (`zzzd`), the CLI crate, xtask,
+  the test binary, integration tests
 
 ## Repository Structure
 
@@ -365,7 +374,10 @@ rules (discovery, env, port, exit codes, `daemon.json`, the opener):
 
 ## Avoid
 
-- **Never edit generated outputs** (`action_collections.ts`, `action_metatypes.ts`, `frontend_action_types.ts`, `docs/reference.md`) — edit the `*.gen.ts` generators and run `gro gen`
+- **Never edit generated outputs** (`action_collections.ts`,
+  `action_metatypes.ts`, `frontend_action_types.ts`,
+  `docs/reference.md`) — edit the `*.gen.ts` generators and run
+  `gro gen`
 - **Use `object()`** in action specs, not `strip_object()` / `loose_object()`
 - **No `$effect` in Cell classes** — effects belong in Svelte components only
 - **Run `gro gen` after changing action specs** — handler types are generated from specs
