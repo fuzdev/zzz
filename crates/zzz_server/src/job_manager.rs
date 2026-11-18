@@ -16,6 +16,8 @@
 //!   process ([`crate::tool`] runs with `kill_on_drop`).
 //! - **Bounded.** Finished jobs are kept as history up to
 //!   [`MAX_FINISHED_JOBS`], oldest dropped first.
+//! - **A panic fails its job, not the queue.** The work runs under
+//!   `catch_unwind`, so a panicking job ends `failed` and the next one starts.
 //!
 //! The work itself is a future the submitter builds from a [`JobHandle`],
 //! which reports progress and the command lines run; a failure carries the
@@ -23,9 +25,11 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
+use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use futures_util::FutureExt as _;
 use parking_lot::Mutex;
 use serde::Serialize;
 use tokio_util::sync::CancellationToken;
@@ -408,11 +412,19 @@ impl JobManager {
                 app: Arc::clone(&app),
                 manager: self.clone(),
             };
-            // dropping the work's future on cancel is what kills its tool
+            // dropping the work's future on cancel is what kills its tool;
+            // building the work runs inside the caught future too, so a panic
+            // in either fails this job instead of ending the drain with
+            // `draining` still set, which would leave every later job queued
+            let run = AssertUnwindSafe(async move { work(handle).await }).catch_unwind();
             let outcome = tokio::select! {
                 biased;
                 () = cancel.cancelled() => None,
-                result = work(handle) => Some(result),
+                result = run => Some(result.unwrap_or_else(|panic| {
+                    let message = panic_message(panic.as_ref());
+                    tracing::error!(%job_id, %message, "job panicked");
+                    Err(JobFailure::new(format!("the job panicked: {message}")))
+                })),
             };
 
             let finished = {
@@ -464,6 +476,15 @@ impl JobManager {
 #[derive(Serialize)]
 struct JobChangedParams<'a> {
     job: &'a JobSnapshot,
+}
+
+/// A caught panic's message, when it carries one.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("no message")
 }
 
 /// Send `job_changed` to the owning account's sockets.
@@ -593,6 +614,21 @@ mod tests {
         let third = submit(&app, owner, third_work);
         third_release.send(Ok(())).unwrap();
         wait_for_status(&app, owner, third, JobStatus::Succeeded).await;
+    }
+
+    #[tokio::test]
+    async fn a_panicking_job_fails_and_the_queue_moves_on() {
+        let app = test_app();
+        let owner = Uuid::new_v4();
+        let panicking: JobWork = Box::new(|_handle| Box::pin(async { panic!("boom") }));
+        let failed = submit(&app, owner, panicking);
+        let (next_work, next_release) = gated("/w/next");
+        let next = submit(&app, owner, next_work);
+
+        let job = wait_for_status(&app, owner, failed, JobStatus::Failed).await;
+        assert_eq!(job.error.as_deref(), Some("the job panicked: boom"));
+        next_release.send(Ok(())).unwrap();
+        wait_for_status(&app, owner, next, JobStatus::Succeeded).await;
     }
 
     #[tokio::test]

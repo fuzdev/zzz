@@ -922,7 +922,7 @@ commands):
   the last falling back instead for a registry kept inside a checkout, no
   link above naming it, to a checkout at or below its directory (the
   project's `fallback`, `registry_refused` with that reason;
-  ./architecture.md § Projects → Fallbacks); an unusable walk bound →
+  ./projects.md § Projects → Fallbacks); an unusable walk bound →
   `internal_error` / `bound_unusable`; the root or the path's own focus
   whose listing is refused → `forbidden` / `permission_denied`. A refused
   registry entry fails nothing: its `entry_*` reason is on the entry. Nor
@@ -1201,6 +1201,9 @@ commands):
     `MAX_FINISHED_JOBS`, oldest dropped first. Everything is lost on
     restart; `cancel_all` stops and forgets every job at shutdown and in
     `_testing_reset`.
+  - **A panic fails its job, not the queue**: the work runs under
+    `catch_unwind`, so a panicking job ends `failed` and the next one
+    starts.
   - A job is not a terminal: it runs on pipes, not a PTY, and ends in a
     typed result. A completion is not a job either — it's request-scoped,
     its progress rides one connection, and the transport's `cancel` ends it.
@@ -1215,7 +1218,11 @@ commands):
     `ScopedFs` and hash it; decode it with `ffmpeg` to 16 kHz mono PCM
     (`media::decode_speech`, the same handle-only confinement as a remux)
     into an unnamed scratch file; run the backend over that PCM; write the
-    sidecar.
+    sidecar. The decode is bounded a second past `SPEECH_MAX_DURATION`
+    (six hours, whisper.cpp's own timeout) by both duration (`-t`) and
+    size (`-fs`), so a small file that decodes to days of PCM can't fill
+    the disk, and audio that runs past the limit fails the job before the
+    recognizer starts.
   - **The backend** is an enum-dispatched seam (`TranscriptionBackend`,
     like `Provider`) with one variant, whisper.cpp. Its contract is timed
     segments, with timing optional per segment. One `whisper-cli`
@@ -1297,7 +1304,7 @@ commands):
   a close; the published snapshot carries the rev it was taken at
   (`PublishedProjects::rev`, `session_load`'s `projects_rev`). So every
   reply and notification says which state it is, and clients apply only
-  newer state (./architecture.md § Projects → The lifecycle rev) instead of
+  newer state (./projects.md § Projects → The lifecycle rev) instead of
   depending on the order frames arrive in, which a socket's order fixes
   but HTTP doesn't. The counter is seeded at boot from the clock in
   microseconds since the epoch (`rev_seed`), so revs keep increasing across
@@ -1312,7 +1319,7 @@ commands):
   pruning a repo's files). Reading under the lock costs a clone of the
   reply's indexes while other changes wait, as `repo_files` already does.
 - **Ignored paths in the commit**: each commit reads every focused dir's
-  ignored set from its filer under the lock (./architecture.md § Projects
+  ignored set from its filer under the lock (./projects.md § Projects
   → Ignored paths on the wire), so a set that moved stamps a rev like any
   change and a reply carries the set its rev names; the reply's project is
   read back from the committed state, not the caller's copy.

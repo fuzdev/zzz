@@ -40,6 +40,27 @@ pub const SPEECH_SAMPLE_RATE: u32 = 16_000;
 /// Size of the header `ffmpeg` writes on a PCM WAV file.
 const WAV_HEADER_BYTES: u64 = 44;
 
+/// The longest audio zzz transcribes.
+///
+/// whisper.cpp's run timeout follows it, since a recognizer runs near real
+/// time on a slow machine. A decode
+/// stops a second past it ([`decode_speech_args`]), so a small file that
+/// decodes to days of PCM (a decompression bomb) can't fill the disk, and a
+/// transcription whose PCM runs past it fails before the recognizer starts.
+pub const SPEECH_MAX_DURATION: Duration = Duration::from_hours(6);
+
+/// How far past [`SPEECH_MAX_DURATION`] a decode runs, so audio cut at the
+/// limit is told apart from audio that ends at it.
+const SPEECH_DECODE_MARGIN: Duration = Duration::from_secs(1);
+
+/// The most bytes a speech decode writes: the header, then mono 16-bit PCM
+/// for [`SPEECH_MAX_DURATION`] plus the margin. A second bound beside `-t`,
+/// in case a stream's timestamps keep `-t` from stopping it.
+const SPEECH_DECODE_MAX_BYTES: u64 = WAV_HEADER_BYTES
+    + (SPEECH_MAX_DURATION.as_secs() + SPEECH_DECODE_MARGIN.as_secs())
+        * SPEECH_SAMPLE_RATE as u64
+        * 2;
+
 /// A media container zzz hands to `ffmpeg`, known from a file's extension.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaContainer {
@@ -180,10 +201,17 @@ pub async fn remux(
 
 /// Arguments for a decode to speech PCM: the first audio stream of the input
 /// (on stdin) as a mono 16-bit WAV at [`SPEECH_SAMPLE_RATE`] (on stdout).
+///
+/// The output is cut a second past [`SPEECH_MAX_DURATION`], and at the bytes
+/// that holds.
 #[must_use]
 pub fn decode_speech_args(container: MediaContainer) -> Vec<OsString> {
     let mut args = input_args(container);
     let sample_rate = SPEECH_SAMPLE_RATE.to_string();
+    let max_seconds = (SPEECH_MAX_DURATION + SPEECH_DECODE_MARGIN)
+        .as_secs()
+        .to_string();
+    let max_bytes = SPEECH_DECODE_MAX_BYTES.to_string();
     args.extend(
         [
             "-map",
@@ -195,6 +223,12 @@ pub fn decode_speech_args(container: MediaContainer) -> Vec<OsString> {
             sample_rate.as_str(),
             "-c:a",
             "pcm_s16le",
+            "-t",
+            max_seconds.as_str(),
+            "-fs",
+            max_bytes.as_str(),
+            // no metadata chunk, so the header is the plain 44 bytes
+            "-bitexact",
             "-f",
             "wav",
             "-fd",
@@ -531,6 +565,15 @@ pub(crate) mod tests {
         assert!(args.iter().all(|arg| !arg.contains('/')), "{args:?}");
         assert_eq!(args[position("-ar") + 1], "16000");
         assert_eq!(args[position("-ac") + 1], "1");
+        // bounded a second past the limit, by duration and by size
+        assert_eq!(args[position("-t") + 1], "21601");
+        assert_eq!(
+            args[position("-fs") + 1],
+            (44 + 21_601 * 32_000).to_string()
+        );
+        assert!(args.contains(&"-bitexact"));
+        // output options: after the input
+        assert!(position("-t") > position("-i") && position("-fs") > position("-i"));
     }
 
     #[test]

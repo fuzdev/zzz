@@ -12,7 +12,8 @@
 //! 1. open the source through `ScopedFs`, and hash it (`blake3`);
 //! 2. decode it with `ffmpeg` to the mono 16 kHz PCM a recognizer reads
 //!    ([`crate::media::decode_speech`] — confined to file handles), into an
-//!    unnamed scratch file;
+//!    unnamed scratch file, failing audio longer than
+//!    [`crate::media::SPEECH_MAX_DURATION`];
 //! 3. run the backend over that PCM, reporting progress and each segment as
 //!    it's decoded (`transcription_progress`, to the owner's sockets);
 //! 4. write the result as a **sidecar** beside the source,
@@ -35,8 +36,8 @@ use serde::Serialize;
 
 use crate::job_manager::{JobFailure, JobHandle};
 use crate::media::{
-    MediaContainer, create_unnamed_temp_file, decode_speech, decode_speech_args, display_command,
-    speech_wav_duration_ms,
+    MediaContainer, SPEECH_MAX_DURATION, create_unnamed_temp_file, decode_speech,
+    decode_speech_args, display_command, speech_wav_duration_ms,
 };
 use crate::scoped_fs::TEMP_FILE_PREFIX;
 use crate::tool::{ToolError, ToolLine, ToolRun, Tools, run_tool_lines};
@@ -249,6 +250,12 @@ pub async fn run_transcription(
         .map_err(|e| io_failure("stat the decoded audio", &e))?
         .len();
     let duration_ms = speech_wav_duration_ms(pcm_bytes);
+    if u128::from(duration_ms) > SPEECH_MAX_DURATION.as_millis() {
+        return Err(JobFailure::new(format!(
+            "the audio is longer than the {}-hour limit",
+            SPEECH_MAX_DURATION.as_secs() / 3600
+        )));
+    }
 
     // 3. recognize
     let pcm = rewound(pcm).map_err(|e| io_failure("rewind the decoded audio", &e))?;

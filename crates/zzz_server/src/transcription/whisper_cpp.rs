@@ -26,8 +26,10 @@ use serde::Deserialize;
 
 use super::{TranscriptSegment, TranscriptWord};
 
-/// How long one run may take. Generous: hours of audio on a CPU-only build.
-pub const WHISPER_CPP_TIMEOUT: Duration = Duration::from_hours(6);
+/// How long one run may take: as long as the longest audio transcribed
+/// ([`crate::media::SPEECH_MAX_DURATION`]) — generous, since a CPU-only
+/// build runs near real time.
+pub const WHISPER_CPP_TIMEOUT: Duration = crate::media::SPEECH_MAX_DURATION;
 
 /// Largest result file read back. A transcript is small; this only stops a
 /// runaway file from being loaded.
