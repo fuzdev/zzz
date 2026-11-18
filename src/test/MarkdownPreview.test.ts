@@ -273,7 +273,7 @@ describe('MarkdownPreview in-zzz links', () => {
 
 	test('a missing file inside the index is marked broken, and clicking it does nothing', async () => {
 		await add_file(GUIDE);
-		app.diskfiles.select(null);
+		app.diskfiles.editor.tabs.close_all_tabs();
 		const target = render_in_app({ path: GUIDE, content: '[gone](./gone.md) [ok](guide.md)' });
 		assert.strictEqual(status_of(target, 'gone'), 'broken');
 		assert.strictEqual(find_link(target, 'gone').title, 'not found: /w/docs/gone.md');
@@ -367,7 +367,7 @@ describe('MarkdownPreview in-zzz links', () => {
 
 	test('an anchor an injected component renders is left alone, and the links keep their marks', async () => {
 		await add_file(GUIDE);
-		app.diskfiles.select(null);
+		app.diskfiles.editor.tabs.close_all_tabs();
 		const target = document.createElement('div');
 		document.body.append(target);
 		const mounted = mount(FrontendContextHarness, {

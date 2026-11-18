@@ -4,7 +4,11 @@ import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
-import { DISKFILE_TABS_CLOSED_MAX, DiskfileTabs } from '#lib/diskfile_tabs.svelte.ts';
+import {
+	DISKFILE_TABS_CLOSED_MAX,
+	DISKFILE_TABS_HISTORY_MAX,
+	DiskfileTabs
+} from '#lib/diskfile_tabs.svelte.ts';
 import { DiskfileTab } from '#lib/diskfile_tab.svelte.ts';
 import { DiskfilePath } from '#lib/diskfile_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -514,10 +518,8 @@ describe('DiskfileTabs', () => {
 			}
 
 			assert.strictEqual(tabs.recently_closed_tabs.length, DISKFILE_TABS_CLOSED_MAX);
-			assert.strictEqual(tabs.closed_tab_paths.size, DISKFILE_TABS_CLOSED_MAX);
 			// the newest are the ones kept
 			assert.strictEqual(tabs.recently_closed_tabs.at(-1)?.id, last_tab_id);
-			assert.ok(last_tab_id && tabs.closed_tab_paths.has(last_tab_id));
 		});
 
 		test('close_all_tabs stays within the bound', () => {
@@ -531,7 +533,6 @@ describe('DiskfileTabs', () => {
 			tabs.close_all_tabs();
 
 			assert.isAtMost(tabs.recently_closed_tabs.length, DISKFILE_TABS_CLOSED_MAX);
-			assert.strictEqual(tabs.closed_tab_paths.size, DISKFILE_TABS_CLOSED_MAX);
 		});
 	});
 
@@ -549,9 +550,8 @@ describe('DiskfileTabs', () => {
 			assert.deepEqual(tabs.tab_order, [tab2.id]);
 			assert.strictEqual(tabs.selected_tab_id, tab2.id);
 			assert.ok(tabs.recently_closed_tabs.every((t) => t.path !== TEST_PATH_1));
-			for (const path of tabs.closed_tab_paths.values()) {
-				assert.notStrictEqual(path, TEST_PATH_1);
-			}
+			assert.notInclude(tabs.back_paths, TEST_PATH_1);
+			assert.notInclude(tabs.forward_paths, TEST_PATH_1);
 			assert.isFalse(tabs.recent_tab_ids.includes(tab1.id));
 		});
 
@@ -750,7 +750,8 @@ describe('DiskfileTabs', () => {
 				tabs.open_diskfile(first.path);
 				tabs.reopen_last_closed_tab();
 				assert_one_tab_per_file(`reopen ${round}`);
-				for (const tab_id of closed_tab_ids) tabs.navigate_to_tab(tab_id);
+				for (let i = 0; i < closed_tab_ids.length; i++) tabs.go_back();
+				tabs.go_forward();
 				assert_one_tab_per_file(`navigate ${round}`);
 				tabs.close_all_tabs();
 				tabs.reopen_last_closed_tab();
@@ -981,106 +982,78 @@ describe('DiskfileTabs', () => {
 		});
 	});
 
-	describe('tab navigation', () => {
-		test('navigate_to_tab selects existing tab', () => {
-			// Create tabs
-			tabs.open_diskfile(TEST_PATH_1);
-			const tab2 = tabs.open_diskfile(TEST_PATH_2);
-
-			// Navigate to tab2
-			const result = tabs.navigate_to_tab(tab2.id);
-
-			// Should select tab2 directly
-			assert.strictEqual(result, tab2.id);
-			assert.strictEqual(tabs.selected_tab_id, tab2.id);
-		});
-
-		test('navigate_to_tab creates preview tab for closed tab', () => {
-			// Create and close a tab
-			const tab = tabs.open_diskfile(TEST_PATH_1);
-			const tab_id = tab.id;
-			tabs.close_tab(tab_id);
-
-			// Try to navigate to the closed tab
-			const result = tabs.navigate_to_tab(tab_id);
-
-			// Should create a preview tab for the same diskfile
-			assert.notStrictEqual(result, tab_id); // Should be a different tab id
-			assert.strictEqual(tabs.selected_tab_id, result);
-			assert.strictEqual(tabs.preview_tab_id, result);
-
-			// Should have the same diskfile
-			const new_tab = tabs.items.by_id.get(result!);
-			assert.strictEqual(new_tab?.path, TEST_PATH_1);
-		});
-
-		test('navigate_to_tab creates a new preview tab for closed tab', () => {
-			// Create a tab and a preview tab
-			tabs.open_diskfile(TEST_PATH_1);
-			const preview_tab = tabs.preview_diskfile(TEST_PATH_2);
-			const preview_tab_id = preview_tab.id;
-
-			// Create and close another tab
-			const closed_tab = tabs.open_diskfile(TEST_PATH_3);
-			const closed_tab_id = closed_tab.id;
-			tabs.close_tab(closed_tab_id);
-
-			// Try to navigate to the closed tab
-			const result = tabs.navigate_to_tab(closed_tab_id);
-
-			// A new preview tab should be created for the closed tab's file
-			assert.ok(result !== null);
-			assert.ok(tabs.preview_tab_id !== null);
-
-			// The new preview tab should be different from the original one
-			assert.notStrictEqual(tabs.preview_tab_id, preview_tab_id);
-
-			// But it should have the closed tab's diskfile
-			if (tabs.preview_tab_id && tabs.items.by_id.get(tabs.preview_tab_id)) {
-				assert.strictEqual(tabs.items.by_id.get(tabs.preview_tab_id)?.path, TEST_PATH_3);
-			}
-		});
-
-		test('navigate_to_tab selects the open tab of a closed tab whose file is open again', () => {
-			const closed = tabs.open_diskfile(TEST_PATH_1);
-			tabs.open_diskfile(TEST_PATH_2);
-			tabs.close_tab(closed.id);
-			const reopened = tabs.open_diskfile(TEST_PATH_1);
-			tabs.open_diskfile(TEST_PATH_3);
-
-			const result = tabs.navigate_to_tab(closed.id);
-
-			assert.strictEqual(result, reopened.id);
-			assert.strictEqual(tabs.selected_tab_id, reopened.id);
-			assert.strictEqual(tabs.items.size, 3);
-		});
-
-		test('navigate_to_tab handles unknown tab id gracefully', () => {
-			// Create a tab
-			tabs.open_diskfile(TEST_PATH_1);
-
-			// Try to navigate to a non-existent tab
-			const result = tabs.navigate_to_tab(create_uuid());
-
-			// Should return null without changing selection
-			assert.isNull(result);
-		});
-
-		test('closed tabs are remembered even after closing all tabs', () => {
-			// Create tabs
+	describe('back and forward', () => {
+		test('go back and forward through the files the selection visited', () => {
 			const tab1 = tabs.open_diskfile(TEST_PATH_1);
+			const tab2 = tabs.open_diskfile(TEST_PATH_2);
+			tabs.open_diskfile(TEST_PATH_3);
+			assert.deepEqual(tabs.back_paths, [TEST_PATH_2, TEST_PATH_1]);
+
+			assert.strictEqual(tabs.go_back(), TEST_PATH_2);
+			assert.strictEqual(tabs.selected_tab_id, tab2.id);
+			assert.strictEqual(tabs.go_back(), TEST_PATH_1);
+			assert.strictEqual(tabs.selected_tab_id, tab1.id);
+			assert.isNull(tabs.go_back());
+			assert.deepEqual(tabs.forward_paths, [TEST_PATH_2, TEST_PATH_3]);
+
+			assert.strictEqual(tabs.go_forward(), TEST_PATH_2);
+			// selecting something new clears forward, as in a browser
+			tabs.select_tab(tab1.id);
+			assert.deepEqual(tabs.forward_paths, []);
+			assert.isNull(tabs.go_forward());
+			assert.strictEqual(tabs.items.size, 3, 'no tab was made or closed');
+		});
+
+		test('going back to a file whose tab closed previews it', () => {
+			const tab = tabs.open_diskfile(TEST_PATH_1);
 			tabs.open_diskfile(TEST_PATH_2);
-			const tab1_id = tab1.id;
+			tabs.close_tab(tab.id);
+			assert.strictEqual(tabs.go_back(), TEST_PATH_1);
+			assert.strictEqual(tabs.selected_path, TEST_PATH_1);
+			assert.strictEqual(tabs.preview_tab?.path, TEST_PATH_1);
+		});
 
-			// Close all tabs
+		test('a preview tab reused for another file counts as a move', () => {
+			tabs.preview_diskfile(TEST_PATH_1);
+			tabs.preview_diskfile(TEST_PATH_2);
+			assert.strictEqual(tabs.items.size, 1);
+			assert.deepEqual(tabs.back_paths, [TEST_PATH_1]);
+			assert.strictEqual(tabs.go_back(), TEST_PATH_1);
+			assert.strictEqual(tabs.selected_path, TEST_PATH_1);
+		});
+
+		test('the history survives closing all tabs', () => {
+			tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
 			tabs.close_all_tabs();
+			tabs.open_diskfile(TEST_PATH_3);
+			assert.deepEqual(tabs.back_paths, [TEST_PATH_2, TEST_PATH_1]);
+			assert.strictEqual(tabs.go_back(), TEST_PATH_2);
+		});
 
-			// Navigate to one of the closed tabs
-			const result = tabs.navigate_to_tab(tab1_id);
+		test('entries left equal to the current file after a removal are dropped, not stuck', () => {
+			tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
+			tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
+			tabs.open_diskfile(TEST_PATH_3);
+			tabs.remove_diskfile(TEST_PATH_2);
+			assert.strictEqual(tabs.go_back(), TEST_PATH_1);
+			assert.isNull(tabs.go_back());
+			assert.deepEqual(tabs.back_paths, []);
+		});
 
-			// Should create a preview tab for the correct diskfile
-			const new_tab = tabs.items.by_id.get(result!);
-			assert.strictEqual(new_tab?.path, TEST_PATH_1);
+		test('is bounded, and forgets a removed file', () => {
+			for (let i = 0; i < DISKFILE_TABS_HISTORY_MAX + 10; i++) {
+				tabs.preview_diskfile(parse_or_throw(DiskfilePath, `/test/h${i}.ts`));
+			}
+			assert.strictEqual(tabs.back_paths.length, DISKFILE_TABS_HISTORY_MAX);
+			tabs.open_diskfile(TEST_PATH_1);
+			tabs.open_diskfile(TEST_PATH_2);
+			tabs.remove_diskfile(TEST_PATH_1);
+			assert.notInclude(tabs.back_paths, TEST_PATH_1);
+			// going back skips nothing it shouldn't, and never lands on the removed file
+			assert.notStrictEqual(tabs.go_back(), TEST_PATH_1);
 		});
 	});
 

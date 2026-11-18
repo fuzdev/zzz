@@ -1575,13 +1575,17 @@ per-file editing state, the drafts store, and the metadata index:
   again and reopens the next, as a permanent tab, like VS Code's "reopen
   closed editor". Closing all tabs pushes them onto the reopen stack above
   the earlier closed ones (reopening one by one restores their order); the
-  stack, and the back/forward navigation stacks, keep the 50 most recent. A
-  file appearing on disk — seeded by a snapshot or created by another tool —
-  never moves the selection or opens a tab; only a file created from zzz
-  (`Diskfiles.create_file`) is selected and opened in a permanent tab — at
-  once if its `filer_change` already arrived, else when it arrives (under
-  the path as the backend normalizes it), unless the user selects another
-  file or tab or closes its project first
+  stack keeps the 50 most recent. Back / forward (`tab_back`,
+  `tab_forward`) walks the files the selection visited, by path — a preview
+  tab reused for another file is a step, and going back to a file whose
+  tab closed previews it — kept on `DiskfileTabs`, 50 each way. The
+  selected file is the selected tab's (`Diskfiles.selected_path` derives
+  from it). A file appearing on disk — seeded by a snapshot or created by
+  another tool — never moves the selection or opens a tab; only a file
+  created from zzz (`Diskfiles.create_file`) is selected and opened in a
+  permanent tab — at once if its `filer_change` already arrived, else when
+  it arrives (under the path as the backend normalizes it), unless the user
+  selects another file or tab or closes its project first
 - `Drafts` (`Diskfiles.drafts`, plain classes, not Cells) — each file's
   draft, keyed by path: its text, the innermost root it was made under
   (`root`, recorded, not part of the key, since a path can sit under

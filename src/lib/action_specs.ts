@@ -361,9 +361,12 @@ export type TabMoveInput = Infer<typeof TabMoveInput>;
 export const TabMoveOutput = object({ moved: boolean });
 export type TabMoveOutput = Infer<typeof TabMoveOutput>;
 
-/** Output for `tab_reopen_closed`: the reopened tab's path, `null` with nothing to reopen. */
-export const TabReopenClosedOutput = object({ path: nullable(DiskfilePath) });
-export type TabReopenClosedOutput = Infer<typeof TabReopenClosedOutput>;
+/**
+ * Output for `tab_reopen_closed`, `tab_back`, and `tab_forward`: the path of
+ * the file whose tab it selected, `null` when there was nothing to do.
+ */
+export const TabPathOutput = object({ path: nullable(DiskfilePath) });
+export type TabPathOutput = Infer<typeof TabPathOutput>;
 
 /** Input for `desk_pin_toggle`. Optional — omit it to toggle, pass `{pinned}` to set. */
 export const DeskPinToggleInput = optional(object({ pinned: optional(boolean) }));
@@ -1006,11 +1009,40 @@ export const tab_reopen_closed_action_spec = {
 	auth: null,
 	side_effects: true,
 	input: fuz_void,
-	output: TabReopenClosedOutput,
+	output: TabPathOutput,
 	async: false,
 	version: 1,
 	history: 'layout',
 	description: 'Reopen the most recently closed tab whose file is not open.'
+} satisfies IntentActionSpec;
+
+export const tab_back_action_spec = {
+	method: 'tab_back',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: fuz_void,
+	output: TabPathOutput,
+	async: false,
+	version: 1,
+	history: 'navigation',
+	description:
+		'Go back to the file the selection last left: select its tab, or preview it if its tab closed.'
+} satisfies IntentActionSpec;
+
+export const tab_forward_action_spec = {
+	method: 'tab_forward',
+	kind: 'local_call',
+	initiator: 'frontend',
+	auth: null,
+	side_effects: true,
+	input: fuz_void,
+	output: TabPathOutput,
+	async: false,
+	version: 1,
+	history: 'navigation',
+	description: 'Go forward again after going back.'
 } satisfies IntentActionSpec;
 
 export const diskfile_details_toggle_action_spec = {
@@ -1247,7 +1279,9 @@ export const all_intent_specs: Array<IntentActionSpec> = [
 	tab_pin_action_spec,
 	tab_close_action_spec,
 	tab_move_action_spec,
-	tab_reopen_closed_action_spec
+	tab_reopen_closed_action_spec,
+	tab_back_action_spec,
+	tab_forward_action_spec
 ];
 
 /**

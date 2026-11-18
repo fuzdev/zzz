@@ -102,6 +102,24 @@ describe('the tab intents', () => {
 		assert.deepEqual(app.intents.tab_reopen_closed(), { path: null });
 	});
 
+	test('`tab_back` / `tab_forward` walk the files visited, as navigation', () => {
+		app.intents.tab_open({ path: A, permanent: true });
+		app.intents.tab_open({ path: B });
+		// the preview reused for another file is a step too
+		app.intents.tab_open({ path: C });
+		assert.deepEqual(app.intents.tab_back(), { path: B });
+		assert.deepEqual(app.intents.tab_back(), { path: A });
+		assert.deepEqual(app.intents.tab_back(), { path: null });
+		assert.deepEqual(app.intents.tab_forward(), { path: B });
+		assert.strictEqual(app.diskfiles.selected_path, B);
+		assert.deepEqual(
+			app.recent_intents.entries
+				.filter((e) => e.method.startsWith('tab_back'))
+				.map((e) => e.history),
+			['navigation', 'navigation', 'navigation']
+		);
+	});
+
 	test('each lands in the recent intents', () => {
 		app.intents.tab_open({ path: A });
 		app.intents.tab_pin({ path: A });

@@ -112,21 +112,22 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	}
 
 	/**
-	 * Navigates back or forward to a tab (see `DiskfileTabs.navigate_to_tab`),
-	 * and selects its file.
+	 * Goes back, or forward, through the files the selection visited (see
+	 * `DiskfileTabs.go_back`). The `tab_back` / `tab_forward` intents'
+	 * implementation.
 	 *
-	 * @returns the id of the tab navigated to, `null` if there's none
+	 * @returns the path gone to, `null` with nowhere to go
 	 */
-	navigate_to_tab(tab_id: Uuid): Uuid | null {
-		const resulting_tab_id = this.tabs.navigate_to_tab(tab_id);
-		if (resulting_tab_id) this.app.diskfiles.follow_selected_tab();
-		return resulting_tab_id;
+	navigate(direction: 'back' | 'forward'): DiskfilePath | null {
+		const path = direction === 'back' ? this.tabs.go_back() : this.tabs.go_forward();
+		if (path) this.app.diskfiles.drop_pending_selection();
+		return path;
 	}
 
 	/**
 	 * Closes a tab by id, now — see `request_close_tab` for the user-facing
-	 * close. If its file was the selected one, selection follows the newly
-	 * selected tab. A draft isn't lost either way: it's app-level, and the file
+	 * close. If its file was the selected one, the selection is the newly
+	 * selected tab's. A draft isn't lost either way: it's app-level, and the file
 	 * reopens on it.
 	 */
 	close_tab(tab_id: Uuid): void {
@@ -138,9 +139,8 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 			this.#pending_close = null;
 		}
 		this.tabs.close_tab(tab_id);
-		if (was_selected_file && diskfiles.selected_path === tab.path) {
-			diskfiles.follow_selected_tab();
-		}
+		// closing the selected tab moved the selection, so the user moved on
+		if (was_selected_file) diskfiles.drop_pending_selection();
 	}
 
 	/**
@@ -176,7 +176,7 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	reopen_last_closed_tab(): DiskfilePath | null {
 		const tab = this.tabs.reopen_last_closed_tab();
 		if (!tab) return null;
-		this.app.diskfiles.follow_selected_tab();
+		this.app.diskfiles.drop_pending_selection();
 		return tab.path;
 	}
 
@@ -186,7 +186,7 @@ export class DiskfilesEditor extends Cell<typeof DiskfilesEditorJson> {
 	open_tab(tab_id: Uuid): void {
 		if (!this.tabs.items.by_id.has(tab_id)) return;
 		this.tabs.open_tab(tab_id);
-		this.app.diskfiles.follow_selected_tab();
+		this.app.diskfiles.drop_pending_selection();
 	}
 
 	/**

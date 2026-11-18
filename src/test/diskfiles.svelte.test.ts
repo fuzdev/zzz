@@ -3,7 +3,7 @@
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert, vi } from 'vitest';
 import { flushSync } from 'svelte';
-import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
+import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
 	DiskfileDirectoryPath,
@@ -11,7 +11,7 @@ import {
 	SerializableDisknode,
 	type DiskfileChangeType
 } from '#lib/diskfile_types.ts';
-import { Diskfiles, type DiskfileChangeTracker } from '#lib/diskfiles.svelte.ts';
+import type { DiskfileChangeTracker } from '#lib/diskfiles.svelte.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { confirm_unload_with_unsaved_changes, to_file_directories } from '#lib/diskfile_helpers.ts';
 
@@ -404,7 +404,8 @@ describe('delete with a tab keeps the file', () => {
 		// neither the reopen stack nor back-navigation resurrects it
 		tabs.reopen_last_closed_tab();
 		assert.isUndefined(tabs.by_path.get(b.path));
-		assert.isNull(tabs.navigate_to_tab(tab.id));
+		assert.notInclude(tabs.back_paths, b.path);
+		assert.notInclude(tabs.forward_paths, b.path);
 	});
 
 	test('a preview tab keeps it until it previews another file', () => {
@@ -529,14 +530,16 @@ describe('delete without a tab or draft forgets the file', () => {
 		app.diskfiles.select(a.path, true);
 		const b_tab = tabs.open_diskfile(b.path);
 		tabs.close_tab(b_tab.id);
-		assert.strictEqual(tabs.closed_tab_paths.get(b_tab.id), b.path);
+		assert.include(tabs.back_paths, b.path);
 
 		filer_change('delete', PATH_B);
 
 		assert.isUndefined(seed_diskfile(app, PATH_B));
 		tabs.reopen_last_closed_tab();
 		assert.isUndefined(tabs.by_path.get(b.path));
-		assert.isNull(tabs.navigate_to_tab(b_tab.id));
+		assert.notInclude(tabs.back_paths, b.path);
+		assert.notStrictEqual(tabs.go_back(), b.path);
+		assert.isUndefined(tabs.by_path.get(b.path));
 	});
 });
 
@@ -1204,28 +1207,19 @@ describe('selection on add', () => {
 	});
 });
 
-describe('selection JSON', () => {
-	test('the selected path round-trips through JSON', () => {
+describe('the selection', () => {
+	test("is the selected tab's path — one selection, nothing kept beside it", () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
-		app.diskfiles.select(PATH_B);
-
-		const json = app.diskfiles.to_json();
-		assert.strictEqual(json.selected_path, PATH_B);
-
-		const other = monkeypatch_zzz_for_tests(new Frontend());
-		const restored = new Diskfiles({ app: other, json });
-		assert.strictEqual(restored.selected_path, PATH_B);
-		assert.strictEqual(restored.to_json().selected_path, PATH_B);
-		restored.dispose();
-		other.dispose();
-	});
-
-	test('no selection round-trips as null', () => {
-		const json = app.diskfiles.to_json();
-		assert.isNull(json.selected_path);
-		const restored = new Diskfiles({ app, json });
-		assert.isNull(restored.selected_path);
-		restored.dispose();
+		const { tabs } = app.diskfiles.editor;
+		assert.isNull(app.diskfiles.selected_path);
+		app.diskfiles.select(PATH_A, true);
+		app.diskfiles.select(PATH_B, true);
+		assert.strictEqual(app.diskfiles.selected_path, PATH_B);
+		tabs.select_tab(tabs.by_path.get(PATH_A)!.id);
+		assert.strictEqual(app.diskfiles.selected_path, PATH_A);
+		tabs.close_all_tabs();
+		assert.isNull(app.diskfiles.selected_path);
+		assert.notProperty(app.diskfiles.to_json(), 'selected_path');
 	});
 });
 
@@ -1251,23 +1245,22 @@ describe('reopening a closed tab', () => {
 });
 
 describe('back/forward navigation', () => {
-	test('selects the file of the tab navigated to', () => {
+	test('selects the file gone back or forward to', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
 		const a = seed_diskfile(app, PATH_A);
 		const b = seed_diskfile(app, PATH_B);
 		assert.ok(a && b);
 		const { editor } = app.diskfiles;
 		app.diskfiles.select(a.path, true);
-		const a_tab = editor.tabs.selected_tab;
-		assert.ok(a_tab);
 		app.diskfiles.select(b.path, true);
 
-		assert.strictEqual(editor.navigate_to_tab(a_tab.id), a_tab.id);
-
+		assert.strictEqual(editor.navigate('back'), a.path);
 		assert.strictEqual(app.diskfiles.selected_path, a.path);
+		assert.strictEqual(editor.navigate('forward'), b.path);
+		assert.strictEqual(app.diskfiles.selected_path, b.path);
 	});
 
-	test('a closed tab navigated to selects its file in a new preview', () => {
+	test('a file whose tab closed is gone back to in a new preview', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
 		const a = seed_diskfile(app, PATH_A);
 		const b = seed_diskfile(app, PATH_B);
@@ -1279,21 +1272,19 @@ describe('back/forward navigation', () => {
 		app.diskfiles.select(b.path, true);
 		editor.close_tab(a_tab.id);
 
-		const tab_id = editor.navigate_to_tab(a_tab.id);
-
-		assert.ok(tab_id);
-		assert.strictEqual(editor.tabs.items.by_id.get(tab_id)?.path, a.path);
+		assert.strictEqual(editor.navigate('back'), a.path);
+		assert.strictEqual(editor.tabs.preview_tab?.path, a.path);
 		assert.strictEqual(app.diskfiles.selected_path, a.path);
 	});
 
-	test('an unknown tab leaves the selection alone', () => {
+	test('with nowhere to go, the selection stays', () => {
 		app.diskfiles.add_initial([create_disknode(PATH_A)]);
 		const a = seed_diskfile(app, PATH_A);
 		assert.ok(a);
 		app.diskfiles.select(a.path, true);
 
-		assert.isNull(app.diskfiles.editor.navigate_to_tab(create_uuid()));
-
+		assert.isNull(app.diskfiles.editor.navigate('back'));
+		assert.isNull(app.diskfiles.editor.navigate('forward'));
 		assert.strictEqual(app.diskfiles.selected_path, a.path);
 	});
 });
@@ -1399,7 +1390,7 @@ describe('create_file selects the new file', () => {
 	test('a tab change through the editor drops the pending selection', async () => {
 		const scenarios: Array<[string, (a_tab_id: Uuid, c_tab_id: Uuid) => void]> = [
 			['open', (a_tab_id) => app.diskfiles.editor.open_tab(a_tab_id)],
-			['navigate', (a_tab_id) => app.diskfiles.editor.navigate_to_tab(a_tab_id)],
+			['navigate', () => app.diskfiles.editor.navigate('back')],
 			['close the selected tab', (_, c_tab_id) => app.diskfiles.editor.close_tab(c_tab_id)],
 			[
 				'reopen',

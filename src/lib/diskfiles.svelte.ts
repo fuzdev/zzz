@@ -1,8 +1,6 @@
 import {
 	array,
-	nullable,
 	parse_or_throw,
-	with_default,
 	with_default_fn,
 	type Infer,
 	type InferInput
@@ -78,8 +76,7 @@ type ContentReadResult =
 
 export const DiskfilesJson = cell_json_schema(
 	{
-		diskfiles: with_default_fn(array(DiskfileJson), () => []),
-		selected_path: with_default(nullable(DiskfilePath), null)
+		diskfiles: with_default_fn(array(DiskfileJson), () => [])
 	},
 	'Diskfiles'
 );
@@ -147,8 +144,11 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		return this.#cells;
 	}
 
-	/** The selected file's path — the selection follows the path, not a particular cell. */
-	selected_path: DiskfilePath | null = $state.raw(null);
+	/**
+	 * The selected file's path: the editor's selected tab's, so there's one
+	 * selection — the selection follows the path, not a particular cell.
+	 */
+	readonly selected_path: DiskfilePath | null = $derived.by(() => this.editor.tabs.selected_path);
 
 	readonly selected_file: Diskfile | null = $derived(
 		this.selected_path ? (this.peek(this.selected_path) ?? null) : null
@@ -341,7 +341,7 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	 * The file `create_file` created whose `filer_change` hasn't arrived yet,
 	 * selected and revealed in the tree when it does. Not reactive. Dropped
 	 * when it's selected, when the user selects anything else (`select`, or a
-	 * tab change through `DiskfilesEditor` — `follow_selected_tab`), when its
+	 * tab change through `DiskfilesEditor` — `drop_pending_selection`), when its
 	 * project is removed (`handle_project_removed`), or by the next
 	 * `create_file` — so a file the filer never reports (say under
 	 * `node_modules/`) can't take the selection
@@ -1022,10 +1022,6 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		// remove first, so closing its tabs re-entering `handle_diskfile_detached` is a no-op
 		this.#write(() => this.#remove_cell(diskfile, false));
 		this.editor.remove_diskfile(diskfile.path);
-
-		if (this.selected_path === diskfile.path) {
-			this.selected_path = this.editor.tabs.selected_path;
-		}
 	}
 
 	/**
@@ -1468,14 +1464,13 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Makes the selected file the editor's selected tab's (or none) after a
-	 * user-driven tab change — selecting, opening, closing the selected tab,
-	 * reopening, or navigating back/forward (the `DiskfilesEditor` methods) —
-	 * and drops a pending `create_file` selection, since the user has moved on.
+	 * Drops a pending `create_file` selection after a user-driven tab change —
+	 * selecting, opening, closing the selected tab, reopening, or navigating
+	 * back / forward (the `DiskfilesEditor` methods) — since the user has
+	 * moved on.
 	 */
-	follow_selected_tab(): void {
+	drop_pending_selection(): void {
 		this.#select_on_arrival = null;
-		this.selected_path = this.editor.tabs.selected_path;
 	}
 
 	/**
@@ -1639,31 +1634,17 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 	}
 
 	/**
-	 * Select a file by path and also update the editor tabs.
-	 * Default to the first file if `path` is `undefined`.
-	 * If `path` is `null`, it selects no file.
-	 * If `open_not_preview` is `true`, opens as a permanent tab, otherwise previews.
+	 * Selects the file at `path` in a tab: a permanent one if
+	 * `open_not_preview`, else a preview (a file already in a tab selects that
+	 * tab).
 	 */
-	select(path: DiskfilePath | null | undefined, open_not_preview: boolean = false): void {
+	select(path: DiskfilePath, open_not_preview: boolean = false): void {
 		this.#select_on_arrival = null;
-		if (path === undefined) {
-			this.select_next();
+		if (open_not_preview) {
+			this.editor.open_diskfile(path);
 		} else {
-			this.selected_path = path;
-
-			// Update the editor if a file is selected
-			if (path !== null) {
-				if (open_not_preview) {
-					this.editor.open_diskfile(path);
-				} else {
-					this.editor.preview_diskfile(path);
-				}
-			}
+			this.editor.preview_diskfile(path);
 		}
-	}
-
-	select_next(): void {
-		this.select(this.index.values().next().value?.id ?? null);
 	}
 }
 

@@ -39,6 +39,8 @@ export const ActionMethod = one_of([
 	'tab_close',
 	'tab_move',
 	'tab_reopen_closed',
+	'tab_back',
+	'tab_forward',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -120,7 +122,9 @@ export const LocalCallActionMethod = one_of([
 	'tab_pin',
 	'tab_close',
 	'tab_move',
-	'tab_reopen_closed'
+	'tab_reopen_closed',
+	'tab_back',
+	'tab_forward'
 ]);
 export type LocalCallActionMethod = Infer<typeof LocalCallActionMethod>;
 
@@ -157,6 +161,8 @@ export const FrontendActionMethod = one_of([
 	'tab_close',
 	'tab_move',
 	'tab_reopen_closed',
+	'tab_back',
+	'tab_forward',
 	'provider_load_status',
 	'terminal_create',
 	'terminal_data_send',
@@ -373,6 +379,8 @@ export interface FrontendActionsApi {
 	tab_close: (input: ActionCallInputs['tab_close']) => ActionOutputs['tab_close'];
 	tab_move: (input: ActionCallInputs['tab_move']) => ActionOutputs['tab_move'];
 	tab_reopen_closed: (input?: void) => ActionOutputs['tab_reopen_closed'];
+	tab_back: (input?: void) => ActionOutputs['tab_back'];
+	tab_forward: (input?: void) => ActionOutputs['tab_forward'];
 	provider_load_status: (
 		input: ActionCallInputs['provider_load_status'],
 		options?: RpcClientCallOptions

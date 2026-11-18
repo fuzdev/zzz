@@ -9,7 +9,7 @@ import {
 	type Infer,
 	type InferInput
 } from '@fuzdev/fuz_schema/schema.ts';
-import { SvelteMap } from 'svelte/reactivity';
+import { untrack } from 'svelte';
 import { create_uuid, Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Cell, type CellOptions } from './cell.svelte.ts';
@@ -18,6 +18,7 @@ import { DiskfileTab } from './diskfile_tab.svelte.ts';
 import { cell_json_schema } from './cell_types.ts';
 import { create_map_by_property } from './iterable_helpers.ts';
 import type { DiskfilePath } from './diskfile_types.ts';
+import { to_prepended_list } from './list_helpers.ts';
 
 export const DiskfileTabsJson = cell_json_schema(
 	{
@@ -37,11 +38,13 @@ export type DiskfileTabsJsonInput = InferInput<typeof DiskfileTabsJson>;
 export type DiskfileTabsOptions = CellOptions<typeof DiskfileTabsJson>;
 
 /**
- * How many closed tabs `DiskfileTabs` remembers, both for reopening
- * (`recently_closed_tabs`) and for back/forward navigation to them
- * (`closed_tab_paths`) — the oldest are forgotten first.
+ * How many closed tabs `DiskfileTabs` remembers for reopening
+ * (`recently_closed_tabs`) — the oldest are forgotten first.
  */
 export const DISKFILE_TABS_CLOSED_MAX = 50;
+
+/** How many files each of `back_paths` and `forward_paths` remembers. */
+export const DISKFILE_TABS_HISTORY_MAX = 50;
 
 /**
  * Manages tabs for diskfiles in the editor with preview behavior. Tabs are
@@ -124,10 +127,20 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	recently_closed_tabs: Array<DiskfileTab> = $state([]);
 
 	/**
-	 * Map of closed tab ids to their file paths - used for browser navigation.
-	 * Holds the `DISKFILE_TABS_CLOSED_MAX` most recently closed.
+	 * Back / forward navigation, by file path, newest first: each file the
+	 * selection left (`back_paths`) or went back from (`forward_paths`), at
+	 * most `DISKFILE_TABS_HISTORY_MAX` each. A path whose tab closed stays —
+	 * going back to it previews the file again. Kept here, not by the editor's
+	 * nav component, so it survives the component remounting per file.
 	 */
-	readonly closed_tab_paths: SvelteMap<Uuid, DiskfilePath> = new SvelteMap();
+	back_paths: ReadonlyArray<DiskfilePath> = $state.raw([]);
+	forward_paths: ReadonlyArray<DiskfilePath> = $state.raw([]);
+
+	/** The path the history last recorded as selected. */
+	#history_current: DiskfilePath | null = null;
+
+	/** Set while `go_back` / `go_forward` select, so they don't record a new step. */
+	#navigating = false;
 
 	constructor(options: DiskfileTabsOptions) {
 		super(DiskfileTabsJson, options);
@@ -175,6 +188,86 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	select_tab(tab_id: Uuid): void {
 		this.selected_tab_id = tab_id;
 		this.#update_tab_history(tab_id);
+		this.#record_selection();
+	}
+
+	/**
+	 * Records a change of the selected file in the back / forward history:
+	 * the file left joins `back_paths` and `forward_paths` clears, as in a
+	 * browser — unless `go_back` / `go_forward` is selecting. Called after
+	 * every change of the selection, by path, so a preview tab reused for
+	 * another file counts as a move. A selection cleared (no tab left) records
+	 * nothing: the next file selected steps away from the last one.
+	 */
+	#record_selection(): void {
+		untrack(() => {
+			const path = this.selected_tab?.path ?? null;
+			if (path === null || path === this.#history_current) return;
+			if (this.#history_current !== null && !this.#navigating) {
+				this.back_paths = to_prepended_list(
+					[...this.back_paths],
+					this.#history_current,
+					DISKFILE_TABS_HISTORY_MAX
+				);
+				this.forward_paths = [];
+			}
+			this.#history_current = path;
+		});
+	}
+
+	/**
+	 * Goes back to the file the selection last left: selects its tab, or
+	 * previews it if its tab closed.
+	 *
+	 * @returns the path gone back to, `null` with nowhere to go
+	 */
+	go_back(): DiskfilePath | null {
+		return this.#step('back');
+	}
+
+	/**
+	 * Goes forward again after `go_back`.
+	 *
+	 * @returns the path gone forward to, `null` with nowhere to go
+	 */
+	go_forward(): DiskfilePath | null {
+		return this.#step('forward');
+	}
+
+	#step(direction: 'back' | 'forward'): DiskfilePath | null {
+		const from = direction === 'back' ? [...this.back_paths] : [...this.forward_paths];
+		const current = this.#history_current;
+		// a path that's the current one again (after removals) is skipped
+		let target = from.shift();
+		while (target !== undefined && target === current) target = from.shift();
+		if (target === undefined) {
+			// only entries equal to the current file were left: drop them
+			if (direction === 'back') this.back_paths = from;
+			else this.forward_paths = from;
+			return null;
+		}
+		const to = direction === 'back' ? this.forward_paths : this.back_paths;
+		const next_to =
+			current === null ? [...to] : to_prepended_list([...to], current, DISKFILE_TABS_HISTORY_MAX);
+		if (direction === 'back') {
+			this.back_paths = from;
+			this.forward_paths = next_to;
+		} else {
+			this.forward_paths = from;
+			this.back_paths = next_to;
+		}
+		this.#navigating = true;
+		try {
+			const tab = this.by_path.get(target);
+			if (tab) {
+				this.select_tab(tab.id);
+			} else {
+				this.preview_diskfile(target);
+			}
+		} finally {
+			this.#navigating = false;
+		}
+		return target;
 	}
 
 	/**
@@ -289,6 +382,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		// Select the tab
 		this.selected_tab_id = tab.id;
 		this.#update_tab_history(tab.id);
+		this.#record_selection();
 
 		// Only reposition if we're reusing a preview tab for a DIFFERENT file
 		if (
@@ -314,6 +408,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		// Select the tab
 		this.selected_tab_id = tab.id;
 		this.#update_tab_history(tab.id);
+		this.#record_selection();
 
 		return tab;
 	}
@@ -336,9 +431,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	close_tab(tab_id: Uuid): void {
 		const tab_to_close = this.items.by_id.get(tab_id);
 		if (!tab_to_close) return;
-
-		// Remember the path for this tab in case we navigate back to it
-		this.#remember_closed_tab(tab_id, tab_to_close.path);
 
 		const was_selected = tab_id === this.selected_tab_id;
 		const was_preview = tab_id === this.preview_tab_id;
@@ -383,6 +475,7 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 			this.preview_tab_id = null;
 		}
 
+		this.#record_selection();
 		this.#notify_if_detached(tab_to_close.path);
 	}
 
@@ -396,19 +489,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		if (excess > 0) this.recently_closed_tabs.splice(0, excess);
 	}
 
-	/** Records a closed tab for back/forward navigation, forgetting the oldest past the cap. */
-	#remember_closed_tab(tab_id: Uuid, path: DiskfilePath): void {
-		const map = this.closed_tab_paths;
-		// re-inserted so the map stays in closing order
-		map.delete(tab_id);
-		map.set(tab_id, path);
-		while (map.size > DISKFILE_TABS_CLOSED_MAX) {
-			const oldest = map.keys().next();
-			if (oldest.done) break;
-			map.delete(oldest.value);
-		}
-	}
-
 	/**
 	 * Tells `Diskfiles` when a path has no tab left, so a diskfile kept for its
 	 * tab (deleted on disk, or uncovered) can be released.
@@ -417,32 +497,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		if (!this.by_path.has(path)) {
 			this.app.diskfiles.handle_diskfile_detached(path);
 		}
-	}
-
-	/**
-	 * Navigates to a tab by id. If the tab doesn't exist but was previously
-	 * closed, selects its file's tab if the file is open again, else
-	 * previews the file.
-	 *
-	 * @param tab_id - the tab id to navigate to
-	 * @returns the id of the resulting tab, `null` for an unknown tab
-	 */
-	navigate_to_tab(tab_id: Uuid): Uuid | null {
-		// If the tab still exists, just select it
-		if (this.items.by_id.has(tab_id)) {
-			this.select_tab(tab_id);
-			return tab_id;
-		}
-
-		// If the tab was closed but we know what file it pointed to, select or preview it
-		const path = this.closed_tab_paths.get(tab_id);
-		if (!path) return null;
-		const open_tab = this.by_path.get(path);
-		if (open_tab) {
-			this.select_tab(open_tab.id);
-			return open_tab.id;
-		}
-		return this.preview_diskfile(path).id;
 	}
 
 	/**
@@ -509,13 +563,9 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 		if (tab) this.close_tab(tab.id);
 
 		this.recently_closed_tabs = this.recently_closed_tabs.filter((tab) => tab.path !== path);
-		const closed_tab_ids: Array<Uuid> = [];
-		for (const [tab_id, closed_path] of this.closed_tab_paths) {
-			if (closed_path === path) closed_tab_ids.push(tab_id);
-		}
-		for (const tab_id of closed_tab_ids) {
-			this.closed_tab_paths.delete(tab_id);
-		}
+		this.back_paths = this.back_paths.filter((p) => p !== path);
+		this.forward_paths = this.forward_paths.filter((p) => p !== path);
+		if (this.#history_current === path) this.#history_current = null;
 	}
 
 	/**
@@ -525,11 +575,6 @@ export class DiskfileTabs extends Cell<typeof DiskfileTabsJson> {
 	 */
 	close_all_tabs(): void {
 		const closed = this.ordered_tabs;
-
-		// Remember paths for all tabs before clearing
-		for (const tab of closed) {
-			this.#remember_closed_tab(tab.id, tab.path);
-		}
 
 		// Store all tabs for potential reopening
 		this.#push_recently_closed([...closed].reverse());

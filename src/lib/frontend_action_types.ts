@@ -293,6 +293,16 @@ export interface FrontendActionHandlers {
 			action_event: TypedActionEvent<'tab_reopen_closed', 'execute', 'handling'>
 		) => ActionOutputs['tab_reopen_closed'];
 	};
+	tab_back?: {
+		execute?: (
+			action_event: TypedActionEvent<'tab_back', 'execute', 'handling'>
+		) => ActionOutputs['tab_back'];
+	};
+	tab_forward?: {
+		execute?: (
+			action_event: TypedActionEvent<'tab_forward', 'execute', 'handling'>
+		) => ActionOutputs['tab_forward'];
+	};
 	provider_load_status?: {
 		send_request?: (
 			action_event: TypedActionEvent<'provider_load_status', 'send_request', 'handling'>

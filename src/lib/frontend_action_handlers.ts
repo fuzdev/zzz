@@ -270,6 +270,14 @@ export const create_frontend_action_handlers = (frontend: Frontend): FrontendAct
 		execute: () => ({ path: frontend.diskfiles.editor.reopen_last_closed_tab() })
 	},
 
+	tab_back: {
+		execute: () => ({ path: frontend.diskfiles.editor.navigate('back') })
+	},
+
+	tab_forward: {
+		execute: () => ({ path: frontend.diskfiles.editor.navigate('forward') })
+	},
+
 	diskfile_details_toggle: {
 		execute: ({ data: { input } }) => ({
 			show: frontend.ui.toggle_diskfile_details(input?.show)

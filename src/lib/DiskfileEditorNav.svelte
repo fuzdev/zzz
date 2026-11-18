@@ -1,12 +1,8 @@
 <script lang="ts">
-	import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
-
 	import { icon_arrow_left, icon_arrow_right, icon_refresh } from '@fuzdev/fuz_ui/icons.ts';
 	import Icon from './Icon.svelte';
 	import { frontend_context } from './frontend.svelte.ts';
 	import type { DiskfileEditorState } from './diskfile_editor_state.svelte.ts';
-	import { DISKFILE_TABS_CLOSED_MAX } from './diskfile_tabs.svelte.ts';
-	import { to_prepended_list } from './list_helpers.ts';
 
 	const {
 		editor_state
@@ -15,103 +11,11 @@
 	} = $props();
 
 	const app = frontend_context.get();
-	const { diskfiles } = app;
-	const { editor } = diskfiles;
+	// the history lives on the tabs, so it survives this component remounting per file
+	const { tabs } = app.diskfiles.editor;
 
-	// Track navigation history, each stack capped at the closed tabs `DiskfileTabs`
-	// remembers — an older closed tab couldn't be navigated back to anyway
-	const push = (stack: Array<Uuid>, id: Uuid): Array<Uuid> =>
-		to_prepended_list(stack, id, DISKFILE_TABS_CLOSED_MAX);
-	let history_stack = $state<Array<Uuid>>([]); // Forward stack (for "back" operations)
-	let future_stack = $state<Array<Uuid>>([]); // Future stack (for "forward" operations)
-	let current_id = $state<Uuid | null>(null); // Currently displayed tab id
-
-	// Initialize current_id with the selected tab
-	$effect.pre(() => {
-		if (editor.tabs.selected_tab_id && current_id === null) {
-			current_id = editor.tabs.selected_tab_id;
-		}
-	});
-
-	// Update history when tab selection changes (not through our navigation)
-	$effect.pre(() => {
-		const selected_id = editor.tabs.selected_tab_id;
-
-		// If selection changed to a new tab that's not in our navigation path
-		if (selected_id && selected_id !== current_id) {
-			// If we have a current id, push it to history stack
-			if (current_id) {
-				history_stack = push(history_stack, current_id);
-			}
-
-			// Clear forward navigation
-			future_stack = [];
-
-			// Update current id
-			current_id = selected_id;
-		}
-	});
-
-	// Determine if navigation buttons should be enabled
-	const can_go_back = $derived(history_stack.length > 0);
-	const can_go_forward = $derived(future_stack.length > 0);
-
-	// Navigation functions using tab history
-	const go_back = () => {
-		if (!can_go_back) return;
-
-		// Get the previous tab from history
-		const previous_id = history_stack[0];
-		if (!previous_id) return; // Defensive check
-
-		const remaining_history = history_stack.slice(1);
-
-		// Push current tab to future stack
-		if (current_id) {
-			future_stack = push(future_stack, current_id);
-		}
-
-		// Update stacks
-		history_stack = remaining_history;
-
-		// Navigate to previous tab
-		const resulting_tab_id = editor.navigate_to_tab(previous_id);
-		if (resulting_tab_id) {
-			current_id = resulting_tab_id;
-			// a closed tab resolves to a different tab id — replace it in the future stack
-			if (resulting_tab_id !== previous_id) {
-				future_stack = future_stack.map((id) => (id === previous_id ? resulting_tab_id : id));
-			}
-		}
-	};
-
-	const go_forward = () => {
-		if (!can_go_forward) return;
-
-		// Get the next tab from future stack
-		const next_id = future_stack[0];
-		if (!next_id) return; // Defensive check
-
-		const remaining_future = future_stack.slice(1);
-
-		// Push current tab to history stack
-		if (current_id) {
-			history_stack = push(history_stack, current_id);
-		}
-
-		// Update stacks
-		future_stack = remaining_future;
-
-		// Navigate to next tab
-		const resulting_tab_id = editor.navigate_to_tab(next_id);
-		if (resulting_tab_id) {
-			current_id = resulting_tab_id;
-			// a closed tab resolves to a different tab id — replace it in the history stack
-			if (resulting_tab_id !== next_id) {
-				history_stack = history_stack.map((id) => (id === next_id ? resulting_tab_id : id));
-			}
-		}
-	};
+	const can_go_back = $derived(tabs.back_paths.length > 0);
+	const can_go_forward = $derived(tabs.forward_paths.length > 0);
 </script>
 
 <div class="flex gap_xs align-items:center">
@@ -119,7 +23,7 @@
 		type="button"
 		class="icon-button plain p_xs border_radius_lg"
 		title="previous diskfile"
-		onclick={go_back}
+		onclick={() => app.intents.tab_back()}
 		disabled={!can_go_back}
 	>
 		<Icon data={icon_arrow_left} />
@@ -128,7 +32,7 @@
 		type="button"
 		class="icon-button plain p_xs border_radius_lg"
 		title="next diskfile"
-		onclick={go_forward}
+		onclick={() => app.intents.tab_forward()}
 		disabled={!can_go_forward}
 	>
 		<Icon data={icon_arrow_right} />

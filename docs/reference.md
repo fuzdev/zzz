@@ -43,7 +43,7 @@ registered too but omitted here — they belong to the shared runtime, not zzz
 - `transcription_create` — Queue a transcription of an audio file by the local speech model, and return its job. The transcript is written beside the file as `<name>.<model>.transcript.json`; fails with `conflict` (`already_exists`) if that model's transcript is already there. Kind: request_response. Initiator: frontend. Auth: account=required, actor=none
 - `transcription_progress` — Segments a running transcription just decoded — a preview; the transcript file is written when the job succeeds. Kind: remote_notification. Initiator: backend. Auth: public
 
-## Intents (11)
+## Intents (13)
 
 UI intents — `local_call` specs called through `app.intents`, run in the
 page, never sent over the wire. History: what a later undo makes of them.
@@ -53,7 +53,9 @@ page, never sent over the wire. History: what a later undo makes of them.
 - `diskfile_details_toggle` — Toggle or set the visibility of the file views' details drawer. Version: 1. History: layout
 - `main_menu_toggle` — Toggle or set the visibility of the main menu. Version: 1. History: layout
 - `sidebar_toggle` — Toggle or set the visibility of the sidebar. Version: 1. History: layout
+- `tab_back` — Go back to the file the selection last left: select its tab, or preview it if its tab closed. Version: 1. History: navigation
 - `tab_close` — Close a file's tab — or, for a file with a draft, ask first: save, don't save, or cancel. Version: 1. History: layout
+- `tab_forward` — Go forward again after going back. Version: 1. History: navigation
 - `tab_move` — Move a tab in front of another, or to the end. Version: 1. History: layout
 - `tab_open` — Open a file in a tab and select it: a preview tab, which the next preview replaces, unless `permanent`. A file already in a tab selects that tab. Version: 1. History: layout
 - `tab_pin` — Make a file's preview tab permanent, and select it. Version: 1. History: layout
