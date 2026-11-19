@@ -139,6 +139,7 @@ const rust_capabilities: BackendCapabilities = {
 	fact_serving_admin_hash: false,
 	ready: false,
 	ws_role_gated: false,
+	rooms: false,
 	// the spine's backdoors `testing_zzzd` mounts; the suites needing another
 	// skip themselves, naming it. Its `_testing_action_manifest` lists zzz's
 	// own specs alone, not the spine's bundle (`action_manifest.cross.test.ts`)
