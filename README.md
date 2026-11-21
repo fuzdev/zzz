@@ -2,9 +2,10 @@
 
 [<img src="/static/logo.svg" alt="three sleepy z's" align="right" width="192" height="192">](https://github.com/fuzdev/zzz)
 
-> nice web things for the tired 💤
+> nice web things for the tired 💤 experimental
 
-⚠️ early pre-release, does not persist your chats, prompts, or open projects yet
+> ⚠️ **Not ready for production.** Zzz is an early pre-release that does not
+> persist your chats, prompts, or open projects yet.
 
 Zzz, pronounced "zees" like bees,
 is a software garage for power users and devs.
@@ -16,6 +17,11 @@ with a streamlined developer experience, eventually accessible to non-coders (he
 
 This is an early stage project and the ideas are still developing -
 see the issues and [discussions](https://github.com/fuzdev/zzz/discussions).
+
+Zzz is part of the Fuz stack
+([fuz.dev](https://www.fuz.dev/), [@fuzdev](https://github.com/fuzdev)).
+
+AI disclosure: much of this codebase is LLM-generated with uneven human review.
 
 ## Setup
 
