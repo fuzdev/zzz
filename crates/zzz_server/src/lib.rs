@@ -48,8 +48,8 @@ use std::sync::Arc;
 
 use fuz_actions::ActionRateLimits;
 use fuz_actions::server::{
-    AppBackendSpec, BootedAppBackend, ServeMode, ServeOptions, SpineRunOptions, StartupError,
-    UpkeepOptions, compile_action_registry, create_app_backend, serve_until_shutdown,
+    AppBackendSpec, BootedAppBackend, ServeOptions, SpineRunOptions, StartupError, UpkeepOptions,
+    compile_action_registry, create_app_backend, serve_until_shutdown,
 };
 
 /// Default loopback bind address (port 4460).
@@ -239,13 +239,13 @@ impl std::fmt::Debug for RunAppOptions {
 /// serves until Ctrl-C / SIGTERM
 /// ([`fuz_actions::server::serve_until_shutdown`]): every live WebSocket is
 /// closed with 1001 (going away) and every audit stream ended, then in-flight
-/// requests drain, then the audit writes in flight drain. Jobs and PTYs are
-/// torn down after the drain.
+/// requests drain, the auth cleanup is joined, and the audit writes in flight
+/// drain, all within one drain timeout. Jobs and PTYs are torn down after.
 ///
 /// The spine's auth cleanup ([`fuz_auth::spawn_auth_cleanup`]) runs beside
 /// the server — expired sessions deleted and the connections they opened
 /// closed, expired role-grant offers audited once — from the bind until
-/// shutdown begins, and is joined before the teardown. Its close repeats one
+/// shutdown begins, and is joined within the shutdown's bound. Its close repeats one
 /// already made: a socket or audit stream closes at its own credential's
 /// deadline ([`fuz_auth::ResolvedAuth::credential_deadline`]).
 ///
@@ -498,24 +498,22 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         &router::zzz_stack_options(backend.stack_options()),
     );
 
-    // Signal handling, the shutdown close of every live WebSocket (a 1001
-    // close) and audit stream, the auth cleanup beside the server, and the
-    // graceful drain — then the audit writes in flight — come from the spine;
-    // zzz's own teardown (jobs, PTYs) runs after the drain returns, ahead of
-    // the result.
+    // Signal handling, the auth cleanup beside the server, and the one
+    // bounded shutdown — every live WebSocket (a 1001 close) and audit stream
+    // closed through the router's duties, the requests drained, the cleanup
+    // joined, the audit writes in flight drained — come from the spine; zzz's
+    // own teardown (jobs, PTYs) runs after it returns, ahead of the result.
     let served = serve_until_shutdown(
-        ServeMode::Live {
-            router,
-            backend: backend.serve_backend(Some(UpkeepOptions {
-                auth_cleanup: backend.auth_cleanup_options(),
-                extra: Vec::new(),
-            })),
-        },
+        router,
         ServeOptions {
             server_name: SERVER_NAME,
             addr: config.bind_addr,
             drain_timeout,
             shutdown,
+            upkeep: Some(UpkeepOptions {
+                auth_cleanup: backend.auth_cleanup_options(),
+                extra: Vec::new(),
+            }),
         },
     )
     .await;

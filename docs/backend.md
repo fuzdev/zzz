@@ -14,8 +14,10 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `create_app_backend` boots the core — keyring, the READ COMMITTED guard,
   the pre-migration hook, the auth migrations, the keeper, bootstrap
   availability, the revocation listeners — then `serve_until_shutdown`
-  binds, runs the auth cleanup beside the server, and drains the requests,
-  then the audit writes in flight; zzz's jobs and PTYs are torn down after).
+  binds, runs the auth cleanup beside the server, and at shutdown, all
+  within one drain timeout, drains the requests, joins the cleanup, then
+  drains the audit writes in flight; zzz's jobs and PTYs are torn down
+  after).
   `RunAppOptions` carries: `spine` (the toolkit's
   `SpineRunOptions` — the password hasher, the `fuz_auth::RateLimiterMode`
   every spine limiter is built through (`Enforced` in production,
