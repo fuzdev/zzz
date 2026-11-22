@@ -48,8 +48,8 @@ use std::sync::Arc;
 
 use fuz_actions::ActionRateLimits;
 use fuz_actions::server::{
-    AppBackendSpec, BootedAppBackend, ServeOptions, SpineRunOptions, StartupError, UpkeepOptions,
-    compile_action_registry, create_app_backend, serve_until_shutdown,
+    AppBackendSpec, BootedAppBackend, ServeMode, ServeOptions, SpineRunOptions, StartupError,
+    UpkeepOptions, compile_action_registry, create_app_backend, serve_until_shutdown,
 };
 
 /// Default loopback bind address (port 4460).
@@ -504,16 +504,18 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
     // zzz's own teardown (jobs, PTYs) runs after the drain returns, ahead of
     // the result.
     let served = serve_until_shutdown(
-        router,
+        ServeMode::Live {
+            router,
+            backend: backend.serve_backend(Some(UpkeepOptions {
+                auth_cleanup: backend.auth_cleanup_options(),
+                extra: Vec::new(),
+            })),
+        },
         ServeOptions {
             server_name: SERVER_NAME,
             addr: config.bind_addr,
             drain_timeout,
             shutdown,
-            backend: Some(backend.serve_backend(Some(UpkeepOptions {
-                auth_cleanup: backend.auth_cleanup_options(),
-                extra: Vec::new(),
-            }))),
         },
     )
     .await;
