@@ -244,10 +244,11 @@ lenient request readers (`Path`, `RawPathParams`, `Query`, `Form`) and
 `form_urlencoded::parse` / `Url::query_pairs`, as the spine's own does — a
 handler reads its query through `fuz_http::read_query_pairs` over `RawQuery`
 and its path params through `fuz_http::RouteParams`.
-`zzz_server/tests/request_reads_census.rs` pins those entries in every
-`clippy.toml` (a crate-level one replaces the root file), holds the axum
-types' positive controls, and lists every in-source suppression of the
-disallow lints.
+`zzz_server/tests/request_reads_census.rs` runs the spine's shared census
+(`fuz_testing::request_reads_census`) over this workspace — every
+`clippy.toml` carries those entries (a crate-level one replaces the root
+file), every in-source suppression of the disallow lints is listed — and
+holds the axum types' positive controls.
 
 **The doc-link gate** is the only command that checks doc links: rustdoc
 lints fire under `cargo doc` alone, never `build`, `test`, or `clippy`. The

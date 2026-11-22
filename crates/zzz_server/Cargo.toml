@@ -43,6 +43,11 @@ libc.workspace = true
 nix.workspace = true
 
 [dev-dependencies]
+# Dev-only: the spine's shared request-reads census
+# (`fuz_testing::request_reads_census`) behind `tests/request_reads_census.rs`.
+# A dev-dependency never reaches the `zzzd` binary, and `cargo xtask
+# check-release` walks runtime edges only.
+fuz_testing.workspace = true
 # Re-declare fuz_http (already a normal dep) with the test-only
 # `GatedRouter::into_router_for_testing`, so the router tests can drive the
 # composed router in-process. Enabled from a dev-dependency it stays out of

@@ -3405,6 +3405,7 @@ dependencies = [
  "fuz_realtime",
  "fuz_repos",
  "fuz_sys",
+ "fuz_testing",
  "libc",
  "nix",
  "notify",
