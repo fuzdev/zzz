@@ -14,7 +14,6 @@
  * @module
  */
 
-import { fuz_session_config } from '@fuzdev/fuz_app/auth/session_cookie.ts';
 import { create_role_registry, ROLE_ADMIN, ROLE_KEEPER } from '@fuzdev/fuz_app/auth/role_schema.ts';
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
 import {
@@ -31,11 +30,11 @@ import { RPC_MESSAGE_MAX_BYTES } from '#lib/rpc_message_limit.ts';
 
 const handle = inject_backend_handle();
 
-// zzz's per-port cookie name (`zzz_session_<port>`) over fuz_app's session shape
-const session_options = { ...fuz_session_config, cookie_name: handle.config.cookie_name };
+// zzz's per-port cookie name (`zzz_session_<port>`)
+const session_cookie_name = handle.config.cookie_name;
 
 const surface_options = {
-	session_options,
+	session_cookie_name,
 	domain_action_specs: all_action_specs
 };
 
@@ -51,7 +50,7 @@ const overrides: SuiteOverrides = {
 
 describe_spine_cross_suites(handle, {
 	surface_source: create_rust_spine_consumer_surface_spec(surface_options),
-	session_options,
+	session_cookie_name,
 	rpc_endpoints: create_rust_spine_consumer_rpc_endpoints(surface_options),
 	roles,
 	// the builtins only: keeper for the role-shaped cell grants (keeper reach is
