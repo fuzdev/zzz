@@ -190,7 +190,7 @@ pub struct RunAppOptions {
     /// zzz mounts **no** daemon-token credential in production. Nothing sends
     /// the header — the browser UI authenticates with session cookies, and a
     /// browser request carries `Origin`/`Referer`, which
-    /// `fuz_auth::is_browser_context` refuses for this credential anyway — so
+    /// `fuz_http::is_browser_context` refuses for this credential anyway — so
     /// the only effect of mounting it was writing a keeper-grade secret into
     /// `<zzz_dir>/run/daemon_token` on a 30-second timer. Its producer
     /// (`fuz_testing::init_daemon_token`) is confined to `fuz_testing` by dep
