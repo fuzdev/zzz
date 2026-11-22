@@ -543,8 +543,9 @@ metadata contract, the bootstrap success/failure audit rows, and the
 `password_change` `concurrent_change` race row are all spine
 (`fuz_auth`) behaviors now — see fuz_app's `auth/` docs for their shapes.
 
-**Auth cleanup**: `run_app` schedules the spine's `fuz_auth::spawn_auth_cleanup`
-on the same emitter — a pass once the listener is bound, then one per
+**Auth cleanup**: `run_app` runs the spine's `fuz_auth::AuthCleanup` on the
+router's serve duties (`AuthCleanupSchedule::Every` from both mains), over the
+backend's emitter — a pass once the listener is bound, then one per
 `DEFAULT_AUTH_CLEANUP_INTERVAL`. Expired sessions are deleted and the
 connections they opened closed through the bound `RealtimeCloser` (WS sockets
 get the revocation close, audit streams end) — no audit row, so this direct

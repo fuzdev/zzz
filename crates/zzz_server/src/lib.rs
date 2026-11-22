@@ -48,7 +48,7 @@ use std::sync::Arc;
 
 use fuz_actions::ActionRateLimits;
 use fuz_actions::server::{
-    AppBackendSpec, BootedAppBackend, ServeOptions, SpineRunOptions, StartupError, UpkeepOptions,
+    AppBackendSpec, BootedAppBackend, ServeOptions, SpineRunOptions, StartupError,
     compile_action_registry, create_app_backend, serve_until_shutdown,
 };
 
@@ -242,7 +242,8 @@ impl std::fmt::Debug for RunAppOptions {
 /// requests drain, the auth cleanup is joined, and the audit writes in flight
 /// drain, all within one drain timeout. Jobs and PTYs are torn down after.
 ///
-/// The spine's auth cleanup ([`fuz_auth::spawn_auth_cleanup`]) runs beside
+/// The spine's auth cleanup ([`fuz_auth::AuthCleanup`]), scheduled by the
+/// backend options and carried on the router's serve duties, runs beside
 /// the server — expired sessions deleted and the connections they opened
 /// closed, expired role-grant offers audited once — from the bind until
 /// shutdown begins, and is joined within the shutdown's bound. Its close repeats one
@@ -510,10 +511,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
             addr: config.bind_addr,
             drain_timeout,
             shutdown,
-            upkeep: Some(UpkeepOptions {
-                auth_cleanup: backend.auth_cleanup_options(),
-                extra: Vec::new(),
-            }),
+            extra_upkeep: Vec::new(),
         },
     )
     .await;

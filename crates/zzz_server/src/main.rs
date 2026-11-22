@@ -39,7 +39,11 @@ async fn main() -> ExitCode {
     // Production wires no test seams: enforced limiters, no daemon token, no
     // pre-migration hook (see `RunAppOptions::spine`).
     match zzz_server::run_app(zzz_server::RunAppOptions {
-        spine: SpineRunOptions::production(password_hasher, zzz_server::DEFAULT_ADDR),
+        spine: SpineRunOptions::production(
+            password_hasher,
+            fuz_auth::AuthCleanupSchedule::Every(fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL),
+            zzz_server::DEFAULT_ADDR,
+        ),
         args,
         force_test_actions: false,
         extra_action_specs_factory: None,

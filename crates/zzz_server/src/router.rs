@@ -234,9 +234,11 @@ mod tests {
             },
             &fuz_actions::server::SpineBackendOptions {
                 rate_limiters: fuz_auth::RateLimiterMode::DisabledForTesting,
-                ..fuz_actions::server::SpineBackendOptions::production(Arc::new(
-                    fuz_auth::Argon2idHasher::new(),
-                ))
+                ..fuz_actions::server::SpineBackendOptions::production(
+                    Arc::new(fuz_auth::Argon2idHasher::new()),
+                    // The core is inert and never served.
+                    fuz_auth::AuthCleanupSchedule::Off,
+                )
             },
         )
         .expect("a lazy core builds without connecting")

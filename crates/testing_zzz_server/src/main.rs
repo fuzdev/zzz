@@ -167,7 +167,10 @@ async fn main() -> ExitCode {
 
     match zzz_server::run_app(zzz_server::RunAppOptions {
         spine: SpineRunOptions {
-            backend: testing_backend_options(daemon_token_state),
+            backend: testing_backend_options(
+                daemon_token_state,
+                fuz_auth::AuthCleanupSchedule::Every(fuz_auth::DEFAULT_AUTH_CLEANUP_INTERVAL),
+            ),
             default_addr: TESTING_DEFAULT_ADDR,
             drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
         },
