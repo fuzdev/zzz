@@ -1754,7 +1754,7 @@ mod config_paths {
             provider::ProviderManager::new(),
             false,
             Arc::new(fuz_realtime::ConnectionRegistry::new()),
-            Arc::new(fuz_auth::AuditEmitter::new(pool)),
+            Arc::new(fuz_auth::AuditEmitter::new(pool, Arc::default())),
         );
         app.root_policy = build_root_policy(Some(home.clone()), None).unwrap();
         let app = Arc::new(app);

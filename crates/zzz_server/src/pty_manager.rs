@@ -1654,7 +1654,7 @@ mod tests {
             crate::provider::ProviderManager::new(),
             false,
             Arc::new(ConnectionRegistry::new()),
-            Arc::new(fuz_auth::AuditEmitter::new(pool)),
+            Arc::new(fuz_auth::AuditEmitter::new(pool, Arc::default())),
         ))
     }
 
