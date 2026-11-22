@@ -27,12 +27,12 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   parsed command line),
   `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag),
   and `extra_action_specs_factory` (lets the test binary inject
-  `_testing_reset`, `_testing_drain_effects`, and `_testing_action_manifest`
-  without putting `fuz_testing` in the production dep graph). The core's
-  emitter is also held on `App` (`audit_emitter`), where the test binary's
-  specs factory reaches it. `src/main.rs` is the thin production entry —
-  parses the command line, constructs `Argon2idHasher`, calls `run_app` with
-  `SpineRunOptions::production`.
+  `_testing_reset`, `_testing_drain_effects`, `_testing_db_invariants`, and
+  `_testing_action_manifest` without putting `fuz_testing` in the production
+  dep graph). The core's emitter is also held on `App` (`audit_emitter`),
+  where the test binary's specs factory reaches it. `src/main.rs` is the thin
+  production entry — parses the command line, constructs `Argon2idHasher`,
+  calls `run_app` with `SpineRunOptions::production`.
 - `testing_zzz_server/` — separate test-binary package (its `[[bin]]` target
   is named `testing_zzzd`) wiring `fuz_testing::TestingArgon2idHasher` (~1-5
   ms argon2 vs production's ~30-50 ms) AND
@@ -42,7 +42,9 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `fuz_testing::create_testing_drain_effects_action_spec`
   (`_testing_drain_effects`, the barrier awaiting in-flight fire-and-forget
   audit writes — a real one because every spine audit emitter tracks its
-  in-flight writes), and
+  in-flight writes), `fuz_testing::create_testing_db_invariants_action_spec`
+  (`_testing_db_invariants`, the rows breaking an auth-schema invariant, which
+  every cross-process setup checks after each test), and
   `fuz_testing::create_testing_action_manifest_action_spec`
   (`_testing_action_manifest`, over zzz's own specs alone —
   `build_zzz_owned_specs` and `build_testing_specs` — not the spine's
@@ -318,11 +320,12 @@ orientation; the spine crates are authoritative:
    each with its own body cap — `rpc` (`/api/rpc` + `/api/ws`,
    `RPC_MESSAGE_MAX_BYTES`), `file_bytes` (`FILE_BYTES_MAX_BODY_BYTES`),
    `account` (account, bootstrap, signup), `health_and_audit` (`/health` +
-   the audit stream), and the fallback (the static frontend, or axum's empty
-   404), the last three at `fuz_http::DEFAULT_BODY_LIMIT_BYTES` — and every
-   group, the fallback included, behind the same gates, outermost first: the
-   group's body cap (a declared `Content-Length` over it is a 413 ahead of
-   every other refusal), `fuz_http::host_layer` (a `Host` that isn't loopback
+   the audit stream), and the fallback (the static frontend, or the spine's
+   unmatched-route 404), the last three at
+   `fuz_http::DEFAULT_BODY_LIMIT_BYTES` — and every group, the fallback
+   included, behind the same gates, outermost first: the group's body cap (a
+   declared `Content-Length` over it is a 413 ahead of every other refusal),
+   `fuz_http::host_layer` (a `Host` that isn't loopback
    or named by an allowed origin → 403 `forbidden_host` — DNS rebinding),
    `fuz_http::origin_layer` (a disallowed `Origin` → 403 `forbidden_origin` on
    every path; no group is carved out — the spine handlers and the byte
@@ -363,7 +366,8 @@ orientation; the spine crates are authoritative:
 
 12. **Account management** — `POST /api/account/login` (username/password →
     session cookie with enumeration prevention via dummy hash),
-    `POST /api/account/logout` (invalidate session + close WS connections),
+    `POST /api/account/logout` (invalidate session + close that session's WS
+    connections),
     `POST /api/account/password` (change password, revoke all sessions + API
     tokens, close all WS connections). Session listing and revocation are
     JSON-RPC: `account_verify`, `account_session_list`,
@@ -388,8 +392,10 @@ commands):
   `create_rust_spine_consumer_surface_spec` over `all_action_specs` with
   `host_gate: true` — no backend dependency. Excluded with its reason shown in
   the run: `actor_lookup` (no resolver mounted). The capabilities, including
-  `testing_backdoors` (`_testing_reset`, `_testing_drain_effects`, and
-  `_testing_action_manifest`, the ones `testing_zzzd` mounts), are stated in
+  `testing_backdoors` (`_testing_reset`, `_testing_drain_effects`,
+  `_testing_db_invariants`, and `_testing_action_manifest`, the ones
+  `testing_zzzd` mounts) and `spine_fallback: false` (outside `/api` an
+  unrouted path gets the SPA shell), are stated in
   `zzz_backend_config.ts`; the testing-backdoor suite checks that list
   against the binary, and the suites needing another backdoor
   (`credential_deadline`, `origin_conformance`, `ws_outbound_overflow`) skip
@@ -409,9 +415,10 @@ commands):
 - **`session.cross.test.ts`** — the per-port session cookie
   (`zzz_session_<port>`: set on login, the shared `fuz_session` name not
   read; fuz_app's hardened-attribute suite runs under it in
-  `spine_suites.cross.test.ts`); another session's
-  logout closing this session's socket while the session stays valid and a
-  fresh socket works (what the frontend's recheck-and-reconnect relies on);
+  `spine_suites.cross.test.ts`); another session's logout leaving this
+  session's socket open; an API-token revoke-all closing this session's
+  socket while the session stays valid and a fresh socket works (what the
+  frontend's recheck-and-reconnect relies on);
   an RPC `account_session_revoke_all` already committed when the socket
   closes.
 - **`project.cross.test.ts`** — project open / list / close on plain

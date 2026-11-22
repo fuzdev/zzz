@@ -9,9 +9,9 @@
  * so a daemon restart never logs the user out.
  *
  * A valid session after a revoked socket is a real case, not noise: some
- * revocations close every socket of the account while ending only another
- * session (another tab's logout, an API-token revoke-all), so the caller
- * gets `on_valid` to rebuild its socket.
+ * revocations close every socket of the account while leaving its sessions
+ * valid (an API-token revoke-all), so the caller gets `on_valid` to rebuild
+ * its socket.
  *
  * @module
  */

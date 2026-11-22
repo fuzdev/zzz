@@ -115,9 +115,9 @@
 	// Re-verify the session when the backend hints it's gone; `check_session`
 	// flips `verified` off, which tears the App down and shows the login gate.
 	// Only a definitive 401 counts, so a daemon restart doesn't log anyone out.
-	// A session still valid after a revoked socket means a revocation ended
-	// another session (another tab's logout, a token revoke-all) but closed
-	// every socket of the account — so reconnect.
+	// A session still valid after a revoked socket means an account-wide
+	// revocation left this session alive (an API-token revoke-all) — so
+	// reconnect.
 	const recheck_session = create_session_recheck({
 		on_invalid: () => auth_state.check_session(),
 		on_valid: () => {

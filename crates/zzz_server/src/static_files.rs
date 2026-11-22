@@ -14,7 +14,9 @@
 //!
 //! Backend paths ([`BACKEND_PATH_PREFIXES`] and below) never get the shell —
 //! the router mounts every real backend route ahead of this fallback, so a
-//! request reaching here under `/api` is an unknown route and 404s. A missing
+//! request reaching here under one is an unknown route, answered by the
+//! spine's [`fuz_actions::server::unmatched_route_response`]: the JSON
+//! `route_not_found` under `/api`, the plain-text 404 elsewhere. A missing
 //! asset under [`ASSET_PATH_PREFIXES`] 404s too instead of answering with
 //! HTML: a tab left open across a rebuild fails an `_app/` chunk load (which
 //! `SvelteKit` turns into a full reload) rather than executing the shell as
@@ -105,7 +107,7 @@ async fn serve_static(State(files): State<StaticFiles>, request: Request) -> Res
     let (parts, _body) = request.into_parts();
     let path = parts.uri.path();
     if is_backend_path(path) {
-        return StatusCode::NOT_FOUND.into_response();
+        return fuz_actions::server::unmatched_route_response(path);
     }
     if parts.method != Method::GET && parts.method != Method::HEAD {
         return (
@@ -415,12 +417,21 @@ mod tests {
     #[tokio::test]
     async fn backend_paths_never_get_the_fallback() {
         let fixture = Fixture::new();
-        for uri in ["/api", "/api/", "/api/nope", "/api/rpc/extra", "/health/x"] {
+        for uri in ["/api", "/api/", "/api/nope", "/api/rpc/extra"] {
             for method in [Method::GET, Method::POST] {
                 let probe = request(fixture.app(), method.clone(), uri).await;
                 assert_eq!(probe.status, StatusCode::NOT_FOUND, "{method} {uri}");
-                assert_eq!(probe.body, "", "{method} {uri}");
+                assert_eq!(
+                    probe.body, r#"{"error":"route_not_found"}"#,
+                    "{method} {uri}"
+                );
             }
+        }
+        // outside the auth scope, the spine's plain-text 404
+        for method in [Method::GET, Method::POST] {
+            let probe = request(fixture.app(), method.clone(), "/health/x").await;
+            assert_eq!(probe.status, StatusCode::NOT_FOUND, "{method}");
+            assert_eq!(probe.body, "404 Not Found", "{method}");
         }
         // real backend routes still win over the static fallback
         let probe = get_path(&fixture, "/health").await;

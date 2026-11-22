@@ -6,10 +6,12 @@
  *   (the installed daemon, `cargo xtask dev`, test binaries) don't share a
  *   session (fuz_app's hardened-attribute suite runs under that name in
  *   `spine_suites.cross.test.ts`).
- * - Logging out closes every socket of the account (the fuz_app contract), so
- *   another tab's socket closes while its session stays valid — the client
- *   rechecks and rebuilds its socket, which needs the status probe to say
- *   valid and a fresh socket on the same session to work.
+ * - Logging out closes only the sockets of the session it ends, so another
+ *   session's socket stays open.
+ * - An admin's API-token revoke-all closes every socket of the account while
+ *   its sessions stay valid — the client rechecks and rebuilds its socket,
+ *   which needs the status probe to say valid and a fresh socket on the same
+ *   session to work.
  * - An RPC revocation closes sockets only after its transaction commits, so
  *   the recheck a revoked socket triggers already sees the session gone (a
  *   smoke check here — the order is a race over the wire; the spine's
@@ -92,13 +94,13 @@ describe('session cookie name', () => {
 });
 
 describe('a revocation that leaves this session valid', () => {
-	test("another session's logout closes this socket, but the session stays valid and a new socket works", async () => {
+	test("another session's logout closes its own socket but leaves this one open and its session valid", async () => {
 		const fixture = await setup_test();
 		await fixture.create_account({ username: 'two_tabs', password_value: DEFAULT_TEST_PASSWORD });
 		const tab_a = await log_in(fixture, 'two_tabs');
 		const tab_b = await log_in(fixture, 'two_tabs');
 		const ws_a = await open_ws(tab_a);
-		let ws_a2: Awaited<ReturnType<typeof open_ws>> | null = null;
+		const ws_b = await open_ws(tab_b);
 		try {
 			const out = await tab_b('/api/account/logout', {
 				method: 'POST',
@@ -107,11 +109,41 @@ describe('a revocation that leaves this session valid', () => {
 			});
 			assert.strictEqual(out.status, 200, 'tab B logs out');
 
-			// logout closes every socket of the account, tab A's included
+			// logout closes the connections of the session it ends, and only those
+			assert.ok(await ws_b.wait_for_close(5_000), "tab B's socket closed");
+			await ws_a.request('after', 'ping', undefined);
+			assert.strictEqual(ws_a.close_code, null, "tab A's socket stays open");
+			assert.strictEqual(await status_of(tab_a), 200, "tab A's session is still valid");
+			assert.strictEqual(await status_of(tab_b), 401, "tab B's session ended");
+		} finally {
+			await ws_a.close();
+			await ws_b.close();
+		}
+	});
+
+	test('an API-token revoke-all closes this socket, but the session stays valid and a new socket works', async () => {
+		const fixture = await setup_test();
+		const account = await fixture.create_account({
+			username: 'token_revoked_tab',
+			password_value: DEFAULT_TEST_PASSWORD
+		});
+		const tab_a = await log_in(fixture, 'token_revoked_tab');
+		const ws_a = await open_ws(tab_a);
+		let ws_a2: Awaited<ReturnType<typeof open_ws>> | null = null;
+		try {
+			// the keeper (an admin) revokes the account's API tokens
+			const res = await rpc_call({
+				app: fixture.transport,
+				path: handle.config.rpc_path,
+				method: 'admin_token_revoke_all',
+				params: { account_id: account.account.id }
+			});
+			assert.ok(res.ok, 'the admin revokes every API token of the account');
+
+			// a token revoke-all closes every socket of the account, tab A's included
 			assert.ok(await ws_a.wait_for_close(5_000), "tab A's socket closed");
 			// tab A's session is untouched — the recheck the client runs reads valid
 			assert.strictEqual(await status_of(tab_a), 200, "tab A's session is still valid");
-			assert.strictEqual(await status_of(tab_b), 401, "tab B's session ended");
 			// so the client rebuilds its socket, and a new one on the same session works
 			ws_a2 = await open_ws(tab_a);
 			await ws_a2.request('after', 'ping', undefined);

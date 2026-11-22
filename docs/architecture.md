@@ -2313,13 +2313,13 @@ Population, per capability:
   the named role (matches the HTTP path). Batch JSON-RPC is rejected (not yet
   supported). Sockets are closed on session/token revocation, logout, and
   password change via audit events — `token_revoke` closes only the revoked
-  token's sockets (granular), `logout` / `session_revoke_all` /
-  `token_revoke_all` / `password_change` close all sockets on the account
-  (logout included, per the fuz_app contract — so another tab's logout closes
-  this tab's socket while its session stays valid). RPC revocations close
-  sockets only after their transaction commits. An expired session's sockets
-  are closed by the auth cleanup, within one cleanup interval of the expiry.
-  An account holds at most 50 sockets
+  token's sockets (granular), `logout` closes only the sockets of the
+  session it ends, and `session_revoke_all` / `token_revoke_all` /
+  `password_change` close all sockets on the account (so an API-token
+  revoke-all closes this tab's socket while its session stays valid). RPC
+  revocations close sockets only after their transaction commits. An expired
+  session's sockets are closed by the auth cleanup, within one cleanup
+  interval of the expiry. An account holds at most 50 sockets
   (`fuz_realtime::DEFAULT_MAX_CONNECTIONS_PER_ACCOUNT`); one more closes its
   oldest with 4004. A socket closed with 4004 stays closed until the user
   reconnects — reconnecting would close a newer socket in turn — so the

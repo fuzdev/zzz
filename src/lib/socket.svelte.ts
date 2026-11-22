@@ -252,8 +252,8 @@ export class Socket implements WebsocketRpcConnection {
 	 * Reconnect after the server closed the socket as revoked — a revoked
 	 * client never reconnects on its own, so this replaces it with a fresh
 	 * one. Call only once a session recheck finds the session still valid:
-	 * some revocations close every socket of the account while ending only
-	 * another session (another tab's logout, an API-token revoke-all).
+	 * some revocations close every socket of the account while leaving its
+	 * sessions valid (an API-token revoke-all).
 	 *
 	 * @returns whether a reconnect started (`false` unless revoked)
 	 */

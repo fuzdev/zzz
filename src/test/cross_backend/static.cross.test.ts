@@ -69,13 +69,26 @@ describe('static frontend serving', () => {
 	});
 
 	test('backend paths never get the fallback', async () => {
-		for (const path of ['/api', '/api/nope', '/health/nope']) {
+		// the spine's unmatched-route 404: JSON `route_not_found` under `/api`
+		for (const path of ['/api', '/api/nope']) {
 			const res = await fetch_path(path);
 			assert.strictEqual(res.status, 404, path);
-			assert.strictEqual(await res.text(), '', path);
+			assert.deepStrictEqual(await res.json(), { error: 'route_not_found' }, path);
 		}
+		// and its plain text outside it
+		const health_miss = await fetch_path('/health/nope');
+		assert.strictEqual(health_miss.status, 404);
+		assert.strictEqual(await health_miss.text(), '404 Not Found');
 		const health = await fetch_path('/health');
 		assert.deepStrictEqual(await health.json(), { status: 'ok' });
+	});
+
+	// `spine_fallback: false` skips the spine's rows outside `/api`; these pin
+	// that a path only spelled like a backend one is outside it, read raw
+	test('a raw path that only spells a backend path gets the SPA fallback', async () => {
+		for (const path of ['/%61pi/account/status', '/API/account/status', '/apix']) {
+			await assert_html(path, FALLBACK);
+		}
 	});
 
 	test('non-GET methods are refused', async () => {

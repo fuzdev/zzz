@@ -14,7 +14,8 @@
 //!   [`FILE_BYTES_MAX_BODY_BYTES`]
 //! - `account` — `/api/account/*` (account, bootstrap, signup)
 //! - `health_and_audit` — `/health` and `/api/admin/audit/stream`
-//! - the fallback — every unrouted path: the built frontend, if any
+//! - the fallback — every unrouted path: the built frontend, if any, else the
+//!   spine's unmatched-route `404`
 //!
 //! The last three are capped at `DEFAULT_BODY_LIMIT_BYTES`.
 //!
@@ -102,8 +103,10 @@ pub const fn zzz_stack_options(mut options: StackOptions) -> StackOptions {
 }
 
 /// Compose zzz's router: the groups in the module doc's table, and the built
-/// frontend in `static_dir` as the fallback (without one, unrouted paths get
-/// axum's empty `404` — dev, where Vite serves the frontend).
+/// frontend in `static_dir` as the fallback (without one — dev, where Vite
+/// serves the frontend — unrouted paths get the spine's
+/// [`fuz_actions::server::unmatched_route_response`]: the JSON
+/// `route_not_found` under `/api`, the plain-text `404` elsewhere).
 pub fn compose_router(
     surfaces: SurfaceRouters,
     static_dir: Option<&Path>,
@@ -146,13 +149,17 @@ pub fn compose_router(
     )
     .refuse_simple_requests();
     // The built frontend — exact files, then prerendered pages, then the SPA
-    // shell (see `static_files`).
-    let fallback = RouteGroup::new(
-        "fallback",
-        static_dir.map_or_else(Router::new, static_files::static_router),
-        BodyCap::Bytes(DEFAULT_BODY_LIMIT_BYTES),
-    )
-    .refuse_simple_requests();
+    // shell (see `static_files`) — or, with none, the spine's fallback group.
+    // Both take the same cap; neither applies the simple-request gate itself.
+    let fallback = static_dir
+        .map_or_else(fuz_actions::server::fallback_group, |dir| {
+            RouteGroup::new(
+                "fallback",
+                static_files::static_router(dir),
+                BodyCap::Bytes(DEFAULT_BODY_LIMIT_BYTES),
+            )
+        })
+        .refuse_simple_requests();
 
     compose_stack(
         [
@@ -455,9 +462,17 @@ mod tests {
         let probe = Probe::new("GET", "/chats/x").origin(ALLOWED_ORIGIN);
         let (status, body) = send(router(Some(&dir.root)), probe).await;
         assert_eq!((status, body.as_str()), (StatusCode::OK, SPA_SHELL));
-        // without a static dir, an unrouted path is axum's empty 404
+        // without a static dir, an unrouted path is the spine's 404
         let (status, body) = send(router(None), Probe::new("GET", "/chats/x")).await;
-        assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, ""));
+        assert_eq!(
+            (status, body.as_str()),
+            (StatusCode::NOT_FOUND, "404 Not Found")
+        );
+        let (status, body) = send(router(None), Probe::new("GET", "/api/nope")).await;
+        assert_eq!(
+            (status, body.as_str()),
+            (StatusCode::NOT_FOUND, r#"{"error":"route_not_found"}"#)
+        );
     }
 
     #[tokio::test]

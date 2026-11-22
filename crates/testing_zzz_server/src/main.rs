@@ -11,7 +11,10 @@
 //! [`fuz_testing::create_testing_drain_effects_action_spec`], the barrier
 //! that awaits in-flight fire-and-forget audit writes (a signup's, a
 //! failure audit, a WebSocket mutation's) before a test reads the audit log;
-//! and `_testing_action_manifest` from
+//! `_testing_db_invariants` from
+//! [`fuz_testing::create_testing_db_invariants_action_spec`], which answers
+//! the rows breaking an auth-schema invariant, checked after every test; and
+//! `_testing_action_manifest` from
 //! [`fuz_testing::create_testing_action_manifest_action_spec`], over zzz's own
 //! specs alone.
 //! The drain is a real barrier because every spine audit emitter tracks its

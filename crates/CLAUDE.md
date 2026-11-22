@@ -11,9 +11,10 @@ OpenAI, and Gemini (all full).
   spine's server toolkit (`fuz_actions::server`); `src/main.rs` is the thin
   production entry.
 - `testing_zzz_server/` — the test binary `testing_zzzd`: fast argon2,
-  `_testing_reset`, `_testing_drain_effects`, and `_testing_action_manifest`,
-  default port 4462. **Never ships in a release** (`fuz_release`'s `testing_`
-  filter and `cargo xtask check-release`).
+  `_testing_reset`, `_testing_drain_effects`, `_testing_db_invariants`, and
+  `_testing_action_manifest`, default port 4462. **Never ships in a
+  release** (`fuz_release`'s `testing_` filter and `cargo xtask
+  check-release`).
 - `xtask/` — `cargo xtask dev`, `dev-setup` / `prod-setup`, `install`, `check-release`,
   `ghostty-vt`; pure `std` + `fuz_audit`, marked `dev_only`.
 - `zzz/` — the CLI: `cli/` (argument parsing, and a module per command in
@@ -266,7 +267,7 @@ crates (`fuz_auth`, `fuz_http`).
   default; `open_signup=true` opens)
 - `/api/account/status` (GET) — Current account info or 401 + bootstrap status
 - `/api/account/login` (POST) — Username/password login → session cookie
-- `/api/account/logout` (POST) — Invalidate session, close WS connections
+- `/api/account/logout` (POST) — Invalidate session, close its WS connections
 - `/api/account/password` (POST) — Change password, revoke all sessions/tokens
 - `/api/ws` (GET) — JSON-RPC 2.0 (WebSocket, cookie/bearer/daemon)
 - `/api/admin/audit/stream` (GET) — Admin-gated audit-log SSE stream (`text/event-stream`)
@@ -285,7 +286,9 @@ crates (`fuz_auth`, `fuz_http`).
   matching the adapter's `fallback` in `vite.config.ts`) — so
   `/projects?open=…`, reloads, deep links, and dynamic routes
   (`/chats/<id>`) all load. `/api`, `/health`, and paths below them never get
-  the shell (an unknown `/api/foo` is an empty 404), nor does a missing asset
+  the shell (an unknown `/api/foo` is the spine's JSON `route_not_found`
+  404, an unknown `/health/x` its plain-text one —
+  `fuz_actions::server::unmatched_route_response`), nor does a missing asset
   under `/_app/` or `/fuz_terminal/` (404 — a stale tab's chunk load fails
   instead of executing HTML, and a checkout that never built the terminal
   emulator module answers its fetch honestly); other methods get 405. Media
@@ -298,7 +301,7 @@ crates (`fuz_auth`, `fuz_http`).
   path). `ServeDir` follows symlinks inside the static dir, which is trusted
   operator content. A static dir without `200.html` logs a boot warning, and
   non-prerendered routes 404. Without a static dir (dev, where Vite serves the
-  frontend) unmatched paths get axum's empty 404
+  frontend) unmatched paths get the spine's unmatched-route 404
 
 ## Auth
 
