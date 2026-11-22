@@ -14,17 +14,17 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `create_app_backend` boots the core — keyring, the READ COMMITTED guard,
   the pre-migration hook, the auth migrations, the keeper, bootstrap
   availability, the revocation listeners — then `serve_until_shutdown`
-  binds, runs the auth cleanup beside the server, and drains; zzz's jobs and
-  PTYs are torn down after). `RunAppOptions` carries: `spine` (the toolkit's
+  binds, runs the auth cleanup beside the server, and drains the requests,
+  then the audit writes in flight; zzz's jobs and PTYs are torn down after).
+  `RunAppOptions` carries: `spine` (the toolkit's
   `SpineRunOptions` — the password hasher, the `fuz_auth::RateLimiterMode`
   every spine limiter is built through (`Enforced` in production,
   `DisabledForTesting` in the test binary only), the daemon-token state (the
   test binary's keeper credential; production `None`), the pre-migration
-  hook (the test binary's `fuz_testing::startup_reset_hook`), in-flight
-  audit tracking (so the test binary's `_testing_drain_effects` awaits
-  detached audit writes), `default_addr` (bind address when
-  `--port`/`ZZZ_PORT` don't supply one; host stays loopback, only the port
-  is overridable), and `drain_timeout`), `args` (the parsed command line),
+  hook (the test binary's `fuz_testing::startup_reset_hook`), `default_addr`
+  (bind address when `--port`/`ZZZ_PORT` don't supply one; host stays
+  loopback, only the port is overridable), and `drain_timeout`), `args` (the
+  parsed command line),
   `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag),
   and `extra_action_specs_factory` (lets the test binary inject
   `_testing_reset`, `_testing_drain_effects`, and `_testing_action_manifest`
@@ -41,8 +41,8 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `credential_types: [DaemonToken]` auth gate) and
   `fuz_testing::create_testing_drain_effects_action_spec`
   (`_testing_drain_effects`, the barrier awaiting in-flight fire-and-forget
-  audit writes — a real one because this binary passes
-  `audit_inflight_tracking: true`), and
+  audit writes — a real one because every spine audit emitter tracks its
+  in-flight writes), and
   `fuz_testing::create_testing_action_manifest_action_spec`
   (`_testing_action_manifest`, over zzz's own specs alone —
   `build_zzz_owned_specs` and `build_testing_specs` — not the spine's

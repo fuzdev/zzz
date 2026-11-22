@@ -185,8 +185,7 @@ pub struct RunAppOptions {
     /// The spine's swap points. Production: [`fuz_auth::Argon2idHasher`],
     /// [`DEFAULT_ADDR`] (`127.0.0.1:4460`; only the port is overridable),
     /// [`fuz_http::DEFAULT_DRAIN_TIMEOUT`], every limiter enforced — always
-    /// on, matching the other spine servers — no daemon token, no hook, no
-    /// in-flight audit tracking.
+    /// on, matching the other spine servers — no daemon token, no hook.
     ///
     /// zzz mounts **no** daemon-token credential in production. Nothing sends
     /// the header — the browser UI authenticates with session cookies, and a
@@ -201,8 +200,7 @@ pub struct RunAppOptions {
     /// `127.0.0.1:4462` so the two can run side-by-side, the limiters
     /// `DisabledForTesting` so the cross-backend auth suite's repeated logins
     /// don't trip the bucket, the daemon token `_testing_reset` resolves the
-    /// keeper through, the env-gated schema wipe, and in-flight tracking so
-    /// `_testing_drain_effects` is a real barrier.
+    /// keeper through, and the env-gated schema wipe.
     pub spine: SpineRunOptions,
     /// The parsed command line ([`parse_args`]): `--port` and `--static-dir`,
     /// each over its env var.
@@ -241,7 +239,8 @@ impl std::fmt::Debug for RunAppOptions {
 /// serves until Ctrl-C / SIGTERM
 /// ([`fuz_actions::server::serve_until_shutdown`]): every live WebSocket is
 /// closed with 1001 (going away) and every audit stream ended, then in-flight
-/// requests drain. Jobs and PTYs are torn down after the drain.
+/// requests drain, then the audit writes in flight drain. Jobs and PTYs are
+/// torn down after the drain.
 ///
 /// The spine's auth cleanup ([`fuz_auth::spawn_auth_cleanup`]) runs beside
 /// the server — expired sessions deleted and the connections they opened
@@ -501,8 +500,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
 
     // Signal handling, the shutdown close of every live WebSocket (a 1001
     // close) and audit stream, the auth cleanup beside the server, and the
-    // graceful drain come from the spine; zzz's own teardown (jobs, PTYs) runs
-    // after the drain returns, ahead of the result.
+    // graceful drain — then the audit writes in flight — come from the spine;
+    // zzz's own teardown (jobs, PTYs) runs after the drain returns, ahead of
+    // the result.
     let served = serve_until_shutdown(
         router,
         ServeOptions {
@@ -510,11 +510,10 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
             addr: config.bind_addr,
             drain_timeout,
             shutdown,
-            connection_closer: Some(backend.connection_closer()),
-            upkeep: Some(UpkeepOptions {
+            backend: Some(backend.serve_backend(Some(UpkeepOptions {
                 auth_cleanup: backend.auth_cleanup_options(),
                 extra: Vec::new(),
-            }),
+            }))),
         },
     )
     .await;

@@ -37,8 +37,7 @@ async fn main() -> ExitCode {
     let password_hasher: Arc<dyn PasswordHasher> = Arc::new(fuz_auth::Argon2idHasher::new());
 
     // Production wires no test seams: enforced limiters, no daemon token, no
-    // pre-migration hook, no in-flight audit tracking (see
-    // `RunAppOptions::spine`).
+    // pre-migration hook (see `RunAppOptions::spine`).
     match zzz_server::run_app(zzz_server::RunAppOptions {
         spine: SpineRunOptions::production(password_hasher, zzz_server::DEFAULT_ADDR),
         args,

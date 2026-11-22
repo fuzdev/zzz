@@ -14,9 +14,8 @@
 //! and `_testing_action_manifest` from
 //! [`fuz_testing::create_testing_action_manifest_action_spec`], over zzz's own
 //! specs alone.
-//! The drain is a real barrier because this binary builds the app's audit
-//! emitter with in-flight tracking ([`fuz_testing::testing_backend_options`]);
-//! over an untracked emitter it would return at once.
+//! The drain is a real barrier because every spine audit emitter tracks its
+//! in-flight writes.
 //! Three layered guardrails keep this from leaking into production:
 //!
 //! 1. The `testing_` prefix is enforced by `fuz_release`'s manifest
