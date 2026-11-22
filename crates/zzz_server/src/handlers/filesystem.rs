@@ -364,8 +364,8 @@ struct DiskfileReadOutput {
 ///
 /// One handle serves the whole answer: `ScopedFs::open_file` opens it
 /// `O_NOFOLLOW | O_NONBLOCK` and `fstat`s it (regular files only), and the
-/// text is read from it by a bounded read ([`read_text_contents`]: at most
-/// [`MAX_TEXT_READ_SIZE`] bytes, valid UTF-8, else `contents: null` with the
+/// text is read from it by a bounded read (`read_text_contents`: at most
+/// `MAX_TEXT_READ_SIZE` bytes, valid UTF-8, else `contents: null` with the
 /// reason). Nothing is cached: every read is of the disk as it is now,
 /// whether or not the filer has seen the latest change. The timestamps come
 /// from that `fstat`, taken before the read, so a write racing the read
@@ -446,7 +446,7 @@ pub async fn diskfile_read(
 ///
 /// With an `expected_hash` (the `hash` of the `diskfile_read` the edit is
 /// based on), it's a compare-and-swap: the file must still be there, at most
-/// [`MAX_TEXT_READ_SIZE`] bytes (the largest a read returns as text), and
+/// `MAX_TEXT_READ_SIZE` bytes (the largest a read returns as text), and
 /// hashing to it — compared after the content is staged, right before the
 /// rename ([`ScopedFs::write_file`](crate::scoped_fs::ScopedFs::write_file))
 /// — or nothing is written and it fails `conflict` / `disk_changed`. So a

@@ -9,7 +9,7 @@
 //! of it):
 //!
 //! - **Level-triggered events.** A notify event is only a hint about which
-//!   path to look at ([`classify_event`](watches::classify_event)); the filer then `lstat`s the path
+//!   path to look at (`classify_event`); the filer then `lstat`s the path
 //!   and decides from what is on disk — even for removes and rename-froms,
 //!   since events can arrive late or out of order (a backlog behind
 //!   `rm -rf src && git checkout src`, or macOS `FSEvents` reporting create before
@@ -19,7 +19,7 @@
 //!   renamed in, or recreated) has its subtree synced; a path that is gone
 //!   takes every indexed file under it along.
 //! - **Per-directory watches.** The filer adds one non-recursive watch per
-//!   directory from its own walk ([`DirWatches`](watches::DirWatches)), so ignored directories
+//!   directory from its own walk (`DirWatches`), so ignored directories
 //!   (`node_modules/`, a `.gitignore`d `target/`, …), symlinks, non-UTF-8 directories, and the
 //!   app dir are never watched — a root needs a watch per directory it
 //!   indexes, not per directory on disk. Each directory is watched before it
@@ -30,13 +30,13 @@
 //!   once), a vanished one ignored, one whose listing fails transiently kept
 //!   as indexed and polled, and only an unreadable or missing root fails
 //!   [`start_filer`].
-//! - **What's ignored** is a per-filer rule ([`ignore`]): fixed names
+//! - **What's ignored** is a per-filer rule (`ignore`): fixed names
 //!   (`node_modules/`, `target/`, …) under a plain dir, git's answer under
 //!   a git root — its ignored set listed at start, each listing taken again
 //!   after its walk (so what was created in between isn't indexed
 //!   unvetted), each live add of a path not yet indexed vetted with one
 //!   `check-ignore` per burst (a burst past
-//!   [`VET_MAX_PATHS`](event_loop::VET_MAX_PATHS) re-prunes instead, since
+//!   `VET_MAX_PATHS` re-prunes instead, since
 //!   git's check costs per path what its index costs to read), and the set
 //!   rebuilt (re-pruned) once a
 //!   `.gitignore` or `info/exclude` change settles, or at once when events
@@ -49,7 +49,7 @@
 //!   submodules (`nested`), so a client tells them from a missing path. When
 //!   either changes, the event loop signals a publisher that asks the projects
 //!   for a refresh at most once a second ([`FilerIgnoredChange`]); a
-//!   re-prune past [`REPRUNE_BROADCAST_MAX`] changes on the wire sends none
+//!   re-prune past `REPRUNE_BROADCAST_MAX` changes on the wire sends none
 //!   and bumps the set's resync count instead, so each client pulls the
 //!   dir once.
 //! - **Degraded mode.** When the OS runs out of watches (inotify's
@@ -58,7 +58,7 @@
 //!   periodically instead ([`WatchStatus::Degraded`]), retrying their watches
 //!   each time.
 //! - **Stat-only.** The index holds each file's identity, size, timestamps,
-//!   and `lstat` stamp ([`FileStat`]) — never its contents. A scan or an
+//!   and `lstat` stamp (`FileStat`) — never its contents. A scan or an
 //!   event costs an `lstat` per file and reads nothing; a client reads a
 //!   file's contents from the disk with `diskfile_read`, and `filer_change`,
 //!   `session_load`, and `project_open` send the metadata alone.
@@ -67,22 +67,22 @@
 //!   new metadata — a `touch` and a rewrite of the same bytes included — and
 //!   a client holding the file's contents reads them again. A stamp is
 //!   trusted only once its inode change time is a while old
-//!   ([`reusable_stat`](index::reusable_stat), git's "racily clean" rule), so a file looked at
+//!   (`reusable_stat`, git's "racily clean" rule), so a file looked at
 //!   while it might still be written is a `change` the next time too,
-//!   whether or not its stamp moved ([`is_unchanged`](index::is_unchanged)). A write the stamp
+//!   whether or not its stamp moved (`is_unchanged`). A write the stamp
 //!   can't see (an `mmap` store to an already-dirty page, a remote
 //!   filesystem whose server clock lags by more than the margin) goes
 //!   unnoticed until the stamp next moves.
 //! - **Debounce coalescing.** Broadcasts are debounced per path
-//!   ([`coalesce_change`](event_loop::coalesce_change)): a `delete` followed by an `add` inside the window
+//!   (`coalesce_change`): a `delete` followed by an `add` inside the window
 //!   becomes `change`, and an `add` followed by a `delete` becomes a bare
 //!   `delete` (a no-op for clients that never saw the add). A path that
-//!   keeps changing still broadcasts at least every [`DEBOUNCE_MAX_WAIT`](event_loop::DEBOUNCE_MAX_WAIT).
+//!   keeps changing still broadcasts at least every `DEBOUNCE_MAX_WAIT`.
 //! - **Overflow recovery.** Paths under ignored directories are filtered in
 //!   the notify callback, before the bounded channel. If the channel is
 //!   still full, or notify reports a rescan (inotify queue overflow), the
 //!   filer schedules one coalesced rescan of its root, which rebuilds the
-//!   watches on a fresh watcher ([`DirWatches::reset`](watches::DirWatches::reset)), diffs the index
+//!   watches on a fresh watcher (`DirWatches::reset`), diffs the index
 //!   against the disk, and broadcasts the differences.
 //! - **Symlinks are skipped entirely** — consistent with `ScopedFs`'s
 //!   no-symlink rule. The walker never follows or indexes a symlink (file or
@@ -239,7 +239,7 @@ pub struct IgnoredPaths {
     /// sorted, each with a trailing `/` (`IgnoredSet::nested_on_wire`).
     pub nested: Arc<Vec<String>>,
     /// How many of the root's re-prunes sent no `filer_change` per file
-    /// (more than [`REPRUNE_BROADCAST_MAX`] changes) — a client that sees it
+    /// (more than `REPRUNE_BROADCAST_MAX` changes) — a client that sees it
     /// move pulls the dir's files whole (`repo_files`) instead.
     pub resyncs: u64,
 }
@@ -298,7 +298,7 @@ pub enum WatchStatus {
     /// Some directories have no watch — the OS watch limit (inotify's
     /// `max_user_watches`) was reached, no watcher could be created, or the
     /// root went missing. They're rescanned periodically, so their changes
-    /// arrive late (after up to [`DEGRADED_RESCAN_INTERVAL`] or longer).
+    /// arrive late (after up to `DEGRADED_RESCAN_INTERVAL` or longer).
     Degraded,
 }
 

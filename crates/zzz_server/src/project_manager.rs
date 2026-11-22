@@ -3,7 +3,7 @@
 //! [`ProjectManager`] owns which projects are open and what each focuses.
 //! Everything else that follows from that — the filers running for them, the
 //! `ScopedFs` roots admitting them, what `project_list` and `session_load`
-//! report — is derived from that state in one place, [`ProjectManager::commit`]:
+//! report — is derived from that state in one place, `ProjectManager::commit`:
 //! an open, close, focus, or unfocus computes the next state and commits it,
 //! and the commit starts the filers the next state needs, stops or narrows
 //! the ones it doesn't, sets the roots, publishes the snapshot readers see,
@@ -20,7 +20,7 @@
 //! one socket, two, or HTTP — doesn't matter. A reply's files are read
 //! under the lock its change committed under, so they're the index of
 //! exactly the state its rev names. The counter starts at the clock
-//! ([`rev_seed`]), so revs keep increasing across restarts.
+//! (`rev_seed`), so revs keep increasing across restarts.
 //!
 //! Each commit also refreshes what git ignores, and the repos of their own
 //! the filer leaves unindexed, under every focused dir on git's rule
@@ -35,14 +35,14 @@
 //! top level, and each focused directory whole. Two projects can keep one
 //! directory (a registry's entry that's also open as its own project), so
 //! what runs is the union over the open projects, each directory at the
-//! deepest any of them indexes it ([`desired_filers`]) — never a count kept
+//! deepest any of them indexes it (`desired_filers`) — never a count kept
 //! by hand.
 //!
 //! An initial scan walks, watches, and stats a whole tree, so an open or a
 //! focus starts its filers *before* taking the lock, where other projects'
 //! changes don't wait on it; the commit then finds them running. If the
 //! operation fails after that, what it started and the open projects don't
-//! keep is released under the lock ([`release`]).
+//! keep is released under the lock (`release`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -82,11 +82,11 @@ pub struct OpenProject {
     pub fallback: Option<OpenFallback>,
     /// What git ignores under each focused dir whose filer is on git's
     /// rule, keyed by the dir — none for a dir on fixed names. Filled by
-    /// every commit from the filers ([`ProjectManager::commit`]); empty on
+    /// every commit from the filers (`ProjectManager::commit`); empty on
     /// a project as resolved.
     pub ignored: BTreeMap<String, IgnoredPaths>,
     /// The manager's rev at the commit that last changed this project
-    /// ([`ProjectManager::commit`]); 0 for a project as resolved, not yet
+    /// (`ProjectManager::commit`); 0 for a project as resolved, not yet
     /// committed.
     pub rev: u64,
 }
@@ -325,7 +325,7 @@ struct ProjectChangedParams {
 }
 
 /// The directories to index, each with how much of it ([`filers_of`],
-/// [`desired_filers`]).
+/// `desired_filers`).
 pub type Filers = BTreeMap<String, FilerDepth>;
 
 /// The open projects, keyed by root (trailing `/`).
@@ -337,7 +337,7 @@ type Projects = BTreeMap<String, OpenProject>;
 pub struct PublishedProjects {
     /// The open projects, by root.
     pub projects: Vec<OpenProject>,
-    /// The directories those projects keep indexed ([`desired_filers`]). A
+    /// The directories those projects keep indexed (`desired_filers`). A
     /// filer running on any other directory belongs to no open project — a
     /// permanent one, or one an open or focus in flight started.
     pub filers: BTreeSet<String>,
@@ -734,7 +734,7 @@ impl Default for ProjectManager {
 
 impl ProjectManager {
     /// A manager with no project open, its rev seeded from the clock
-    /// ([`rev_seed`]).
+    /// (`rev_seed`).
     pub fn new() -> Self {
         Self::with_rev_seed(rev_seed(SystemTime::now()))
     }
@@ -763,7 +763,7 @@ impl ProjectManager {
     /// `root` — a registry's focused entry, or a checkout's or plain
     /// directory's root — read under the lock every commit holds.
     ///
-    /// A commit stops or narrows filers ([`release`]) before it publishes,
+    /// A commit stops or narrows filers (`release`) before it publishes,
     /// so a check against [`Self::published`] and a read of the filer
     /// outside the lock could pass the check and read a filer already
     /// stopped (no files) or narrowed (a nested registry's top level) — an
@@ -813,9 +813,9 @@ impl ProjectManager {
 
     /// Open `fresh` — a project as just resolved, focusing what the open
     /// focuses — or update the open project at its root with it
-    /// ([`merge_project`]): the fresh kind and entries, the focus of both.
+    /// (`merge_project`): the fresh kind and entries, the focus of both.
     /// `requested` are more directories to focus once it lands, each checked
-    /// against `fresh` ([`check_requested`]) and landing or refused alone.
+    /// against `fresh` (`check_requested`) and landing or refused alone.
     ///
     /// The filers `fresh` itself keeps (its root, the opened path's focus)
     /// are required: one that can't start fails the open. A requested focus

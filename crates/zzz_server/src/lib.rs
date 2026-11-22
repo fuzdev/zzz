@@ -614,14 +614,14 @@ pub struct Config {
     pub secret_cookie_keys: String,
     pub bootstrap_token_path: Option<String>,
     /// `FUZ_ALLOWED_ORIGINS`, parsed and validated entry by entry — never
-    /// empty (see [`origin_allowlist`]). Read by both the origin check and
+    /// empty (see `origin_allowlist`). Read by both the origin check and
     /// the `Host` check.
     pub allowed_origins: fuz_http::AllowedOrigins,
     /// `FUZ_ALLOW_ORIGIN_WILDCARDS` — `true` admits a wildcard entry in
     /// `allowed_origins`, which the boot refuses otherwise.
     pub allow_origin_wildcards: bool,
     /// `PUBLIC_ZZZ_SCOPED_DIRS`, resolved (canonical, trailing `/`) and
-    /// checked by [`check_scoped_dirs`].
+    /// checked by `check_scoped_dirs`.
     pub scoped_dirs: Vec<String>,
     pub zzz_dir: String,
     /// Which directories can be roots: strictly inside the daemon's home
@@ -782,7 +782,7 @@ fn resolve_dir(path: &Path) -> Result<String, String> {
 }
 
 /// The app directory: `PUBLIC_ZZZ_DIR` (unset or empty → [`DEFAULT_ZZZ_DIR`])
-/// through [`ensure_app_dir`].
+/// through `ensure_app_dir`.
 ///
 /// Public so `testing_zzz_server` places its
 /// daemon-token file exactly where [`run_app`] resolves the app dir — the
@@ -792,7 +792,7 @@ fn resolve_dir(path: &Path) -> Result<String, String> {
 /// # Errors
 ///
 /// Returns [`StartupError::Config`] when the directory can't be created or
-/// resolved, or is the working directory (see [`check_app_dir_is_not_cwd`]).
+/// resolved, or is the working directory (see `check_app_dir_is_not_cwd`).
 pub fn ensure_zzz_dir_from_env() -> Result<String, StartupError> {
     let raw = env_non_empty("PUBLIC_ZZZ_DIR")?.unwrap_or_else(|| DEFAULT_ZZZ_DIR.to_owned());
     let zzz_dir = ensure_app_dir(Path::new(&raw))?;

@@ -567,8 +567,8 @@ impl PtyManager {
     ///
     /// `NotFound` when `owner` has no terminal `terminal_id` (see
     /// [`TerminalNotFound`]) — checked for empty `data` too; `InputFull` when
-    /// its input queue is full — [`INPUT_QUEUE_CAPACITY`] chunks, or
-    /// [`INPUT_QUEUE_MAX_BYTES`] bytes (a larger chunk only once nothing is
+    /// its input queue is full — `INPUT_QUEUE_CAPACITY` chunks, or
+    /// `INPUT_QUEUE_MAX_BYTES` bytes (a larger chunk only once nothing is
     /// held).
     pub async fn write(
         &self,

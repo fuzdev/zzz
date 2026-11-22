@@ -16,7 +16,7 @@
 //!    ([`crate::file_trust`]: the file and every directory from it up to the
 //!    home directory or the allowlisted root, that one included) and, when
 //!    it's a symlink, confined: its target inside the root it would make,
-//!    and named by its link text through no other symlink ([`link_text_path`]).
+//!    and named by its link text through no other symlink (`link_text_path`).
 //!    One that isn't refuses the open, before the file is read, rather than
 //!    being skipped, since a skip would widen the root to a registry further
 //!    up — unless it's a registry kept inside a checkout, below (see
@@ -36,7 +36,7 @@
 //! 2. **A git checkout** — the nearest directory at or above the path, inside
 //!    the same bound, holding a `.git` that is itself a directory or a
 //!    regular file (a linked worktree's gitfile), read by `lstat`
-//!    ([`is_checkout`]) — anything else there, a symlink included, is
+//!    (`is_checkout`) — anything else there, a symlink included, is
 //!    ignored, and that directory is no checkout.
 //! 3. **The directory itself.**
 //!
@@ -338,7 +338,7 @@ pub enum ProjectError {
     )]
     RegistryNotConfined { path: PathBuf, target: PathBuf },
     /// A symlinked registry whose link text doesn't name its target without
-    /// passing another symlink ([`link_text_path`]): a `..` that takes back a
+    /// passing another symlink (`link_text_path`): a `..` that takes back a
     /// component the text added, which may be a symlink, or a text that read
     /// as written names another path. The directories such a link passes are
     /// ones the trust rule wouldn't see.

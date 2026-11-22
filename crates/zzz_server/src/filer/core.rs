@@ -47,10 +47,10 @@ pub struct FilerConfig {
     pub depth: FilerDepth,
     /// The daemon's git, when it's usable — a root that is a checkout,
     /// indexed whole, takes git's ignore rule through it; `None` leaves every
-    /// root on fixed names (see [`super::ignore`]).
+    /// root on fixed names (see `super::ignore`).
     pub git: Option<Arc<fuz_git::Git>>,
     /// Called when the filer's ignored set (or its resync count) changed,
-    /// at most once per [`IGNORED_REFRESH_INTERVAL`] — how the open
+    /// at most once per `IGNORED_REFRESH_INTERVAL` — how the open
     /// projects learn to republish it. Only a filer on git's rule calls it.
     pub on_ignored_change: Option<FilerIgnoredChange>,
     /// Test seam: run as if no watcher could be created.
@@ -83,7 +83,7 @@ impl FilerConfig {
     /// matched by path, not name, so same-named directories elsewhere (an app
     /// dir named `data` vs a project's own `data/`) stay visible; `.zzz`
     /// directories are ignored everywhere by name, under every ignore rule
-    /// (see [`super::ignore`]).
+    /// (see `super::ignore`).
     ///
     /// A root in a protected directory is marked [`Self::root_protected`], so
     /// the filer refuses to start on it.
@@ -306,7 +306,7 @@ impl Filer {
     }
 
     /// Mark whether an open project carries this filer's set — see
-    /// [`IgnoredWire::on_wire`].
+    /// `IgnoredWire::on_wire`.
     pub fn set_on_wire(&self, on_wire: bool) {
         self.wire.on_wire.store(on_wire, Ordering::Release);
     }
@@ -419,7 +419,7 @@ fn watcher_factory(
 
 /// Start watching a directory, perform an initial file scan, and return a `Filer`.
 ///
-/// `path` is the root in [`dir_prefix`](super::dir_prefix) form. The initial scan (walk,
+/// `path` is the root in `dir_prefix` form. The initial scan (walk,
 /// watches, `lstat`s) populates the file index before returning, so callers
 /// can immediately read it; it runs on blocking threads. The background task
 /// then keeps the index updated and broadcasts changes.

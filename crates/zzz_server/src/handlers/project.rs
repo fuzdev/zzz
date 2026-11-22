@@ -492,7 +492,7 @@ pub async fn project_list(
 /// focus in one call. Each is checked against the registry as just resolved
 /// (a present entry, as a reopen keeps a focus) and lands or is refused
 /// alone, reported in `refused` with the code `repo_focus` would refuse it
-/// with ([`focus_refusal_reason`]): none of the entries
+/// with (`focus_refusal_reason`): none of the entries
 /// (`repo_not_in_project`), missing, refused, or gone since the resolve
 /// (`repo_not_present`), not a registry (`project_not_registry` — a
 /// checkout's or plain directory's root is its one focus, so a request for
@@ -515,7 +515,7 @@ pub async fn project_list(
 ///
 /// # Errors
 ///
-/// [`ProjectError::reason`] as `data.reason` ([`open_error`]):
+/// [`ProjectError::reason`] as `data.reason` (`open_error`):
 /// `invalid_params` for a malformed input, a relative or invalid path, or a
 /// registry that can't be read or doesn't parse; `not_found` for a missing
 /// path; `forbidden` for a path the OS refuses, a root the root rules refuse

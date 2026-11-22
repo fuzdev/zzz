@@ -17,7 +17,7 @@
 //! request reaching here under one is an unknown route, answered by the
 //! spine's [`fuz_actions::server::unmatched_route_response`]: the JSON
 //! `route_not_found` under `/api`, the plain-text 404 elsewhere. A missing
-//! asset under [`ASSET_PATH_PREFIXES`] 404s too instead of answering with
+//! asset under `ASSET_PATH_PREFIXES` 404s too instead of answering with
 //! HTML: a tab left open across a rebuild fails an `_app/` chunk load (which
 //! `SvelteKit` turns into a full reload) rather than executing the shell as
 //! JavaScript, and a missing terminal emulator module

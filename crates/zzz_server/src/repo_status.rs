@@ -241,7 +241,7 @@ const fn to_relation(relation: Relation) -> RelationInfo {
 /// stash, or config move.
 ///
 /// The checkout's own `HEAD`, `index`, and `FETCH_HEAD`; the common git
-/// dir's [`COMMON_STAMPED`] files, `refs/heads/**`, and
+/// dir's `COMMON_STAMPED` files, `refs/heads/**`, and
 /// `refs/remotes/origin/**`; and each linked worktree's `HEAD` and
 /// `index`. Each by `lstat`: inode, size, and mtime, or its
 /// absence. Editing a tracked file moves none of these — the hints and the

@@ -357,7 +357,7 @@ impl FilerManager {
     /// just-written file may not yet be in the index when the event loop is
     /// still draining. A direct filesystem walk sidesteps that race; files
     /// whose trusted `lstat` stamp is unchanged aren't broadcast
-    /// ([`is_unchanged`](super::index::is_unchanged)). The rescans run on each filer's event loop, so
+    /// (`is_unchanged`). The rescans run on each filer's event loop, so
     /// they serialize with event handling instead of racing it.
     pub async fn rescan_all(&self) {
         // Snapshot the request senders under the outer lock, then rescan
