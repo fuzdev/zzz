@@ -439,7 +439,11 @@ describe('file bytes cross-backend', () => {
 				`${api_path}/files/bytes`,
 				`${bytes_url(path)}&extra=1`,
 				// `offset` belongs to the append alone
-				`${bytes_url(path)}&offset=0`
+				`${bytes_url(path)}&offset=0`,
+				// an escape that doesn't decode, never read as U+FFFD or as text
+				`${api_path}/files/bytes?path=%FF`,
+				`${api_path}/files/bytes?path=%ZZ`,
+				`${bytes_url(path)}&path=%E9`
 			]) {
 				// the same answer with and without credentials
 				for (const transport of [fixture.transport, anonymous]) {

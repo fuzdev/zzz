@@ -19,7 +19,9 @@
 //! ## Gates
 //!
 //! In order, through the server's [`AuthGate`]: the origin check
-//! ([`AuthGate::check_origin`]), the query's shape, authentication
+//! ([`AuthGate::check_origin`]), the query's shape (read strictly through
+//! [`read_query_pairs`] — an escape that doesn't decode is
+//! `400 invalid_query_params`, never a path with U+FFFD in it), authentication
 //! ([`AuthGate::resolve_credential`], on the origin check's witness — any
 //! credential, like every zzz-owned action), and the token scope (a
 //! method-scoped API token holds no non-RPC surface). The origin check is the
@@ -59,12 +61,12 @@ use std::sync::Arc;
 use axum::Json;
 use axum::Router;
 use axum::body::{Body, Bytes};
-use axum::extract::{Extension, Query, Request, State};
+use axum::extract::{Extension, RawQuery, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use fuz_auth::{AuthGate, OriginChecked};
-use fuz_http::{ClientIp, assert_known_query_keys, query_first};
+use fuz_http::{ClientIp, assert_known_query_keys, query_first, read_query_pairs};
 use tokio::io::{AsyncReadExt as _, AsyncSeekExt as _};
 
 use crate::handlers::App;
@@ -129,7 +131,7 @@ pub fn file_bytes_router(state: FileBytesRouteState) -> Router {
 /// `GET` / `HEAD` — a file's bytes, whole or one range of them.
 async fn read_file_bytes(
     State(state): State<FileBytesRouteState>,
-    Query(query_pairs): Query<Vec<(String, String)>>,
+    RawQuery(query): RawQuery,
     client_ip: Option<Extension<ClientIp>>,
     headers: HeaderMap,
 ) -> Response {
@@ -137,10 +139,11 @@ async fn read_file_bytes(
         Ok(origin) => origin,
         Err(response) => return response,
     };
-    let path = match parse_query(&query_pairs, &["path"]) {
-        Ok(query) => query.path,
+    let query = match parse_query(query.as_deref(), &["path"]) {
+        Ok(query) => query,
         Err(response) => return response,
     };
+    let path = query.path.as_str();
     if let Err(response) = authorize(&state, origin, client_ip).await {
         return response;
     }
@@ -184,7 +187,7 @@ async fn read_file_bytes(
 /// `POST` — create a file exclusively from the request body.
 async fn create_file_bytes(
     State(state): State<FileBytesRouteState>,
-    Query(query_pairs): Query<Vec<(String, String)>>,
+    RawQuery(query): RawQuery,
     client_ip: Option<Extension<ClientIp>>,
     request: Request,
 ) -> Response {
@@ -192,10 +195,11 @@ async fn create_file_bytes(
         Ok(origin) => origin,
         Err(response) => return response,
     };
-    let path = match parse_query(&query_pairs, &["path"]) {
-        Ok(query) => query.path,
+    let query = match parse_query(query.as_deref(), &["path"]) {
+        Ok(query) => query,
         Err(response) => return response,
     };
+    let path = query.path.as_str();
     if let Err(response) = authorize(&state, origin, client_ip).await {
         return response;
     }
@@ -213,7 +217,7 @@ async fn create_file_bytes(
 /// `PATCH` — append the request body at `?offset=`.
 async fn append_file_bytes(
     State(state): State<FileBytesRouteState>,
-    Query(query_pairs): Query<Vec<(String, String)>>,
+    RawQuery(query): RawQuery,
     client_ip: Option<Extension<ClientIp>>,
     request: Request,
 ) -> Response {
@@ -221,7 +225,7 @@ async fn append_file_bytes(
         Ok(origin) => origin,
         Err(response) => return response,
     };
-    let query = match parse_query(&query_pairs, &["path", "offset"]) {
+    let query = match parse_query(query.as_deref(), &["path", "offset"]) {
         Ok(query) => query,
         Err(response) => return response,
     };
@@ -238,7 +242,7 @@ async fn append_file_bytes(
     match state
         .app
         .scoped_fs
-        .append_file(query.path, offset, content)
+        .append_file(&query.path, offset, content)
         .await
     {
         Ok(size) => size_response(StatusCode::OK, size),
@@ -248,29 +252,30 @@ async fn append_file_bytes(
 
 // -- Gates --------------------------------------------------------------------
 
-struct FileBytesQuery<'a> {
-    path: &'a str,
+struct FileBytesQuery {
+    path: String,
     /// Present and valid only when `offset` is among the allowed keys.
     offset: Option<u64>,
 }
 
-/// Check the query's shape: only `allowed` keys, a `path`, and — when given —
-/// an `offset` that's a plain decimal `u64`. Runs after the origin check and
+/// Read the raw query strictly ([`read_query_pairs`]: an escape anywhere in
+/// it that doesn't decode refuses the whole query, never a U+FFFD path) and
+/// check its shape: only `allowed` keys, a `path`, and — when given — an
+/// `offset` that's a plain decimal `u64`. Runs after the origin check and
 /// before the credential walk, so a malformed query answers the same whatever
 /// the caller's credentials.
 #[expect(
     clippy::result_large_err,
     reason = "Err is the ready-to-return axum Response — the spine's REST handler idiom"
 )]
-fn parse_query<'a>(
-    query_pairs: &'a [(String, String)],
-    allowed: &[&str],
-) -> Result<FileBytesQuery<'a>, Response> {
-    assert_known_query_keys(query_pairs, allowed)?;
-    let Some(path) = query_first(query_pairs, "path") else {
+fn parse_query(query: Option<&str>, allowed: &[&str]) -> Result<FileBytesQuery, Response> {
+    let query_pairs =
+        read_query_pairs(query).map_err(|_| fuz_http::invalid_query_params_response())?;
+    assert_known_query_keys(&query_pairs, allowed)?;
+    let Some(path) = query_first(&query_pairs, "path") else {
         return Err(fuz_http::invalid_query_params_response());
     };
-    let offset = match query_first(query_pairs, "offset") {
+    let offset = match query_first(&query_pairs, "offset") {
         None => None,
         // digits only: `u64::from_str` alone would take a leading `+`
         Some(raw) if !raw.is_empty() && raw.bytes().all(|b| b.is_ascii_digit()) => Some(
@@ -279,7 +284,10 @@ fn parse_query<'a>(
         ),
         Some(_) => return Err(fuz_http::invalid_query_params_response()),
     };
-    Ok(FileBytesQuery { path, offset })
+    Ok(FileBytesQuery {
+        path: path.to_owned(),
+        offset,
+    })
 }
 
 /// Authenticate a request the origin check admitted and check its token

@@ -581,4 +581,37 @@ mod tests {
             }
         }
     }
+
+    #[tokio::test]
+    async fn the_byte_routes_refuse_a_query_escape_that_does_not_decode() {
+        // anonymous: the query check runs ahead of the credential walk, so a
+        // query read leniently would go on to the `401`
+        for query in [
+            "path=%FF",
+            "path=%ZZ",
+            "path=/a/b%2",
+            // Latin-1 `é`, not UTF-8
+            "path=/a/%E9.bin",
+            // an escape in the name
+            "pa%74h=/a/x.bin&%FF=1",
+            // an occurrence no handler reads still refuses the whole query
+            "path=/a/x.bin&path=%FF",
+            // a nameless pair, which is not a key
+            "path=/a/x.bin&=%FF",
+        ] {
+            for (method, offset) in [("GET", ""), ("POST", ""), ("PATCH", "&offset=0")] {
+                let uri = format!("{FILE_BYTES_PATH}?{query}{offset}");
+                let mut probe = Probe::new(method, &uri);
+                if method != "GET" {
+                    probe = probe.content_type("application/octet-stream");
+                }
+                let (status, body) = send(router(None), probe).await;
+                assert_eq!(status, StatusCode::BAD_REQUEST, "{method} {uri}: {body}");
+                assert_eq!(
+                    body, r#"{"error":"invalid_query_params"}"#,
+                    "{method} {uri}"
+                );
+            }
+        }
+    }
 }

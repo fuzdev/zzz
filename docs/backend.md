@@ -1078,7 +1078,9 @@ commands):
   `file_bytes.cross.test.ts` pins them.
   - **Gates**, in order, through the server's `fuz_auth::AuthGate`: the
     origin check (`check_origin`, 403 `forbidden_origin`); query shape
-    (unknown key, missing `path`, a non-decimal `offset` → 400
+    (read strictly by `fuz_http::read_query_pairs` — an escape anywhere in
+    the query that doesn't decode refuses it, never a U+FFFD path; unknown
+    key, missing `path`, a non-decimal `offset` → 400
     `invalid_query_params`, the same with or without credentials); the
     credential walk (`resolve_credential` on the origin check's witness — any
     credential, like every zzz-owned action; none → 401); the token scope (a

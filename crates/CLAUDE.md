@@ -239,6 +239,16 @@ string vars fails boot naming the variable (it would otherwise read as unset —
 e.g. silently dropping every `PUBLIC_ZZZ_SCOPED_DIRS` entry), as does a dir
 that resolves to a non-UTF-8 path.
 
+**The request-reads census**: the workspace `clippy.toml` disallows axum's
+lenient request readers (`Path`, `RawPathParams`, `Query`, `Form`) and
+`form_urlencoded::parse` / `Url::query_pairs`, as the spine's own does — a
+handler reads its query through `fuz_http::read_query_pairs` over `RawQuery`
+and its path params through `fuz_http::RouteParams`.
+`zzz_server/tests/request_reads_census.rs` pins those entries in every
+`clippy.toml` (a crate-level one replaces the root file), holds the axum
+types' positive controls, and lists every in-source suppression of the
+disallow lints.
+
 **The doc-link gate** is the only command that checks doc links: rustdoc
 lints fire under `cargo doc` alone, never `build`, `test`, or `clippy`. The
 workspace `[workspace.lints.rustdoc]` table denies `broken_intra_doc_links`
@@ -276,7 +286,9 @@ crates (`fuz_auth`, `fuz_http`).
   ../docs/backend.md § Design Decisions → File byte routes)
 - `/api/files/bytes?path=` (POST) — create a file exclusively from the request body
 - `/api/files/bytes?path=&offset=` (PATCH) — append the request body if the
-  file is exactly `offset` bytes long
+  file is exactly `offset` bytes long. On every method the query is read
+  strictly (`fuz_http::read_query_pairs`): an escape that doesn't decode is
+  `400 invalid_query_params`, never a path with U+FFFD in it
 - `/health` (GET) — Health check (`{"status":"ok"}`)
 - `/*` (GET, HEAD) — the built frontend (if `--static-dir` /
   `ZZZ_STATIC_DIR`), the router's fallback behind every route above.
