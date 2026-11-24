@@ -38,9 +38,9 @@ the `zzz` CLI (`createdb zzz && cargo xtask install`, then `zzz`; see
 It also builds as a static site via SvelteKit's static adapter with diminished capabilities,
 and the full app is served by the Rust `zzz_server` backend.
 
-> The Rust backend depends on sibling crates from the fuz and fuz_repos
-> workspaces via path dependencies (including the native `fuz_pty` terminal
-> crate). They must be checked out alongside this repo for `cargo build` to
+> The Rust backend depends on sibling crates from the fuz, fuz_repos, and
+> pglet workspaces via path dependencies (including the native `fuz_pty`
+> terminal crate). They must be checked out alongside this repo for `cargo build` to
 > succeed; until they're published, building from a bare clone isn't yet
 > reproducible.
 

@@ -64,14 +64,16 @@ manual SSE parsing.
 
 ## Prerequisites
 
-The sibling [fuz](https://github.com/fuzdev/fuz) and
-[fuz_repos](https://github.com/fuzdev/fuz_repos) workspaces must be checked
-out alongside this repo:
+The sibling [fuz](https://github.com/fuzdev/fuz),
+[fuz_repos](https://github.com/fuzdev/fuz_repos), and
+[pglet](https://github.com/fuzdev/pglet) workspaces must be checked out
+alongside this repo:
 
 ```
 ~/dev/zzz/                  (this repo)
 ~/dev/fuz/                  (path deps: fuz_sys, fuz_pty, the spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions — plus fuz_testing for the test binary and fuz_audit for xtask)
 ~/dev/fuz_repos/            (path deps: fuz_repos for registry discovery, parsing, and repo status, fuz_git, its git runner)
+~/dev/pglet/                (fuz_testing's path dep: pglet_server, the in-process engine its DB fixture runs on)
 ```
 
 If a path dep is missing, `cargo build` will fail with

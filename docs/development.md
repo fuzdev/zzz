@@ -9,7 +9,9 @@ Requires Node (>=24.14), the Rust toolchain pinned in `rust-toolchain.toml`
 [fuz](https://github.com/fuzdev/fuz) and
 [fuz_repos](https://github.com/fuzdev/fuz_repos) Rust workspaces checked out
 alongside this repo as `fuz/` and `fuz_repos/` (path deps — including
-`fuz_pty`, and `fuz_repos` and `fuz_git` for repo registries). Terminals
+`fuz_pty`, and `fuz_repos` and `fuz_git` for repo registries), and
+[pglet](https://github.com/fuzdev/pglet) as `pglet/`, which `fuz_testing`
+path-depends on. Terminals
 also need [Zig](https://ziglang.org/download/) 0.17, which builds the
 terminal emulator's module (see [Terminal emulator
 module](#terminal-emulator-module)); without it everything else runs.
@@ -17,6 +19,7 @@ module](#terminal-emulator-module)); without it everything else runs.
 ```bash
 git clone https://github.com/fuzdev/fuz.git
 git clone https://github.com/fuzdev/fuz_repos.git
+git clone https://github.com/fuzdev/pglet.git
 git clone https://github.com/fuzdev/zzz.git && cd zzz
 createdb zzz_dev      # PostgreSQL database the dev backend connects to
 cargo xtask dev-setup   # generate .env.development (idempotent)

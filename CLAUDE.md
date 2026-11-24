@@ -149,7 +149,8 @@ The installed app (`cargo xtask install`, then `zzz`) uses its own
 database, `zzz`; dev's is `zzz_dev`.
 
 The Rust crates need the sibling Rust workspaces `fuz` and `fuz_repos`
-checked out alongside this repo (path deps); terminals need Zig 0.17
+checked out alongside this repo (path deps), and `pglet`, which
+`fuz_testing` path-depends on; terminals need Zig 0.17
 (without it the app runs and each terminal says the module is missing).
 Node deps via npm; there is no Deno.
 
