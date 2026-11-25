@@ -185,7 +185,7 @@ pub struct RunAppOptions {
     /// The spine's swap points. Production: [`fuz_auth::Argon2idHasher`],
     /// [`DEFAULT_ADDR`] (`127.0.0.1:4460`; only the port is overridable),
     /// [`fuz_http::DEFAULT_DRAIN_TIMEOUT`], every limiter enforced — always
-    /// on, matching the other spine servers — no daemon token, no hook.
+    /// on, matching the other spine servers — no daemon token.
     ///
     /// zzz mounts **no** daemon-token credential in production. Nothing sends
     /// the header — the browser UI authenticates with session cookies, and a
@@ -199,8 +199,8 @@ pub struct RunAppOptions {
     /// The test binary: `fuz_testing::TestingArgon2idHasher`,
     /// `127.0.0.1:4462` so the two can run side-by-side, the limiters
     /// `DisabledForTesting` so the cross-backend auth suite's repeated logins
-    /// don't trip the bucket, the daemon token `_testing_reset` resolves the
-    /// keeper through, and the env-gated schema wipe.
+    /// don't trip the bucket, and the daemon token `_testing_reset` resolves
+    /// the keeper through.
     pub spine: SpineRunOptions,
     /// The parsed command line ([`parse_args`]): `--port` and `--static-dir`,
     /// each over its env var.
@@ -232,7 +232,7 @@ impl std::fmt::Debug for RunAppOptions {
 ///
 /// Reads the config (command line + env), boots the spine core
 /// (`fuz_actions::server::create_app_backend`: the keyring, the READ
-/// COMMITTED guard, the pre-migration hook, the auth migrations, the keeper,
+/// COMMITTED guard, the auth migrations, the keeper,
 /// bootstrap availability, the revocation listeners and the audit-row fan-out
 /// to the admin audit streams), builds zzz's app over it, compiles the action
 /// registry, starts the permanent file watchers, mounts the routes, and

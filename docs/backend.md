@@ -12,7 +12,7 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `pub async fn run_app(options: RunAppOptions)` in `src/lib.rs` owns the
   full lifecycle over the spine's server toolkit (`fuz_actions::server`:
   `create_app_backend` boots the core — keyring, the READ COMMITTED guard,
-  the pre-migration hook, the auth migrations, the keeper, bootstrap
+  the auth migrations, the keeper, bootstrap
   availability, the revocation listeners — then `serve_until_shutdown`
   binds, runs the auth cleanup beside the server, and at shutdown, all
   within one drain timeout, drains the requests, joins the cleanup, then
@@ -22,8 +22,7 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `SpineRunOptions` — the password hasher, the `fuz_auth::RateLimiterMode`
   every spine limiter is built through (`Enforced` in production,
   `DisabledForTesting` in the test binary only), the daemon-token state (the
-  test binary's keeper credential; production `None`), the pre-migration
-  hook (the test binary's `fuz_testing::startup_reset_hook`), `default_addr`
+  test binary's keeper credential; production `None`), `default_addr`
   (bind address when `--port`/`ZZZ_PORT` don't supply one; host stays
   loopback, only the port is overridable), and `drain_timeout`), `args` (the
   parsed command line),
