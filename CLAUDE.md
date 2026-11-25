@@ -154,7 +154,7 @@ checked out alongside this repo (path deps), and `pglet`, which
 (without it the app runs and each terminal says the module is missing).
 Node deps via npm; there is no Deno.
 
-- `gro check` — all checks (typecheck, test, gen, format, lint)
+- `gro check` — all checks (typecheck, test, gen, format)
 - `gro typecheck`, `gro test`, `gro gen`, `gro format`, `gro build`
 - `npm run test:cross` — the Rust cross-process suites (builds `testing_zzzd`;
   each backend runs over a `pglet_server` of its own, or a PostgreSQL database

@@ -47,7 +47,7 @@ jobs:
       - run: cp .env.development.example .env.development
       - run: cp .env.production.example .env.production
       - run: npx svelte-kit sync
-      - run: npx @fuzdev/gro check --workspace --build
+      - run: npx @fuzdev/gro check --workspace --build --lint
 
   # The cross-backend wire-contract suites (cross_backend_rust / _proxy) run
   # against the Rust `zzz_server`. They need the sibling Rust workspace checkouts

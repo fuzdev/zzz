@@ -193,7 +193,7 @@ project, which exists only when the module does.
 
 ## Commands
 
-- `gro check` — All checks (typecheck, test, gen, format, lint)
+- `gro check` — All checks (typecheck, test, gen, format)
 - `gro typecheck` — Type checking only (faster iteration)
 - `gro test` (or `npm test`) — Run Vitest unit + db tests; the
   `cross_backend_*` projects are excluded unless `FUZ_TEST_CROSS_BACKEND=1`
