@@ -5,10 +5,13 @@
  * the vitest project name (`cross_backend_rust` → `rust`,
  * `cross_backend_rust_proxy` → `rust_proxy`, `cross_backend_rust_projects`
  * → `rust_projects`), builds the test binary first
- * with its output shown (`prepare_cargo_binary`), creates the backend's
- * Postgres database when it's missing, spawns + bootstraps the backend, and
+ * with its output shown (`prepare_cargo_binary`), opens a database of the
+ * backend's own (a `pglet_server` built in zzz's Cargo workspace, or a
+ * PostgreSQL database under `FUZ_TEST_POSTGRES_URL`), spawns + bootstraps
+ * the backend over it, and
  * `provide`s the serializable handle the `*.cross.test.ts` files read with
- * `inject_backend_handle`. The teardown SIGTERMs the child's process group.
+ * `inject_backend_handle`. The teardown SIGTERMs the child's process group,
+ * then closes the database.
  *
  * @module
  */
@@ -18,6 +21,7 @@ import { create_cross_backend_global_setup } from '@fuzdev/fuz_app/testing/cross
 
 import {
 	ZZZ_CARGO_BINARY,
+	ZZZ_PGLET_SERVER,
 	rust_backend_config,
 	rust_projects_backend_config,
 	rust_proxy_backend_config
@@ -31,7 +35,10 @@ export default create_cross_backend_global_setup({
 		rust_proxy: rust_proxy_backend_config,
 		rust_projects: rust_projects_backend_config
 	},
-	// `createdb` for each project's own `zzz_test_<name>` database when it's missing
-	ensure_databases: true,
+	databases: {
+		rust: ZZZ_PGLET_SERVER,
+		rust_proxy: ZZZ_PGLET_SERVER,
+		rust_projects: ZZZ_PGLET_SERVER
+	},
 	before_spawn: { rust: build, rust_proxy: build, rust_projects: build }
 });

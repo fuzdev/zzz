@@ -15,26 +15,48 @@
  * origin reaches a handler (which answers, or asks for a credential), and a
  * refused one gets the gate's 403 on RPC, REST, and the WebSocket upgrade.
  *
+ * The backend runs over a database of its own, opened here as the global
+ * setup opens a project's (`open_rust_test_database`).
+ *
  * @module
  */
 
 import { describe, test, assert, beforeAll, afterAll } from 'vitest';
+import type { BackendConfig } from '@fuzdev/fuz_app/testing/cross_backend/backend_config.ts';
 import {
 	spawn_backend,
 	type BackendHandle
 } from '@fuzdev/fuz_app/testing/cross_backend/spawn_backend.ts';
+import {
+	assert_config_on_database,
+	type TestDatabase
+} from '@fuzdev/fuz_app/testing/cross_backend/test_database.ts';
 import { RAW_WS_UPGRADE_HEADERS } from '@fuzdev/fuz_app/testing/transports/ws_raw_client.ts';
 
 import { raw_request, type RawResponse } from './raw_request.ts';
-import { read_dev_allowed_origins, rust_dev_origins_backend_config } from './zzz_backend_config.ts';
+import {
+	RUST_DEV_ORIGINS_BACKEND_NAME,
+	open_rust_test_database,
+	read_dev_allowed_origins,
+	rust_dev_origins_backend_config
+} from './zzz_backend_config.ts';
 
 /** The dev UI's origin: the Vite dev server, at the port `vite.config.ts` pins. */
 const DEV_UI_ORIGIN = 'http://localhost:5460';
 
-const config = rust_dev_origins_backend_config();
-const { base_url, rpc_path } = config;
-const port = new URL(base_url).port;
-const api_path = rpc_path.replace(/\/rpc$/, '');
+/**
+ * How long opening the database and spawning the backend may take: the Rust
+ * backend's startup window (`make_default_rust_backend_config`'s two
+ * minutes) and the database's.
+ */
+const SETUP_TIMEOUT_MS = 150_000;
+
+// set in `beforeAll`, once the backend's database is open
+let config: BackendConfig;
+let base_url: string;
+let rpc_path: string;
+let port: string;
+let api_path: string;
 
 const ping_envelope = JSON.stringify({ jsonrpc: '2.0', id: 'dev', method: 'ping' });
 
@@ -65,14 +87,25 @@ const assert_refused = async (origin: string): Promise<void> => {
 };
 
 describe('dev origins', () => {
-	let backend: BackendHandle;
+	let database: TestDatabase | undefined;
+	let backend: BackendHandle | undefined;
 
 	beforeAll(async () => {
+		database = await open_rust_test_database(RUST_DEV_ORIGINS_BACKEND_NAME);
+		config = rust_dev_origins_backend_config(database.url);
+		({ base_url, rpc_path } = config);
+		port = new URL(base_url).port;
+		api_path = rpc_path.replace(/\/rpc$/, '');
+		assert_config_on_database(config, database);
 		backend = await spawn_backend(config);
-	}, config.startup_timeout_ms + 10_000);
+	}, SETUP_TIMEOUT_MS);
 
 	afterAll(async () => {
-		await backend.teardown();
+		try {
+			await backend?.teardown();
+		} finally {
+			await database?.close();
+		}
 	});
 
 	test('the dev template allows exactly the dev UI origin', () => {

@@ -25,19 +25,16 @@
  * `proxy-test-<label>-<uuid>` username, with crafted `X-Forwarded-For`
  * headers, then queries the resulting `audit_log` row's `ip` column to
  * assert the resolved client IP. Uses a direct `pg` Client against the
- * per-project Rust test database (`zzz_test_rust_proxy` for this
- * suite) rather than the `audit_log_list` RPC because that RPC requires
- * the `admin` role, and the bootstrapped keeper only holds `keeper`.
- * The direct query is acceptable here because (a) these tests are
- * Rust-only, (b) the test DB is a real Postgres (no PGlite path to
- * confuse), and (c) the audit write is fire-and-forget so we poll
- * until the row appears.
+ * backend's own database rather than the `audit_log_list` RPC because that
+ * RPC requires the `admin` role, and the bootstrapped keeper only holds
+ * `keeper`. The direct query is acceptable here because (a) these tests are
+ * Rust-only, (b) the database speaks the Postgres wire protocol (a
+ * `pglet_server`, or PostgreSQL under `FUZ_TEST_POSTGRES_URL`), and (c) the
+ * audit write is fire-and-forget so we poll until the row appears.
  *
- * The DB URL is sourced from `handle.config.env.DATABASE_URL` rather
- * than a hardcoded constant — `zzz_backend_config.ts` builds it as
- * `${RUST_DATABASE_URL_PREFIX}${name}` so the per-project DB
- * isolation lifts cleanly into here without any harness↔test
- * coordination.
+ * The DB URL is the backend's own `DATABASE_URL`
+ * (`handle.config.env.DATABASE_URL`), the database the global setup
+ * provisioned for it.
  *
  * @module
  */
@@ -49,22 +46,15 @@ import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/pro
 import type { ReconstructedBootstrappedBackendHandle } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 
 /**
- * Resolve the connection string for the spawned backend's database.
- *
- * Reads `handle.config.env.DATABASE_URL` (built by
- * `rust_proxy_backend_config()` in `zzz_backend_config.ts` as
- * `postgres://localhost/zzz_test_rust_proxy`). `TEST_DATABASE_URL`
- * remains as a CI override hook — useful when the runner needs a
- * custom host even though the binary's URL is set per-project.
+ * The spawned backend's database: its `DATABASE_URL`, the database the
+ * global setup provisioned for it.
  */
 const resolve_database_url = (handle: ReconstructedBootstrappedBackendHandle): string => {
-	const env_override = process.env.TEST_DATABASE_URL;
-	if (env_override) return env_override;
 	const backend_url = handle.config.env?.DATABASE_URL;
 	if (!backend_url) {
 		throw new Error(
 			'proxy.cross.test: handle.config.env.DATABASE_URL missing — ' +
-				'expected `rust_proxy_backend_config()` to set DATABASE_URL on the env block'
+				'expected `rust_proxy_backend_config` to set DATABASE_URL on the env block'
 		);
 	}
 	return backend_url;

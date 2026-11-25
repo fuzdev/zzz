@@ -156,8 +156,9 @@ Node deps via npm; there is no Deno.
 
 - `gro check` — all checks (typecheck, test, gen, format, lint)
 - `gro typecheck`, `gro test`, `gro gen`, `gro format`, `gro build`
-- `npm run test:cross` — the Rust cross-process suites (needs local Postgres;
-  builds `testing_zzzd`, creates its DBs). A bare `gro test` excludes them
+- `npm run test:cross` — the Rust cross-process suites (builds `testing_zzzd`;
+  each backend runs over a `pglet_server` of its own, or a PostgreSQL database
+  with `FUZ_TEST_POSTGRES_URL` set). A bare `gro test` excludes them
   (`FUZ_TEST_CROSS_BACKEND=1` gates them).
 - Rust gates: `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo test --workspace`, and the doc-link gate `cargo doc --workspace

@@ -16,9 +16,8 @@
  * lifted upstream builder
  * (`make_default_rust_backend_config` in
  * `@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.ts`).
- * The upstream builder owns the common shape — `/api/*` paths, the
- * bootstrap block keyed off `default_test_*` secrets, the
- * `FUZ_TESTING_RESET_DB_ON_STARTUP` gate. Per-backend factories only
+ * The upstream builder owns the common shape — `/api/*` paths and the
+ * bootstrap block keyed off `default_test_*` secrets. Per-backend factories only
  * declare what genuinely differs: zzz-specific env vars (`PUBLIC_ZZZ_*`,
  * `ZZZ_ROOTS_OUTSIDE_HOME`, `ZZZ_PORT`), the per-port session cookie name
  * (`zzz_session_cookie_name`), the Rust binary's preferred `RUST_LOG`
@@ -39,26 +38,14 @@
  * Vitest projects spawn one backend each, so ports only need to not
  * collide cross-project, not cross-test.
  *
- * **Per-project Postgres DBs** — each Rust project points at its own
- * database (`zzz_test_rust` for `cross_backend_rust`, `zzz_test_rust_proxy`
- * for `cross_backend_rust_proxy`, `zzz_test_rust_projects` for
- * `cross_backend_rust_projects`). Decouples the projects so vitest
- * can run them in parallel without trashing another's `bootstrap_lock`
- * state, and removes the shared-DB race condition that forced a manual
- * `DROP TABLE` between project switches.
- *
- * **Startup-reset env gate** — `make_default_rust_backend_config` sets
- * `FUZ_TESTING_RESET_DB_ON_STARTUP=true` by default, which makes
- * `testing_zzz_server` wipe the auth-namespace schema
- * before migrations replay on every boot. No more manual `psql DROP
- * TABLE...` between vitest sessions — the binary self-cleans. The
- * `_testing_reset` RPC action (per-test reset) is orthogonal and stays
- * wired the same way it was; this is the per-process-startup wipe.
- *
- * **Databases** — the global setup creates each project's database when
- * it's missing (`ensure_databases`, an idempotent `createdb`; a role without
- * `CREATEDB` gets a warning, and a database provisioned another way works
- * the same).
+ * **Databases** — each factory takes the URL of a database of the backend's
+ * own, empty at its spawn: the global setup provisions one per project
+ * (`databases`), and `dev_origins.cross.test.ts` opens one for the backend
+ * it spawns (`open_rust_test_database`). By default it is a `pglet_server`
+ * built in zzz's Cargo workspace; under `FUZ_TEST_POSTGRES_URL` it is a
+ * PostgreSQL database `fuz_testing_zzz_<name>` on that server. Separate
+ * databases let vitest run the projects in parallel without one backend's
+ * `bootstrap_lock` state reaching another.
  *
  * @module
  */
@@ -81,6 +68,13 @@ import {
 	make_default_rust_backend_config,
 	rust_default_capabilities
 } from '@fuzdev/fuz_app/testing/cross_backend/default_backend_configs.ts';
+import {
+	open_test_database,
+	prepare_pglet_server_binary,
+	type PgletServerBinaryOptions,
+	type TestDatabase
+} from '@fuzdev/fuz_app/testing/cross_backend/test_database.ts';
+import { FUZ_TEST_POSTGRES_URL_ENV } from '@fuzdev/fuz_app/testing/db.ts';
 import { TEST_ORIGIN } from '@fuzdev/fuz_app/testing/test_origin.ts';
 
 /**
@@ -105,15 +99,6 @@ export const read_dev_allowed_origins = (): string => {
 	}
 	return values[0];
 };
-
-/**
- * Per-project Rust backend database URL prefix — real Postgres (PGlite
- * isn't reachable from `tokio-postgres`). The full URL is built by
- * appending the backend `name` so each Rust project gets its own
- * database (`zzz_test_rust`, `zzz_test_rust_proxy`). See the module
- * doc for the operator setup step.
- */
-const RUST_DATABASE_URL_PREFIX = 'postgres://localhost/zzz_test_';
 
 /**
  * Every mount flag `zzz_server` has, stated: `/api/ws` (`ws`), the
@@ -169,6 +154,32 @@ export const ZZZ_CARGO_BINARY: CargoBinaryOptions = {
 	bin: 'testing_zzzd'
 };
 
+/**
+ * Where a Rust backend's `pglet_server` is built: zzz's own Cargo workspace
+ * and `ZZZ_CARGO_BINARY`'s profile, so it runs the pglet the spine's
+ * `fuz_testing` runs and shares the build of its library.
+ */
+export const ZZZ_PGLET_SERVER: PgletServerBinaryOptions = {
+	workspace_dir: ZZZ_CARGO_BINARY.workspace_dir,
+	profile: ZZZ_CARGO_BINARY.profile
+};
+
+/**
+ * Open a database of its own for a Rust backend spawned outside the global
+ * setup, as the global setup's `databases` does for a project's backend: a
+ * `pglet_server` built from `ZZZ_PGLET_SERVER`, or a PostgreSQL database
+ * under `FUZ_TEST_POSTGRES_URL`.
+ *
+ * @param name - the backend's name, which names the database
+ * @returns the database; `close()` it after the backend's teardown
+ */
+export const open_rust_test_database = (name: string): Promise<TestDatabase> =>
+	open_test_database({
+		name,
+		postgres_url: process.env[FUZ_TEST_POSTGRES_URL_ENV],
+		pglet_server_bin: () => prepare_pglet_server_binary(ZZZ_PGLET_SERVER)
+	});
+
 interface ZzzBackendPaths extends TestBackendPaths {
 	scoped_dir: string;
 }
@@ -193,8 +204,8 @@ const build_zzz_paths = (backend_name: string): ZzzBackendPaths => {
 interface MakeZzzRustBackendOptions {
 	name: string;
 	port: number;
-	/** The database, when it isn't the backend's own `zzz_test_<name>`. */
-	database_name?: string;
+	/** The backend's database, provisioned for it. */
+	database_url: string;
 	extra_env?: Record<string, string>;
 }
 
@@ -210,7 +221,7 @@ interface MakeZzzRustBackendOptions {
 const make_zzz_rust_backend_config = ({
 	name,
 	port,
-	database_name = name,
+	database_url,
 	extra_env
 }: MakeZzzRustBackendOptions): BackendConfig => {
 	const paths = build_zzz_paths(name);
@@ -221,7 +232,7 @@ const make_zzz_rust_backend_config = ({
 		name,
 		port,
 		start_command: [resolve_cargo_binary_path(ZZZ_CARGO_BINARY)],
-		database_url: `${RUST_DATABASE_URL_PREFIX}${database_name}`,
+		database_url,
 		port_env_var: 'ZZZ_PORT',
 		cookie_name: zzz_session_cookie_name(port),
 		rust_log: 'info,zzz_server=info,testing_zzzd=info',
@@ -289,19 +300,16 @@ const write_static_fixture = (dir: string): void => {
 };
 
 /**
- * Rust backend. Requires PostgreSQL — `DATABASE_URL` resolves to
- * `zzz_test_rust` (one of the per-project DBs the operator creates
- * once; see the module doc). The test binary self-wipes the
- * auth-namespace schema on every startup, so no manual `DROP TABLE`
- * between vitest sessions is needed. Serves `STATIC_FIXTURE_FILES` as its
- * frontend (`ZZZ_STATIC_DIR`).
+ * Rust backend, over the database at `database_url`. Serves
+ * `STATIC_FIXTURE_FILES` as its frontend (`ZZZ_STATIC_DIR`).
  */
-export const rust_backend_config = (): BackendConfig => {
+export const rust_backend_config = (database_url: string): BackendConfig => {
 	const static_dir = join(build_zzz_paths('rust').root, 'static');
 	write_static_fixture(static_dir);
 	return make_zzz_rust_backend_config({
 		name: 'rust',
 		port: 4462,
+		database_url,
 		extra_env: { ZZZ_STATIC_DIR: static_dir }
 	});
 };
@@ -312,15 +320,12 @@ export const rust_backend_config = (): BackendConfig => {
  * regular Rust project — flipping `ZZZ_TRUSTED_PROXIES` mid-run isn't
  * supported (Rust parses it once at boot). Port `4463` so the proxy
  * binary doesn't collide with the regular Rust project on `4462`.
- *
- * Points at its own `zzz_test_rust_proxy` database so the two Rust
- * projects don't fight over `bootstrap_lock` state and can run in
- * parallel.
  */
-export const rust_proxy_backend_config = (): BackendConfig =>
+export const rust_proxy_backend_config = (database_url: string): BackendConfig =>
 	make_zzz_rust_backend_config({
 		name: 'rust_proxy',
 		port: 4463,
+		database_url,
 		extra_env: { ZZZ_TRUSTED_PROXIES: '127.0.0.1' }
 	});
 
@@ -341,7 +346,7 @@ export const projects_backend_home = (): string =>
  * write. No roots outside it; its scoped dir is inside it. Its own project
  * and database, since `HOME` is read once at boot.
  */
-export const rust_projects_backend_config = (): BackendConfig => {
+export const rust_projects_backend_config = (database_url: string): BackendConfig => {
 	const home = projects_backend_home();
 	rmSync(home, { recursive: true, force: true });
 	const scoped_dir = join(home, 'scoped');
@@ -351,26 +356,25 @@ export const rust_projects_backend_config = (): BackendConfig => {
 	return make_zzz_rust_backend_config({
 		name: 'rust_projects',
 		port: 4465,
+		database_url,
 		extra_env: { HOME: home, PUBLIC_ZZZ_SCOPED_DIRS: scoped_dir, ZZZ_ROOTS_OUTSIDE_HOME: '' }
 	});
 };
+
+/** The name of `rust_dev_origins_backend_config`'s backend, which names its database. */
+export const RUST_DEV_ORIGINS_BACKEND_NAME = 'rust_dev_origins';
 
 /**
  * A second Rust backend for `dev_origins.cross.test.ts`, started with the dev
  * env template's origin allowlist and no frontend of its own — what
  * `cargo xtask dev` runs. The suite spawns it itself, beside the
- * `cross_backend_rust` project's backend, and makes only requests that need
- * no account, so it shares that project's database instead of taking one of
- * its own: it never wipes the schema on startup, and its migrations find
- * them already run.
+ * `cross_backend_rust` project's backend, over a database of its own
+ * (`open_rust_test_database(RUST_DEV_ORIGINS_BACKEND_NAME)`).
  */
-export const rust_dev_origins_backend_config = (): BackendConfig =>
+export const rust_dev_origins_backend_config = (database_url: string): BackendConfig =>
 	make_zzz_rust_backend_config({
-		name: 'rust_dev_origins',
+		name: RUST_DEV_ORIGINS_BACKEND_NAME,
 		port: 4464,
-		database_name: 'rust',
-		extra_env: {
-			FUZ_ALLOWED_ORIGINS: read_dev_allowed_origins(),
-			FUZ_TESTING_RESET_DB_ON_STARTUP: 'false'
-		}
+		database_url,
+		extra_env: { FUZ_ALLOWED_ORIGINS: read_dev_allowed_origins() }
 	});

@@ -73,16 +73,14 @@ alongside this repo:
 ~/dev/zzz/                  (this repo)
 ~/dev/fuz/                  (path deps: fuz_sys, fuz_pty, the spine crates — fuz_db, fuz_auth, fuz_http, fuz_realtime, fuz_actions — plus fuz_testing for the test binary and fuz_audit for xtask)
 ~/dev/fuz_repos/            (path deps: fuz_repos for registry discovery, parsing, and repo status, fuz_git, its git runner)
-~/dev/pglet/                (fuz_testing's path dep: pglet_server, the in-process engine its DB fixture runs on)
+~/dev/pglet/                (fuz_testing's path dep: pglet_server, the engine its DB fixture runs in-process and the cross-backend harness spawns)
 ```
 
 If a path dep is missing, `cargo build` will fail with
 `failed to read .../crates/{crate}/Cargo.toml`.
 
 **PostgreSQL** is required. Create the development and manual-test databases
-(the cross-backend projects' `zzz_test_rust` / `zzz_test_rust_proxy` /
-`zzz_test_rust_projects` are
-created by their global setup when missing):
+(the cross-backend suites need none: their harness provisions its own):
 
 ```bash
 createdb zzz_dev             # development (`cargo xtask dev`)
@@ -345,7 +343,7 @@ suites.
 
 Supporting files: `global_setup.ts` (vitest globalSetup:
 `create_cross_backend_global_setup`, which builds `testing_zzzd` first and
-creates each project's database when missing), `zzz_backend_config.ts`
+opens each project's database), `zzz_backend_config.ts`
 (per-project `BackendConfig` factories and the stated capabilities), and
 `raw_request.ts` (a request sent with exactly the headers given — a chosen
 `Host`, an upgrade). The over-cap cases send the request head alone through
@@ -353,7 +351,7 @@ fuz_app's `raw_http_send_head`, so the cap must refuse on the declared length.
 
 ```bash
 npm run test:cross                                                        # Every rust project (rust, rust_proxy, rust_projects) — flag baked in
-FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary; postgres://localhost/zzz_test_rust)
+FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust       # Single project (Rust binary)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_proxy # Single project (proxy variant; ZZZ_TRUSTED_PROXIES=127.0.0.1, proxy.cross.test.ts only)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run --project cross_backend_rust_projects # Single project (a fixture HOME for registries; project_registry.cross.test.ts only)
 FUZ_TEST_CROSS_BACKEND=1 npx vitest run -t ping                            # Substring match on test name (vitest -t flag)
@@ -370,10 +368,17 @@ spawns the built binary (`BackendConfig.start_command`), waits for health,
 bootstraps an admin account via `POST /api/account/bootstrap`, then
 provides the bootstrapped handle to test files, which read it with
 `inject_backend_handle`. SIGTERM on globalSetup teardown leaves no
-stranded ports. Each project targets its own real PostgreSQL DB
-(`zzz_test_rust` / `zzz_test_rust_proxy` / `zzz_test_rust_projects`), with its auth-namespace schema
-wiped on backend startup (`FUZ_TESTING_RESET_DB_ON_STARTUP`) and
-`_testing_reset` clearing it between tests (preserving the keeper row).
+stranded ports. Each backend runs over a database of its own, empty at its
+spawn and gone after its teardown, with `_testing_reset` clearing it between
+tests (preserving the keeper row). By default that database is a
+`pglet_server` built in this Cargo workspace (`PGLET_SERVER_BIN` names a
+prebuilt one); with `FUZ_TEST_POSTGRES_URL` set to a PostgreSQL server and a
+role with `CREATEDB`, it is a database `fuz_testing_zzz_<backend>` on that
+server instead:
+
+```bash
+FUZ_TEST_POSTGRES_URL=postgres://postgres@localhost:5432/postgres npm run test:cross
+```
 
 A schema-parity snapshot gate exists as a fuz_app capability
 (`query_schema_snapshot` + `assert_schema_snapshots_equal`) but isn't wired

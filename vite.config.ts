@@ -27,8 +27,8 @@ const PROXY_TEST = 'src/test/cross_backend/proxy.cross.test.ts';
 const PROJECT_REGISTRY_TEST = 'src/test/cross_backend/project_registry.cross.test.ts';
 
 // The `cross_backend_*` projects spawn the real Rust `zzz_server` binary via
-// `globalSetup` (needs local Postgres; the global setup builds the binary and
-// creates the DBs). Gate them behind `FUZ_TEST_CROSS_BACKEND=1` so a bare
+// `globalSetup`, over a database it provisions per project (a `pglet_server` by
+// default, PostgreSQL under `FUZ_TEST_POSTGRES_URL`). Gate them behind `FUZ_TEST_CROSS_BACKEND=1` so a bare
 // `gro test` stays a fast, infra-free unit+db run and never spawns. Set the
 // flag to opt in — required both for `gro test` to include them and for
 // explicit `npx vitest run --project cross_backend_*` runs.
