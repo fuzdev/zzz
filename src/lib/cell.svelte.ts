@@ -227,6 +227,11 @@ export abstract class Cell<TSchema extends AnySchema = AnySchema> implements Cel
 	/**
 	 * Encodes the cell's serializable state as JSON.
 	 * Use the derived `cell.json` if you don't need a fresh copy.
+	 *
+	 * A schema key with no property but a decoder is virtual — the decoder
+	 * takes it in (returning `HANDLED`, see `assign_property`), so it's left
+	 * out here — a subclass that keeps the state elsewhere must encode it by
+	 * overriding `to_json`, or `set_json(to_json())` resets it to its default.
 	 */
 	to_json(): Infer<TSchema> {
 		const result = {} as Record<string, any>;
@@ -236,8 +241,10 @@ export abstract class Cell<TSchema extends AnySchema = AnySchema> implements Cel
 				// We know the key exists in this instance, use index access with type assertion
 				const value = (this as Record<string, unknown>)[key];
 				result[key] = this.encode_property(value, key) as any;
-			} else {
-				console.error(`Property ${key} not found on instance of ${this.constructor.name}`);
+			} else if (!(key in this.decoders)) {
+				console.error(
+					`Schema key "${key}" in ${this.constructor.name} has no property to encode or decoder`
+				);
 			}
 		}
 

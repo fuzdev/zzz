@@ -2,7 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert, vi } from 'vitest';
-import { allow_logged_error, expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { flushSync } from 'svelte';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -1210,8 +1210,6 @@ describe('selection on add', () => {
 
 describe('the selection', () => {
 	test("is the selected tab's path — one selection, nothing kept beside it", () => {
-		// TODO known bug: Cell.to_json logs a schema key with no property behind it
-		expect_logged_error('Property diskfiles not found on instance of Diskfiles');
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
 		const { tabs } = app.diskfiles.editor;
 		assert.isNull(app.diskfiles.selected_path);
@@ -1223,6 +1221,30 @@ describe('the selection', () => {
 		tabs.close_all_tabs();
 		assert.isNull(app.diskfiles.selected_path);
 		assert.notProperty(app.diskfiles.to_json(), 'selected_path');
+	});
+});
+
+describe('the json', () => {
+	test('carries the cells under `diskfiles`, which `set_json` restores', () => {
+		const a = app.diskfiles.add({ path: PATH_A, source_dir: SOURCE_DIR, content: 'a contents' });
+		const b = app.diskfiles.add({ path: PATH_B, source_dir: SOURCE_DIR, content: null });
+
+		const json = app.diskfiles.to_json();
+		assert.deepEqual(json.diskfiles, [a.to_json(), b.to_json()]);
+		assert.deepEqual(app.diskfiles.json.diskfiles, json.diskfiles);
+
+		app.diskfiles.set_json({ diskfiles: [] });
+		assert.strictEqual(app.diskfiles.cells.size, 0);
+		assert.deepEqual(app.diskfiles.to_json().diskfiles, []);
+
+		app.diskfiles.set_json(json);
+		const restored = app.diskfiles.cells.get(PATH_A);
+		assert.ok(restored);
+		assert.notStrictEqual(restored, a);
+		assert.strictEqual(restored.id, a.id);
+		assert.strictEqual(restored.content, 'a contents');
+		assert.strictEqual(app.diskfiles.cells.get(PATH_B)?.id, b.id);
+		assert.deepEqual(app.diskfiles.to_json().diskfiles, json.diskfiles);
 	});
 });
 

@@ -260,6 +260,20 @@ export class Diskfiles extends Cell<typeof DiskfilesJson> {
 		this.init();
 	}
 
+	/**
+	 * Encodes the cells under `diskfiles`, which has no property of that
+	 * name — left out, `set_json(to_json())` would reset it to `[]` and its
+	 * decoder would clear every cell. `set_json` replaces the files with
+	 * these cells: index records without a cell, drafts, and editing state
+	 * aren't in the schema, so they're dropped.
+	 */
+	override to_json(): DiskfilesJson {
+		return {
+			...super.to_json(),
+			diskfiles: Array.from(this.#cells.values(), (diskfile) => diskfile.to_json())
+		};
+	}
+
 	// not reactive — bookkeeping for snapshot requests in flight
 	readonly #change_trackers: Set<{ paths: Set<string> }> = new Set();
 

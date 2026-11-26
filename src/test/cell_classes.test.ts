@@ -49,6 +49,8 @@ describe('registered cell classes', () => {
 			assert.ok(cell.id);
 			assert.ok(cell.created);
 			assert.strictEqual(app.cell_registry.all.get(cell.id), cell);
+			// every schema key is encoded, so `set_json(to_json())` resets nothing
+			assert.deepEqual(Object.keys(cell.to_json()).sort(), [...cell.schema_keys].sort());
 		});
 	}
 

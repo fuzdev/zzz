@@ -12,7 +12,7 @@ import {
 	type Infer
 } from '@fuzdev/fuz_schema/schema.ts';
 import { test, vi, beforeEach, assert } from 'vitest';
-import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
+import { allow_logged_error, expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { get_datetime_now } from '#lib/datetime.ts';
@@ -203,8 +203,6 @@ test('Cell handles inherited properties correctly', () => {
 });
 
 test('Cell properly handles collections with HANDLED sentinel', () => {
-	// TODO known bug: Cell.to_json logs a schema key with no property behind it
-	expect_logged_error('Property collection not found on instance of VirtualCollectionCell');
 	const VirtualCollectionSchema = object({
 		...CellJson.def,
 		collection: with_default_fn(array(string), () => []),
@@ -256,6 +254,63 @@ test('Cell properly handles collections with HANDLED sentinel', () => {
 
 	assert.deepEqual(cell.stored_items, ['ONE', 'TWO', 'THREE']);
 	assert.deepEqual(cell.json.collection, ['ONE', 'TWO', 'THREE']);
+	assert.deepEqual(cell.to_json().collection, ['ONE', 'TWO', 'THREE']);
+});
+
+test('Cell.to_json leaves out a virtual key its decoder handles, logging nothing', () => {
+	const VirtualSchema = object({
+		...CellJson.def,
+		hidden: with_default_fn(array(string), () => []),
+		text: with_default(string, '')
+	});
+
+	class VirtualKeyCell extends Cell<typeof VirtualSchema> {
+		text: string = $state()!;
+		// No `hidden` property and no `to_json` override
+
+		constructor(options: CellOptions<typeof VirtualSchema>) {
+			super(VirtualSchema, options);
+			this.decoders = { hidden: () => HANDLED };
+			this.init();
+		}
+	}
+
+	const cell = new VirtualKeyCell({ app, json: { hidden: ['a'], text: 'sample' } });
+
+	const json = cell.to_json();
+	assert.notProperty(json, 'hidden');
+	assert.strictEqual(json.text, 'sample');
+});
+
+test('Cell.to_json logs a schema key with neither a property nor a decoder', () => {
+	expect_logged_error(
+		'Schema key "missing" in MissingKeyCell has no property to encode or decoder'
+	);
+	// what construction logs, `assign_property`'s twin of the error
+	allow_logged_error(
+		'Schema key "missing" in MissingKeyCell has no matching property or decoder',
+		'construction decodes the same key'
+	);
+	const MissingSchema = object({
+		...CellJson.def,
+		missing: with_default(string, ''),
+		text: with_default(string, '')
+	});
+
+	class MissingKeyCell extends Cell<typeof MissingSchema> {
+		text: string = $state()!;
+
+		constructor(options: CellOptions<typeof MissingSchema>) {
+			super(MissingSchema, options);
+			this.init();
+		}
+	}
+
+	const cell = new MissingKeyCell({ app, json: { text: 'sample' } });
+
+	const json = cell.to_json();
+	assert.notProperty(json, 'missing');
+	assert.strictEqual(json.text, 'sample');
 });
 
 test('Cell registration and unregistration works correctly', () => {
