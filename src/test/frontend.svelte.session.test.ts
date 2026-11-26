@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import {
@@ -99,7 +100,7 @@ describe('Frontend.load_session', () => {
 	});
 
 	test('re-pings a backend whose last ping failed, restoring the filesystem capability', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('[capabilities] [handle_ping_error] ping_id p1 fetch failed');
 		const { capabilities } = app;
 		// the mount-time ping failed — the daemon was restarting
 		capabilities.handle_ping_sent('p1');
@@ -129,7 +130,6 @@ describe('Frontend.load_session', () => {
 
 	test('retries a failure with backoff and surfaces the error meanwhile', async () => {
 		vi.useFakeTimers();
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const loaded = app.load_session();
 		fail(0);
@@ -164,7 +164,6 @@ describe('Frontend.load_session', () => {
 
 	test('calling it while a retry waits retries now', async () => {
 		vi.useFakeTimers();
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const loaded = app.load_session();
 		fail(0);
@@ -180,8 +179,8 @@ describe('Frontend.load_session', () => {
 	});
 
 	test('a throw from the request is retried like a failed load', async () => {
+		expect_logged_error('[frontend] session load failed: Error: transport exploded');
 		vi.useFakeTimers();
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 		(app as unknown as { api: unknown }).api = {
 			session_load: () => Promise.reject(new Error('transport exploded'))
 		};
@@ -203,8 +202,8 @@ describe('Frontend.load_session', () => {
 	});
 
 	test('a throw applying the snapshot is retried like a failed load', async () => {
+		expect_logged_error('[frontend] session load failed: Error: bad snapshot');
 		vi.useFakeTimers();
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 		const receive_session = vi.spyOn(app, 'receive_session').mockImplementationOnce(() => {
 			throw new Error('bad snapshot');
 		});
@@ -225,7 +224,6 @@ describe('Frontend.load_session', () => {
 
 	test('dispose stops retrying', async () => {
 		vi.useFakeTimers();
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const loaded = app.load_session();
 		fail(0);

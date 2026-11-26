@@ -1,4 +1,5 @@
 import { assert, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
 import { flushSync, mount, unmount, type ComponentProps } from 'svelte';
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 
@@ -226,7 +227,7 @@ const find_menuitem = (label: string): HTMLElement => {
 };
 
 const tick = async (): Promise<void> => {
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await wait();
 	flushSync();
 };
 

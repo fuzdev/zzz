@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert, vi } from 'vitest';
+import { allow_logged_error, expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { flushSync } from 'svelte';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -1209,6 +1210,8 @@ describe('selection on add', () => {
 
 describe('the selection', () => {
 	test("is the selected tab's path — one selection, nothing kept beside it", () => {
+		// TODO known bug: Cell.to_json logs a schema key with no property behind it
+		expect_logged_error('Property diskfiles not found on instance of Diskfiles');
 		app.diskfiles.add_initial([create_disknode(PATH_A), create_disknode(PATH_B)]);
 		const { tabs } = app.diskfiles.editor;
 		assert.isNull(app.diskfiles.selected_path);
@@ -1327,6 +1330,10 @@ describe('create_file selects the new file', () => {
 	};
 
 	test('when its `filer_change` arrives after the response', async () => {
+		allow_logged_error(
+			'[diskfiles] reading /ws/b.txt failed: this.app.api.diskfile_read is not a function',
+			"the test's api fake has no `diskfile_read`, so the read a new file starts fails"
+		);
 		const a = setup();
 
 		await app.diskfiles.create_file('b.txt');
@@ -1356,6 +1363,10 @@ describe('create_file selects the new file', () => {
 	});
 
 	test('only once — a later re-add of the path by another tool does not select it', async () => {
+		allow_logged_error(
+			'[diskfiles] reading /ws/b.txt failed: this.app.api.diskfile_read is not a function',
+			"the test's api fake has no `diskfile_read`, so the read a new file starts fails"
+		);
 		const a = setup(() => filer_change('add', PATH_B));
 		await app.diskfiles.create_file('b.txt');
 		app.diskfiles.select(a.path);
@@ -1368,6 +1379,10 @@ describe('create_file selects the new file', () => {
 
 	for (const filename of ['./b.txt', 'sub/../b.txt', '/b.txt', 'sub//../b.txt']) {
 		test(`a name the backend normalizes (${filename}) is selected by its normalized path`, async () => {
+			allow_logged_error(
+				'[diskfiles] reading /ws/b.txt failed: this.app.api.diskfile_read is not a function',
+				"the test's api fake has no `diskfile_read`, so the read a new file starts fails"
+			);
 			setup();
 
 			await app.diskfiles.create_file(filename);
@@ -1436,6 +1451,10 @@ describe('create_file selects the new file', () => {
 	});
 
 	test('the next create replaces the pending selection', async () => {
+		allow_logged_error(
+			'[diskfiles] reading /ws/c.txt failed: this.app.api.diskfile_read is not a function',
+			"the test's api fake has no `diskfile_read`, so the read a new file starts fails"
+		);
 		setup();
 		await app.diskfiles.create_file('b.txt');
 		await app.diskfiles.create_file('c.txt');

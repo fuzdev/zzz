@@ -1,19 +1,15 @@
 // @vitest-environment jsdom
 
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
 import { flushSync, mount, unmount } from 'svelte';
 
 import TerminalContextmenuHarness from './TerminalContextmenuHarness.svelte';
+import { ResizeObserverStub } from './diskfile_tree_test_helpers.ts';
 
 const cleanups: Array<() => void> = [];
 
 // jsdom has no `ResizeObserver`, which the menu's size bindings use
-class ResizeObserverStub {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-
 beforeEach(() => {
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
@@ -58,7 +54,7 @@ const find_menuitem = (text: string): HTMLElement | undefined =>
 /** Entries activate a tick after the click. */
 const click = async (item: HTMLElement): Promise<void> => {
 	item.click();
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await wait();
 	flushSync();
 };
 
@@ -85,7 +81,7 @@ describe('TerminalContextmenu paste', () => {
 		vi.advanceTimersByTime(0);
 		assert.deepEqual(reads, [read], 'read in the activation itself');
 		vi.useRealTimers();
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 		assert.deepEqual(reads, [read], 'read once');
 		assert.strictEqual(pastes.length, 1);

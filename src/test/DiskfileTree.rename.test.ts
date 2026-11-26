@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { flushSync } from 'svelte';
-import { create_deferred, type Deferred } from '@fuzdev/fuz_util/async.ts';
+import { create_deferred, type Deferred, wait } from '@fuzdev/fuz_util/async.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import type { Diskfile } from '#lib/diskfile.svelte.ts';
@@ -78,7 +79,7 @@ const write = (path: string): Diskfile => write_diskfile(app, path);
 const render_tree = (): HTMLElement => mount_tree(app, cleanups).target;
 
 const tick = async (): Promise<void> => {
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await wait();
 	flushSync();
 };
 
@@ -335,6 +336,10 @@ describe('the inline rename', () => {
 	});
 
 	test('the open file’s tab follows the rename', async () => {
+		allow_logged_error(
+			'no transport available',
+			'the test runs without a transport, so what the component sends fails'
+		);
 		const file = write('/w/a.md');
 		app.diskfiles.editor.open_diskfile(file.path);
 		const target = render_tree();
@@ -360,6 +365,10 @@ describe('the inline rename', () => {
 	});
 
 	test('a rename to a skipped name kept in the tree for its tab says nothing', async () => {
+		allow_logged_error(
+			'no transport available',
+			'the test runs without a transport, so what the component sends fails'
+		);
 		const file = write('/w/a.md');
 		app.diskfiles.editor.open_diskfile(file.path);
 		const target = render_tree();

@@ -2,6 +2,8 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { flushSync, mount, unmount } from 'svelte';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -24,7 +26,6 @@ let app: Frontend;
 
 beforeEach(() => {
 	vi.spyOn(console, 'log').mockImplementation(() => undefined);
-	vi.spyOn(console, 'error').mockImplementation(() => undefined);
 	app = new Frontend();
 });
 afterEach(() => {
@@ -80,6 +81,8 @@ describe('create_detached', () => {
 describe('actions created by api calls in component scopes', () => {
 	for (const scope of SCOPES) {
 		test(`an api call in ${scope} leaves an action that settles after unmount`, async () => {
+			// no transport, so the request fails
+			expect_logged_error('no transport available');
 			let action!: Action;
 			run_in_unmounted_scope(scope, () => {
 				void app.api.ping();
@@ -89,8 +92,7 @@ describe('actions created by api calls in component scopes', () => {
 				assert.isTrue(action.pending);
 			});
 
-			// no transport, so the request fails
-			await new Promise((resolve) => setTimeout(resolve, 0));
+			await wait();
 
 			assert.isFalse(action.pending);
 			assert.isTrue(action.has_error);

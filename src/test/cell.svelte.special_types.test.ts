@@ -14,6 +14,7 @@ import {
 } from '@fuzdev/fuz_schema/schema.ts';
 import { meta } from '@fuzdev/fuz_schema/meta.ts';
 import { test, vi, beforeEach, assert } from 'vitest';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { get_datetime_now } from '#lib/datetime.ts';
@@ -177,6 +178,10 @@ test('Cell decodes JSON arrays into a Map and a Set with decoders', () => {
 });
 
 test('Cell - JSON serialization excludes undefined values correctly', () => {
+	allow_logged_error(
+		'registry already has a different cell instance',
+		'the test builds a second cell with an id already registered'
+	);
 	const SerializationSchema = object({
 		...CellJson.def,
 		type: one_of(['type1', 'type2']),

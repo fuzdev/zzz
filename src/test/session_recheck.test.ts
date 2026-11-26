@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, test, assert, vi, afterEach } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 import {
@@ -116,14 +117,17 @@ describe('create_session_recheck', () => {
 	});
 
 	test('never rejects', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('[session_recheck] recheck failed: Error: boom');
+		let invalid_calls = 0;
 		const recheck = create_session_recheck({
 			probe: async () => 'invalid',
 			on_invalid: () => {
+				invalid_calls++;
 				throw new Error('boom');
 			}
 		});
 		await recheck();
+		assert.strictEqual(invalid_calls, 1);
 	});
 });
 
@@ -139,7 +143,8 @@ describe('Frontend on_unauthenticated', () => {
 	};
 
 	test('fires when an action fails with unauthenticated', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('[peer] send request failed: diskfile_update no session');
+		expect_logged_error('[frontend_action_handlers] update file failed: /a/b.txt');
 		stub_rpc_error(401, JSONRPC_ERROR_CODES.unauthenticated);
 		let calls = 0;
 		const app = new Frontend({
@@ -153,7 +158,8 @@ describe('Frontend on_unauthenticated', () => {
 	});
 
 	test('does not fire for other errors', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('[peer] send request failed: diskfile_update no session');
+		expect_logged_error('[frontend_action_handlers] update file failed: /a/b.txt');
 		stub_rpc_error(403, JSONRPC_ERROR_CODES.forbidden);
 		let calls = 0;
 		const app = new Frontend({

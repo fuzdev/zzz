@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, assert } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
 import { flushSync, tick } from 'svelte';
 
 import { DiskfileIndex } from '#lib/diskfile_index.svelte.ts';
@@ -43,7 +44,7 @@ const watch = (read: () => unknown): { values: Array<unknown>; stop: () => void 
 /** Lets the subscriptions' teardown, deferred to a microtask, run. */
 const settle_teardown = async (): Promise<void> => {
 	await tick();
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await wait();
 };
 
 describe('counters', () => {

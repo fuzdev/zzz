@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
-import { test, beforeEach, describe, assert } from 'vitest';
+import { test, beforeEach, describe, assert, vi } from 'vitest';
 
 import type { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
@@ -284,19 +284,25 @@ describe('managing unsaved edits', () => {
 		});
 	});
 
-	test('editing the draft keeps one entry and dates it to the latest edit', async () => {
-		editor_state.current_content = 'First';
-		const draft = editor_state.draft_entry;
-		assert.ok(draft);
-		const first_created = draft.created;
-		await new Promise((resolve) => setTimeout(resolve, 5));
+	test('editing the draft keeps one entry and dates it to the latest edit', () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		try {
+			const start = Date.now();
+			editor_state.current_content = 'First';
+			const draft = editor_state.draft_entry;
+			assert.ok(draft);
+			const first_created = draft.created;
+			vi.setSystemTime(start + 5);
 
-		editor_state.current_content = 'Second';
+			editor_state.current_content = 'Second';
 
-		assert.strictEqual(editor_state.unsaved_history_entries.length, 1);
-		assert.strictEqual(editor_state.draft_entry?.id, draft.id);
-		assert.isAbove(editor_state.draft_entry!.created, first_created);
-		assert.strictEqual(editor_state.content_history[0]?.id, draft.id);
+			assert.strictEqual(editor_state.unsaved_history_entries.length, 1);
+			assert.strictEqual(editor_state.draft_entry?.id, draft.id);
+			assert.isAbove(editor_state.draft_entry!.created, first_created);
+			assert.strictEqual(editor_state.content_history[0]?.id, draft.id);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	test('clear_unsaved_edits removes the draft', () => {

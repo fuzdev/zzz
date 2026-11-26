@@ -2,7 +2,8 @@
 
 import { parse, parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, afterEach, describe, assert, vi } from 'vitest';
-import { create_deferred, type Deferred } from '@fuzdev/fuz_util/async.ts';
+import { allow_logged_error, expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
+import { create_deferred, type Deferred, wait } from '@fuzdev/fuz_util/async.ts';
 import { assert_rejects } from '@fuzdev/fuz_util/testing.ts';
 
 import {
@@ -78,14 +79,12 @@ beforeEach(() => {
 			return deferred.promise;
 		}
 	};
-	vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterEach(() => {
 	vi.restoreAllMocks();
 });
 
 /** Lets queued reads start and landed ones apply. */
-const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 const read_ok = (contents: string | null, unloaded_reason: DiskfileUnloadedReason | null = null) =>
 	({
@@ -108,7 +107,7 @@ const answer = async (path: DiskfilePath, result: ReadResult): Promise<void> => 
 	assert.ok(index !== -1, `a read of ${path} is in flight`);
 	const [read] = reads.splice(index, 1);
 	read!.deferred.resolve(result);
-	await flush();
+	await wait();
 };
 
 const get = (path: DiskfilePath): Diskfile => {
@@ -130,7 +129,7 @@ const load = async (path: DiskfilePath, contents: string): Promise<Diskfile> => 
 	app.diskfiles.add_initial([metadata(path)]);
 	const diskfile = get(path);
 	const loading = app.diskfiles.ensure_content(diskfile);
-	await flush();
+	await wait();
 	await answer(path, read_ok(contents));
 	await loading;
 	return diskfile;
@@ -139,7 +138,7 @@ const load = async (path: DiskfilePath, contents: string): Promise<Diskfile> => 
 describe('metadata-only seeds', () => {
 	test('a file seeded without contents is unrequested, and nothing reads it until asked', async () => {
 		app.diskfiles.add_initial([metadata(PATH_A), metadata(PATH_B)]);
-		await flush();
+		await wait();
 		assert.strictEqual(get(PATH_A).content_status, 'unrequested');
 		assert.strictEqual(get(PATH_B).content_status, 'unrequested');
 		assert.isNull(get(PATH_A).content);
@@ -152,7 +151,7 @@ describe('metadata-only seeds', () => {
 		const loading = app.diskfiles.ensure_content(diskfile);
 		assert.strictEqual(diskfile.content_status, 'loading');
 		assert.strictEqual(to_diskfile_unloaded_message(diskfile), DISKFILE_CONTENT_LOADING_MESSAGE);
-		await flush();
+		await wait();
 		assert.deepEqual(
 			reads.map((r) => r.path),
 			[PATH_A]
@@ -169,7 +168,7 @@ describe('metadata-only seeds', () => {
 		app.diskfiles.add_initial([{ ...metadata(PATH_A, 5), size: 42 }]);
 		const diskfile = get(PATH_A);
 		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		await answer(PATH_A, {
 			ok: true,
 			value: {
@@ -201,7 +200,7 @@ describe('single-flight', () => {
 		const first = app.diskfiles.ensure_content(diskfile);
 		const second = app.diskfiles.ensure_content(diskfile);
 		assert.strictEqual(first, second);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 1);
 		await answer(PATH_A, read_ok('text'));
 		await Promise.all([first, second]);
@@ -212,29 +211,30 @@ describe('single-flight', () => {
 		const diskfile = await load(PATH_A, 'text');
 		app.diskfiles.add_initial([metadata(PATH_B)]);
 		const loading = app.diskfiles.ensure_content(get(PATH_B));
-		await flush();
+		await wait();
 		await answer(PATH_B, read_ok(null, 'not_utf8'));
 		await loading;
 		assert.strictEqual(get(PATH_B).content_status, 'unloadable');
 		await app.diskfiles.ensure_content(diskfile);
 		await app.diskfiles.ensure_content(get(PATH_B));
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 0);
 	});
 
 	test('concurrent load_content retries share one read', async () => {
+		expect_logged_error('[diskfiles] reading /ws/a.txt failed');
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		// held, as a copy's file is by its menu, so the cell outlives each load
 		app.diskfiles.hold(PATH_A);
 		const diskfile = get(PATH_A);
 		const failing = assert_rejects(() => app.diskfiles.load_content(diskfile), /connection lost/);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_error('connection lost'));
 		await failing;
 
 		const first = app.diskfiles.load_content(diskfile);
 		const second = app.diskfiles.load_content(diskfile);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 1);
 		await answer(PATH_A, read_ok('text'));
 		assert.deepEqual(await Promise.all([first, second]), ['text', 'text']);
@@ -249,7 +249,7 @@ describe('stale while in flight', () => {
 		const loading = app.diskfiles.ensure_content(diskfile).then(() => {
 			settled = true;
 		});
-		await flush();
+		await wait();
 
 		change_on_disk(PATH_A);
 		assert.strictEqual(reads.length, 1, 'the read in flight reads again, no second one');
@@ -268,7 +268,7 @@ describe('stale while in flight', () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const diskfile = get(PATH_A);
 		void app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		for (const version of ['v1', 'v2', 'v3']) {
 			change_on_disk(PATH_A);
 			await answer(PATH_A, read_ok(version));
@@ -283,7 +283,7 @@ describe('stale while in flight', () => {
 		const diskfile = await load(PATH_A, 'v1');
 		app.diskfiles.get_editor_state(diskfile);
 		change_on_disk(PATH_A);
-		await flush();
+		await wait();
 		change_on_disk(PATH_A);
 		await answer(PATH_A, read_error('flaky'));
 		assert.isNull(diskfile.content_error);
@@ -295,7 +295,7 @@ describe('stale while in flight', () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const diskfile = get(PATH_A);
 		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		change_on_disk(PATH_A);
 		app.diskfiles.remove_by_path(PATH_A);
 		await answer(PATH_A, read_error('not found'));
@@ -313,7 +313,7 @@ describe('stale while in flight', () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const diskfile = get(PATH_A);
 		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, DISKFILE_READ_CONCURRENCY, 'the read of a.txt is queued');
 
 		change_on_disk(PATH_A);
@@ -335,30 +335,31 @@ describe('stale while in flight', () => {
 			() => app.diskfiles.load_content(diskfile),
 			/content not loaded — the file is gone/
 		);
-		await flush();
+		await wait();
 		app.diskfiles.remove_by_path(PATH_A);
 		await answer(PATH_A, read_ok('text'));
 		await loading;
 	});
 
 	test('load_content retries a failed read on an explicit ask', async () => {
+		expect_logged_error('[diskfiles] reading /ws/a.txt failed');
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		// held, as a copy's file is by its menu, so the cell outlives each load
 		app.diskfiles.hold(PATH_A);
 		const diskfile = get(PATH_A);
 		// the handler attached at once, so the rejection is never unhandled
 		const first = assert_rejects(() => app.diskfiles.load_content(diskfile), /connection lost/);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_error('connection lost'));
 		await first;
 		await app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 0, 'ensure_content does not retry');
 
 		const second = app.diskfiles.load_content(diskfile);
 		assert.strictEqual(diskfile.content_status, 'loading');
 		assert.isNull(diskfile.content_error, 'the retry starts clean');
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 1, 'load_content does');
 		await answer(PATH_A, read_ok('text'));
 		assert.strictEqual(await second, 'text');
@@ -366,16 +367,17 @@ describe('stale while in flight', () => {
 	});
 
 	test('load_content does not retry a failed read for a file gone since', async () => {
+		expect_logged_error('[diskfiles] reading /ws/a.txt failed');
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const diskfile = get(PATH_A);
 		const first = assert_rejects(() => app.diskfiles.load_content(diskfile), /connection lost/);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_error('connection lost'));
 		await first;
 		app.diskfiles.remove_by_path(PATH_A);
 
 		await assert_rejects(() => app.diskfiles.load_content(diskfile), /connection lost/);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 0);
 		assert.strictEqual(diskfile.content_status, 'unloadable');
 		assert.strictEqual(diskfile.content_error, 'connection lost');
@@ -384,7 +386,7 @@ describe('stale while in flight', () => {
 	test('a read for a file deleted meanwhile is dropped', async () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const loading = app.diskfiles.ensure_content(get(PATH_A));
-		await flush();
+		await wait();
 		app.diskfiles.handle_change({
 			change: { type: 'delete', path: PATH_A },
 			disknode: metadata(PATH_A)
@@ -400,7 +402,7 @@ describe('unloadable', () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const diskfile = get(PATH_A);
 		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_ok(null, 'too_large'));
 		await loading;
 		assert.strictEqual(diskfile.content_status, 'unloadable');
@@ -409,10 +411,14 @@ describe('unloadable', () => {
 	});
 
 	test('a failed first read settles it unloadable with the error, not retried by asking', async () => {
+		allow_logged_error(
+			'no transport available',
+			'the test runs without a transport, so what the component sends fails'
+		);
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const diskfile = get(PATH_A);
 		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_error('no transport available'));
 		await loading;
 		assert.strictEqual(diskfile.content_status, 'unloadable');
@@ -420,15 +426,16 @@ describe('unloadable', () => {
 		assert.include(to_diskfile_unloaded_message(diskfile), 'no transport available');
 
 		await app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 0, "a view's effect can't loop on a failure");
 	});
 
 	test('a failed re-read keeps the content it had', async () => {
+		expect_logged_error('[diskfiles] reading /ws/a.txt failed');
 		const diskfile = await load(PATH_A, 'text');
 		app.diskfiles.get_editor_state(diskfile);
 		change_on_disk(PATH_A);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_error('network down'));
 		assert.strictEqual(diskfile.content, 'text');
 		assert.strictEqual(diskfile.content_error, 'network down');
@@ -441,7 +448,7 @@ describe('unloadable', () => {
 			() => app.diskfiles.load_content(diskfile),
 			/content not loaded — the file is over 4 MiB/
 		);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_ok(null, 'too_large'));
 		await first;
 
@@ -449,21 +456,22 @@ describe('unloadable', () => {
 			() => app.diskfiles.load_content(diskfile),
 			/content not loaded — the file is over 4 MiB/
 		);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 0);
 	});
 
 	test('a failed read after one found the file too large says the error, not the old reason', async () => {
+		expect_logged_error('[diskfiles] reading /ws/a.txt failed');
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const diskfile = get(PATH_A);
 		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_ok(null, 'too_large'));
 		await loading;
 		app.diskfiles.get_editor_state(diskfile);
 
 		change_on_disk(PATH_A);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_error('connection lost'));
 		assert.strictEqual(diskfile.content_status, 'unloadable');
 		assert.isNull(diskfile.unloaded_reason);
@@ -481,7 +489,7 @@ describe('a change on disk', () => {
 		change_on_disk(PATH_A);
 		assert.strictEqual(diskfile.content_status, 'loaded', 'no read-only flicker');
 		assert.strictEqual(diskfile.content, 'v1');
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 1);
 
 		await answer(PATH_A, read_ok('v2'));
@@ -500,7 +508,7 @@ describe('a change on disk', () => {
 		const entries = editor_state.history.entries.length;
 
 		change_on_disk(PATH_A);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_ok('v1'));
 		assert.strictEqual(editor_state.history.entries.length, entries);
 		assert.isFalse(editor_state.disk_conflict, 'a touch is not a conflict');
@@ -509,9 +517,9 @@ describe('a change on disk', () => {
 	test('re-reads a file a part references', async () => {
 		await load(PATH_A, 'v1');
 		app.parts.add({ type: 'diskfile', path: PATH_A });
-		await flush();
+		await wait();
 		change_on_disk(PATH_A);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 1);
 		await answer(PATH_A, read_ok('v2'));
 		assert.strictEqual(get(PATH_A).content, 'v2');
@@ -520,14 +528,14 @@ describe('a change on disk', () => {
 	test('drops the content of a file nothing holds, to reload on next access', async () => {
 		const diskfile = await load(PATH_A, 'v1');
 		change_on_disk(PATH_A, 7);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 0);
 		assert.strictEqual(diskfile.content_status, 'unrequested');
 		assert.isNull(diskfile.content);
 		assert.strictEqual(diskfile.mtime, 7);
 
 		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_ok('v2'));
 		await loading;
 		assert.strictEqual(diskfile.content, 'v2');
@@ -536,7 +544,7 @@ describe('a change on disk', () => {
 	test('drops an unloadable file nothing holds too — it may load now', async () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const loading = app.diskfiles.ensure_content(get(PATH_A));
-		await flush();
+		await wait();
 		await answer(PATH_A, read_ok(null, 'too_large'));
 		await loading;
 		assert.strictEqual(get(PATH_A).content_status, 'unloadable');
@@ -547,7 +555,7 @@ describe('a change on disk', () => {
 	test('leaves an unrequested file alone', async () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		change_on_disk(PATH_A);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 0);
 		assert.strictEqual(get(PATH_A).content_status, 'unrequested');
 	});
@@ -558,7 +566,7 @@ describe('a change on disk', () => {
 		const loose = await load(PATH_B, 'b');
 		// a `touch` arrives as a `change`, metadata only like every one
 		for (const path of [PATH_A, PATH_B]) change_on_disk(path, 3);
-		await flush();
+		await wait();
 		assert.deepEqual(
 			reads.map((r) => r.path),
 			[PATH_A]
@@ -568,13 +576,13 @@ describe('a change on disk', () => {
 
 	test('a new file a part references is read when it arrives', async () => {
 		app.parts.add({ type: 'diskfile', path: PATH_A });
-		await flush();
+		await wait();
 		app.diskfiles.handle_change({
 			change: { type: 'add', path: PATH_A },
 			disknode: metadata(PATH_A)
 		});
 		assert.strictEqual(get(PATH_A).content_status, 'loading');
-		await flush();
+		await wait();
 		await answer(PATH_A, read_ok('text'));
 		assert.strictEqual(get(PATH_A).content, 'text');
 	});
@@ -585,7 +593,7 @@ describe('a file part attaching', () => {
 		app.diskfiles.add_initial([metadata(PATH_A)]);
 		const part = app.parts.add({ type: 'diskfile', path: PATH_A });
 		assert.strictEqual(part.type === 'diskfile' && part.content_status, 'unrequested');
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 1);
 		await answer(PATH_A, read_ok('text'));
 		assert.strictEqual(part.content, 'text');
@@ -596,7 +604,7 @@ describe('a file part attaching', () => {
 		const part = app.parts.add({ type: 'diskfile', path: PATH_A });
 		app.parts.remove(part.id);
 		change_on_disk(PATH_A);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, 0);
 		assert.strictEqual(diskfile.content_status, 'unrequested');
 	});
@@ -613,7 +621,7 @@ describe('the first load of a file with an editing state', () => {
 		assert.strictEqual(editor_state.current_content, '', 'ignored');
 
 		const loading = app.diskfiles.ensure_content(diskfile);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_ok('text'));
 		await loading;
 
@@ -639,7 +647,7 @@ describe('the markdown view mode', () => {
 		assert.strictEqual(editor_state.markdown_view_mode, 'split', 'unrequested');
 		const loading = app.diskfiles.ensure_content(diskfile);
 		assert.strictEqual(editor_state.markdown_view_mode, 'split', 'loading');
-		await flush();
+		await wait();
 		await answer(path, read_ok(null, 'too_large'));
 		await loading;
 		assert.strictEqual(editor_state.markdown_view_mode, 'preview');
@@ -670,7 +678,7 @@ describe('reconnect', () => {
 		app.diskfiles.add_initial([metadata(PATH_C)]);
 
 		app.diskfiles.reconcile([metadata(PATH_A), metadata(PATH_B), metadata(PATH_C)], [SOURCE_DIR]);
-		await flush();
+		await wait();
 		assert.deepEqual(
 			reads.map((r) => r.path),
 			[PATH_A]
@@ -689,7 +697,7 @@ describe('reconnect', () => {
 		const editor_state = app.diskfiles.get_editor_state(held);
 		editor_state.current_content = 'draft';
 		app.diskfiles.reconcile([metadata(PATH_A)], [SOURCE_DIR]);
-		await flush();
+		await wait();
 		await answer(PATH_A, read_ok('changed elsewhere'));
 		assert.isTrue(editor_state.has_conflict);
 	});
@@ -710,7 +718,7 @@ describe('reconnect', () => {
 			paths.map((path) => metadata(path)),
 			[SOURCE_DIR]
 		);
-		await flush();
+		await wait();
 		assert.strictEqual(reads.length, DISKFILE_READ_CONCURRENCY);
 		assert.strictEqual(reads[0]!.path, shown, 'the selected tab first');
 		assert.strictEqual(reads[1]!.path, tabbed, 'then the other tabs');
@@ -728,13 +736,13 @@ describe('ensure_content in an $effect', () => {
 			void app.diskfiles.ensure_content(diskfile);
 		});
 		try {
-			await flush();
+			await wait();
 			await answer(PATH_A, read_ok('v1'));
 			assert.strictEqual(diskfile.content, 'v1');
 
 			// a transcript view, say: no editing state, so a change drops the content
 			change_on_disk(PATH_A);
-			await flush();
+			await wait();
 			assert.strictEqual(reads.length, 1, 'the effect asked again');
 			await answer(PATH_A, read_ok('v2'));
 			assert.strictEqual(diskfile.content, 'v2');
@@ -760,7 +768,7 @@ describe('ensure_content in an $effect', () => {
 		});
 		try {
 			for (let i = 0; i < 5; i++) {
-				await flush();
+				await wait();
 				for (const pending of reads.splice(0)) pending.deferred.resolve(read_ok('x'));
 			}
 			assert.strictEqual(read_count, 0);

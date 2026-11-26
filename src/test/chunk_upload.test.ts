@@ -1,4 +1,5 @@
 import { test, describe, assert } from 'vitest';
+import { assert_rejects } from '@fuzdev/fuz_util/testing.ts';
 
 import { ChunkUpload, CHUNK_UPLOAD_RETRY_DELAYS } from '#lib/chunk_upload.ts';
 
@@ -60,12 +61,7 @@ describe('ChunkUpload', () => {
 	test('create fails on a taken path', async () => {
 		const { routes, upload } = create_harness();
 		routes.files.set(PATH, []);
-		let message = '';
-		try {
-			await upload.create();
-		} catch (error) {
-			message = (error as Error).message;
-		}
+		const { message } = await assert_rejects(() => upload.create());
 		assert.strictEqual(message, 'already exists');
 	});
 
@@ -116,12 +112,7 @@ describe('ChunkUpload', () => {
 		upload.enqueue(blob_of(10));
 		upload.enqueue(blob_of(10));
 
-		let message = '';
-		try {
-			await upload.flush();
-		} catch (error) {
-			message = (error as Error).message;
-		}
+		const { message } = await assert_rejects(() => upload.flush());
 		assert.include(message, 'changed on disk');
 		assert.deepEqual(errors, [message]);
 		assert.strictEqual(routes.size_of(PATH), 3, 'nothing appended');
@@ -134,12 +125,7 @@ describe('ChunkUpload', () => {
 		await upload.create();
 		routes.replies.push({ status: 401, body: { error: 'authentication_required' } });
 		upload.enqueue(blob_of(10));
-		let message = '';
-		try {
-			await upload.flush();
-		} catch (error) {
-			message = (error as Error).message;
-		}
+		const { message } = await assert_rejects(() => upload.flush());
 		assert.strictEqual(message, 'authentication_required');
 		assert.deepEqual(errors, ['authentication_required']);
 		assert.deepEqual(slept, []);
@@ -150,12 +136,7 @@ describe('ChunkUpload', () => {
 		await upload.create();
 		routes.replies.push('network_error', 'network_error', 'network_error');
 		upload.enqueue(blob_of(10));
-		let message = '';
-		try {
-			await upload.flush();
-		} catch (error) {
-			message = (error as Error).message;
-		}
+		const { message } = await assert_rejects(() => upload.flush());
 		assert.strictEqual(message, 'network_error');
 		assert.deepEqual(errors, ['network_error']);
 		assert.deepEqual(slept, [1, 2]);

@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, afterEach, describe, assert, vi } from 'vitest';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 
 import { DiskfilePath } from '#lib/diskfile_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -229,6 +230,10 @@ describe('the inline create', () => {
 	});
 
 	test('a created file is revealed when its change arrives', async () => {
+		allow_logged_error(
+			'[diskfiles] reading /w/a/b/new.md failed: this.app.api.diskfile_read is not a function',
+			"the test's api fake has no `diskfile_read`, so the read a new file starts fails"
+		);
 		write('/w/a/x.md');
 		stub_diskfile_create();
 		const { tree } = app.diskfiles.editor;
@@ -268,6 +273,10 @@ describe('the inline create', () => {
 	});
 
 	test('a created file arriving while a newer input is open isn’t revealed', async () => {
+		allow_logged_error(
+			'[diskfiles] reading /w/a/new.md failed: this.app.api.diskfile_read is not a function',
+			"the test's api fake has no `diskfile_read`, so the read a new file starts fails"
+		);
 		write('/w/a/x.md');
 		write('/w/b/y.md');
 		stub_diskfile_create();

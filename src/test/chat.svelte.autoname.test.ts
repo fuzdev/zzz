@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
-import { test, describe, beforeEach, assert, vi } from 'vitest';
+import { test, describe, beforeEach, assert } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
+import { allow_logged_error, expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { get_datetime_now } from '#lib/datetime.ts';
@@ -37,7 +39,6 @@ const create_claude_response = (text: string): CompletionResponse => ({
 });
 
 beforeEach(() => {
-	vi.spyOn(console, 'error').mockImplementation(() => {});
 	app = monkeypatch_zzz_for_tests(
 		new Frontend({
 			models: [
@@ -87,7 +88,7 @@ const create_chat = (name?: string, model_name = 'm'): Chat => {
 /** Sends to the chat's first thread and lets auto-naming finish. */
 const send = async (chat: Chat): Promise<void> => {
 	await chat.send_to_thread(chat.thread_ids[0]!, 'hello');
-	await new Promise((r) => setTimeout(r, 0));
+	await wait();
 };
 
 const transient = (message = 'claude: Overloaded'): NamerReply => ({
@@ -120,6 +121,11 @@ describe('Chat auto-naming', () => {
 	});
 
 	test('retries a transient failure on later sends, then gives up', async () => {
+		expect_logged_error('[chat.init_name_from_turns] failed to name the chat (attempt 1)');
+		expect_logged_error('[chat.init_name_from_turns] failed to name the chat (attempt 2)');
+		expect_logged_error(
+			'[chat.init_name_from_turns] failed to name the chat (attempt 3, giving up)'
+		);
 		const chat = create_chat();
 		for (let i = 0; i < CHAT_AUTONAME_ATTEMPTS_MAX + 2; i++) namer_replies.push(transient());
 		for (let i = 0; i < CHAT_AUTONAME_ATTEMPTS_MAX + 2; i++) await send(chat);
@@ -131,6 +137,7 @@ describe('Chat auto-naming', () => {
 	});
 
 	test('a retry after a transient failure can still succeed', async () => {
+		expect_logged_error('[chat.init_name_from_turns] failed to name the chat (attempt 1)');
 		const chat = create_chat();
 		namer_replies.push(transient(), { ok: true, name: 'second try' });
 		await send(chat);
@@ -142,6 +149,9 @@ describe('Chat auto-naming', () => {
 	});
 
 	test('stops after one permanent failure', async () => {
+		expect_logged_error(
+			'[chat.init_name_from_turns] failed to name the chat (attempt 1, giving up)'
+		);
 		for (const code of [
 			JSONRPC_ERROR_CODES.invalid_params,
 			JSONRPC_ERROR_CODES.not_found,
@@ -160,6 +170,9 @@ describe('Chat auto-naming', () => {
 	});
 
 	test('stops after one upstream 400, 401, 403, or 404', async () => {
+		expect_logged_error(
+			'[chat.init_name_from_turns] failed to name the chat (attempt 1, giving up)'
+		);
 		for (const status of [400, 401, 403, 404]) {
 			namer_calls = 0;
 			const chat = create_chat();
@@ -173,6 +186,7 @@ describe('Chat auto-naming', () => {
 	});
 
 	test('retries an upstream 408, 429, or 5xx on the next send', async () => {
+		expect_logged_error('[chat.init_name_from_turns] failed to name the chat (attempt 1)');
 		for (const status of [408, 429, 500, 503, 529]) {
 			namer_calls = 0;
 			const chat = create_chat();
@@ -186,6 +200,8 @@ describe('Chat auto-naming', () => {
 	});
 
 	test('makes at most one naming attempt per send across threads', async () => {
+		expect_logged_error('[chat.init_name_from_turns] failed to name the chat (attempt 1)');
+		expect_logged_error('[chat.init_name_from_turns] failed to name the chat (attempt 2)');
 		const chat = create_chat();
 		chat.add_thread(app.models.find_by_name('m_slow')!);
 		chat.add_thread(app.models.find_by_name('m_slow')!);
@@ -195,21 +211,22 @@ describe('Chat auto-naming', () => {
 		let release_slow!: () => void;
 		hold_slow = new Promise((r) => (release_slow = r));
 		const sent = chat.send_to_all('hello');
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		assert.strictEqual(namer_calls, 1);
 		assert.strictEqual(chat.init_name_status, 'initial');
 		release_slow();
 		assert.strictEqual(await sent, 3);
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		assert.strictEqual(namer_calls, 1, 'the slow replies of the same send do not retry');
 
 		hold_slow = null;
 		await chat.send_to_all('again');
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		assert.strictEqual(namer_calls, 2, 'the next send retries once');
 	});
 
 	test('renaming clears a naming failure, and later failures are not recorded', async () => {
+		expect_logged_error('[chat.init_name_from_turns] failed to name the chat (attempt 1)');
 		const chat = create_chat();
 		namer_replies.push(transient());
 		await send(chat);
@@ -223,17 +240,18 @@ describe('Chat auto-naming', () => {
 		hold_namer = new Promise((r) => (release = r));
 		namer_replies.push(transient());
 		const sent = send(other);
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		other.rename('also mine');
 		release();
 		await sent;
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		assert.strictEqual(other.init_name_error, null);
 		assert.strictEqual(other.init_name_attempts, 0);
 		assert.strictEqual(other.name, 'also mine');
 	});
 
 	test('an empty naming reply counts as a failed attempt', async () => {
+		expect_logged_error('[chat.init_name_from_turns] failed to name the chat (attempt 1)');
 		const chat = create_chat();
 		namer_replies.push({ ok: true, name: '  ' });
 		await send(chat);
@@ -256,12 +274,12 @@ describe('Chat auto-naming', () => {
 		let release!: () => void;
 		hold_namer = new Promise((r) => (release = r));
 		const sent = send(chat);
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		assert.strictEqual(namer_calls, 1);
 		chat.rename('mine');
 		release();
 		await sent;
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		assert.strictEqual(chat.name, 'mine');
 	});
 
@@ -280,6 +298,14 @@ describe('Chat auto-naming', () => {
 	});
 
 	test('autoname round-trips through json', () => {
+		allow_logged_error(
+			'registry already has a different cell instance',
+			'the test builds a second cell with an id already registered'
+		);
+		allow_logged_error(
+			'item already exists in collection with id',
+			'the round trip adds the chat again under the id it already has'
+		);
 		const chat = create_chat();
 		chat.rename('x');
 		const restored = app.chats.add(chat.json);
@@ -367,11 +393,11 @@ describe('Chat auto-naming across providers', () => {
 		let release_slow!: () => void;
 		hold_slow = new Promise((r) => (release_slow = r));
 		const sent = chat.send_to_all('hello');
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		assert.strictEqual(namer_calls, 0);
 		release_slow();
 		assert.strictEqual(await sent, 2);
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		assert.deepEqual(namer_providers, ['claude']);
 		assert.strictEqual(chat.name, 'from claude');
 	});

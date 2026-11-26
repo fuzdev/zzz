@@ -6,9 +6,8 @@
  *
  * **Wiring constraint** — this suite must run against a Rust backend
  * spawned with `ZZZ_TRUSTED_PROXIES=127.0.0.1` in its environment. The
- * vitest config wires this as its own project
- * (`cross_backend_rust_proxy`) with a dedicated `globalSetup` that calls
- * `bootstrap_backend(rust_backend_config_with_trusted_proxy())`; other
+ * vitest config wires this as its own project (`cross_backend_rust_proxy`),
+ * whose global setup boots `rust_proxy_backend_config`; other
  * cross-backend suites continue to use the trusted-proxy-less
  * `cross_backend_rust` project so their tests aren't influenced by the
  * middleware (which collapses every connection IP to the resolved
@@ -17,71 +16,29 @@
  * collapse to the same assertion.
  *
  * These tests need the backend booted with a trusted-proxy list, so they
- * live in a dedicated project (`cross_backend_rust_proxy`) rather than gating
- * with `test_if(capabilities.trusted_proxy, ...)` — keeping the backend env
+ * live in a dedicated project rather than gating with
+ * `test_if(capabilities.trusted_proxy, ...)` — keeping the backend env
  * trusted-proxy-free for the rest of the suite.
  *
  * **Audit-read pattern** — each test fires a `/login` 401 under a unique
  * `proxy-test-<label>-<uuid>` username, with crafted `X-Forwarded-For`
- * headers, then queries the resulting `audit_log` row's `ip` column to
- * assert the resolved client IP. Uses a direct `pg` Client against the
- * backend's own database rather than the `audit_log_list` RPC because that
- * RPC requires the `admin` role, and the bootstrapped keeper only holds
- * `keeper`. The direct query is acceptable here because (a) these tests are
- * Rust-only, (b) the database speaks the Postgres wire protocol (a
- * `pglet_server`, or PostgreSQL under `FUZ_TEST_POSTGRES_URL`), and (c) the
- * audit write is fire-and-forget so we poll until the row appears.
- *
- * The DB URL is the backend's own `DATABASE_URL`
- * (`handle.config.env.DATABASE_URL`), the database the global setup
- * provisioned for it.
+ * headers, then reads the resulting `audit_log` row's `ip` through
+ * `list_audit_events`: `_testing_drain_effects` awaits the backend's
+ * fire-and-forget audit write, then `audit_log_list` runs as the fixture's
+ * keeper, which holds the admin role it needs.
  *
  * @module
  */
 
-import { describe, test, assert, afterAll } from 'vitest';
-import { Client } from 'pg';
+import { describe, test, assert } from 'vitest';
 
 import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/provided_context.ts';
-import type { ReconstructedBootstrappedBackendHandle } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
-
-/**
- * The spawned backend's database: its `DATABASE_URL`, the database the
- * global setup provisioned for it.
- */
-const resolve_database_url = (handle: ReconstructedBootstrappedBackendHandle): string => {
-	const backend_url = handle.config.env?.DATABASE_URL;
-	if (!backend_url) {
-		throw new Error(
-			'proxy.cross.test: handle.config.env.DATABASE_URL missing — ' +
-				'expected `rust_proxy_backend_config` to set DATABASE_URL on the env block'
-		);
-	}
-	return backend_url;
-};
-
-/**
- * Lazy-singleton `pg.Client` shared by every test in this file. Each
- * test does one short-lived query and the suite runs serially within a
- * single vitest project, so a single client suffices and one connection
- * roundtrip is amortized across ten tests.
- */
-let pg_client: Client | null = null;
-
-const get_pg_client = async (handle: ReconstructedBootstrappedBackendHandle): Promise<Client> => {
-	if (pg_client) return pg_client;
-	const client = new Client({ connectionString: resolve_database_url(handle) });
-	await client.connect();
-	pg_client = client;
-	return client;
-};
-
-afterAll(async () => {
-	if (pg_client) {
-		await pg_client.end();
-		pg_client = null;
-	}
-});
+import {
+	default_cross_process_setup,
+	type ReconstructedBootstrappedBackendHandle,
+	type TestFixture
+} from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
+import { list_audit_events } from '@fuzdev/fuz_app/testing/cross_backend/audit_cross_helpers.ts';
 
 /**
  * Fire a deliberately-failed login attempt against the spawned backend.
@@ -117,53 +74,23 @@ const fire_failed_login = async (
 };
 
 /**
- * Poll the `audit_log` table for the most recent `login` / `failure` row
- * whose `metadata.username` matches the test-scoped username. Returns
- * the resolved `ip` value (or `null` if the column is null) once the
- * row appears, or throws when the deadline elapses.
- *
- * The Rust backend's audit emit fires from `tokio::spawn`, so the row
- * may land a few ms after the HTTP response. Poll at 25ms intervals
- * up to 2s — generous enough to absorb scheduler jitter under cargo
- * workload, tight enough that failed assertions don't drag suite time.
+ * The resolved `ip` of the `login` / `failure` audit row whose
+ * `metadata.username` is the test-scoped username (`null` if the column is
+ * null). `list_audit_events` drains the backend's detached audit writes
+ * first, so the row is there once the login has answered.
  */
-const wait_for_login_failure_ip = async (
-	handle: ReconstructedBootstrappedBackendHandle,
-	username: string,
-	{ timeout_ms = 2_000, interval_ms = 25 }: { timeout_ms?: number; interval_ms?: number } = {}
+const read_login_failure_ip = async (
+	fixture: TestFixture,
+	username: string
 ): Promise<string | null> => {
-	const client = await get_pg_client(handle);
-	const deadline = performance.now() + timeout_ms;
-	let last_error: unknown;
-	while (performance.now() < deadline) {
-		try {
-			const result = await client.query<{ ip: string | null }>(
-				`SELECT ip FROM audit_log
-				 WHERE event_type = 'login'
-				   AND outcome = 'failure'
-				   AND metadata->>'username' = $1
-				 ORDER BY seq DESC
-				 LIMIT 1`,
-				[username]
-			);
-			if (result.rows.length > 0) return result.rows[0]!.ip;
-		} catch (e) {
-			last_error = e;
-		}
-		await new Promise((resolve) => setTimeout(resolve, interval_ms));
-	}
-	throw new Error(
-		`wait_for_login_failure_ip(${username}): no row matched within ${timeout_ms}ms` +
-			(last_error
-				? ` (last error: ${last_error instanceof Error ? last_error.message : JSON.stringify(last_error)})`
-				: '')
-	);
+	const events = await list_audit_events(fixture, { event_type: 'login', outcome: 'failure' });
+	const matching = events.filter((e) => e.metadata?.username === username);
+	assert.strictEqual(matching.length, 1, `one login failure row for ${username}`);
+	return matching[0]!.ip;
 };
 
 /**
- * Build a unique test-scoped username. The random suffix defends
- * against residual rows from prior runs of this suite within a single
- * test-database lifetime, so each test's `metadata->>'username'` filter
+ * Build a unique test-scoped username, so each test's username filter
  * matches exactly one row.
  */
 const unique_username = (label: string): string =>
@@ -171,8 +98,8 @@ const unique_username = (label: string): string =>
 
 /**
  * Run one trusted-proxy assertion: fire a failed login with the given
- * XFF header, wait for the audit row, assert the resolved IP. Wraps
- * the shared three-step pattern so the per-test body is one call.
+ * XFF header, read the audit row, assert the resolved IP. Wraps
+ * the shared pattern so the per-test body is one call.
  */
 const assert_resolved_ip = async (
 	handle: ReconstructedBootstrappedBackendHandle,
@@ -181,13 +108,15 @@ const assert_resolved_ip = async (
 	expected_ip: string,
 	message: string
 ): Promise<void> => {
+	const fixture = await setup_test();
 	const username = unique_username(label);
 	await fire_failed_login(handle, username, xff);
-	const resolved_ip = await wait_for_login_failure_ip(handle, username);
+	const resolved_ip = await read_login_failure_ip(fixture, username);
 	assert.strictEqual(resolved_ip, expected_ip, message);
 };
 
 const handle = inject_backend_handle();
+const setup_test = default_cross_process_setup(handle);
 
 describe('proxy.cross', () => {
 	// No XFF header — middleware uses the TCP peer (loopback). The harness

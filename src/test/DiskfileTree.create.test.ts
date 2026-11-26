@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
 import { flushSync } from 'svelte';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -51,7 +52,7 @@ const write = (path: string, source_dir?: string): Diskfile =>
 const render_tree = (): HTMLElement => mount_tree(app, cleanups).target;
 
 const tick = async (): Promise<void> => {
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await wait();
 	flushSync();
 };
 

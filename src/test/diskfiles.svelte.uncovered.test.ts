@@ -1,5 +1,6 @@
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 
 import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -347,6 +348,10 @@ describe('saving a file deleted on disk is an exclusive create', () => {
 	});
 
 	test('an uncovered file truly gone is flagged deleted by the refused save, then recreated', async () => {
+		allow_logged_error(
+			'[diskfiles] reading /dev/r/x.ts failed: failed to read file: No such file or directory',
+			"the test's fake disk has no such file, so the read its cell starts fails"
+		);
 		add_registry_with_repo();
 		const x = await disk.load('/dev/r/x.ts', 'v1');
 		app.diskfiles.select(x.path, true);
@@ -407,6 +412,10 @@ describe('saving a file deleted on disk is an exclusive create', () => {
 });
 
 test('a held file in an unfocused repo found deleted by a refused save is flagged deleted, then recreated', async () => {
+	allow_logged_error(
+		'[diskfiles] reading /dev/r/x.ts failed: failed to read file: No such file or directory',
+		"the test's fake disk has no such file, so the read its cell starts fails"
+	);
 	add_registry_with_repo();
 	const x = await disk.load('/dev/r/x.ts', 'v1');
 	app.diskfiles.select(x.path, true);

@@ -164,7 +164,8 @@ Node deps via npm; there is no Deno.
   `cargo test --workspace`, and the doc-link gate `cargo doc --workspace
   --no-deps --document-private-items` (pass = exit code; its
   `private_intra_doc_links` warnings are expected — ./crates/CLAUDE.md
-  § Build and Run). CI is Node-only, so the Rust gates run locally.
+  § Build and Run). CI runs them in its `rust` job (`.github/workflows/check.yml`);
+  the cross-process suites run locally.
 
 ### Naming Conventions
 

@@ -1,5 +1,30 @@
-# Checks and builds the project. For more info:
-# https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
+# Checks the TypeScript app and the Rust server.
+#
+# Two jobs:
+#
+# - `build` — `gro check` (types, tests, format, lint, and the site build),
+#   after building the terminal emulator's wasm module (`cargo xtask
+#   ghostty-vt`, which needs Zig) so the `fuz_terminal_wasm` vitest project
+#   runs: `vite.config.ts` fails a CI run without the module rather than
+#   skipping those tests.
+# - `rust` — format, lint, tests, the release dep-graph audit (`cargo xtask
+#   check-release` — keeps `fuz_testing` and `fuz_audit` off the `zzzd`
+#   release graph), and rustdoc. No PostgreSQL leg: no Rust test here opens a
+#   database (the DB-backed coverage is the cross-backend suites).
+#
+# Not run here: the cross-backend wire-contract suites (`cross_backend_rust`,
+# `_proxy`, `_projects`), which spawn the Rust `zzz_server` and run locally
+# (`npm run test:cross`).
+#
+# Layout: the Rust workspace path-depends on the spine crates in the sibling
+# `fuz` repository (`../fuz/crates/*`) and on `fuz_repos`
+# (`../fuz_repos/crates/*`), and `fuz_testing` path-depends on the pglet server
+# in the sibling `pglet` repository (`../pglet/crates/*`). Cargo resolves the
+# whole workspace for any command, `cargo xtask` included, so each job that
+# runs cargo checks all of them out. `actions/checkout` can't write outside
+# `$GITHUB_WORKSPACE`, so every checkout goes into a subdirectory — `zzz/`,
+# `fuz/`, `fuz_repos/`, `pglet/` — and every `run` step works in `zzz/` unless
+# it says otherwise.
 
 name: check
 
@@ -21,14 +46,32 @@ concurrency:
 permissions:
   contents: read
 
+# `FUZ_REF`, `FUZ_REPOS_REF` and `PGLET_REF` are the sibling commits zzz is
+# checked against: all checked out at `main`, so the four move together.
+env:
+  FUZ_REF: main
+  FUZ_REPOS_REF: main
+  PGLET_REF: main
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     strategy:
       matrix:
         node-version: ['24.14']
+
+    # The Zig release `cargo xtask ghostty-vt` builds libghostty-vt with (it
+    # accepts only this minor), and the sha256 of its official x86_64 Linux
+    # tarball. Move both together with the xtask's `ZIG_MINOR`.
+    env:
+      ZIG_VERSION: 0.17.0
+      ZIG_SHA256: 1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026
+
+    defaults:
+      run:
+        working-directory: zzz
 
     steps:
       # persist-credentials: false keeps the GITHUB_TOKEN out of .git/config, so a
@@ -37,19 +80,138 @@ jobs:
       # authenticate that step explicitly.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
+          path: zzz
           persist-credentials: false
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: fuzdev/fuz
+          ref: ${{ env.FUZ_REF }}
+          path: fuz
+          persist-credentials: false
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: fuzdev/fuz_repos
+          ref: ${{ env.FUZ_REPOS_REF }}
+          path: fuz_repos
+          persist-credentials: false
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: fuzdev/pglet
+          ref: ${{ env.PGLET_REF }}
+          path: pglet
+          persist-credentials: false
+
+      # rust-toolchain.toml pins the toolchain the xtask builds with.
+      - name: Install Rust
+        run: |
+          rustup toolchain install --no-self-update
+          cargo --version
+
+      # The official tarball, refused unless its sha256 matches the pin.
+      - name: Install Zig
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --silent --show-error --location --output zig.tar.xz \
+            "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          echo "${ZIG_SHA256}  zig.tar.xz" | sha256sum --check
+          mkdir zig
+          tar -xJf zig.tar.xz -C zig --strip-components=1
+          echo "$PWD/zig" >> "$GITHUB_PATH"
+
+      # Downloads the pinned libghostty-vt source and dependency tarballs
+      # (sha256-checked against the xtask's pins) and builds
+      # `static/fuz_terminal/ghostty-vt.wasm`. `cargo xtask` spelled out to pass
+      # `--locked`: without it a moved sibling dependency rewrites `Cargo.lock`,
+      # and `gro check --workspace` then fails on a dirty tree.
+      - name: Build the terminal emulator module
+        run: cargo run --locked --package xtask -- ghostty-vt
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
+          cache-dependency-path: zzz/package-lock.json
       - run: npm ci
       - run: cp .env.development.example .env.development
       - run: cp .env.production.example .env.production
       - run: npx svelte-kit sync
       - run: npx @fuzdev/gro check --workspace --build --lint
 
-  # The cross-backend wire-contract suites (cross_backend_rust / _proxy) run
-  # against the Rust `zzz_server`. They need the sibling Rust workspace checkouts
-  # (fuz, fuz_repos, pglet) and a cached cargo build, so they run locally
-  # (`npm run test:cross`) rather than in CI for now.
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    defaults:
+      run:
+        working-directory: zzz
+
+    steps:
+      # persist-credentials: false keeps the GITHUB_TOKEN out of .git/config (no step here pushes via git).
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          path: zzz
+          persist-credentials: false
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: fuzdev/fuz
+          ref: ${{ env.FUZ_REF }}
+          path: fuz
+          persist-credentials: false
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: fuzdev/fuz_repos
+          ref: ${{ env.FUZ_REPOS_REF }}
+          path: fuz_repos
+          persist-credentials: false
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: fuzdev/pglet
+          ref: ${{ env.PGLET_REF }}
+          path: pglet
+          persist-credentials: false
+
+      # The toolchain is pinned in rust-toolchain.toml, not `stable`: the
+      # workspace runs `clippy::nursery` at warn and this job denies warnings,
+      # so a floating toolchain would fail CI whenever a new Rust release adds a
+      # nursery lint. Any rustup 1.28+ reads the file with no arguments, so skip
+      # self-updating it. It runs in `zzz/`, so it reads this repo's file; the
+      # path crates build under that same toolchain.
+      - name: Install Rust
+        run: |
+          rustup toolchain install --no-self-update
+          rustup show active-toolchain
+          cargo --version
+
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: zzz -> target
+
+      # Every workspace package named, never `--all`: rustfmt follows path
+      # dependencies, so `--all` would check the sibling checkouts' files too.
+      - name: Format
+        run: cargo fmt -p zzz -p zzz_server -p testing_zzz_server -p xtask --check
+
+      # `--locked` holds the committed lockfile, which records the path crates
+      # with their versions and dependencies, so a version bump or dependency
+      # change at a sibling's ref fails here until `Cargo.lock` is updated.
+      - name: Clippy
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked --workspace
+
+      - name: Release dep-graph audit
+        run: cargo xtask check-release
+
+      # The doc-link gate as crates/CLAUDE.md runs it: the workspace denies the
+      # rustdoc lints that matter, so the exit code is the gate.
+      # `--no-deps` keeps the path crates out (their own CI documents them).
+      - name: Rustdoc
+        run: cargo doc --locked --workspace --no-deps --document-private-items

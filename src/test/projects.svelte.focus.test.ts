@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
-import { test, beforeEach, afterEach, describe, assert, vi } from 'vitest';
+import { test, beforeEach, afterEach, describe, assert } from 'vitest';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
@@ -283,7 +283,6 @@ describe('Projects.focus_repo', () => {
 	});
 
 	test('returns the error and changes nothing on failure', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 		setup([], [README]);
 		const focused = app.projects.focus_repo(DEV, SITE);
 		focus_calls[0]!.resolve({

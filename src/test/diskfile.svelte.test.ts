@@ -2,6 +2,7 @@
 
 import { is, parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, assert, beforeEach, afterEach, vi } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 
 import { Diskfile } from '#lib/diskfile.svelte.ts';
 import { DiskfileJson, DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
@@ -30,7 +31,7 @@ describe('Diskfile schema and fields agree', () => {
 	});
 
 	test('path and source_dir are required', () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('error setting JSON for Diskfile: SchemaError');
 		assert.isFalse(is(DiskfileJson, { source_dir: SOURCE_DIR }));
 		assert.isFalse(is(DiskfileJson, { path: PATH }));
 		assert.isFalse(is(DiskfileJson, { path: null, source_dir: SOURCE_DIR }));

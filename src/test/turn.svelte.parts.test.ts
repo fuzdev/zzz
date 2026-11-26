@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { Thread } from '#lib/thread.svelte.ts';
@@ -127,6 +128,7 @@ describe('Turn.content', () => {
 	};
 
 	test('marks a file part that can not load with its path and why', async () => {
+		expect_logged_error('[diskfiles] reading /w/denied.txt failed');
 		disk.write('/w/src/big.txt', 'x');
 		disk.write('/w/bin.dat', null); // read as not UTF-8
 		disk.write('/w/denied.txt', 'x');
@@ -161,6 +163,7 @@ describe('Turn.content', () => {
 	});
 
 	test('a copy reads a failed file once more, copying its text when that succeeds', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		disk.write('/w/a.txt', 'text');
 		disk.fail_reads(1, 'connection lost');
 		const turn = add_turn('/w/a.txt');
@@ -176,6 +179,7 @@ describe('Turn.content', () => {
 	});
 
 	test('a copy reads a failed file once more, copying its marker when that fails', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		disk.write('/w/a.txt', 'text');
 		disk.fail_reads(2, 'permission denied');
 		const turn = add_turn('/w/a.txt');
@@ -190,6 +194,7 @@ describe('Turn.content', () => {
 	});
 
 	test('a part removed while the others load is not retried', async () => {
+		expect_logged_error('[diskfiles] reading /w/b.txt failed');
 		disk.write('/w/a.txt', 'text');
 		disk.write('/w/b.txt', 'b');
 		disk.fail_reads(1);
@@ -210,6 +215,7 @@ describe('Turn.content', () => {
 	});
 
 	test("a thread's copy retries its turns' failed reads too", async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		disk.write('/w/a.txt', 'text');
 		disk.fail_reads(1);
 		add_turn('/w/a.txt');

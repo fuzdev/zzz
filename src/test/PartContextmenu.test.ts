@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
 import { flushSync, mount, unmount } from 'svelte';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -11,18 +12,13 @@ import FrontendContextHarness from './FrontendContextHarness.svelte';
 import ContextmenuHarness from './ContextmenuHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import { ResizeObserverStub } from './diskfile_tree_test_helpers.ts';
 
 let app: Frontend;
 let disk: FakeDisk;
 const cleanups: Array<() => void> = [];
 
 // jsdom has no `ResizeObserver`, which the menu's size bindings use
-class ResizeObserverStub {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-
 beforeEach(() => {
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 	vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -64,7 +60,7 @@ const open_part_submenu = async (target: HTMLElement): Promise<void> => {
 	);
 	assert.ok(item, 'a "part" submenu');
 	item.dispatchEvent(new MouseEvent('mouseenter'));
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await wait();
 	flushSync();
 };
 

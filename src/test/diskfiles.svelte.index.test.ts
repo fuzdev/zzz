@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, assert } from 'vitest';
+import { allow_logged_error, expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { DEV as ESM_DEV } from 'esm-env';
 
 import {
@@ -88,15 +89,15 @@ test('a write that throws surfaces its own error, not the DEV check', () => {
 	app.diskfiles.reconcile([node('/dev/r/a.ts')], [REPO]);
 	// a cell, so the next reconcile updates it in place
 	seed_diskfile(app, '/dev/r/a.ts');
-	let message = '';
 	try {
 		// an mtime past what a `Datetime` holds throws mid-write, the index already moved
 		app.diskfiles.reconcile([node('/dev/r/a.ts', 1e20, DEV_ROOT)], [REPO]);
 	} catch (error) {
-		message = String(error);
+		assert(error instanceof Error);
+		assert.notInclude(error.message, 'out of step');
+		return;
 	}
-	assert.ok(message, 'the write throws');
-	assert.notInclude(message, 'out of step');
+	assert.fail('the write throws');
 });
 
 test('the DEV check catches a directory count out of step with the records', () => {
@@ -117,6 +118,10 @@ test('the DEV check catches a directory count out of step with the records', () 
 });
 
 test('reconcile: adds, changes, prunes, and keeps a held file out of the index', () => {
+	allow_logged_error(
+		'[diskfiles] reading /dev/r/b.ts failed: failed to read file: No such file or directory',
+		"the test's fake disk has no such file, so the read its cell starts fails"
+	);
 	const records = [node('/dev/r/a.ts'), node('/dev/r/b.ts'), node('/dev/r/sub/c.ts')];
 	const before = app.diskfiles.index.membership;
 	app.diskfiles.reconcile(records, [REPO]);
@@ -215,6 +220,12 @@ test('release_uncovered: a dropped repo uncovers a held file, an unfocused one k
 });
 
 test('settle_recreated, the flag setters, a direct remove, and a decoded reset', async () => {
+	allow_logged_error(
+		'registry already has a different cell instance',
+		'the test builds a second cell with an id already registered'
+	);
+	expect_logged_error('a diskfile is already at /dev/r/a.ts');
+	expect_logged_error('cell not found in registry');
 	const a = await disk.load('/dev/r/a.ts', 'a');
 	app.diskfiles.select(a.path, true);
 	delete_change('/dev/r/a.ts');

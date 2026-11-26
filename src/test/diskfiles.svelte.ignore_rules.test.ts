@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, afterEach, describe, assert, vi } from 'vitest';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { mdz_parse } from '@fuzdev/mdz/mdz.ts';
 
 import { DiskfileDirectoryPath, DiskfilePath } from '#lib/diskfile_types.ts';
@@ -201,6 +202,14 @@ describe('creating', () => {
 	});
 
 	test('a file created where the rule skips it isn’t waited for, one it indexes is', async () => {
+		allow_logged_error(
+			'[diskfiles] reading /g/dist/c.js failed: this.app.api.diskfile_read is not a function',
+			"the test's api fake has no `diskfile_read`, so the read a new file starts fails"
+		);
+		allow_logged_error(
+			'[diskfiles] reading /p/out/c.js failed: this.app.api.diskfile_read is not a function',
+			"the test's api fake has no `diskfile_read`, so the read a new file starts fails"
+		);
 		(app as unknown as { api: unknown }).api = {
 			diskfile_create: () => Promise.resolve({ ok: true, value: null })
 		};

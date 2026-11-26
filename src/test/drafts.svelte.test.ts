@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 
 import { DiskfileEditorState, SAVE_ERROR_DORMANT } from '#lib/diskfile_editor_state.svelte.ts';
@@ -446,6 +447,7 @@ describe('a draft whose project closed', () => {
 	});
 
 	test('a save waiting on a read says it is dormant when the project closes meanwhile', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		const { editor_state } = setup_dormant_open();
 		const release = disk.hold_reads();
 		disk.write(PATH, 'theirs'); // reported — the save waits for its read
@@ -463,6 +465,7 @@ describe('a draft whose project closed', () => {
 	});
 
 	test('a save retrying a failed read says it is dormant when the project closes meanwhile', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		const { editor_state } = setup_dormant_open();
 		disk.fail_reads(1, 'read failed');
 		disk.write(PATH, 'theirs');

@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
+import { allow_logged_error, expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 
 import {
 	SAVE_ERROR_CHANGED_AGAIN,
@@ -108,6 +109,7 @@ describe('the base a save sends', () => {
 	});
 
 	test('an overwrite after a failed read writes over whatever is there', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		editor_state.current_content = 'mine';
 		disk.fail_reads(1, 'socket closed');
 		disk.write(PATH, 'theirs');
@@ -164,6 +166,7 @@ describe('the base a save sends', () => {
 	});
 
 	test('an overwrite asked for after a failed read stays unchecked though a read lands meanwhile', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		editor_state.current_content = 'mine';
 		disk.fail_reads(1, 'socket closed');
 		disk.write(PATH, 'V2');
@@ -182,6 +185,7 @@ describe('the base a save sends', () => {
 	});
 
 	test('a save after a failed read says when the file is gone', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		editor_state.current_content = 'mine';
 		disk.fail_reads(1, 'socket closed');
 		disk.write(PATH, 'V2');
@@ -311,6 +315,7 @@ describe('a write the frontend has not heard of', () => {
 	});
 
 	test('says so when the re-read fails, keeping the draft', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		disk.fail_reads(1, 'socket closed');
 		assert.isFalse(await save_over_unreported_write('mine', 'theirs'));
 
@@ -324,6 +329,10 @@ describe('a write the frontend has not heard of', () => {
 	});
 
 	test('a file gone from disk is a change too, and said to be deleted', async () => {
+		allow_logged_error(
+			'[diskfiles] reading /w/a.txt failed: failed to read file: No such file or directory',
+			"the test's fake disk has no such file, so the read its cell starts fails"
+		);
 		assert.isFalse(await save_over_unreported_write('mine', undefined));
 
 		assert.isFalse(disk.files.has(PATH), 'not recreated');

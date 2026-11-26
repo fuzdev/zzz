@@ -629,12 +629,11 @@ describe('generate_phase_handlers', () => {
 
 		const import_str = imports.build();
 		// All imports should be type-only
-		const lines = import_str.split('\n');
-		lines.forEach((line) => {
-			if (line.trim()) {
-				assert.match(line, /^import type/);
-			}
-		});
+		const lines = import_str.split('\n').filter((line) => line.trim());
+		assert.isNotEmpty(lines, 'the handlers import something');
+		for (const line of lines) {
+			assert.match(line, /^import type/);
+		}
 	});
 
 	test('generates all phases for both initiator', () => {

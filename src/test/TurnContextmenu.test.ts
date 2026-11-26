@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { flushSync, mount, unmount } from 'svelte';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -12,22 +14,16 @@ import FrontendContextHarness from './FrontendContextHarness.svelte';
 import ContextmenuHarness from './ContextmenuHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import { flush_reads, install_fake_disk, type FakeDisk } from './diskfile_test_helpers.ts';
+import { ResizeObserverStub } from './diskfile_tree_test_helpers.ts';
 
 let app: Frontend;
 let disk: FakeDisk;
 const cleanups: Array<() => void> = [];
 
 // jsdom has no `ResizeObserver`, which the menu's size bindings use
-class ResizeObserverStub {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-
 beforeEach(() => {
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 	vi.spyOn(console, 'log').mockImplementation(() => undefined);
-	vi.spyOn(console, 'error').mockImplementation(() => undefined);
 	app = monkeypatch_zzz_for_tests(
 		new Frontend({ models: [{ name: 'test-model', provider_name: 'claude' }] })
 	);
@@ -74,12 +70,14 @@ const open_turn_submenu = async (target: HTMLElement): Promise<void> => {
 	);
 	assert.ok(item, 'a "turn" submenu');
 	item.dispatchEvent(new MouseEvent('mouseenter'));
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await wait();
 	flushSync();
 };
 
 describe('TurnContextmenu copy content', () => {
 	test('"copy again" after a refused write copies what was loaded, without reading again', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
+		expect_logged_error('failed to copy text');
 		const write_text = vi
 			.fn((_text: string) => Promise.resolve())
 			.mockImplementationOnce(() => Promise.reject(new Error('not allowed')));
@@ -122,6 +120,7 @@ describe('TurnContextmenu copy content', () => {
 	});
 
 	test('reads a failed file part once more on click, copying its text', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		const write_text = vi.fn((_text: string) => Promise.resolve());
 		Object.defineProperty(navigator, 'clipboard', {
 			value: { writeText: write_text },

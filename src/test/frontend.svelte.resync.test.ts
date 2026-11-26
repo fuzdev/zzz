@@ -2,6 +2,8 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
@@ -252,7 +254,6 @@ describe('boot load', () => {
 
 	test('a first connect during a failed load’s backoff retries now', async () => {
 		vi.useFakeTimers();
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 		try {
 			app.boot_session();
 			calls[0]!({ ok: false, error: { code: -32603, message: 'down' } });
@@ -448,7 +449,7 @@ describe('file reconcile', () => {
 		await load({ files: encode_snapshot_files(files) });
 		assert.strictEqual(c.content_status, 'unrequested', 'dropped, to be read when next needed');
 		assert.strictEqual(a.content, 'contents', 'kept while it reads again');
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 
 		assert.deepEqual(reads, [ZZZ_B, ZZZ_A], 'the shown file first, and only the files held');
 		assert.strictEqual(b.content, 'b changed');
@@ -676,7 +677,7 @@ describe('projects after a restart', () => {
 	});
 
 	test('a reopen refused because the directory is gone drops it and its files', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('[frontend] failed to reopen /ws/ after zzzd restarted');
 		await setup();
 		await load_restarted({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
 
@@ -689,14 +690,13 @@ describe('projects after a restart', () => {
 		assert.ok(!seed_diskfile(app, WS_A));
 		assert.ok(seed_diskfile(app, WS_B)?.uncovered, 'unsaved edits still kept');
 		assert.ok(seed_diskfile(app, ZZZ_A), 'other roots untouched');
-		assert.ok(vi.mocked(console.error).mock.calls.length > 0, 'the failure is logged');
 
 		await load({ files: encode_snapshot_files([create_disknode(ZZZ_A)]) });
 		assert.strictEqual(open_calls.length, 1, 'not retried');
 	});
 
 	test('any other reopen failure keeps it for the next snapshot to retry once', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('[frontend] failed to reopen /ws/ after zzzd restarted');
 		await setup();
 		await load_restarted();
 		open_calls[0]!.resolve({
@@ -715,7 +715,7 @@ describe('projects after a restart', () => {
 	});
 
 	test('a refused reopen spares files under a nested file root', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('[frontend] failed to reopen /ws/ after zzzd restarted');
 		const nested_dir = parse_or_throw(DiskfileDirectoryPath, '/ws/nested/');
 		const nested_a = parse_or_throw(DiskfilePath, '/ws/nested/a.txt');
 		await setup();
@@ -768,7 +768,7 @@ describe('projects after a restart', () => {
 	};
 
 	test('closing a project pending a reopen retry cancels the retry', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('[frontend] failed to reopen /ws/ after zzzd restarted');
 		await setup();
 		await load_restarted();
 		open_calls[0]!.resolve({
@@ -1046,7 +1046,7 @@ describe('a registry project after a restart', () => {
 	});
 
 	test('an open that fails transiently keeps the project and retries its whole focus', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect_logged_error('[frontend] failed to reopen /dev/ after zzzd restarted');
 		await setup_restarted();
 		open_calls[0]!.resolve(transient);
 		await flush();

@@ -11,6 +11,7 @@ import DiskfilePickerDialog from '#lib/DiskfilePickerDialog.svelte';
 
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
+import { ResizeObserverStub } from './diskfile_tree_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
@@ -24,12 +25,6 @@ const dialog_proto = HTMLDialogElement.prototype;
 const dialog_originals = { showModal: dialog_proto.showModal, close: dialog_proto.close };
 
 // jsdom has no `ResizeObserver`, which the windowed list's measuring uses, and no modal dialogs
-class ResizeObserverStub {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-
 beforeEach(() => {
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 	dialog_proto.showModal = function (this: HTMLDialogElement) {

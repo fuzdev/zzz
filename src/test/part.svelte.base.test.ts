@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, assert, describe, beforeEach } from 'vitest';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { get_datetime_now } from '#lib/datetime.ts';
@@ -160,6 +161,10 @@ describe('TextPart specific behavior', () => {
 	});
 
 	test('TextPart serialization and deserialization', () => {
+		allow_logged_error(
+			'registry already has a different cell instance',
+			'the test builds a second cell with an id already registered'
+		);
 		const test_id = create_uuid();
 		const test_date = get_datetime_now();
 

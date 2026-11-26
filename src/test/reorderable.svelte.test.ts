@@ -222,13 +222,10 @@ describe('Reorderable', () => {
 			assert.isDefined(item.dataset.reorderable_item_id);
 			assert.strictEqual(item.dataset.reorderable_list_id, reorderable.id);
 
-			// Either in pending items or regular maps
+			// no list is attached, so the item waits in the pending items
 			const item_id = item.dataset.reorderable_item_id as ReorderableItemId;
-			const is_indexed = reorderable.initialized
-				? reorderable.indices.has(item_id)
-				: reorderable.pending_items.some((p) => p.id === item_id);
-
-			assert.ok(is_indexed);
+			assert.isFalse(reorderable.initialized);
+			assert.ok(reorderable.pending_items.some((p) => p.id === item_id));
 		});
 
 		test('re-attachment changes index', () => {
@@ -237,13 +234,9 @@ describe('Reorderable', () => {
 			// Get the item id
 			const item_id = item.dataset.reorderable_item_id as ReorderableItemId;
 
-			// Check initial index
-			if (reorderable.initialized) {
-				assert.strictEqual(reorderable.indices.get(item_id), 0);
-			} else {
-				const pending_item = reorderable.pending_items.find((p) => p.id === item_id);
-				assert.strictEqual(pending_item?.index, 0);
-			}
+			// no list is attached, so the item waits in the pending items
+			assert.isFalse(reorderable.initialized);
+			assert.strictEqual(reorderable.pending_items.find((p) => p.id === item_id)?.index, 0);
 
 			// Re-attach with new index
 			cleanup1();
@@ -252,13 +245,8 @@ describe('Reorderable', () => {
 			// Get the new item id after re-attachment
 			const new_item_id = item.dataset.reorderable_item_id as ReorderableItemId;
 
-			// Check if index was updated in the appropriate storage
-			if (reorderable.initialized) {
-				assert.strictEqual(reorderable.indices.get(new_item_id), 5);
-			} else {
-				const pending_item = reorderable.pending_items.find((p) => p.id === new_item_id);
-				assert.strictEqual(pending_item?.index, 5);
-			}
+			assert.isFalse(reorderable.initialized);
+			assert.strictEqual(reorderable.pending_items.find((p) => p.id === new_item_id)?.index, 5);
 		});
 
 		test('destroy cleans up', () => {

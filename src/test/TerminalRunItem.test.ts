@@ -10,6 +10,7 @@ import TerminalRunItemHarness from './TerminalRunItemHarness.svelte';
 import { create_test_fuz_terminal_deps } from './fuz_terminal/fuz_terminal_test_helpers.ts';
 import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
 import { stub_terminal_api } from './terminal_test_helpers.ts';
+import { ResizeObserverStub } from './diskfile_tree_test_helpers.ts';
 
 // the module never loads: the entry's gating is the run item's, not the view's
 vi.mock('#lib/fuz_terminal_module.ts', () => ({
@@ -17,12 +18,6 @@ vi.mock('#lib/fuz_terminal_module.ts', () => ({
 }));
 
 const cleanups: Array<() => void> = [];
-
-class ResizeObserverStub {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
 
 beforeEach(() => {
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);

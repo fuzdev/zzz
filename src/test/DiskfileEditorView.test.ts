@@ -36,7 +36,7 @@ import {
 	type HeldUpdateResult,
 	seed_diskfile
 } from './diskfile_test_helpers.ts';
-import { create_deferred } from '@fuzdev/fuz_util/async.ts';
+import { create_deferred, wait } from '@fuzdev/fuz_util/async.ts';
 import { jsonrpc_error_messages } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
 /**
@@ -226,7 +226,7 @@ describe('DiskfileEditorView', () => {
 		assert.ok(save_button?.disabled, 'the plain save waits for a choice');
 
 		click_button(view.target, 'overwrite with your draft');
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 
 		assert.strictEqual(a.content, 'mine');
@@ -385,7 +385,6 @@ describe('a file whose content loads on view', () => {
 		]);
 		return { diskfile: seed_diskfile(app, PATH_A)!, read, read_paths };
 	};
-	const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 	for (const [name, component] of [
 		['DiskfileEditorView', DiskfileEditorView],
@@ -405,7 +404,7 @@ describe('a file whose content loads on view', () => {
 				'not the notice of a file that can not load'
 			);
 			assert.isTrue(view.textarea().readOnly);
-			await flush();
+			await wait();
 			assert.deepEqual(read_paths, [PATH_A]);
 
 			read.resolve({
@@ -419,7 +418,7 @@ describe('a file whose content loads on view', () => {
 					mtime: 1
 				}
 			});
-			await flush();
+			await wait();
 			flushSync();
 			assert.notInclude(to_visible_text(view.target), DISKFILE_CONTENT_LOADING_MESSAGE);
 			assert.strictEqual(view.textarea().value, 'text');
@@ -444,7 +443,7 @@ describe('a file whose content loads on view', () => {
 				mtime: 1
 			}
 		});
-		await flush();
+		await wait();
 		flushSync();
 		const text = to_visible_text(view.target);
 		assert.include(text, 'over 4 MiB');
@@ -538,7 +537,7 @@ describe('the conflict notice showing the disk version', () => {
 			.dispatchEvent(
 				new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true })
 			);
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 
 		assert.strictEqual(document.activeElement, view.alert());
@@ -576,7 +575,7 @@ describe('the conflict notice showing the disk version', () => {
 			copy()?.click();
 			click_button(view.target, 'show disk version');
 			copy()?.click();
-			await new Promise((resolve) => setTimeout(resolve, 0));
+			await wait();
 		} finally {
 			Reflect.deleteProperty(navigator, 'clipboard');
 		}
@@ -589,7 +588,7 @@ describe('the conflict notice showing the disk version', () => {
 		click_button(view.target, 'show disk version');
 
 		click_button(view.target, 'overwrite with your draft');
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 
 		assert.strictEqual(a.content, 'mine');
@@ -674,7 +673,7 @@ describe('the conflict notice showing the disk version', () => {
 		assert.isTrue(find_button(view.target, 'show disk version').disabled);
 
 		deferred.resolve({ ok: false, error: { code: -32603, message: 'disk full' } });
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 		assert.isFalse(find_button(view.target, 'show disk version').disabled);
 	});
@@ -1044,7 +1043,7 @@ describe('a draft whose project closed', () => {
 		assert.notInclude(button.textContent, '(not indexed)');
 
 		click_button(view.target, 'reopen project');
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 
 		// by the file's directory — the file may be gone — reconciling what's known there
@@ -1135,7 +1134,7 @@ describe('DiskfileCloseDialog', () => {
 	test('save writes the draft and closes the tab', async () => {
 		const { a, tab, view } = await setup_pending();
 		click_button(view.target, 'save');
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 
 		assert.strictEqual(a.content, 'draft');
@@ -1205,7 +1204,7 @@ describe('DiskfileCloseDialog', () => {
 		flushSync();
 
 		click_button(view.target, 'save');
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 
 		assert.strictEqual(a.content, 'DRAFT');
@@ -1221,7 +1220,7 @@ describe('DiskfileCloseDialog', () => {
 		click_button(view.target, 'save');
 		click_button(view.target, 'cancel');
 		deferred.resolve({ ok: true, value: null });
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 
 		assert.ok(app.diskfiles.editor.tabs.items.by_id.has(tab.id));
@@ -1233,7 +1232,7 @@ describe('DiskfileCloseDialog', () => {
 			Promise.resolve({ ok: false, error: { code: -32603, message: 'disk full' } });
 
 		click_button(view.target, 'save');
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 		assert.include(view.target.textContent, 'disk full');
 

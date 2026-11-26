@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, beforeEach, assert, vi } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 
@@ -9,7 +10,6 @@ let app: Frontend;
 beforeEach(() => {
 	app = new Frontend();
 	vi.spyOn(console, 'log').mockImplementation(() => {});
-	vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 describe('Capabilities backend ping status', () => {
@@ -39,6 +39,7 @@ describe('Capabilities backend ping status', () => {
 	});
 
 	test('a failed ping once connected shows the failure', () => {
+		expect_logged_error('[capabilities] [handle_ping_error] ping_id p2 gone');
 		const { capabilities } = app;
 		capabilities.handle_ping_sent('p1');
 		capabilities.handle_ping_received('p1');

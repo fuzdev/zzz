@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, describe, assert } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_deferred } from '@fuzdev/fuz_util/async.ts';
 
 import type { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
@@ -364,6 +365,7 @@ describe('a save while a reported change is still being read', () => {
 
 describe('a save after a read that failed', () => {
 	test('reads once more, and refuses on the change that read shows', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		editor_state.current_content = 'mine';
 		const release = disk.hold_reads();
 		disk.fail_reads(1, 'socket closed');
@@ -384,6 +386,7 @@ describe('a save after a read that failed', () => {
 	});
 
 	test('reads once more, and writes when the file still holds what the draft started from', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		editor_state.current_content = 'mine';
 		const release = disk.hold_reads();
 		disk.fail_reads(1);
@@ -399,6 +402,7 @@ describe('a save after a read that failed', () => {
 	});
 
 	test('refuses, saying why, when the second read fails too', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		editor_state.current_content = 'mine';
 		const release = disk.hold_reads();
 		disk.fail_reads(2, 'permission denied');
@@ -416,6 +420,7 @@ describe('a save after a read that failed', () => {
 	});
 
 	test('a read that failed before the save is retried by it too', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		editor_state.current_content = 'mine';
 		disk.fail_reads(1);
 		await broadcast('theirs');
@@ -429,6 +434,7 @@ describe('a save after a read that failed', () => {
 	});
 
 	test('a file deleted on disk since is written without the retry, recreating it', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		editor_state.current_content = 'mine';
 		disk.fail_reads(1);
 		await broadcast('theirs');
@@ -450,6 +456,7 @@ describe('a save after a read that failed', () => {
 	});
 
 	test('an overwrite writes without the retry', async () => {
+		expect_logged_error('[diskfiles] reading /w/a.txt failed');
 		editor_state.current_content = 'mine';
 		disk.fail_reads(1);
 		await broadcast('theirs');

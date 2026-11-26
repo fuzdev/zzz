@@ -2,11 +2,12 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert, vi } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
 import { Thread } from '#lib/thread.svelte.ts';
 import { Turn } from '#lib/turn.svelte.ts';
-import { create_deferred } from '@fuzdev/fuz_util/async.ts';
+import { create_deferred, wait } from '@fuzdev/fuz_util/async.ts';
 import type { CompletionRequest } from '#lib/completion_types.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import { create_frontend_action_handlers } from '#lib/frontend_action_handlers.ts';
@@ -183,6 +184,8 @@ describe('Thread.send_message', () => {
 
 describe('a completion in flight when the socket drops', () => {
 	test('settles its turn as errored through the real rpc path', async () => {
+		expect_logged_error('[peer] send request failed: completion_create');
+		expect_logged_error('[frontend_action_handlers] completion failed');
 		// a real `api` over the ws transport, on a connection that's up when the
 		// request goes out and then closes — fuz_app's client rejects in-flight
 		// requests on close (they can't be correlated after a reconnect)
@@ -204,7 +207,6 @@ describe('a completion in flight when the socket drops', () => {
 		live.peer.transports.register_transport(
 			new FrontendWebsocketTransport(connection, (data) => live.peer.receive(data))
 		);
-		vi.spyOn(console, 'error').mockImplementation(() => {});
 		vi.spyOn(console, 'log').mockImplementation(() => {});
 
 		const thread = live.threads.add_thread(
@@ -254,14 +256,13 @@ describe('a file part still loading when sent', () => {
 		thread.add_turn(turn);
 		return { thread, read, read_paths };
 	};
-	const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 	test('is awaited, and the request carries its content', async () => {
 		const { thread, read, read_paths } = setup();
 		const sent = thread.send_message('what does it say?');
 		assert.ok(thread.pending, 'pending at once, as for any send');
 		assert.strictEqual(thread.turns.size, 3);
-		await flush();
+		await wait();
 		assert.strictEqual(calls.length, 0, 'waits for the content');
 		assert.deepEqual(read_paths, [FILE_PATH]);
 
@@ -276,7 +277,7 @@ describe('a file part still loading when sent', () => {
 				mtime: 1
 			}
 		});
-		await flush();
+		await wait();
 		assert.strictEqual(calls.length, 1);
 		assert.deepEqual(calls[0]!.completion_request.completion_messages, [
 			{ role: 'user', content: 'file text' }
@@ -289,6 +290,7 @@ describe('a file part still loading when sent', () => {
 	});
 
 	test('a failed read, failing again on its one retry, stops the send with an error', async () => {
+		expect_logged_error('[diskfiles] reading /test/notes.txt failed');
 		const { thread, read, read_paths } = setup();
 		const sent = thread.send_message('what does it say?');
 		read.resolve({ ok: false, error: { code: -32603, message: 'connection lost' } });
@@ -303,9 +305,10 @@ describe('a file part still loading when sent', () => {
 	});
 
 	test('a file already failed when sent stops the send too', async () => {
+		expect_logged_error('[diskfiles] reading /test/notes.txt failed');
 		const { thread, read } = setup();
 		read.resolve({ ok: false, error: { code: -32603, message: 'connection lost' } });
-		await flush();
+		await wait();
 		assert.strictEqual(seed_diskfile(app, FILE_PATH)?.content_error, 'connection lost');
 		const assistant_turn = await thread.send_message('again');
 		assert.strictEqual(calls.length, 0);
@@ -313,12 +316,13 @@ describe('a file part still loading when sent', () => {
 	});
 
 	test('a failed read in a disabled turn does not stop the send', async () => {
+		expect_logged_error('[diskfiles] reading /test/notes.txt failed');
 		const { thread, read } = setup();
 		read.resolve({ ok: false, error: { code: -32603, message: 'connection lost' } });
-		await flush();
+		await wait();
 		for (const turn of thread.turns.by_id.values()) turn.enabled = false;
 		const sent = thread.send_message('hi');
-		await flush();
+		await wait();
 		assert.strictEqual(calls.length, 1);
 		calls[0]!.resolve();
 		const assistant_turn = await sent;
@@ -339,7 +343,7 @@ describe('a file part still loading when sent', () => {
 				mtime: 1
 			}
 		});
-		await flush();
+		await wait();
 		assert.strictEqual(calls.length, 1);
 		assert.deepEqual(calls[0]!.completion_request.completion_messages, [
 			{ role: 'user', content: `[${FILE_PATH}: content not loaded — the file is over 4 MiB]` }
@@ -424,23 +428,23 @@ describe('a file part whose read failed when sent', () => {
 		const thread = create_thread();
 		const part_ids = paths.map((path) => app.parts.add({ type: 'diskfile', path }).id);
 		thread.add_turn(new Turn({ app, json: { role: 'user', part_ids } }));
-		await flush();
+		await wait();
 		for (const path of paths) {
 			assert.strictEqual(seed_diskfile(app, path)?.content_error, 'connection lost');
 		}
 		read_paths.length = 0;
 		return { thread, answers, read_paths };
 	};
-	const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 	test('is read once more, and the send goes with its content when that succeeds', async () => {
+		expect_logged_error('[diskfiles] reading /test/notes.txt failed');
 		const { thread, answers, read_paths } = await setup();
 		const sent = thread.send_message('what does it say?');
-		await flush();
+		await wait();
 		assert.deepEqual(read_paths, [FILE_PATH], 'one retry');
 		assert.strictEqual(calls.length, 0, 'waits for the retry');
 		answers[0]!(LOADED);
-		await flush();
+		await wait();
 		assert.strictEqual(calls.length, 1);
 		assert.deepEqual(calls[0]!.completion_request.completion_messages, [
 			{ role: 'user', content: 'file text' }
@@ -452,9 +456,10 @@ describe('a file part whose read failed when sent', () => {
 	});
 
 	test('stops the send when the retry fails too, saying how to send without it', async () => {
+		expect_logged_error('[diskfiles] reading /test/notes.txt failed');
 		const { thread, answers, read_paths } = await setup();
 		const sent = thread.send_message('what does it say?');
-		await flush();
+		await wait();
 		answers[0]!(failed('permission denied'));
 		const assistant_turn = await sent;
 		assert.strictEqual(calls.length, 0);
@@ -467,9 +472,11 @@ describe('a file part whose read failed when sent', () => {
 	});
 
 	test('names every file whose retry failed, each once', async () => {
+		expect_logged_error('[diskfiles] reading /test/notes.txt failed');
+		expect_logged_error('[diskfiles] reading /test/other.txt failed');
 		const { thread, answers } = await setup([FILE_PATH, OTHER_PATH, FILE_PATH]);
 		const sent = thread.send_message('hi');
-		await flush();
+		await wait();
 		answers[0]!(failed('permission denied'));
 		answers[1]!(failed('is a directory'));
 		const assistant_turn = await sent;
@@ -481,35 +488,38 @@ describe('a file part whose read failed when sent', () => {
 	});
 
 	test('two parts on one failed file share one retry read', async () => {
+		expect_logged_error('[diskfiles] reading /test/notes.txt failed');
 		const { thread, answers, read_paths } = await setup([FILE_PATH, FILE_PATH]);
 		const sent = thread.send_message('hi');
-		await flush();
+		await wait();
 		assert.deepEqual(read_paths, [FILE_PATH]);
 		answers[0]!(LOADED);
-		await flush();
+		await wait();
 		assert.strictEqual(calls.length, 1);
 		calls[0]!.resolve();
 		await sent;
 	});
 
 	test('cancelling during the retry sends nothing', async () => {
+		expect_logged_error('[diskfiles] reading /test/notes.txt failed');
 		const { thread, answers } = await setup();
 		const sent = thread.send_message('hi');
-		await flush();
+		await wait();
 		const assistant_turn = Array.from(thread.turns.by_id.values()).at(-1)!;
 		thread.cancel_pending();
 		answers[0]!(LOADED);
-		await flush();
+		await wait();
 		assert.strictEqual(calls.length, 0, 'no request after the retry lands');
 		assert.strictEqual(await sent, assistant_turn);
 		assert.ok(assistant_turn.cancelled);
 	});
 
 	test('cancelling before the retry starts skips it', async () => {
+		expect_logged_error('[diskfiles] reading /test/notes.txt failed');
 		const { thread, answers, read_paths } = await setup();
 		const sent = thread.send_message('hi');
 		thread.cancel_pending(); // before the loads settle
-		await flush();
+		await wait();
 		assert.deepEqual(read_paths, [], 'not retried');
 		answers[0]?.(LOADED); // were it retried, let the send end
 		await sent;

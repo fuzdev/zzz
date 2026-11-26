@@ -2,7 +2,8 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
-import { create_deferred } from '@fuzdev/fuz_util/async.ts';
+import { allow_logged_error, expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
+import { create_deferred, wait } from '@fuzdev/fuz_util/async.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { get_datetime_now } from '#lib/datetime.ts';
@@ -481,6 +482,10 @@ describe('DiskfilePart attribute management', () => {
 	});
 
 	test('attributes are preserved when serializing to JSON', () => {
+		allow_logged_error(
+			'registry already has a different cell instance',
+			'the test builds a second cell with an id already registered'
+		);
 		const part = app.cell_registry.instantiate('DiskfilePart', {
 			type: 'diskfile',
 			path: TEST_PATHS.BASIC
@@ -582,6 +587,7 @@ describe('DiskfilePart content still loading', () => {
 	});
 
 	test('load_content reads a failed file once more', async () => {
+		expect_logged_error('[diskfiles] reading /test/lazy.txt failed');
 		const answers = [
 			{ ok: false, error: { code: -32603, message: 'connection lost' } },
 			{
@@ -605,7 +611,7 @@ describe('DiskfilePart content still loading', () => {
 		]);
 		const prompt = new Prompt({ app });
 		prompt.add_part(Part.create(app, { type: 'diskfile', path: LAZY_PATH }));
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		assert.include(prompt.content, 'content not loaded — connection lost');
 		assert.isTrue(prompt.content_pending_read);
 		assert.include(await prompt.load_content(), 'lazy text');

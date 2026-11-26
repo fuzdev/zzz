@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, beforeEach, assert } from 'vitest';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { get_datetime_now } from '#lib/datetime.ts';
@@ -337,6 +338,10 @@ describe('TextPart attribute management', () => {
 	});
 
 	test('attributes are preserved when serializing to JSON', () => {
+		allow_logged_error(
+			'registry already has a different cell instance',
+			'the test builds a second cell with an id already registered'
+		);
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
 			content: 'Test content'
@@ -434,6 +439,10 @@ describe('TextPart start and end position markers', () => {
 	});
 
 	test('positions are preserved when serializing and deserializing', () => {
+		allow_logged_error(
+			'registry already has a different cell instance',
+			'the test builds a second cell with an id already registered'
+		);
 		const part = app.cell_registry.instantiate('TextPart', {
 			type: 'text',
 			content: 'Position preservation test',

@@ -189,13 +189,15 @@ removes the cache, not the module. `cargo xtask dev` runs this step before it
 starts (warning instead of failing when it can't). The tests that load the
 module are `src/test/fuz_terminal/**/*.wasm.test.ts` and
 `src/test/TerminalView.wasm.test.ts`, run by the `fuz_terminal_wasm` vitest
-project, which exists only when the module does.
+project, which exists only when the module does. CI builds the module before
+`gro check`, and with `CI` set a missing module fails the run instead of
+skipping those tests.
 
 ## Commands
 
 - `gro check` — All checks (typecheck, test, gen, format)
 - `gro typecheck` — Type checking only (faster iteration)
-- `gro test` (or `npm test`) — Run Vitest unit + db tests; the
+- `gro test` (or `npm test`) — Run the Vitest unit tests; the
   `cross_backend_*` projects are excluded unless `FUZ_TEST_CROSS_BACKEND=1`
   (`npm run test:cross` sets it — ../crates/CLAUDE.md § Integration Tests)
 - `gro test -- --watch` — Tests in watch mode
@@ -943,6 +945,12 @@ Tests live in `src/test/` (not co-located). Split large suites by aspect with do
 
 `src/test/sveltekit_env_setup.ts`, a vitest setup file, stubs the page global
 that `$app/env/public` reads.
+`src/test/logged_error_gate.ts`, a setup file of the unit and
+`fuz_terminal_wasm` projects, installs fuz_app's logged-error gate: a test
+fails on any error it logs (`console.error` or a `Logger`'s) unless it
+declares it — `expect_logged_error(pattern)` for the error it provokes,
+`allow_logged_error(pattern, reason)` for one it only tolerates. Don't
+silence `console.error` with a spy.
 
 ```bash
 gro test                                    # all tests
@@ -987,7 +995,8 @@ test('all model provider_names exist in providers_default', () => {
 
 ### Test File Naming
 
-- `module.test.ts` — `action_event.test.ts`
+- `module.test.ts` — `action_event.test.ts`; the name matches the module,
+  `.svelte.` included (`reactive_helpers.svelte.test.ts`)
 - `module.aspect.test.ts` — `cell.svelte.base.test.ts`,
   `cell.svelte.decoders.test.ts`,
   `indexed_collection.svelte.queries.test.ts`

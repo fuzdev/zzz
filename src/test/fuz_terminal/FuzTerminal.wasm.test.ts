@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, assert, afterEach, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
 import { flushSync, mount, unmount } from 'svelte';
 
 import type FuzTerminal from '#lib/fuz_terminal/FuzTerminal.svelte';
@@ -842,7 +843,7 @@ describe('unmounting', () => {
 		});
 		flushSync();
 		// the instantiate is in flight
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		assert.isFunction(resolve_vt);
 		void unmount(mounted);
 		flushSync();
@@ -862,7 +863,7 @@ describe('unmounting', () => {
 		// constructing the instance called in; only what follows counts
 		calls = 0;
 		resolve_vt(vt);
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		assert.strictEqual(calls, 0);
 		assert.deepEqual(statuses, []);
 		assert.strictEqual(deps.frames.pending, 0);
@@ -1098,7 +1099,7 @@ describe('the module as a promise', () => {
 		let reject!: (error: Error) => void;
 		const module = new Promise<WebAssembly.Module>((_, r) => (reject = r));
 		const pending = mount_terminal({ props: { module } });
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		reject(new Error('404 ghostty-vt.wasm'));
 		const t = await pending;
 		assert.deepEqual(
@@ -1117,7 +1118,7 @@ describe('the module as a promise', () => {
 		let reject!: (error: Error) => void;
 		const module = new Promise<WebAssembly.Module>((_, r) => (reject = r));
 		const pending = mount_terminal({ props: { module } });
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		reject(odd);
 		const t = await pending;
 		const status = t.view.get_status();
@@ -1161,7 +1162,7 @@ describe('the module as a promise', () => {
 		flushSync();
 		target.remove();
 		resolve(await compile_test_ghostty_vt());
-		await new Promise((r) => setTimeout(r, 0));
+		await wait();
 		assert.strictEqual(loads, 0);
 		assert.deepEqual(statuses, []);
 	});

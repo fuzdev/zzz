@@ -13,6 +13,7 @@ import {
 	type SchemaResult
 } from '@fuzdev/fuz_schema/schema.ts';
 import { test, vi, beforeEach, describe, assert } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { get_datetime_now } from '#lib/datetime.ts';
@@ -288,6 +289,8 @@ describe('Cell id handling', () => {
 	});
 
 	test('schema validation rejects invalid id formats', () => {
+		expect_logged_error('Error parsing property "id" for IdTestCell: SchemaError');
+		expect_logged_error('error in partial update for IdTestCell: SchemaError');
 		// Create initial cell
 		const cell = new IdTestCell({ app });
 
@@ -416,6 +419,7 @@ describe('Cell modification methods', () => {
 	});
 
 	test('set_json rejects invalid data', () => {
+		expect_logged_error('error setting JSON for BasicTestCell: SchemaError');
 		const test_cell = new BasicTestCell({ app });
 
 		// Should reject invalid data with a schema error
@@ -469,6 +473,8 @@ describe('Cell modification methods', () => {
 	});
 
 	test('set_json_partial validates merged data against schema', () => {
+		expect_logged_error('Error parsing property "number" for BasicTestCell: SchemaError');
+		expect_logged_error('error in partial update for BasicTestCell: SchemaError');
 		const test_cell = new BasicTestCell({
 			app,
 			json: {
@@ -583,6 +589,7 @@ describe('Cell cloning', () => {
 
 describe('Schema validation', () => {
 	test('json_parsed validates cell state', () => {
+		expect_logged_error('error setting JSON for BasicTestCell: SchemaError');
 		const test_cell = new BasicTestCell({
 			app,
 			json: {

@@ -2,6 +2,8 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { flushSync, mount, unmount } from 'svelte';
 
 import { icon_checkmark } from '@fuzdev/fuz_ui/icons.ts';
@@ -19,6 +21,7 @@ import {
 	type FakeDisk,
 	seed_diskfile
 } from './diskfile_test_helpers.ts';
+import { ResizeObserverStub } from './diskfile_tree_test_helpers.ts';
 
 const SOURCE_DIR = parse_or_throw(SerializableDisknode.def.source_dir, '/w/');
 
@@ -27,12 +30,6 @@ let disk: FakeDisk;
 const cleanups: Array<() => void> = [];
 
 // jsdom has no `ResizeObserver`, which the menu's size bindings use
-class ResizeObserverStub {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-
 beforeEach(() => {
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 	vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -83,7 +80,7 @@ const open_submenu = async (target: HTMLElement, text: string): Promise<void> =>
 	const item = find_menuitem(target, text);
 	assert.ok(item, `a "${text}" submenu`);
 	item.dispatchEvent(new MouseEvent('mouseenter'));
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await wait();
 	flushSync();
 };
 
@@ -98,7 +95,7 @@ describe('DiskfileContextmenu view submenu', () => {
 
 		// entries activate a tick after the click
 		find_menuitem(target, 'preview')!.click();
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 		assert.isUndefined(app.diskfiles.find_editor_state(a.path));
 		assert.strictEqual(app.diskfiles.markdown_view_modes.get(a.path), 'preview');
@@ -181,8 +178,8 @@ describe('DiskfileContextmenu copy file content', () => {
 		assert.deepEqual(read_paths, [], 'opening the menu reads nothing');
 
 		entry.click();
-		await new Promise((resolve) => setTimeout(resolve, 0));
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
+		await wait();
 		assert.deepEqual(read_paths, [path]);
 		assert.deepEqual(write_text.mock.calls, [['lazy text']]);
 	});
@@ -212,6 +209,7 @@ describe('DiskfileContextmenu copy file content', () => {
 	});
 
 	test('a write refused after a load keeps the menu open, and a second click copies', async () => {
+		expect_logged_error('failed to copy text');
 		const write_text = vi
 			.fn((_text: string) => Promise.resolve())
 			.mockImplementationOnce(() => Promise.reject(new Error('not allowed')));
@@ -219,7 +217,6 @@ describe('DiskfileContextmenu copy file content', () => {
 			value: { writeText: write_text },
 			configurable: true
 		});
-		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		(app as unknown as { api: unknown }).api = {
 			diskfile_read: () =>
 				Promise.resolve({
@@ -241,7 +238,7 @@ describe('DiskfileContextmenu copy file content', () => {
 		await open_submenu(target, 'file');
 
 		find_copy_entry(target)!.click();
-		for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+		for (let i = 0; i < 3; i++) await wait();
 		flushSync();
 		const entry = find_copy_entry(target);
 		assert.ok(entry, 'the menu stays open');
@@ -258,12 +255,12 @@ describe('DiskfileContextmenu copy file content', () => {
 	});
 
 	test('a failed load keeps the menu open, saying why, and a second click reads again', async () => {
+		expect_logged_error('[diskfiles] reading /w/lazy.txt failed');
 		const write_text = vi.fn((_text: string) => Promise.resolve());
 		Object.defineProperty(navigator, 'clipboard', {
 			value: { writeText: write_text },
 			configurable: true
 		});
-		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		let read_count = 0;
 		(app as unknown as { api: unknown }).api = {
 			diskfile_read: () =>
@@ -290,7 +287,7 @@ describe('DiskfileContextmenu copy file content', () => {
 		await open_submenu(target, 'file');
 
 		find_copy_entry(target)!.click();
-		for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+		for (let i = 0; i < 3; i++) await wait();
 		flushSync();
 		const entry = find_copy_entry(target);
 		assert.ok(entry, 'the menu stays open');
@@ -298,7 +295,7 @@ describe('DiskfileContextmenu copy file content', () => {
 		assert.strictEqual(write_text.mock.calls.length, 0);
 
 		entry.click();
-		for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+		for (let i = 0; i < 3; i++) await wait();
 		assert.strictEqual(read_count, 2, 'the click read again');
 		assert.deepEqual(write_text.mock.calls, [['lazy text']]);
 	});
@@ -330,6 +327,7 @@ describe('DiskfileContextmenu copy file content', () => {
 
 describe('DiskfileContextmenu on a file nothing holds', () => {
 	test('the open menu makes the cell, copies through it, and lets it go on close', async () => {
+		expect_logged_error('failed to copy text');
 		const write_text = vi
 			.fn((_text: string) => Promise.resolve())
 			.mockImplementationOnce(() => Promise.reject(new Error('not allowed')));
@@ -337,7 +335,6 @@ describe('DiskfileContextmenu on a file nothing holds', () => {
 			value: { writeText: write_text },
 			configurable: true
 		});
-		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const read_paths: Array<string> = [];
 		(app as unknown as { api: unknown }).api = {
 			diskfile_read: ({ path }: { path: string }) => {
@@ -367,7 +364,7 @@ describe('DiskfileContextmenu on a file nothing holds', () => {
 
 		// the first write is refused after the load, so the menu stays open
 		find_copy_entry(target)!.click();
-		for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+		for (let i = 0; i < 3; i++) await wait();
 		flushSync();
 		const entry = find_copy_entry(target);
 		assert.ok(entry, 'the menu stays open');
@@ -384,7 +381,7 @@ describe('DiskfileContextmenu on a file nothing holds', () => {
 		assert.deepEqual(read_paths, [path], 'read once');
 
 		for (const cleanup of cleanups.splice(0)) cleanup();
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		assert.isUndefined(app.diskfiles.peek(path), 'closing lets the cell go');
 		assert.isTrue(app.diskfiles.index.has(path), 'its record stays');
 	});

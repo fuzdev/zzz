@@ -1,10 +1,8 @@
 import { test, describe, assert } from 'vitest';
-import { create_deferred, type Deferred } from '@fuzdev/fuz_util/async.ts';
+import { create_deferred, type Deferred, wait } from '@fuzdev/fuz_util/async.ts';
 import { assert_rejects } from '@fuzdev/fuz_util/testing.ts';
 
 import { TaskQueue } from '#lib/task_queue.ts';
-
-const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Queues a task that records its start and waits for the test to finish it. */
 const queue_task = (
@@ -29,14 +27,14 @@ describe('TaskQueue', () => {
 		queue_task(queue, started, 'b');
 		queue_task(queue, started, 'c');
 		assert.deepEqual(started, [], 'nothing starts synchronously');
-		await flush();
+		await wait();
 		assert.deepEqual(started, ['a', 'b']);
 		assert.strictEqual(queue.active, 2);
 		assert.strictEqual(queue.waiting, 1);
 
 		a.deferred.resolve('A');
 		assert.strictEqual(await a.done, 'A');
-		await flush();
+		await wait();
 		assert.deepEqual(started, ['a', 'b', 'c']);
 	});
 
@@ -50,7 +48,7 @@ describe('TaskQueue', () => {
 			queue_task(queue, started, 'mid_1', () => 1),
 			queue_task(queue, started, 'mid_2', () => 1)
 		];
-		await flush();
+		await wait();
 		assert.deepEqual(started, ['high']);
 		for (const task of [first, ...tasks]) task.deferred.resolve('');
 		await Promise.all(tasks.map((task) => task.done));
@@ -65,11 +63,11 @@ describe('TaskQueue', () => {
 		const a = queue_task(queue, started, 'a', () => 0);
 		queue_task(queue, started, 'b', () => b_priority);
 		queue_task(queue, started, 'c', () => 1);
-		await flush();
+		await wait();
 		b_priority = 0;
 		a.deferred.resolve('');
 		await a.done;
-		await flush();
+		await wait();
 		assert.deepEqual(started, ['a', 'b']);
 	});
 

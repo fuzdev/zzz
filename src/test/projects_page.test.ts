@@ -222,7 +222,6 @@ describe('a registry project on the projects page', () => {
 	});
 
 	test('a failure says why', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		entry_button('site/').click();
 		calls[0]!.resolve({
 			ok: false,

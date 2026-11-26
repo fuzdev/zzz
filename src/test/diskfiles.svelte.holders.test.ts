@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, assert, describe } from 'vitest';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { flushSync } from 'svelte';
 
 import {
@@ -326,6 +327,10 @@ describe('an editing state with something to keep keeps its cell after the last 
 });
 
 test('a file arriving at a held path gets a cell and is read; any other stays a record', async () => {
+	allow_logged_error(
+		'[diskfiles] reading /dev/r/a.ts failed: failed to read file: No such file or directory',
+		"the test's fake disk has no such file, so the read its cell starts fails"
+	);
 	const { diskfiles } = app;
 	diskfiles.hold(at('/dev/r/a.ts'));
 	diskfiles.upsert(record('/dev/r/a.ts'));
@@ -364,6 +369,10 @@ test('a reader of peek sees the cell an effect’s hold makes', () => {
 });
 
 test('a part constructed in a derived makes its cell without an unsafe mutation', () => {
+	allow_logged_error(
+		'[diskfiles] reading /dev/r/a.ts failed: failed to read file: No such file or directory',
+		"the test's fake disk has no such file, so the read its cell starts fails"
+	);
 	const { diskfiles } = app;
 	diskfiles.add_initial([record('/dev/r/a.ts')]);
 	const read = read_in_derived(() =>

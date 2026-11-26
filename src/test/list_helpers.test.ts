@@ -1,4 +1,5 @@
 import { test, describe, assert } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { reorder_list, to_prepended_list, to_reordered_list } from '#lib/list_helpers.ts';
 
 // Test constants
@@ -65,24 +66,28 @@ describe('reorder_list', () => {
 
 	// Error cases - testing that array remains unchanged with invalid indices
 	test('handles negative from_index by leaving array unchanged', () => {
+		expect_logged_error('Invalid indices');
 		const array = [...SAMPLE_ARRAY];
 		reorder_list(array, -1, 2);
 		assert.deepEqual(array, SAMPLE_ARRAY);
 	});
 
 	test('handles out of bounds from_index by leaving array unchanged', () => {
+		expect_logged_error('Invalid indices');
 		const array = [...SAMPLE_ARRAY];
 		reorder_list(array, 10, 2);
 		assert.deepEqual(array, SAMPLE_ARRAY);
 	});
 
 	test('handles negative to_index by leaving array unchanged', () => {
+		expect_logged_error('Invalid indices');
 		const array = [...SAMPLE_ARRAY];
 		reorder_list(array, 2, -1);
 		assert.deepEqual(array, SAMPLE_ARRAY);
 	});
 
 	test('handles out of bounds to_index by leaving array unchanged', () => {
+		expect_logged_error('Invalid indices');
 		const array = [...SAMPLE_ARRAY];
 		reorder_list(array, 2, 10);
 		assert.deepEqual(array, SAMPLE_ARRAY);
@@ -172,24 +177,28 @@ describe('to_reordered_list', () => {
 
 	// Error cases - testing that original array is returned with invalid indices
 	test('handles negative from_index by returning original array', () => {
+		expect_logged_error('Invalid indices');
 		const original = [...SAMPLE_ARRAY];
 		const result = to_reordered_list(original, -1, 2);
 		assert.strictEqual(result, original);
 	});
 
 	test('handles out of bounds from_index by returning original array', () => {
+		expect_logged_error('Invalid indices');
 		const original = [...SAMPLE_ARRAY];
 		const result = to_reordered_list(original, 10, 2);
 		assert.strictEqual(result, original);
 	});
 
 	test('handles negative to_index by returning original array', () => {
+		expect_logged_error('Invalid indices');
 		const original = [...SAMPLE_ARRAY];
 		const result = to_reordered_list(original, 2, -1);
 		assert.strictEqual(result, original);
 	});
 
 	test('handles out of bounds to_index by returning original array', () => {
+		expect_logged_error('Invalid indices');
 		const original = [...SAMPLE_ARRAY];
 		const result = to_reordered_list(original, 2, 10);
 		assert.strictEqual(result, original);

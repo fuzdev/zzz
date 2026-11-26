@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert, vi } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 
 import { get_datetime_now } from '#lib/datetime.ts';
 import { JSONRPC_ERROR_CODES } from '#lib/zzz_jsonrpc_errors.ts';
@@ -106,6 +107,7 @@ describe('Turn pending and settled', () => {
 
 describe('completion_create receive_error', () => {
 	test('keeps streamed content and sets the error separately', () => {
+		expect_logged_error('[frontend_action_handlers] completion failed');
 		const turn = thread.add_assistant_turn('');
 		receive_progress(turn, 'partial ');
 		receive_progress(turn, 'answer');
@@ -118,6 +120,7 @@ describe('completion_create receive_error', () => {
 	});
 
 	test('an error before any content settles the turn', () => {
+		expect_logged_error('[frontend_action_handlers] completion failed');
 		const turn = thread.add_assistant_turn('');
 		receive_error(turn, -32000, 'bad request');
 
@@ -145,6 +148,7 @@ describe('completion_create receive_error', () => {
 	});
 
 	test('does not touch a turn that already has its response', () => {
+		expect_logged_error('[frontend_action_handlers] completion failed');
 		const turn = thread.add_assistant_turn('');
 		receive_response(turn, create_claude_response('done'));
 		receive_error(turn, -32000, 'late');
@@ -202,6 +206,7 @@ describe('completion_create stop reasons', () => {
 	});
 
 	test('a refusal after partial text keeps the text and shows the error, not a truncation', () => {
+		expect_logged_error('[frontend_action_handlers] completion failed');
 		const turn = thread.add_assistant_turn('');
 		receive_progress(turn, 'Sure, here');
 		receive_error(
@@ -262,6 +267,7 @@ describe('completion_progress', () => {
 	});
 
 	test('ignores chunks after an error', () => {
+		expect_logged_error('[frontend_action_handlers] completion failed');
 		const turn = thread.add_assistant_turn('');
 		receive_error(turn, -32000, 'boom');
 		receive_progress(turn, 'late');

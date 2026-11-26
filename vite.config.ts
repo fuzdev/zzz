@@ -19,6 +19,8 @@ import { check_dev_server_port, DEV_SERVER_PORT_VAR } from './src/lib/dev_server
 
 const max_workers = Math.max(1, Math.ceil(availableParallelism() / 2));
 
+// fails a unit or wasm test on any error it logs without declaring it
+const LOGGED_ERROR_GATE = './src/test/logged_error_gate.ts';
 const GLOBAL_SETUP = './src/test/cross_backend/global_setup.ts';
 // The proxy variant is its own project: `ZZZ_TRUSTED_PROXIES` is parsed once
 // at boot, so its suite needs a backend spawned with the trust list set.
@@ -29,7 +31,7 @@ const PROJECT_REGISTRY_TEST = 'src/test/cross_backend/project_registry.cross.tes
 // The `cross_backend_*` projects spawn the real Rust `zzz_server` binary via
 // `globalSetup`, over a database it provisions per project (a `pglet_server` by
 // default, PostgreSQL under `FUZ_TEST_POSTGRES_URL`). Gate them behind `FUZ_TEST_CROSS_BACKEND=1` so a bare
-// `gro test` stays a fast, infra-free unit+db run and never spawns. Set the
+// `gro test` stays a fast, infra-free unit run and never spawns. Set the
 // flag to opt in — required both for `gro test` to include them and for
 // explicit `npx vitest run --project cross_backend_*` runs.
 const cross_backend_enabled = !!process.env.FUZ_TEST_CROSS_BACKEND;
@@ -56,9 +58,10 @@ const cross_backend_projects = cross_backend_enabled
 
 // The `fuz_terminal_wasm` project runs the tests that load libghostty-vt's wasm
 // module, which isn't committed: `cargo xtask ghostty-vt` builds it (it needs
-// Zig). The project exists only once the module does, so a checkout without it
-// (CI included) runs everything else — saying so once per test run — and
-// `unit` never runs these files.
+// Zig). The project exists only once the module does, so a local checkout
+// without it runs everything else — saying so once per test run — and `unit`
+// never runs these files. CI builds the module first, so there a missing one
+// is an error, not a skip.
 const GHOSTTY_VT_MODULE = 'static/fuz_terminal/ghostty-vt.wasm';
 // the binding's and renderer's tests, and the terminal view's, which mounts them
 const GHOSTTY_VT_TESTS = [
@@ -68,9 +71,11 @@ const GHOSTTY_VT_TESTS = [
 const ghostty_vt_module_present = existsSync(new URL(`./${GHOSTTY_VT_MODULE}`, import.meta.url));
 // only under vitest, never `vite dev` or a build
 if (process.env.VITEST && !ghostty_vt_module_present) {
-	console.warn(
-		`[vite.config] skipping the fuz_terminal_wasm tests: ${GHOSTTY_VT_MODULE} is missing — build it with \`cargo xtask ghostty-vt\``
-	);
+	const message = `${GHOSTTY_VT_MODULE} is missing — build it with \`cargo xtask ghostty-vt\``;
+	if (process.env.CI) {
+		throw new Error(`[vite.config] the fuz_terminal_wasm tests can't run: ${message}`);
+	}
+	console.warn(`[vite.config] skipping the fuz_terminal_wasm tests: ${message}`);
 }
 const ghostty_vt_projects = ghostty_vt_module_present
 	? [
@@ -79,6 +84,7 @@ const ghostty_vt_projects = ghostty_vt_module_present
 				test: {
 					name: 'fuz_terminal_wasm',
 					include: GHOSTTY_VT_TESTS,
+					setupFiles: [LOGGED_ERROR_GATE],
 					maxWorkers: max_workers,
 					sequence: { groupOrder: 1 }
 				}
@@ -161,19 +167,10 @@ export default defineConfig(({ mode }) => ({
 				test: {
 					name: 'unit',
 					include: ['src/test/**/*.test.ts'],
-					exclude: ['src/test/**/*.db.test.ts', 'src/test/**/*.cross.test.ts', ...GHOSTTY_VT_TESTS],
+					exclude: ['src/test/**/*.cross.test.ts', ...GHOSTTY_VT_TESTS],
+					setupFiles: [LOGGED_ERROR_GATE],
 					maxWorkers: max_workers,
 					sequence: { groupOrder: 1 }
-				}
-			},
-			{
-				extends: true,
-				test: {
-					name: 'db',
-					include: ['src/test/**/*.db.test.ts'],
-					isolate: false,
-					fileParallelism: false,
-					sequence: { groupOrder: 2 }
 				}
 			},
 			...ghostty_vt_projects,

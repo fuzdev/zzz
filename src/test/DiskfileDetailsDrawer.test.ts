@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
 import { createRawSnippet, flushSync, mount, unmount, type Component } from 'svelte';
 
 import DiskfileDetailsDrawer from '#lib/DiskfileDetailsDrawer.svelte';
@@ -295,7 +296,7 @@ const TRANSCRIPT = JSON.stringify({
 
 /** Lets a closing drawer's or a notice's outro finish. */
 const settle = async (): Promise<void> => {
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await wait();
 	flushSync();
 };
 

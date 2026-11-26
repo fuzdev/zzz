@@ -206,7 +206,6 @@ describe('focusing a lazy row', () => {
 	});
 
 	test('a failure says why and leaves it lazy', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const target = render_tree();
 		click(find_row(target, 'site'));
 		focus_calls[0]!.resolve({

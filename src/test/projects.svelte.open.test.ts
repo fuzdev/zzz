@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { test, beforeEach, afterEach, describe, assert } from 'vitest';
+import { assert_rejects } from '@fuzdev/fuz_util/testing.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -391,13 +392,7 @@ describe('Projects.receive_remote_change', () => {
 		receive_change(other);
 		assert.strictEqual(session_loads, 0);
 		calls[0]!.reject(new Error('transport down'));
-		let thrown: unknown;
-		try {
-			await opened;
-		} catch (error) {
-			thrown = error;
-		}
-		assert.ok(thrown instanceof Error, 'the throw propagates');
+		await assert_rejects(() => opened, /transport down/);
 		assert.strictEqual(session_loads, 1, 'the deferred remote open resynced');
 		await flush();
 		assert.ok(app.projects.get_by_root(other.root));

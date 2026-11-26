@@ -2,6 +2,7 @@
 
 import { number, string, strip_object } from '@fuzdev/fuz_schema/schema.ts';
 import { test, describe, beforeEach, assert } from 'vitest';
+import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { type Uuid, UuidWithDefault } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { DatetimeNow } from '#lib/datetime.ts';
@@ -251,6 +252,10 @@ describe('Sortable', () => {
 		});
 
 		test('sorts null and undefined values last in both directions, ties by id', () => {
+			allow_logged_error(
+				'registry already has a different cell instance',
+				'the test builds a second cell with an id already registered'
+			);
 			const a = new TestCell(app, ordered_uuid(4), 'a', 0);
 			const b = new TestCell(app, ordered_uuid(1), 'b', 10);
 			const c = new TestCell(app, ordered_uuid(3), 'c', 0);
@@ -273,6 +278,10 @@ describe('Sortable', () => {
 		});
 
 		test('orders equal values by id, whatever the input order', () => {
+			allow_logged_error(
+				'registry already has a different cell instance',
+				'the test builds a second cell with an id already registered'
+			);
 			const equal_items = [
 				new TestCell(app, ordered_uuid(3), 'Item3', 10),
 				new TestCell(app, ordered_uuid(1), 'Item1', 10),

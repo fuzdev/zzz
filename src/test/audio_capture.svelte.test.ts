@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, assert, beforeEach } from 'vitest';
+import { assert_rejects } from '@fuzdev/fuz_util/testing.ts';
 
 import {
 	AudioCapture,
@@ -126,12 +127,8 @@ describe('AudioCapture', () => {
 
 	test('a sink that can not open closes the microphone', async () => {
 		h.options.open_sink = () => Promise.reject(new Error('no room'));
-		try {
-			await h.capture.start(h.options);
-			assert.fail('expected a throw');
-		} catch (error) {
-			assert.strictEqual((error as Error).message, 'no room');
-		}
+		const error = await assert_rejects(() => h.capture.start(h.options));
+		assert.strictEqual(error.message, 'no room');
 		assert.ok(h.streams[0]!.track.stopped);
 		assert.strictEqual(h.capture.status, 'idle');
 		assert.strictEqual(h.media_recorders.length, 0);

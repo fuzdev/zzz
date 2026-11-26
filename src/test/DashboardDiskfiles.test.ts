@@ -13,6 +13,7 @@ import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
 import FrontendContextHarness from './FrontendContextHarness.svelte';
 import { monkeypatch_zzz_for_tests, to_visible_text } from './test_helpers.ts';
 import { install_fake_disk, type FakeDisk, seed_diskfile } from './diskfile_test_helpers.ts';
+import { ResizeObserverStub } from './diskfile_tree_test_helpers.ts';
 
 /**
  * The files page's header: the tabs, then the details toggle for the file
@@ -38,12 +39,6 @@ const animate_stub = function (this: Element): Animation {
 };
 
 // jsdom has no `ResizeObserver`, which the file explorer's list uses
-class ResizeObserverStub {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-
 beforeEach(() => {
 	vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 	Element.prototype.animate = animate_stub;

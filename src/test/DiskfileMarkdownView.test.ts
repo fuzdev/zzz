@@ -2,6 +2,7 @@
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
 import { describe, test, assert, afterEach, beforeEach, vi } from 'vitest';
+import { wait } from '@fuzdev/fuz_util/async.ts';
 import { flushSync, mount, unmount, type Component } from 'svelte';
 
 import DiskfileMarkdownView from '#lib/DiskfileMarkdownView.svelte';
@@ -205,7 +206,7 @@ describe('DiskfileMarkdownView', () => {
 		type_into(view.textarea()!, 'v2');
 		click_button(view.target, 'preview');
 		press_save(document.body);
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		assert.strictEqual(a.content, 'v2');
 	});
 
@@ -236,7 +237,7 @@ describe('DiskfileMarkdownView', () => {
 
 		toggle_details();
 		// let the drawer finish its outro
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 		assert.notInclude(view.target.textContent, 'save changes');
 
@@ -263,7 +264,7 @@ describe('DiskfileMarkdownView', () => {
 		assert.strictEqual(app.diskfiles.get_editor_state(a).markdown_view_mode, 'preview');
 		assert.isNull(view.textarea());
 		press_save(document.body);
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		assert.strictEqual(update.mock.calls.length, 0);
 	});
 
@@ -736,7 +737,7 @@ describe('DiskfileMarkdownView showing the disk version', () => {
 		const { a, view } = await setup();
 
 		press_save(view.textarea()!);
-		await new Promise((resolve) => setTimeout(resolve, 0));
+		await wait();
 		flushSync();
 
 		assert.strictEqual(document.activeElement, view.alert());

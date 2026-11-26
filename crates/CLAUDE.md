@@ -261,8 +261,9 @@ warnings"` would fail; rustdoc warns on those links even with
 `--document-private-items`, since they'd break in the public-only docs.
 `--document-private-items` is still part of the gate: without it rustdoc
 never reads the doc comments on private and `pub(crate)` items, so their
-links go unchecked. The GitHub check workflow is Node-only (no sibling Rust
-spine checkout), so the Rust gates run locally.
+links go unchecked. The GitHub check workflow's `rust` job runs these gates
+(fmt, clippy, test, `check-release`, rustdoc) over sibling `fuz`,
+`fuz_repos`, and `pglet` checkouts.
 
 `zzz_server`'s own `#[cfg(test)]` unit tests sit beside the code they cover
 (the provider modules, `filer/`, `pty_manager.rs`, `scoped_fs.rs`, …);
