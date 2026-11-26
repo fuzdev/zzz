@@ -44,7 +44,7 @@ nix.workspace = true
 
 [dev-dependencies]
 # Dev-only: the spine's shared request-reads census
-# (`fuz_testing::request_reads_census`) behind `tests/request_reads_census.rs`.
+# (`fuz_testing`'s `assert_*` census checks) behind `tests/request_reads_census.rs`.
 # A dev-dependency never reaches the `zzzd` binary, and `cargo xtask
 # check-release` walks runtime edges only.
 fuz_testing.workspace = true

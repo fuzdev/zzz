@@ -2,9 +2,10 @@
 //! query and its path params only through the spine's strict readers —
 //! `fuz_http::read_query_pairs` over axum's `RawQuery`, and
 //! `fuz_http::RouteParams`. The checks are the spine's shared
-//! `fuz_testing::request_reads_census` (what each pins, and what it cannot
-//! see, is its module doc); this file holds this workspace's inputs — its
-//! [`SUPPRESSIONS`] and its positive controls.
+//! request-reads census in `fuz_testing` (its `assert_*` checks; what each
+//! pins, and what it cannot see, is its crate doc § The request-reads
+//! census); this file holds this workspace's inputs — its [`SUPPRESSIONS`]
+//! and its positive controls.
 //!
 //! The positive controls below use each disallowed axum type under an
 //! `#[expect]`, so a path that stops resolving under this workspace's
@@ -15,7 +16,7 @@
 
 use std::path::PathBuf;
 
-use fuz_testing::request_reads_census::{
+use fuz_testing::{
     Suppression, assert_clippy_configs_disallow_lenient_readers,
     assert_no_lints_table_allows_disallows, assert_suppressions_listed,
 };

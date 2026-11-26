@@ -245,7 +245,7 @@ lenient request readers (`Path`, `RawPathParams`, `Query`, `Form`) and
 handler reads its query through `fuz_http::read_query_pairs` over `RawQuery`
 and its path params through `fuz_http::RouteParams`.
 `zzz_server/tests/request_reads_census.rs` runs the spine's shared census
-(`fuz_testing::request_reads_census`) over this workspace — every
+(`fuz_testing`'s `assert_*` census checks) over this workspace — every
 `clippy.toml` carries those entries (a crate-level one replaces the root
 file), every in-source suppression of the disallow lints is listed — and
 holds the axum types' positive controls.
