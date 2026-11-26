@@ -169,7 +169,8 @@ mod tests {
             fuz_sys::rand::random_hex_suffix()
         ));
         fs::create_dir_all(&dir).unwrap();
-        let bin = dir.join("sleeper");
+        // named `sleep`: a multi-call coreutils binary picks its tool from its name
+        let bin = dir.join("sleep");
         fs::copy("/bin/sleep", &bin).unwrap();
         let mut child = std::process::Command::new(&bin).arg("30").spawn().unwrap();
         let pid = child.id();
@@ -186,15 +187,19 @@ mod tests {
         }
         assert!(!exe_replaced(pid), "running from its file");
         // a reinstall: a new file renamed over the path
-        let staged = dir.join("sleeper.new");
+        let staged = dir.join("sleep.new");
         fs::copy("/bin/sleep", &staged).unwrap();
         fs::rename(&staged, &bin).unwrap();
         let replaced = exe_replaced(pid);
         let link_after = exe_link();
+        let status = child.try_wait();
         let _ = child.kill();
         let _ = child.wait();
         let _ = fs::remove_dir_all(&dir);
-        assert!(replaced, "its file was renamed over: {link_after:?}");
+        assert!(
+            replaced,
+            "its file was renamed over: {link_after:?}, child status {status:?}"
+        );
     }
 
     const fn stat(zombie: bool, start_ticks: u64) -> Stat {
