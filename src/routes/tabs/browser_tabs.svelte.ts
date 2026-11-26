@@ -4,6 +4,7 @@ import {
 	array,
 	parse_or_throw,
 	with_default_fn,
+	type Infer,
 	type InferInput
 } from '@fuzdev/fuz_schema/schema.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
@@ -28,6 +29,7 @@ export const BrowserTabsJson = cell_json_schema(
 	},
 	'BrowserTabs'
 );
+export type BrowserTabsJson = Infer<typeof BrowserTabsJson>;
 export type BrowserTabsJsonInput = InferInput<typeof BrowserTabsJson>;
 
 export type BrowserTabsOptions = CellOptions<typeof BrowserTabsJson>;
@@ -85,6 +87,18 @@ export class BrowserTabs extends Cell<typeof BrowserTabsJson> {
 		};
 
 		this.init();
+	}
+
+	/**
+	 * Encodes the tab cells under `tabs`, which has no property of that name —
+	 * left out, `set_json(to_json())` would reset it to `[]` and its decoder
+	 * would clear every tab. In display order, so a reorder survives.
+	 */
+	override to_json(): BrowserTabsJson {
+		return {
+			...super.to_json(),
+			tabs: this.ordered_tabs.map((tab) => tab.to_json())
+		};
 	}
 
 	add(tab_data: BrowserTabJson): void {

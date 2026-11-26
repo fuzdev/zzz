@@ -56,3 +56,35 @@ describe('BrowserTabs.reopen_last_closed_tab', () => {
 		assert.strictEqual(tabs.recently_closed_tabs.at(-1)?.id, last_id);
 	});
 });
+
+describe('BrowserTabs json', () => {
+	test('encodes every schema key, `tabs` in display order', () => {
+		tabs.add_new_tab();
+		tabs.add_new_tab();
+		tabs.reorder_tabs(0, 1);
+		const json = tabs.to_json();
+		assert.deepEqual(Object.keys(json).sort(), [...tabs.schema_keys].sort());
+		assert.deepEqual(
+			json.tabs,
+			tabs.ordered_tabs.map((tab) => tab.to_json())
+		);
+	});
+
+	test('`set_json(to_json())` keeps the tabs and the closed tabs', () => {
+		tabs.add_new_tab();
+		tabs.add_new_tab();
+		tabs.add_new_tab();
+		tabs.close(0);
+		tabs.reorder_tabs(0, 1);
+		const json = tabs.to_json();
+		const ids = tabs.ordered_tabs.map((tab) => tab.id);
+
+		tabs.set_json(json);
+		assert.strictEqual(tabs.items.size, 2);
+		assert.deepEqual(tabs.to_json(), json);
+		assert.deepEqual(
+			tabs.ordered_tabs.map((tab) => tab.id),
+			ids
+		);
+	});
+});

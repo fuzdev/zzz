@@ -44,7 +44,8 @@ export class Browser extends Cell<typeof BrowserJson> {
 		this.decoders = {
 			tabs: (tabs) => {
 				if (Array.isArray(tabs)) {
-					// Add tabs to the browser tabs collection
+					// Replace the browser tabs collection's tabs
+					this.tabs.items.clear();
 					for (const tab_json of tabs) {
 						this.tabs.add(tab_json);
 					}
@@ -66,6 +67,18 @@ export class Browser extends Cell<typeof BrowserJson> {
 		};
 
 		this.init();
+	}
+
+	/**
+	 * Encodes `tabs` as the array its decoder takes — the property is a
+	 * `BrowserTabs` cell, whose own json is an object, so the inherited
+	 * encoding fails `set_json(to_json())`'s parse.
+	 */
+	override to_json(): BrowserJson {
+		return {
+			...super.to_json(),
+			tabs: this.tabs.to_json().tabs
+		};
 	}
 
 	navigate_to(url: string): void {
