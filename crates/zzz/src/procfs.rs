@@ -173,16 +173,28 @@ mod tests {
         fs::copy("/bin/sleep", &bin).unwrap();
         let mut child = std::process::Command::new(&bin).arg("30").spawn().unwrap();
         let pid = child.id();
+        let exe_link = || fs::read_link(format!("/proc/{pid}/exe"));
+        // the replace below is meaningful only once the child runs from `bin`
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while exe_link().ok().as_deref() != Some(bin.as_path()) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the child never ran from its file: {:?}",
+                exe_link()
+            );
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
         assert!(!exe_replaced(pid), "running from its file");
         // a reinstall: a new file renamed over the path
         let staged = dir.join("sleeper.new");
         fs::copy("/bin/sleep", &staged).unwrap();
         fs::rename(&staged, &bin).unwrap();
         let replaced = exe_replaced(pid);
+        let link_after = exe_link();
         let _ = child.kill();
         let _ = child.wait();
         let _ = fs::remove_dir_all(&dir);
-        assert!(replaced, "its file was renamed over");
+        assert!(replaced, "its file was renamed over: {link_after:?}");
     }
 
     const fn stat(zombie: bool, start_ticks: u64) -> Stat {
