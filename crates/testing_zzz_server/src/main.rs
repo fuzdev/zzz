@@ -16,7 +16,11 @@
 //! the rows breaking an auth-schema invariant, checked after every test; and
 //! `_testing_action_manifest` from
 //! [`fuz_testing::create_testing_action_manifest_action_spec`], over zzz's own
-//! specs alone.
+//! specs alone; and `_testing_flood_notifications` from
+//! [`fuz_testing::create_testing_flood_notifications_action_spec`], which
+//! queues notifications onto the caller's own socket. Every `_testing_*`
+//! action is mounted here, through `run_app`'s `extra_action_specs_factory`,
+//! behind the daemon-token gate; `zzzd` mounts none.
 //! The drain is a real barrier because every spine audit emitter tracks its
 //! in-flight writes.
 //! Three layered guardrails keep this from leaking into production:
@@ -104,6 +108,9 @@ async fn main() -> ExitCode {
         }
     };
 
+    // Optional scoped-FS scratch root the reset wipes, read once at boot.
+    let scratch_dir = std::env::var_os("ZZZ_TESTING_SCRATCH_DIR").map(std::path::PathBuf::from);
+
     // The factory closes over `Arc<App>` so the `_testing_reset`
     // domain-state reset closure can close zzz projects + kill terminals +
     // wipe the optional scratch dir.
@@ -115,6 +122,7 @@ async fn main() -> ExitCode {
         // use it.
         let reset_state: ResetStateFn = Arc::new(move |_db| {
             let app = Arc::clone(&app_for_reset);
+            let scratch_dir = scratch_dir.clone();
             Box::pin(async move {
                 // Close every open project through the production close
                 // path: each project's filers are stopped, its `ScopedFs`
@@ -140,7 +148,7 @@ async fn main() -> ExitCode {
                 // surface as a JSON-RPC error so the per-test fixture
                 // sees the reset short-circuit instead of silently
                 // running against a half-wiped scratch tree.
-                if let Ok(scratch_dir) = std::env::var("ZZZ_TESTING_SCRATCH_DIR")
+                if let Some(scratch_dir) = scratch_dir
                     && tokio::fs::metadata(&scratch_dir).await.is_ok()
                 {
                     tokio::fs::remove_dir_all(&scratch_dir).await.map_err(|e| {
@@ -152,13 +160,10 @@ async fn main() -> ExitCode {
             })
         });
         let mut specs = testing_reset_specs(&runtime, Some(reset_state))?;
-        // zzz's own surface, the test-only specs included, for the cross
-        // suite that holds each spec to its TS twin. The spine's standard
-        // bundle is fuz_app's to compare.
-        let mut zzz_specs = zzz_server::zzz_action_specs::build_zzz_owned_specs(&app);
-        zzz_specs.extend(zzz_server::zzz_action_specs::build_testing_specs(
-            Arc::clone(&app),
-        ));
+        specs.push(fuz_testing::create_testing_flood_notifications_action_spec());
+        // zzz's own surface, for the cross suite that holds each spec to its
+        // TS twin. The spine's standard bundle is fuz_app's to compare.
+        let zzz_specs = zzz_server::zzz_action_specs::build_zzz_owned_specs(&app);
         specs.push(fuz_testing::create_testing_action_manifest_action_spec(
             &zzz_specs,
         ));
@@ -175,7 +180,6 @@ async fn main() -> ExitCode {
             drain_timeout: fuz_http::DEFAULT_DRAIN_TIMEOUT,
         },
         args,
-        force_test_actions: true,
         extra_action_specs_factory: Some(extra_specs_factory),
     })
     .await

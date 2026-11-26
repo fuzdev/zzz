@@ -11,8 +11,9 @@ OpenAI, and Gemini (all full).
   spine's server toolkit (`fuz_actions::server`); `src/main.rs` is the thin
   production entry.
 - `testing_zzz_server/` — the test binary `testing_zzzd`: fast argon2,
-  `_testing_reset`, `_testing_drain_effects`, `_testing_db_invariants`, and
-  `_testing_action_manifest`, default port 4462. **Never ships in a
+  `_testing_reset`, `_testing_drain_effects`, `_testing_db_invariants`,
+  `_testing_flood_notifications`, and `_testing_action_manifest`, default port
+  4462 — the only binary that mounts a `_testing_*` action. **Never ships in a
   release** (`fuz_release`'s `testing_` filter and `cargo xtask
   check-release`).
 - `xtask/` — `cargo xtask dev`, `dev-setup` / `prod-setup`, `install`, `check-release`,
@@ -40,9 +41,8 @@ dispatch:
 - **Protocol specs**: `fuz_actions::PROTOCOL_ACTION_SPECS` (`heartbeat`,
   `peer/ping`; `cancel` is a client notification the WS read loop handles,
   not a spec).
-- `_testing_emit_notifications` registers only under
-  `ZZZ_ENABLE_TEST_ACTIONS=1` (the integration runner sets it; elsewhere
-  dispatch answers `method_not_found`).
+- No `_testing_*` spec: `zzzd` answers `method_not_found` for every one,
+  whatever its environment (`zzz_server/tests/zzzd_testing_actions.rs`).
 
 Outside the registry: the admin audit-log SSE stream
 (`fuz_realtime::audit_stream_router`) and zzz's file byte routes
@@ -217,12 +217,6 @@ An unset or blank (empty or whitespace) `DATABASE_URL` or
   `transcription_create` is `tool_unavailable`
 - `SECRET_ANTHROPIC_API_KEY` / `SECRET_OPENAI_API_KEY` /
   `SECRET_GOOGLE_API_KEY` — provider keys, read once at boot
-- `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live
-  dispatchers (`true`/`1`/`yes`/`on`/`y`/`enabled` opt in;
-  `false`/`0`/`no`/`off`/`n`/`disabled` or unset opt out; case-insensitive;
-  blank reads as unset; anything else errors at startup. Integration tests
-  only — production must leave unset, and the `zzz` CLI strips it from a
-  daemon it starts)
 - `ZZZ_TRUSTED_PROXIES` — Comma-separated trusted-proxy entries (IPs and CIDR
   ranges, e.g. `127.0.0.1,10.0.0.0/8,fe80::/10`). Unset/empty → no XFF trust →
   `client_ip` falls back to the TCP peer IP on every request (direct-bind
@@ -394,7 +388,7 @@ crates/zzz_server/src/
 ├── git.rs            # The daemon's git: the runner's allowlisted environment (`git_env`: `PATH`, `HOME`, `XDG_CONFIG_HOME`), `daemon_git`, and the boot check (`check_git` → `GitUsability`, held as `App.git_usability`)
 ├── handlers/         # `App` state + the per-domain RPC handlers (spine signature `(Value, ActionContext<'_>, Arc<App>)`, registered into the `ActionRegistry` via `zzz_action_specs::build_*_specs`; `session_load`, `project_open`, `repo_focus`, `repo_files`, and `diskfile_read` return a `fuz_actions::ActionOutput` — see Large responses below)
 │   ├── mod.rs        # `App` long-lived state (`ProjectManager`, `repo_status`, `trusted_owner`, `git`, `git_usability`, `db_pool`, `ScopedFs`, `FilerManager`, `PtyManager`, `JobManager`, `ProviderManager`, `tools`, `realtime`, `action_registry` OnceLock) + the `broadcast` shim over `App.realtime`
-│   ├── core.rs       # ping, session_load, _testing_emit_notifications
+│   ├── core.rs       # ping, session_load
 │   ├── filesystem.rs # diskfile_read (+ its bounded text read, `read_text_contents`, and the bytes' `hash`), diskfile_update (+ its `expected_hash` compare-and-swap), diskfile_create, diskfile_delete, diskfile_rename (+ its sidecars, under the job table's lock), directory_create
 │   ├── job.rs        # job_cancel
 │   ├── media.rs      # media_finalize, transcription_create (+ `tool_error`, the `ToolError` → JSON-RPC mapping)
@@ -496,7 +490,7 @@ debouncing, in-memory file index, lifetime tracking — permanent for
 open project keeps them, and a depth — a whole tree, or a registry root's
 top level alone),
 `PtyManager`, `JobManager`, `ProviderManager`, `tools` (the local tools
-found at boot), `completion_options`, `enable_test_actions`,
+found at boot), `completion_options`,
 `root_policy` (which directories can be roots, `RootPolicy`),
 `audit_emitter` (the spine emitter, held so the test binary's specs factory
 can reach it), the spine `realtime: Arc<fuz_realtime::ConnectionRegistry>`,

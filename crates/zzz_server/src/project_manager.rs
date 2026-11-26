@@ -1422,7 +1422,6 @@ mod tests {
             "/nowhere/".to_owned(),
             vec![],
             crate::provider::ProviderManager::new(),
-            false,
             realtime,
             Arc::new(fuz_auth::AuditEmitter::new(pool, Arc::default())),
         )

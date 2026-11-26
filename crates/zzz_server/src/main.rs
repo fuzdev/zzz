@@ -45,7 +45,6 @@ async fn main() -> ExitCode {
             zzz_server::DEFAULT_ADDR,
         ),
         args,
-        force_test_actions: false,
         extra_action_specs_factory: None,
     })
     .await

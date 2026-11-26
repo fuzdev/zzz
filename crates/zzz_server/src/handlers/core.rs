@@ -13,8 +13,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use fuz_actions::{ActionContext, ActionOutput};
-use fuz_http::{JsonrpcError, internal_error_with_source, invalid_params, parse_strict_params};
-use serde::{Deserialize, Serialize};
+use fuz_http::{JsonrpcError, internal_error_with_source};
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::filer::{FilerSnapshot, SnapshotFiles};
@@ -25,20 +25,6 @@ use crate::project_manager::{OpenProject, ProjectInfo};
 #[derive(Serialize)]
 struct PingResult {
     ping_id: Value,
-}
-
-/// Input for `_testing_emit_notifications` — twin of
-/// `TestingEmitNotificationsInput`.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct TestingEmitNotificationsInput {
-    #[serde(deserialize_with = "fuz_http::deserialize_wire_int")]
-    count: u64,
-}
-
-#[derive(Serialize)]
-struct TestingEmitNotificationsResult {
-    count: u64,
 }
 
 /// Twin of `SessionLoadData` in `action_specs.ts`.
@@ -182,38 +168,6 @@ pub async fn session_load(
         },
     };
     Ok(ActionOutput::serialize(result).with_size_hint(size_hint))
-}
-
-/// `_testing_emit_notifications` — test-only action used by the integration
-/// suite to verify `ctx.notify` socket-scoped routing without a real AI
-/// provider.
-///
-/// Emits `count` `_testing_notification` frames through `ctx.notify`, then
-/// returns `{count}`. Gated at registry-compile time by
-/// `App.enable_test_actions` (`ZZZ_ENABLE_TEST_ACTIONS=1`).
-///
-/// # Errors
-///
-/// `invalid_params` for a malformed input or a `count` above 100; an internal
-/// error if the result fails to serialize.
-#[expect(
-    clippy::unused_async,
-    reason = "kept `async` like every other handler, whose spec builder awaits it"
-)]
-pub async fn testing_emit_notifications(
-    params: Value,
-    ctx: ActionContext<'_>,
-    _app: Arc<App>,
-) -> Result<Value, JsonrpcError> {
-    let TestingEmitNotificationsInput { count } = parse_strict_params(params)?;
-    if count > 100 {
-        return Err(invalid_params("count must be <= 100", None));
-    }
-    for i in 0..count {
-        (ctx.notify)("_testing_notification", &serde_json::json!({"index": i}));
-    }
-    serde_json::to_value(TestingEmitNotificationsResult { count })
-        .map_err(|e| internal_error_with_source("serialization failed", &e))
 }
 
 #[cfg(test)]

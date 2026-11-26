@@ -383,8 +383,6 @@ When the CLI starts `zzzd` it:
   that aren't assignments are skipped with a warning naming their line
   numbers. When the environment overrides a `.env` key with a different
   value, a note names the key (never the value).
-  `ZZZ_ENABLE_TEST_ACTIONS` is never passed on, from either source (a
-  warning says so when it's set).
 - **cwd** — runs it in `~/.zzz`. For the path-valued vars (`PUBLIC_ZZZ_DIR`,
   `PUBLIC_ZZZ_SCOPED_DIRS`, `ZZZ_ROOTS_OUTSIDE_HOME`,
   `FUZ_BOOTSTRAP_TOKEN_PATH`, `ZZZ_STATIC_DIR`,
@@ -483,9 +481,8 @@ needs that list (`root_outside_home` without it).
   The URL is always its own argument, so a `--flag=<url>` form needs a
   wrapper script. It runs detached (its own process group, output in
   `~/.zzz/run/opener.log`, mode `0600`, emptied at each launch) in the
-  directory `zzz` runs in, with the CLI's environment
-  minus `ZZZ_ENABLE_TEST_ACTIONS`; the daemon's `~/.zzz/.env` values aren't
-  added. `zzz` doesn't wait for it, so the opener's own exit status isn't
+  directory `zzz` runs in, with the CLI's environment; the daemon's
+  `~/.zzz/.env` values aren't added. `zzz` doesn't wait for it, so the opener's own exit status isn't
   checked; only a failure to start it is an error (exit 1).
 
 `zzz` reads `config.json` for the opener on every run, so a file that isn't a
@@ -567,9 +564,6 @@ JSON object is an error (exit 2) even when a daemon is already running.
   root or opened directory the rules refuse is `forbidden` with
   `root_outside_home` (this would admit it) or `root_not_allowed` (nothing
   would)
-- `ZZZ_ENABLE_TEST_ACTIONS` — Register `_testing_*` actions on live
-  dispatchers (integration tests only — must stay unset in prod; blank reads
-  as unset, and the `zzz` CLI never passes it to a daemon it starts)
 - `SECRET_ANTHROPIC_API_KEY` — Claude API key
 - `SECRET_OPENAI_API_KEY` — OpenAI API key
 - `SECRET_GOOGLE_API_KEY` — Google Gemini API key
@@ -764,9 +758,8 @@ my_action: {
    HTTP RPC and WebSocket paths dispatch through the same `ActionRegistry`,
    so the handler is picked up on both transports. See ../crates/CLAUDE.md.
 
-The test-only `_testing_emit_notifications` and `_testing_notification`
-specs live apart, in `src/lib/testing_action_specs.ts`, as TS twins of the
-methods `zzzd` registers only when `ZZZ_ENABLE_TEST_ACTIONS=1`.
+`zzzd` mounts no `_testing_*` action: the test-only backdoors are the
+`testing_zzzd` binary's, behind the daemon-token gate (../crates/CLAUDE.md).
 
 ### Streaming Handlers
 

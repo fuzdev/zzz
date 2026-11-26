@@ -315,7 +315,8 @@ Directory, § Filesystem, § File Editing, § Recording.
 `.env.development` (the file wins). Required: `DATABASE_URL`,
 `SECRET_FUZ_COOKIE_KEYS`, `FUZ_ALLOWED_ORIGINS` (exact origins; wildcards
 refuse to boot unless `FUZ_ALLOW_ORIGIN_WILDCARDS=true`).
-`ZZZ_ENABLE_TEST_ACTIONS` is tests only — never in prod. The frontend's
+The `_testing_*` actions are `testing_zzzd`'s alone; `zzzd` mounts none
+under any environment. The frontend's
 `PUBLIC_ZZZ_SERVER_*` and `PUBLIC_ZZZ_WEBSOCKET_URL` are baked in by
 `gro build` (`src/env.ts`). PTY terminals don't get `SECRET_*`, `FUZ_*`,
 `ZZZ_*`, `PUBLIC_ZZZ_*`, `DATABASE_URL`, or `PORT`. Every variable and its rules:

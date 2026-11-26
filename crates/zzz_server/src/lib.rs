@@ -205,10 +205,6 @@ pub struct RunAppOptions {
     /// The parsed command line ([`parse_args`]): `--port` and `--static-dir`,
     /// each over its env var.
     pub args: CliArgs,
-    /// Override the `ZZZ_ENABLE_TEST_ACTIONS` env-parsed flag.
-    /// Production: `false`. Test binary: `true` so the `_testing_*`
-    /// registry branch fires regardless of operator env.
-    pub force_test_actions: bool,
     /// Factory injecting extra action specs after the standard zzz set.
     /// Production: `None`. Test binary: `Some(_)` so
     /// `fuz_testing::create_testing_reset_action_spec` can register
@@ -223,8 +219,25 @@ impl std::fmt::Debug for RunAppOptions {
             .field("default_addr", &self.spine.default_addr)
             .field("drain_timeout", &self.spine.drain_timeout)
             .field("args", &self.args)
-            .field("force_test_actions", &self.force_test_actions)
             .finish_non_exhaustive()
+    }
+}
+
+/// What zzz's server is on `port`: its per-port session cookie, the auth
+/// chain, the admin audit stream, and its browser gates. No `/ready`
+/// fixture: zzz is a local daemon with no deploy gate.
+///
+/// The spine's route states take the cookie name as `&'static str`; it is
+/// fixed for the life of the process, so its one allocation is leaked. The
+/// in-process router tests build their core over this same spec.
+#[must_use]
+pub fn zzz_backend_spec(port: u16) -> AppBackendSpec {
+    AppBackendSpec {
+        session_cookie_name: session_cookie_name_for_port(port).leak(),
+        migration_namespaces: ZZZ_MIGRATION_NAMESPACES,
+        expected_schema_json: None,
+        audit_sse: Some(fuz_actions::server::AuditSseSpec::DEFAULT),
+        browser_gates: origin_allowlist::ZZZ_BROWSER_GATES,
     }
 }
 
@@ -264,13 +277,9 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
                 drain_timeout,
             },
         args,
-        force_test_actions,
         extra_action_specs_factory,
     } = options;
     let mut config = parse_config(default_addr, args)?;
-    if force_test_actions {
-        config.enable_test_actions = true;
-    }
     let shutdown = fuz_http::shutdown_token();
 
     // Parse `ZZZ_TRUSTED_PROXIES`. Empty/unset → no XFF trust (`client_ip` is
@@ -283,17 +292,7 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
             .map_err(|e| StartupError::Config(format!("ZZZ_TRUSTED_PROXIES: {e}")))?,
     };
 
-    // What zzz's server is: its per-port cookie (the spine's route states take
-    // the name as `&'static str`; it is fixed for the life of the process, so
-    // leak its one allocation), the auth chain, and the admin audit stream. No
-    // `/ready` fixture: zzz is a local daemon with no deploy gate.
-    let spec = AppBackendSpec {
-        session_cookie_name: session_cookie_name_for_port(config.bind_addr.port()).leak(),
-        migration_namespaces: ZZZ_MIGRATION_NAMESPACES,
-        expected_schema_json: None,
-        audit_sse: Some(fuz_actions::server::AuditSseSpec::DEFAULT),
-        browser_gates: origin_allowlist::ZZZ_BROWSER_GATES,
-    };
+    let spec = zzz_backend_spec(config.bind_addr.port());
     // zzz reads its own env (`ZZZ_PORT`, `--port`, a required
     // `DATABASE_URL`, `ZZZ_TRUSTED_PROXIES`, the spine's
     // `FUZ_DB_CHECKOUT_TIMEOUT_MS` / `FUZ_DB_AUDIT_CHECKOUT_TIMEOUT_MS`); the
@@ -341,12 +340,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         provider::gemini::GeminiProvider::new(google_key.as_deref()),
     ));
 
-    if config.enable_test_actions {
-        tracing::info!(
-            "test actions enabled — `_testing_*` methods registered on live dispatchers"
-        );
-    }
-
     // The app over the core's pool, connection registry, and audit emitter —
     // the instances the spine routes and the revocation listeners use.
     let mut app = handlers::App::new(
@@ -355,7 +348,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         config.zzz_dir,
         scoped_dir_strings,
         provider_manager,
-        config.enable_test_actions,
         Arc::clone(&backend.realtime),
         Arc::clone(&backend.audit_emitter),
     );
@@ -397,11 +389,6 @@ pub async fn run_app(options: RunAppOptions) -> Result<(), StartupError> {
         Arc::new(fuz_auth::RoleRegistry::default()),
     ));
     all_specs.extend(zzz_action_specs::build_zzz_owned_specs(&app_state));
-    if app_state.enable_test_actions {
-        all_specs.extend(zzz_action_specs::build_testing_specs(Arc::clone(
-            &app_state,
-        )));
-    }
     if let Some(factory) = extra_action_specs_factory {
         all_specs.extend(factory(
             Arc::clone(&app_state),
@@ -625,9 +612,6 @@ pub struct Config {
     /// holds the app dir and `scoped_dirs` to it; `project_open` every
     /// project's root.
     pub root_policy: root_policy::RootPolicy,
-    /// Register `_testing_*` actions on live dispatchers. Set by integration
-    /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave unset.
-    pub enable_test_actions: bool,
     /// Comma-separated trusted-proxy entries (IPs and CIDR ranges).
     /// Unset/empty → no XFF trust → `client_ip` falls back to the TCP
     /// peer IP on every request. Set when running behind a reverse
@@ -661,7 +645,6 @@ impl std::fmt::Debug for Config {
             .field("scoped_dirs", &self.scoped_dirs)
             .field("zzz_dir", &self.zzz_dir)
             .field("root_policy", &self.root_policy)
-            .field("enable_test_actions", &self.enable_test_actions)
             .field("trusted_proxies", &self.trusted_proxies)
             .field("tools", &self.tools)
             .field("db_checkout_timeout", &self.db_checkout_timeout)
@@ -1133,20 +1116,6 @@ fn env_required(name: &str) -> Result<String, StartupError> {
         .ok_or_else(|| StartupError::Config(format!("{name} is unset or blank (it is required)")))
 }
 
-/// Parse the `ZZZ_ENABLE_TEST_ACTIONS` flag from its env value: unset or
-/// blank → `false`, else [`fuz_sys::env::parse_stringbool`].
-///
-/// # Errors
-///
-/// [`StartupError::Config`] naming the variable for an unrecognized value.
-fn parse_test_actions_flag(value: Option<&str>) -> Result<bool, StartupError> {
-    let Some(value) = value.filter(|v| !v.trim().is_empty()) else {
-        return Ok(false);
-    };
-    fuz_sys::env::parse_stringbool(value)
-        .map_err(|e| StartupError::Config(format!("ZZZ_ENABLE_TEST_ACTIONS: {e}")))
-}
-
 fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, StartupError> {
     let CliArgs {
         mut port,
@@ -1213,8 +1182,6 @@ fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, Start
     )?;
     check_scoped_dirs(&scoped_dirs, &zzz_dir, &root_policy)?;
 
-    let enable_test_actions =
-        parse_test_actions_flag(env_var_utf8("ZZZ_ENABLE_TEST_ACTIONS")?.as_deref())?;
     let trusted_proxies = env_var_utf8("ZZZ_TRUSTED_PROXIES")?;
     // a bad override refuses to boot; a tool that's simply absent doesn't
     let tools = tool::Tools::from_env().map_err(StartupError::Config)?;
@@ -1263,7 +1230,6 @@ fn parse_config(default_addr: SocketAddr, args: CliArgs) -> Result<Config, Start
         scoped_dirs,
         zzz_dir,
         root_policy,
-        enable_test_actions,
         trusted_proxies,
         tools,
         db_checkout_timeout,
@@ -1434,20 +1400,6 @@ mod config_paths {
         assert!(message.contains("not valid UTF-8"), "{message}");
         let message = config_error(parse_args([OsString::from("--port"), bad()]));
         assert!(message.contains("--port is not valid UTF-8"), "{message}");
-    }
-
-    #[test]
-    fn blank_test_actions_flag_reads_as_unset() {
-        for unset in [None, Some(""), Some("  ")] {
-            assert!(!parse_test_actions_flag(unset).unwrap(), "{unset:?}");
-        }
-        assert!(parse_test_actions_flag(Some("1")).unwrap());
-        assert!(parse_test_actions_flag(Some("TRUE")).unwrap());
-        assert!(!parse_test_actions_flag(Some("off")).unwrap());
-        let Err(StartupError::Config(message)) = parse_test_actions_flag(Some("maybe")) else {
-            panic!("an unknown value errors");
-        };
-        assert!(message.contains("ZZZ_ENABLE_TEST_ACTIONS"), "{message}");
     }
 
     #[test]
@@ -1750,7 +1702,6 @@ mod config_paths {
                 dir("missing"),
             ],
             provider::ProviderManager::new(),
-            false,
             Arc::new(fuz_realtime::ConnectionRegistry::new()),
             Arc::new(fuz_auth::AuditEmitter::new(pool, Arc::default())),
         );

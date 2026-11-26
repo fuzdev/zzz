@@ -1190,7 +1190,6 @@ mod tests {
             ("FUZ_ALLOWED_ORIGINS", "http://localhost:*"),
             ("FUZ_BOOTSTRAP_TOKEN_PATH", "/tmp/t"),
             ("ZZZ_PORT", "4460"),
-            ("ZZZ_ENABLE_TEST_ACTIONS", "1"),
             ("PUBLIC_ZZZ_DIR", ".zzz"),
             ("PORT", "4460"),
         ]));
@@ -1652,7 +1651,6 @@ mod tests {
             String::new(),
             vec![],
             crate::provider::ProviderManager::new(),
-            false,
             Arc::new(ConnectionRegistry::new()),
             Arc::new(fuz_auth::AuditEmitter::new(pool, Arc::default())),
         ))

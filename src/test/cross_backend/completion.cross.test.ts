@@ -78,8 +78,8 @@ describe('completion cross-backend', () => {
 	// TODO: completion_create happy-path + cancel coverage needs a mock
 	// provider plumbed into the test binaries (no live keys in the
 	// cross-backend matrix). The old standalone runner skipped the
-	// happy path for the same reason — it only exercised
-	// `_testing_emit_notifications` to cover the streaming notification
+	// happy path for the same reason — it only exercised a test-only emitter
+	// (now `testing_zzzd`'s `_testing_flood_notifications`) to cover the streaming notification
 	// fan-out path generically. See `ctx_notify_socket_scoped` in the
 	// old runner for that primitive.
 });

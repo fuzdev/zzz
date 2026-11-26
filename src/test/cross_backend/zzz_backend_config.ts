@@ -131,14 +131,17 @@ const rust_capabilities: BackendCapabilities = {
 	// with no static dir answers the spine's); under `/api` it is the spine's
 	// `route_not_found` either way (`static_files.rs`)
 	spine_fallback: false,
-	// the spine's backdoors `testing_zzzd` mounts; the suites needing another
-	// skip themselves, naming it. Its `_testing_action_manifest` lists zzz's
-	// own specs alone, not the spine's bundle (`action_manifest.cross.test.ts`)
+	// the spine's backdoors `testing_zzzd` mounts, every `_testing_*` action
+	// it has (`zzzd` mounts none); the suites needing another skip themselves,
+	// naming it. Its `_testing_action_manifest` lists zzz's own specs alone,
+	// not the spine's bundle (`action_manifest.cross.test.ts`), and
+	// `_testing_flood_notifications` is the spine's socket-flood primitive
 	testing_backdoors: [
 		'_testing_reset',
 		'_testing_drain_effects',
 		'_testing_db_invariants',
-		'_testing_action_manifest'
+		'_testing_action_manifest',
+		'_testing_flood_notifications'
 	]
 };
 

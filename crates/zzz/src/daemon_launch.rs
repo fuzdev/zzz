@@ -23,8 +23,6 @@
 //! own, so this is where its config comes from. `DATABASE_URL` and
 //! `SECRET_FUZ_COOKIE_KEYS` are required up front, so a missing one is a
 //! clear CLI error rather than a daemon that dies at boot.
-//! `ZZZ_ENABLE_TEST_ACTIONS` is never passed on (a warning says so when it
-//! was set): the test-only actions have no place in a daemon the CLI starts.
 //!
 //! **Port.** `--port` > `ZZZ_PORT` > `zzz_config_port` in
 //! `~/.zzz/config.json` > [`DEFAULT_PORT`], always passed to `zzzd` as
@@ -49,9 +47,8 @@ use crate::env_file;
 /// Env vars `zzzd` refuses to boot without, checked before spawning.
 const REQUIRED_ENV: &[&str] = &["DATABASE_URL", "SECRET_FUZ_COOKIE_KEYS"];
 
-/// The env vars `zzzd` reads (besides [`REQUIRED_ENV`], [`PATH_VARS`], and
-/// [`TEST_ACTIONS_ENV`]): a blank inherited value for any of them is
-/// removed, not passed on.
+/// The env vars `zzzd` reads (besides [`REQUIRED_ENV`] and [`PATH_VARS`]): a
+/// blank inherited value for any of them is removed, not passed on.
 const ZZZD_ENV: &[&str] = &[
     "ZZZ_PORT",
     "FUZ_ALLOWED_ORIGINS",
@@ -64,10 +61,6 @@ const ZZZD_ENV: &[&str] = &[
     "SECRET_OPENAI_API_KEY",
     "SECRET_GOOGLE_API_KEY",
 ];
-
-/// Registers `zzzd`'s test-only actions — never passed to a daemon the CLI
-/// starts, from either source, nor to an opener.
-pub const TEST_ACTIONS_ENV: &str = "ZZZ_ENABLE_TEST_ACTIONS";
 
 /// Path-valued env vars the CLI resolves, with whether each is a
 /// comma-separated list.
@@ -96,7 +89,7 @@ pub struct DaemonLaunch {
     /// Variables set on top of the inherited environment.
     pub env_overlay: BTreeMap<String, String>,
     /// Inherited variables removed from the child's environment (blank
-    /// values, which read as unset, and [`TEST_ACTIONS_ENV`]).
+    /// values, which read as unset).
     pub env_remove: Vec<String>,
 }
 
@@ -120,16 +113,8 @@ impl DaemonLaunch {
             );
         }
         let mut env_overlay = overlay_file_env(file_env, process_get);
-        if strip_test_actions(&mut env_overlay, process_get) {
-            eprintln!(
-                "warning: ignoring {TEST_ACTIONS_ENV}: a daemon zzz starts never registers the test-only actions"
-            );
-        }
         resolve_path_vars(&mut env_overlay, process_get, cli_cwd.as_deref())?;
-        let mut env_remove = drop_blank_values(&mut env_overlay, &file_keys, process_get);
-        if !env_remove.iter().any(|key| key == TEST_ACTIONS_ENV) {
-            env_remove.push(TEST_ACTIONS_ENV.to_owned());
-        }
+        let env_remove = drop_blank_values(&mut env_overlay, &file_keys, process_get);
         let get = |key: &str| lookup(key, process_get, &env_overlay);
 
         let config_port = config_port(config)?;
@@ -228,7 +213,7 @@ fn overlay_file_env(
 
 /// The `.env` keys the process environment overrides: set there to a
 /// non-blank value different from the file's (its last line for the key).
-/// Sorted; [`TEST_ACTIONS_ENV`] is left out (it's never passed on at all).
+/// Sorted.
 ///
 /// [`PATH_VARS`] compare as the paths the daemon would get, since the two
 /// sources resolve differently (see the module doc): `~/app` in the file and
@@ -262,7 +247,7 @@ fn overridden_file_keys(
     };
     file_values
         .into_iter()
-        .filter(|&(key, value)| key != TEST_ACTIONS_ENV && !value.trim().is_empty())
+        .filter(|&(_, value)| !value.trim().is_empty())
         .filter(|&(key, value)| {
             process_get(key).is_some_and(|current| {
                 !is_blank(&current)
@@ -274,19 +259,6 @@ fn overridden_file_keys(
         })
         .map(|(key, _)| key.to_owned())
         .collect()
-}
-
-/// Remove [`TEST_ACTIONS_ENV`] from `overlay`; returns whether it was set
-/// (non-blank) in the file or the process environment.
-fn strip_test_actions(
-    overlay: &mut BTreeMap<String, String>,
-    process_get: impl Fn(&str) -> Option<OsString>,
-) -> bool {
-    let from_file = overlay
-        .remove(TEST_ACTIONS_ENV)
-        .is_some_and(|value| !value.trim().is_empty());
-    let from_process = process_get(TEST_ACTIONS_ENV).is_some_and(|value| !is_blank(&value));
-    from_file || from_process
 }
 
 /// Make blank values unset: drop them from `overlay`, and list every key —
@@ -729,7 +701,6 @@ mod tests {
             "DATABASE_URL" => Some(OsString::from("postgres://env")),
             "SAME" => Some(OsString::from("v")),
             "BLANK" => Some(OsString::from(" ")),
-            "ZZZ_ENABLE_TEST_ACTIONS" => Some(OsString::from("1")),
             "FILE_BLANK" => Some(OsString::from("x")),
             _ => None,
         };
@@ -737,7 +708,6 @@ mod tests {
             ("DATABASE_URL", "postgres://file"),
             ("SAME", "v"),
             ("BLANK", "file"),
-            ("ZZZ_ENABLE_TEST_ACTIONS", "0"),
             ("FILE_BLANK", ""),
             ("ONLY_FILE", "f"),
         ]);
@@ -775,28 +745,6 @@ mod tests {
         // with no known cwd, a relative process value resolves against
         // ~/.zzz too (as the daemon would see it)
         assert!(overridden_file_keys(&file, process, None, zzz_dir).is_empty());
-    }
-
-    #[test]
-    fn test_actions_are_never_passed_on() {
-        let unset = |_: &str| None;
-        let set = |key: &str| (key == TEST_ACTIONS_ENV).then(|| OsString::from("1"));
-        let blank = |key: &str| (key == TEST_ACTIONS_ENV).then(OsString::new);
-
-        let mut overlay = BTreeMap::from([(TEST_ACTIONS_ENV.to_owned(), "true".to_owned())]);
-        assert!(strip_test_actions(&mut overlay, unset), "set in the file");
-        assert!(overlay.is_empty());
-        assert!(
-            strip_test_actions(&mut BTreeMap::new(), set),
-            "set in the env"
-        );
-        assert!(
-            !strip_test_actions(&mut BTreeMap::new(), blank),
-            "blank is unset"
-        );
-        let mut overlay = BTreeMap::from([(TEST_ACTIONS_ENV.to_owned(), " ".to_owned())]);
-        assert!(!strip_test_actions(&mut overlay, unset));
-        assert!(overlay.is_empty());
     }
 
     #[test]

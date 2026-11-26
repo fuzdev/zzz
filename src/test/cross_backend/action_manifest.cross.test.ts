@@ -20,7 +20,6 @@ import { inject_backend_handle } from '@fuzdev/fuz_app/testing/cross_backend/pro
 import { capture_action_manifest } from '@fuzdev/fuz_app/testing/cross_backend/setup.ts';
 
 import { all_action_specs } from '#lib/action_specs.ts';
-import { _testing_emit_notifications_action_spec } from '#lib/testing_action_specs.ts';
 
 const handle = inject_backend_handle();
 
@@ -32,17 +31,15 @@ const handle = inject_backend_handle();
 const MANIFEST_METHOD = '_testing_action_manifest';
 
 test("zzz's request specs match the backend's registered specs", async () => {
-	const declared = build_action_manifest([
+	const declared = build_action_manifest(
 		// requests the backend answers: a request it initiates has no handler there
-		...all_action_specs.filter(
+		all_action_specs.filter(
 			(spec): spec is RequestResponseActionSpec =>
 				spec.kind === 'request_response' &&
 				spec.initiator !== 'backend' &&
 				!is_protocol_action_method(spec.method)
-		),
-		// what `testing_zzzd` registers beside them
-		_testing_emit_notifications_action_spec
-	]);
+		)
+	);
 	const registered = await capture_action_manifest(handle);
 
 	assert_action_manifests_equal(

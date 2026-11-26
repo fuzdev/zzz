@@ -26,11 +26,12 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   (bind address when `--port`/`ZZZ_PORT` don't supply one; host stays
   loopback, only the port is overridable), and `drain_timeout`), `args` (the
   parsed command line),
-  `force_test_actions` (overrides the `ZZZ_ENABLE_TEST_ACTIONS` env flag),
   and `extra_action_specs_factory` (lets the test binary inject
-  `_testing_reset`, `_testing_drain_effects`, `_testing_db_invariants`, and
-  `_testing_action_manifest` without putting `fuz_testing` in the production
-  dep graph). The core's emitter is also held on `App` (`audit_emitter`),
+  `_testing_reset`, `_testing_drain_effects`, `_testing_db_invariants`,
+  `_testing_flood_notifications`, and `_testing_action_manifest` without
+  putting `fuz_testing` in the production dep graph — the only way a
+  `_testing_*` action is mounted; `zzzd` mounts none, and
+  `tests/zzzd_testing_actions.rs` pins that against the real binary). The core's emitter is also held on `App` (`audit_emitter`),
   where the test binary's specs factory reaches it. `src/main.rs` is the thin
   production entry — parses the command line, constructs `Argon2idHasher`,
   calls `run_app` with `SpineRunOptions::production`.
@@ -45,11 +46,13 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   audit writes — a real one because every spine audit emitter tracks its
   in-flight writes), `fuz_testing::create_testing_db_invariants_action_spec`
   (`_testing_db_invariants`, the rows breaking an auth-schema invariant, which
-  every cross-process setup checks after each test), and
+  every cross-process setup checks after each test),
+  `fuz_testing::create_testing_flood_notifications_action_spec`
+  (`_testing_flood_notifications`, a burst of notifications onto the caller's
+  own socket), and
   `fuz_testing::create_testing_action_manifest_action_spec`
   (`_testing_action_manifest`, over zzz's own specs alone —
-  `build_zzz_owned_specs` and `build_testing_specs` — not the spine's
-  bundle). zzz's reset closure ignores the in-tx
+  `build_zzz_owned_specs` — not the spine's bundle). zzz's reset closure ignores the in-tx
   `ActionDb` handle (its domain state is in-memory, not in PG) — it closes
   every zzz project through the production close path
   (`ProjectManager::close_all` — filers stopped, `ScopedFs`
@@ -57,7 +60,7 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   scope), calls `pty_manager.kill_all()` (non-destructive — manager stays
   usable across tests), stops and forgets every job
   (`job_manager.cancel_all()`), and wipes the optional
-  `ZZZ_TESTING_SCRATCH_DIR`. Default port 4462 (production is 4460). **Never
+  `ZZZ_TESTING_SCRATCH_DIR` (read once at boot). Default port 4462 (production is 4460). **Never
   ships in a release** — enforced by `fuz_release`'s `testing_` manifest
   filter and the `cargo xtask check-release` dep-graph audit. It is zzz's test
   binary, spawned by the cross-process integration tests.
@@ -146,7 +149,7 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   (the `zzzd` command: `--port`, `--static-dir`, cwd `~/.zzz`, and the env
   overlay from `~/.zzz/.env` + defaults, with required-var / static-dir / port
   / `config.json` validation, the note naming `.env` keys the environment
-  overrides, and `ZZZ_ENABLE_TEST_ACTIONS` stripped; `CliConfig`, the one
+  overrides; `CliConfig`, the one
   reader of `config.json`), `opener.rs` (the open command run instead of the
   browser: `opener` in `config.json` — a string, or an array of the program
   and its arguments — then `ZZZ_OPENER`; blank reads as unset; the program
@@ -155,8 +158,7 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   `/`, `~name` included) is refused from both sources, never searched for on
   `$PATH` or run from the current directory; the URL appended as its own final
   argument, no shell, so a `--flag=<url>` form needs a wrapper script; output
-  in `run/opener.log`, emptied at each launch; `ZZZ_ENABLE_TEST_ACTIONS`
-  removed), `daemon_lifecycle.rs` (`resolve_server_bin` — `ZZZ_SERVER_BIN`
+  in `run/opener.log`, emptied at each launch), `daemon_lifecycle.rs` (`resolve_server_bin` — `ZZZ_SERVER_BIN`
   (must be an executable file) > beside the resolved CLI executable >
   `~/.zzz/bin` > absolute `$PATH` entries, skipping non-executable candidates,
   never the current directory; `parse_port`, the one `1..=65535` rule for
@@ -191,12 +193,12 @@ endpoints, and env vars are in ../crates/CLAUDE.md.
   launch rules. Tests: unit tests per module, `tests/cli_daemon.rs`
   (infra-free: status + stale/reused-pid/older-zzz records (a start refuses to
   overwrite one), launch validation (ports at every source, `config.json`,
-  env-override notes, `ZZZ_ENABLE_TEST_ACTIONS` stripped, never a `zzzd` from
+  env-override notes, never a `zzzd` from
   the current directory), early child exit, `init` file modes, the opener (a
   stand-in script recording its arguments: the URL as the single final
   argument for a project path a shell would mangle, array arguments passed
   through, config over env, blank values unset, the browser stub as the
-  fallback, no `ZZZ_ENABLE_TEST_ACTIONS`; a missing or non-executable program,
+  fallback; a missing or non-executable program,
   a bare name from either source, and a malformed `opener` exit 2 with nothing
   launched), full foreground + detached lifecycles and signals during startup
   against a `sh` + `python3` stand-in daemon — a visible SKIPPED line without
@@ -405,7 +407,7 @@ commands):
   their Rust twins: the methods registered, and each one's input shape, auth
   axes, role and credential gates, `side_effects`, and rate-limit class
   (`_testing_action_manifest` against `build_action_manifest` over
-  `all_action_specs` and the test-only `_testing_emit_notifications`). A
+  `all_action_specs`). A
   spec added, dropped, or changed on one side alone fails.
 - **`spec_schemas.cross.test.ts`** — wire-shape conformance: the responses
   and backend-initiated notifications of zzz's own session, provider-status,

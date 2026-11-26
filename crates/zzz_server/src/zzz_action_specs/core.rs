@@ -1,6 +1,5 @@
 //! Core `ActionSpec` builders — `ping` (public) and `session_load`
-//! (account-grain), plus the test-only `_testing_emit_notifications`
-//! builder gated on `App.enable_test_actions`.
+//! (account-grain).
 //!
 //! Both methods are zzz-namespaced (not in `fuz_actions::PROTOCOL_ACTION_SPECS`
 //! / `auth_adapter`), so they ship here.
@@ -39,29 +38,6 @@ fn session_load_spec(app: Arc<App>) -> ActionSpec {
         AuthSpec::account_grain(CredentialGate::Any),
         InputShape::Void,
         false,
-        handler,
-    )
-}
-
-/// Build the test-only action specs (`_testing_emit_notifications`).
-///
-/// The caller extends the registry input with these only when
-/// `enable_test_actions` is set — the gating happens at registry-compile time
-/// so production boots never carry the test surface at all.
-#[must_use]
-pub fn build_testing_specs(app: Arc<App>) -> Vec<ActionSpec> {
-    vec![testing_emit_notifications_spec(app)]
-}
-
-fn testing_emit_notifications_spec(app: Arc<App>) -> ActionSpec {
-    let handler: ActionHandler = Arc::new(move |params: Value, ctx: ActionContext<'_>| {
-        let app = Arc::clone(&app);
-        Box::pin(async move { core::testing_emit_notifications(params, ctx, app).await })
-    });
-    ActionSpec::read_only(
-        "_testing_emit_notifications",
-        AuthSpec::account_grain(CredentialGate::Any),
-        InputShape::Object,
         handler,
     )
 }

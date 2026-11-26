@@ -274,8 +274,12 @@ async fn rule_changes_in_quick_succession_re_prune_once() {
     }
     tmp.write(".gitignore", "*.log\n*.txt\n");
     wait_for_keys(&filer, &tmp.keys(&[".gitignore"])).await;
+    // one listing, and the one after its walk: both come
+    git.wait_for_calls(GitCall::LsFiles, listed + 2).await;
+    // TODO: then no third — an absence after a sleep; exact needs the filer to
+    // report a re-prune settled with none pending (a test hook on its rule
+    // state).
     tokio::time::sleep(REPRUNE_SETTLE * 2).await;
-    // one listing, and the one after its walk
     assert_eq!(git.calls(GitCall::LsFiles), listed + 2);
 }
 
@@ -338,6 +342,8 @@ async fn one_trigger_failing_fast_lists_once_and_keeps_the_set() {
     tmp.write(".gitignore", "venv/\n# one write\n");
     git.wait_for_calls(GitCall::LsFiles, listed + 1).await;
     // a self-retry would come within a settle or two
+    // TODO: an absence after a sleep — exact needs the filer to report a
+    // re-prune settled with none pending (a test hook on its rule state).
     tokio::time::sleep(REPRUNE_SETTLE * 5).await;
     assert_eq!(git.calls(GitCall::LsFiles), listed + 1, "one listing");
     assert!(ignores(&filer, &tmp, "venv"), "no fallback");
@@ -990,9 +996,11 @@ async fn ignored_churn_re_prunes_the_set_back_down() {
             std::fs::remove_file(path).unwrap();
         }
     }
-    tokio::time::sleep(Duration::from_secs(2)).await;
-    let size = filer.ignored_paths().unwrap().len();
-    assert!(size < 10_000, "the set kept {size} paths of deleted files");
+    // the re-prune brings the set back down: wait for it, not for a time
+    wait_until(&filer, "the set to drop the deleted files", |filer| {
+        filer.ignored_paths().unwrap().len() < 10_000
+    })
+    .await;
 }
 
 /// A rescan's walk (here a degraded filer's, with no watcher) vets the new
@@ -1165,6 +1173,8 @@ async fn a_big_re_prune_on_the_wire_resyncs_instead_of_broadcasting() {
     let after = filer.ignored_on_wire(&root).unwrap();
     assert!(!after.paths.contains(&"big/".to_owned()), "{after:?}");
     // past the debounce: nothing under `big/` went out
+    // TODO: an absence after a sleep — exact needs the broadcast debounce to
+    // report a flush with nothing pending (a test hook on the filer).
     tokio::time::sleep(Duration::from_millis(700)).await;
     let big = tmp.key("big/");
     assert!(

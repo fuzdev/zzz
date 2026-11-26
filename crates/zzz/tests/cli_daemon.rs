@@ -41,7 +41,6 @@ const CLI_ENV: &[&str] = &[
     "FUZ_BOOTSTRAP_TOKEN_PATH",
     "PUBLIC_ZZZ_DIR",
     "PUBLIC_ZZZ_SCOPED_DIRS",
-    "ZZZ_ENABLE_TEST_ACTIONS",
 ];
 
 /// A unique temp dir to use as `$HOME` (no `tempfile` dep in this crate).
@@ -209,6 +208,11 @@ impl Cleanup {
     /// Where the stand-in signals that its signal handlers are installed.
     fn ready_marker(&self) -> PathBuf {
         self.home.join("fake_zzzd.ready")
+    }
+
+    /// Where a stand-in that ignores `SIGTERM` records receiving one.
+    fn sigterm_marker(&self) -> PathBuf {
+        self.home.join("fake_zzzd.sigterm")
     }
 }
 
@@ -520,50 +524,37 @@ fn invalid_ports_are_errors_at_every_source() {
 }
 
 #[test]
-fn the_launch_reports_env_overrides_and_strips_test_actions() {
+fn the_launch_reports_env_overrides() {
     let home = launchable_home("envnote");
     let _cleanup = Cleanup::new(&home);
     fs::write(
         home.join(".zzz/.env"),
-        "DATABASE_URL=postgres://file-value\nSECRET_FUZ_COOKIE_KEYS=file-keys-0123456789abcdef0123\nZZZ_ENABLE_TEST_ACTIONS=true\n",
+        "DATABASE_URL=postgres://file-value\nSECRET_FUZ_COOKIE_KEYS=file-keys-0123456789abcdef0123\n",
     )
     .unwrap();
     let bin = home.join("fake_zzzd");
-    write_script(
-        &bin,
-        "echo \"fake zzzd: test_actions=${ZZZ_ENABLE_TEST_ACTIONS-unset}\" >&2\nexit 3",
+    write_script(&bin, "exit 3");
+    let mut command = zzz(&home);
+    command
+        .args(["daemon", "start", "--port", &free_port().to_string()])
+        .env("ZZZ_SERVER_BIN", &bin)
+        .env("DATABASE_URL", "postgres://process-value")
+        // the same value as the file's isn't an override
+        .env("SECRET_FUZ_COOKIE_KEYS", "file-keys-0123456789abcdef0123");
+    let out = run(&mut command);
+    let err = stderr(&out);
+    assert!(
+        err.contains(&format!(
+            "note: the environment overrides DATABASE_URL from {}",
+            home.join(".zzz/.env").display()
+        )),
+        "{err}"
     );
-    for process_value in [None, Some("1")] {
-        let mut command = zzz(&home);
-        command
-            .args(["daemon", "start", "--port", &free_port().to_string()])
-            .env("ZZZ_SERVER_BIN", &bin)
-            .env("DATABASE_URL", "postgres://process-value")
-            // the same value as the file's isn't an override
-            .env("SECRET_FUZ_COOKIE_KEYS", "file-keys-0123456789abcdef0123");
-        if let Some(value) = process_value {
-            command.env("ZZZ_ENABLE_TEST_ACTIONS", value);
-        }
-        let out = run(&mut command);
-        let err = stderr(&out);
-        assert!(
-            err.contains(&format!(
-                "note: the environment overrides DATABASE_URL from {}",
-                home.join(".zzz/.env").display()
-            )),
-            "{err}"
-        );
-        // names only, never values
-        assert!(
-            !err.contains("process-value") && !err.contains("file-value"),
-            "{err}"
-        );
-        assert!(
-            err.contains("warning: ignoring ZZZ_ENABLE_TEST_ACTIONS"),
-            "{err}"
-        );
-        assert!(err.contains("fake zzzd: test_actions=unset"), "{err}");
-    }
+    // names only, never values
+    assert!(
+        !err.contains("process-value") && !err.contains("file-value"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -789,7 +780,8 @@ fn init_recreates_a_missing_bootstrap_token() {
 struct FakeDaemon {
     /// Seconds to sleep before serving (a slow start).
     delay_secs: u32,
-    /// Ignore `SIGTERM` (a daemon that won't stop).
+    /// Ignore `SIGTERM` (a daemon that won't stop), recording its arrival in
+    /// [`Cleanup::sigterm_marker`].
     ignore_sigterm: bool,
     /// Exit with code 7 this many seconds after starting (a crash).
     crash_after_secs: Option<u32>,
@@ -819,9 +811,12 @@ fn write_fake_daemon(
     let bin = cleanup.home.join("fake_zzzd");
     let record = cleanup.home.join("fake_zzzd.record");
     let on_term = if fake.ignore_sigterm {
-        "signal.SIG_IGN"
+        format!(
+            r#"lambda *_: open("{}", "w").close()"#,
+            cleanup.sigterm_marker().display()
+        )
     } else {
-        "lambda *_: os._exit(0)"
+        "lambda *_: os._exit(0)".to_owned()
     };
     let crash_after = fake
         .crash_after_secs
@@ -1104,15 +1099,14 @@ fn restart_refuses_a_bad_launch_before_stopping_anything() {
     assert!(daemon_json(&home).exists());
 }
 
-/// A stand-in opener (or browser stub): records its argument count, each
-/// argument on its own line, and whether it was given
-/// `ZZZ_ENABLE_TEST_ACTIONS`, in `record` — written whole, then renamed into
+/// A stand-in opener (or browser stub): records its argument count and each
+/// argument on its own line in `record` — written whole, then renamed into
 /// place, so a reader never sees half of it.
 fn write_recording_opener(path: &Path, record: &Path) {
     write_script(
         path,
         &format!(
-            r#"{{ echo "argc=$#"; for arg in "$@"; do printf 'arg=%s\n' "$arg"; done; echo "test_actions=${{ZZZ_ENABLE_TEST_ACTIONS-unset}}"; }} > '{record}.tmp'
+            r#"{{ echo "argc=$#"; for arg in "$@"; do printf 'arg=%s\n' "$arg"; done; }} > '{record}.tmp'
 mv '{record}.tmp' '{record}'"#,
             record = record.display(),
         ),
@@ -1164,6 +1158,9 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
     write_recording_opener(&home.join(".zzz/bin/config_opener"), &config_record);
     let others_are_quiet = |records: &[&PathBuf]| {
         // give a wrongly launched (detached) opener time to record
+        // TODO: not exact — the openers share one log, so nothing synchronous
+        // tells which programs a launch ran; exact needs the CLI to report the
+        // program it launched (or a stub that records before `zzz` returns).
         std::thread::sleep(Duration::from_millis(300));
         for record in records {
             assert!(!record.exists(), "{} also ran", record.display());
@@ -1186,7 +1183,6 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
             .env("ZZZ_PORT", port.to_string())
             .env("ZZZ_SERVER_BIN", &bin)
             .env("ZZZ_OPENER", "./env_opener")
-            .env("ZZZ_ENABLE_TEST_ACTIONS", "1")
             .envs(DEAD_PROXY.iter().copied()));
         attempt += 1;
         if out.status.success() || attempt > 3 || !stderr(&out).contains("already in use") {
@@ -1202,11 +1198,7 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
     assert!(project_url.contains("a%20b's%20(x)%20*!%24HOME%3B%26"));
     assert_eq!(
         take_record(&env_record),
-        [
-            "argc=1".to_owned(),
-            format!("arg={project_url}"),
-            "test_actions=unset".to_owned()
-        ]
+        ["argc=1".to_owned(), format!("arg={project_url}"),]
     );
     others_are_quiet(&[&browser_record, &config_record]);
     let log_mode = fs::metadata(home.join(".zzz/run/opener.log"))
@@ -1228,7 +1220,6 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
         command
             .current_dir(&home)
             .env("PATH", &path)
-            .env("ZZZ_ENABLE_TEST_ACTIONS", "1")
             .envs(DEAD_PROXY.iter().copied());
         if let Some(value) = env_opener {
             command.env("ZZZ_OPENER", value);
@@ -1241,11 +1232,7 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
         );
         assert!(stdout(&out).contains(&format!("opening {url}")));
     };
-    let bare = [
-        "argc=1".to_owned(),
-        format!("arg={url}"),
-        "test_actions=unset".to_owned(),
-    ];
+    let bare = ["argc=1".to_owned(), format!("arg={url}")];
 
     // an array is the program (relative to ~/.zzz) and its arguments, passed
     // through verbatim, with the URL last; the config beats the environment
@@ -1262,7 +1249,6 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
             "arg=$HOME;*",
             "arg=",
             &format!("arg={url}"),
-            "test_actions=unset"
         ]
     );
     others_are_quiet(&[&browser_record, &env_record]);
@@ -1283,7 +1269,7 @@ fn open_runs_the_configured_opener_with_the_url_as_its_final_argument() {
     // both blank (or absent): the browser, as without an opener
     for (config_json, env_opener) in [(Some(r#"{"opener": ""}"#), Some(" ")), (None, None)] {
         open(config_json, env_opener);
-        assert_eq!(take_record(&browser_record)[..2], bare[..2]);
+        assert_eq!(take_record(&browser_record), bare);
         others_are_quiet(&[&env_record, &config_record]);
     }
 
@@ -1466,14 +1452,16 @@ fn a_bad_opener_exits_2_without_launching_anything() {
         &format!("invalid {config_path}: expected a JSON object"),
     );
 
-    std::thread::sleep(Duration::from_millis(300));
-    assert!(!cleanup.ready_marker().exists(), "no daemon spawned");
-    assert!(!daemon_json(&home).exists(), "no daemon recorded");
+    // Every `check` has exited, and the CLI creates a child's log before it
+    // spawns the child, so no log means no spawn — the daemon's marker and
+    // the openers' records, written later by a child, can't be pending.
     assert!(
         !home.join(".zzz/run/daemon.log").exists(),
         "no spawn attempted"
     );
     assert!(!home.join(".zzz/run/opener.log").exists(), "no opener run");
+    assert!(!cleanup.ready_marker().exists(), "no daemon spawned");
+    assert!(!daemon_json(&home).exists(), "no daemon recorded");
     assert!(!browser_record.exists(), "no browser fallback");
     assert!(!good_record.exists(), "no opener run");
 }
@@ -1579,7 +1567,12 @@ fn a_second_signal_kills_a_daemon_that_ignores_sigterm() {
 
     let started = Instant::now();
     send_signal(cli_pid, "INT");
-    std::thread::sleep(Duration::from_millis(300));
+    // the CLI sends SIGTERM as it enters the grace period, where a second
+    // signal skips to SIGKILL
+    wait_for(
+        || cleanup.sigterm_marker().exists(),
+        "the SIGTERM the first signal brings",
+    );
     send_signal(cli_pid, "INT");
     let out = wait_output(cleanup.children.pop().unwrap());
     assert!(

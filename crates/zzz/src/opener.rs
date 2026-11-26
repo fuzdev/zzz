@@ -36,15 +36,14 @@
 //! in `~/.zzz/run/opener.log` (emptied at each launch), and is not awaited:
 //! `zzz` can't tell a launcher that exits at once from a window that stays
 //! open, so the opener's own exit status is not checked. Its environment is
-//! the CLI's, minus `ZZZ_ENABLE_TEST_ACTIONS` (as for a daemon the CLI
-//! starts) — the daemon's `~/.zzz/.env` values are not added.
+//! the CLI's — the daemon's `~/.zzz/.env` values are not added.
 
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::CliError;
-use crate::daemon_launch::{CliConfig, TEST_ACTIONS_ENV};
+use crate::daemon_launch::CliConfig;
 use crate::daemon_lifecycle as dl;
 
 /// The env var naming an opener program.
@@ -86,10 +85,7 @@ impl Opener {
     #[must_use]
     pub fn command(&self, url: &str) -> std::process::Command {
         let mut command = std::process::Command::new(&self.program);
-        command
-            .args(&self.args)
-            .arg(url)
-            .env_remove(TEST_ACTIONS_ENV);
+        command.args(&self.args).arg(url);
         command
     }
 
@@ -492,7 +488,7 @@ mod tests {
     }
 
     #[test]
-    fn the_url_is_the_final_argument_and_test_actions_are_removed() {
+    fn the_url_is_the_final_argument() {
         let opener = Opener {
             program: PathBuf::from("/opt/app"),
             args: vec!["--flag".to_owned(), "a b".to_owned()],
@@ -502,7 +498,10 @@ mod tests {
         assert_eq!(command.get_program(), "/opt/app");
         let args: Vec<&OsStr> = command.get_args().collect();
         assert_eq!(args, ["--flag", "a b", url]);
-        let envs: Vec<_> = command.get_envs().collect();
-        assert_eq!(envs, [(OsStr::new(TEST_ACTIONS_ENV), None)]);
+        assert_eq!(
+            command.get_envs().count(),
+            0,
+            "the CLI's environment, unchanged"
+        );
     }
 }

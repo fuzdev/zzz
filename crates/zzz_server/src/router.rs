@@ -195,10 +195,7 @@ mod tests {
     use std::sync::Arc;
 
     use axum::body::Body;
-    use axum::extract::ConnectInfo;
     use axum::http::{Request, StatusCode};
-    use fuz_http::AllowedOrigins;
-    use tower::ServiceExt as _;
 
     use super::*;
     use crate::file_bytes::{FILE_BYTES_PATH, FileBytesRouteState};
@@ -206,42 +203,12 @@ mod tests {
 
     const ALLOWED_ORIGIN: &str = "http://localhost:4460";
     const FOREIGN_ORIGIN: &str = "http://localhost:5555";
-    const COOKIE_KEY: &str = "a-cookie-signing-key-that-is-long-enough-to-pass";
     const SPA_SHELL: &str = "<!doctype html>shell";
 
-    /// The spine core over a pool that never connects, its limiters off.
+    /// The spine core `run_app` builds on port 4460 (`crate::zzz_backend_spec`),
+    /// over the unreachable database, its limiters off.
     fn test_backend() -> fuz_actions::server::AppBackend {
-        let env = fuz_http::BaseServerEnv {
-            database_url: Some("postgres://localhost:1/zzz_router_unused".to_owned()),
-            cookie_keys: Some(COOKIE_KEY.to_owned()),
-            host: None,
-            port: None,
-            allowed_origins: AllowedOrigins::parse(ALLOWED_ORIGIN).expect("origins parse"),
-            allow_origin_wildcards: false,
-            trusted_proxies: Vec::new(),
-            bootstrap_token_path: None,
-            db_checkout_timeout: fuz_db::DEFAULT_CHECKOUT_TIMEOUT,
-            db_audit_checkout_timeout: fuz_db::DEFAULT_AUDIT_CHECKOUT_TIMEOUT,
-        };
-        fuz_actions::server::build_app_backend(
-            &env,
-            &fuz_actions::server::AppBackendSpec {
-                session_cookie_name: "zzz_session_4460",
-                migration_namespaces: crate::ZZZ_MIGRATION_NAMESPACES,
-                expected_schema_json: None,
-                audit_sse: Some(fuz_actions::server::AuditSseSpec::DEFAULT),
-                browser_gates: crate::origin_allowlist::ZZZ_BROWSER_GATES,
-            },
-            &fuz_actions::server::SpineBackendOptions {
-                rate_limiters: fuz_auth::RateLimiterMode::DisabledForTesting,
-                ..fuz_actions::server::SpineBackendOptions::production(
-                    Arc::new(fuz_auth::Argon2idHasher::new()),
-                    // The core is inert and never served.
-                    fuz_auth::AuthCleanupSchedule::Off,
-                )
-            },
-        )
-        .expect("a lazy core builds without connecting")
+        fuz_testing::inert_app_backend(&crate::zzz_backend_spec(4460), ALLOWED_ORIGIN)
     }
 
     /// The real surface routers over the inert core, the way `run_app` builds
@@ -259,7 +226,6 @@ mod tests {
             String::new(),
             vec![],
             crate::provider::ProviderManager::new(),
-            false,
             Arc::clone(&backend.realtime),
             Arc::clone(&backend.audit_emitter),
         ));
@@ -363,8 +329,7 @@ mod tests {
         }
     }
 
-    /// Send one request, with the TCP peer `serve_with_shutdown` supplies,
-    /// and return the status and body.
+    /// Send one request from the test peer and return the status and body.
     async fn send(router: GatedRouter, probe: Probe<'_>) -> (StatusCode, String) {
         let mut builder = Request::builder().method(probe.method).uri(probe.uri);
         if let Some(origin) = probe.origin {
@@ -379,16 +344,12 @@ mod tests {
         if let Some(length) = probe.content_length {
             builder = builder.header("content-length", length.to_string());
         }
-        let mut req = builder.body(Body::empty()).unwrap();
-        req.extensions_mut().insert(ConnectInfo(
-            "127.0.0.1:50000".parse::<std::net::SocketAddr>().unwrap(),
-        ));
-        let res = router.into_router_for_testing().oneshot(req).await.unwrap();
-        let status = res.status();
-        let bytes = axum::body::to_bytes(res.into_body(), 1 << 16)
-            .await
-            .unwrap();
-        (status, String::from_utf8_lossy(&bytes).into_owned())
+        let req = builder.body(Body::empty()).unwrap();
+        let res = router.send_for_testing(req, fuz_http::TEST_PEER).await;
+        (
+            res.status(),
+            String::from_utf8_lossy(res.body()).into_owned(),
+        )
     }
 
     /// A path under the byte routes, with a well-formed query.

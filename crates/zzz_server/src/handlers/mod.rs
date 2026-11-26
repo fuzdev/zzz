@@ -94,11 +94,6 @@ pub struct App {
     /// `CompletionOptions::default()`, since `completion_create` accepts no
     /// options.
     pub completion_options: CompletionOptions,
-    /// Register `_testing_*` actions on live dispatchers. Set by integration
-    /// tests via `ZZZ_ENABLE_TEST_ACTIONS=1`; production must leave false.
-    /// Read in `run_app` at registry-compile time to conditionally
-    /// extend the spec set via `zzz_action_specs::build_testing_specs`.
-    pub enable_test_actions: bool,
     /// `Arc<ConnectionRegistry>` — the spine's connection-tracking
     /// registry. Sole connection store on `App`; drives the `broadcast`
     /// shim below.
@@ -132,24 +127,18 @@ impl std::fmt::Debug for App {
             .field("instance_id", &self.instance_id)
             .field("zzz_dir", &self.zzz_dir)
             .field("scoped_dirs", &self.scoped_dirs)
-            .field("enable_test_actions", &self.enable_test_actions)
             .field("git_usability", &self.git_usability)
             .finish_non_exhaustive()
     }
 }
 
 impl App {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the handles and config `run_app` composes; tests pass inert ones"
-    )]
     pub fn new(
         db_pool: Pool,
         scoped_fs: ScopedFs,
         zzz_dir: String,
         scoped_dirs: Vec<String>,
         provider_manager: ProviderManager,
-        enable_test_actions: bool,
         realtime: Arc<ConnectionRegistry>,
         audit_emitter: Arc<AuditEmitter>,
     ) -> Self {
@@ -169,7 +158,6 @@ impl App {
             job_manager: JobManager::new(),
             provider_manager,
             completion_options: CompletionOptions::default(),
-            enable_test_actions,
             realtime,
             action_registry: std::sync::OnceLock::new(),
             tools: Tools::default(),

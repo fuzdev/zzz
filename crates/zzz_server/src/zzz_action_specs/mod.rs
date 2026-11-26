@@ -18,7 +18,7 @@ pub mod project;
 pub mod provider;
 pub mod terminal;
 
-pub use core::{build_core_specs, build_testing_specs};
+pub use core::build_core_specs;
 pub use filesystem::build_filesystem_specs;
 pub use job::build_job_specs;
 pub use media::build_media_specs;
@@ -30,8 +30,9 @@ pub use terminal::build_terminal_specs;
 /// registry-composition order.
 ///
 /// The aggregation point `run_app` folds into `ActionRegistry::compile` after
-/// the protocol + `fuz_auth` adapter sets. Excludes [`build_testing_specs`],
-/// which registers only when `enable_test_actions` is set.
+/// the protocol + `fuz_auth` adapter sets. No `_testing_*` spec is here: those
+/// are the `testing_zzzd` binary's, mounted through its
+/// `extra_action_specs_factory`.
 ///
 /// Exists so the permissive-surface census below sees the whole owned surface
 /// structurally — a new domain builder wired here is censused automatically
@@ -97,21 +98,19 @@ mod any_credential_surface {
             String::new(),
             vec![],
             crate::provider::ProviderManager::new(),
-            false,
             Arc::new(fuz_realtime::ConnectionRegistry::new()),
             Arc::new(fuz_auth::AuditEmitter::new(pool, Arc::default())),
         ))
     }
 
     /// The registry's boot-time invariants hold over the protocol specs plus
-    /// every zzz-owned spec (the testing specs included), so a spec the
-    /// registry refuses fails here rather than at server boot.
+    /// every zzz-owned spec, so a spec the registry refuses fails here rather
+    /// than at server boot.
     #[test]
     fn the_owned_and_protocol_specs_compile_into_a_registry() {
         let app = inert_app();
         let mut specs = fuz_actions::PROTOCOL_ACTION_SPECS();
         specs.extend(super::build_zzz_owned_specs(&app));
-        specs.extend(super::build_testing_specs(Arc::clone(&app)));
         let count = specs.len();
         let registry = fuz_actions::ActionRegistry::compile(specs)
             .unwrap_or_else(|e| panic!("the zzz spec set must compile: {e}"));
@@ -140,8 +139,7 @@ mod any_credential_surface {
     fn every_zzz_owned_spec_is_public_or_account_grain() {
         let app = inert_app();
 
-        let mut specs = super::build_zzz_owned_specs(&app);
-        specs.extend(super::build_testing_specs(Arc::clone(&app)));
+        let specs = super::build_zzz_owned_specs(&app);
         let off_grain: Vec<&str> = specs
             .iter()
             .filter(|s| {
