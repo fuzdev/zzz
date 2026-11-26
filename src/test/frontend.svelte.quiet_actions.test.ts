@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { test, describe, beforeEach, afterEach, assert, vi, type MockInstance } from 'vitest';
+import { test, describe, afterEach, assert, vi } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 import type { JsonrpcErrorObject } from '@fuzdev/fuz_app/http/jsonrpc.ts';
@@ -17,7 +18,6 @@ const NOT_FOUND: JsonrpcErrorObject = {
 };
 
 let app: Frontend;
-let console_error: MockInstance;
 
 /** An app whose real dispatcher sends over a transport that answers every request with `error`. */
 const create_app = (error: JsonrpcErrorObject | null, options?: FrontendOptions): Frontend => {
@@ -38,12 +38,7 @@ const create_app = (error: JsonrpcErrorObject | null, options?: FrontendOptions)
 
 const methods_logged = (): Array<string> => app.actions.items.values.map((action) => action.method);
 
-beforeEach(() => {
-	console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-});
-
 afterEach(() => {
-	console_error.mockRestore();
 	app.dispose();
 });
 
@@ -73,13 +68,10 @@ describe('quiet action methods', () => {
 		const result = await app.api.terminal_ack({ terminal_id, bytes: 1 });
 		assert.ok(!result.ok);
 		assert.strictEqual(result.error.code, JSONRPC_ERROR_CODES.not_found);
-		assert.deepEqual(console_error.mock.calls, [], 'the terminal closing first is expected');
 
 		// the same answer to any other method is still reported by the dispatcher
+		expect_logged_error('[peer] send request failed: terminal_resize terminal not found');
 		await app.api.terminal_resize({ terminal_id, cols: 80, rows: 24 });
-		assert.deepEqual(console_error.mock.calls, [
-			['[peer] send request failed:', 'terminal_resize', 'terminal not found']
-		]);
 	});
 
 	test('an `unauthenticated` answer to one still triggers the session recheck', async () => {

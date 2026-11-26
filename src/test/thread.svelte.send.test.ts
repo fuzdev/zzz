@@ -93,22 +93,19 @@ describe('Thread.cancel_pending_turn', () => {
 		app.diskfiles.add({ path: FILE_PATH, source_dir: SOURCE_DIR, content: 'file' });
 		assistant_turn.part_ids = [app.parts.add({ type: 'diskfile', path: FILE_PATH }).id];
 
-		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		try {
-			void handlers.completion_progress!.receive!({
-				data: {
-					input: {
-						chunk: { message: { role: 'assistant', content: 'x' } },
-						_meta: { progressToken: assistant_turn.id }
-					}
+		expect_logged_error(
+			`[frontend_action_handlers] completion turn has no assistant text part, cancelling: ${assistant_turn.id}`
+		);
+		void handlers.completion_progress!.receive!({
+			data: {
+				input: {
+					chunk: { message: { role: 'assistant', content: 'x' } },
+					_meta: { progressToken: assistant_turn.id }
 				}
-			} as unknown as Parameters<
-				NonNullable<NonNullable<FrontendActionHandlers['completion_progress']>['receive']>
-			>[0]);
-			assert.strictEqual(error_spy.mock.calls.length, 1);
-		} finally {
-			error_spy.mockRestore();
-		}
+			}
+		} as unknown as Parameters<
+			NonNullable<NonNullable<FrontendActionHandlers['completion_progress']>['receive']>
+		>[0]);
 
 		assert.ok(calls[0]!.signal?.aborted);
 		assert.ok(assistant_turn.cancelled);

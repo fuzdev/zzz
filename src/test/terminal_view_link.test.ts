@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -139,7 +140,6 @@ describe('TerminalViewLink output', () => {
 	});
 
 	test('a throwing write is logged, never thrown into the cell, and still consumed', async () => {
-		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const terminal = await create_running();
 		const view = create_view();
 		const other: Array<string> = [];
@@ -149,11 +149,10 @@ describe('TerminalViewLink output', () => {
 			consumed();
 		});
 		view.fail = true;
+		expect_logged_error('[TerminalViewLink] writing terminal output failed: Error: write failed');
 		terminal.receive_output('a', 1);
 		assert.deepEqual(other, ['a'], 'the other listener still got it');
-		assert.strictEqual(error.mock.calls.length, 1);
 		assert.deepEqual(await new_acks(), [1]);
-		error.mockRestore();
 	});
 
 	test('after disconnect nothing is written and the terminal waits on nothing', async () => {
@@ -239,7 +238,6 @@ describe('TerminalViewLink acks while the view loads', () => {
 	});
 
 	test('a waiting chunk whose consumed throws doesn’t drop the rest', () => {
-		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 		let listener: TerminalOutputListener | null = null;
 		const cell: TerminalViewLinkTerminal = {
 			attach_output: (l) => {
@@ -258,12 +256,13 @@ describe('TerminalViewLink acks while the view loads', () => {
 		listener!('b', () => {
 			throw new Error('consumed failed');
 		});
+		expect_logged_error(
+			'[TerminalViewLink] consuming terminal output failed: Error: consumed failed'
+		);
 		listener!('c', () => consumed.push('c'));
 		view.status = { kind: 'ready' };
 		link.view_status_changed();
 		assert.deepEqual(consumed, ['a', 'c']);
-		assert.strictEqual(error.mock.calls.length, 1);
-		error.mockRestore();
 	});
 
 	for (const status of [

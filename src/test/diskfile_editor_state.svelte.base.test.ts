@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
-import { test, beforeEach, describe, assert, vi } from 'vitest';
+import { test, beforeEach, describe, assert } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 
 import type { DiskfileEditorState } from '#lib/diskfile_editor_state.svelte.ts';
 import { DiskfilePath, SerializableDisknode } from '#lib/diskfile_types.ts';
@@ -504,13 +505,8 @@ describe('saving failures and concurrent edits', () => {
 		const unsaved_id = editor_state.unsaved_edit_entry_id;
 		app.diskfiles.update = () => Promise.reject(new Error('socket closed'));
 
-		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		try {
-			assert.isFalse(await editor_state.save_changes());
-			assert.strictEqual(error_spy.mock.calls.length, 1);
-		} finally {
-			error_spy.mockRestore();
-		}
+		expect_logged_error('[DiskfileEditorState] save threw: Error: socket closed');
+		assert.isFalse(await editor_state.save_changes());
 
 		assert.strictEqual(editor_state.save_error, 'socket closed');
 		assert.isFalse(editor_state.saving);
@@ -529,13 +525,8 @@ describe('saving failures and concurrent edits', () => {
 		app.diskfiles.update = () => {
 			throw new Error('not connected');
 		};
-		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		try {
-			assert.isFalse(await editor_state.save_changes());
-			assert.strictEqual(error_spy.mock.calls.length, 1);
-		} finally {
-			error_spy.mockRestore();
-		}
+		expect_logged_error('[DiskfileEditorState] save threw: Error: not connected');
+		assert.isFalse(await editor_state.save_changes());
 		assert.strictEqual(editor_state.save_error, 'not connected');
 		assert.isFalse(editor_state.saving);
 
@@ -665,16 +656,12 @@ describe('saving failures and concurrent edits', () => {
 		const saving = editor_state.save_changes();
 		editor_state.current_content = 'second';
 		const queued = editor_state.save_changes();
-		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		try {
-			deferred.reject(new Error('transport closed'));
+		expect_logged_error('[DiskfileEditorState] save threw: Error: transport closed');
+		deferred.reject(new Error('transport closed'));
 
-			// a thrown write is a failed save, not a rejection
-			assert.isFalse(await saving);
-			assert.isFalse(await queued);
-		} finally {
-			error_spy.mockRestore();
-		}
+		// a thrown write is a failed save, not a rejection
+		assert.isFalse(await saving);
+		assert.isFalse(await queued);
 		assert.isFalse(editor_state.saving);
 		assert.strictEqual(editor_state.save_error, 'transport closed');
 		assert.deepEqual(writes, ['first']);

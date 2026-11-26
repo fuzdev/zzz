@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, assert, afterEach, vi } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { wait } from '@fuzdev/fuz_util/async.ts';
 import { flushSync, mount, unmount } from 'svelte';
 
@@ -1619,18 +1620,14 @@ describe('keyboard input', () => {
 		});
 
 		test('without onerror, a failed copy is logged as itself', async () => {
-			const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-			cleanups.push(() => error.mockRestore());
 			const t = await mount_typing();
 			t.deps.selection = 'selected text';
 			t.deps.clipboard_error = new Error('write denied');
-			press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true });
-			await settle();
-			assert.strictEqual(error.mock.calls.length, 1);
-			assert.strictEqual(
-				error.mock.calls[0]![0],
+			expect_logged_error(
 				'[FuzTerminal] copying the selection to the clipboard failed: write denied'
 			);
+			press(t.root, 'KeyC', 'c', { ctrlKey: true, altKey: true });
+			await settle();
 		});
 
 		test('a clipboard write that throws, or a selection read that throws, is reported', async () => {

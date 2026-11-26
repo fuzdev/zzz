@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { parse_or_throw } from '@fuzdev/fuz_schema/schema.ts';
-import { test, beforeEach, describe, assert, vi } from 'vitest';
-import { allow_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
+import { test, beforeEach, describe, assert } from 'vitest';
+import { allow_logged_error, expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { flushSync } from 'svelte';
 import type { Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 
@@ -1614,9 +1614,11 @@ describe('directory_paths', () => {
 	test('an add of an id already present keeps the file it holds counted', () => {
 		app.diskfiles.upsert(node_at('/ws/a/x.md'));
 		const existing = seed_diskfile(app, '/ws/a/x.md')!;
-		const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		expect_logged_error(
+			`registry already has a different cell instance with this id: ${existing.id}`
+		);
+		expect_logged_error('a diskfile is already at /ws/a/x.md');
 		app.diskfiles.add(existing.to_json());
-		error.mockRestore();
 		assert.strictEqual(app.diskfiles.peek(existing.path), existing);
 		assert.deepEqual(dirs(), ['/ws/', '/ws/a/']);
 		assert.deepEqual(dirs(), rebuilt());

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { test, describe, beforeEach, afterEach, assert, vi } from 'vitest';
+import { expect_logged_error } from '@fuzdev/fuz_app/testing/logged_errors.ts';
 import { create_uuid, type Uuid } from '@fuzdev/fuz_app/primitive_schemas.ts';
 import { JSONRPC_ERROR_CODES } from '@fuzdev/fuz_app/http/jsonrpc_errors.ts';
 
@@ -233,39 +234,25 @@ describe('Terminal output acks', () => {
 	});
 
 	test('a not_found ack ends the acks, silently, without marking the terminal lost', async () => {
-		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		try {
-			const terminal = await create_running();
-			terminal.receive_output('x', TERMINAL_ACK_THRESHOLD_BYTES);
-			acks()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.not_found, 'terminal not found'));
-			await vi.advanceTimersByTimeAsync(0);
-			assert.strictEqual(terminal.status, 'running');
-			terminal.receive_output('y', 3 * TERMINAL_ACK_THRESHOLD_BYTES);
-			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY * 2);
-			assert.strictEqual(acks().length, 1, 'neither retried nor followed by another');
-			assert.strictEqual(
-				console_error.mock.calls.length,
-				0,
-				'an ack racing its terminal is expected'
-			);
-		} finally {
-			console_error.mockRestore();
-		}
+		// an ack racing its terminal is expected, so it logs nothing (the logged-error gate)
+		const terminal = await create_running();
+		terminal.receive_output('x', TERMINAL_ACK_THRESHOLD_BYTES);
+		acks()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.not_found, 'terminal not found'));
+		await vi.advanceTimersByTimeAsync(0);
+		assert.strictEqual(terminal.status, 'running');
+		terminal.receive_output('y', 3 * TERMINAL_ACK_THRESHOLD_BYTES);
+		await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY * 2);
+		assert.strictEqual(acks().length, 1, 'neither retried nor followed by another');
 	});
 
 	test('any other failed ack is reported and retried', async () => {
-		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		try {
-			const terminal = await create_running();
-			terminal.receive_output('x', TERMINAL_ACK_THRESHOLD_BYTES);
-			acks()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.internal_error, 'boom'));
-			await vi.advanceTimersByTimeAsync(0);
-			assert.deepEqual(console_error.mock.calls, [['[terminal] terminal_ack failed:', 'boom']]);
-			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY);
-			assert.strictEqual(acks().length, 2);
-		} finally {
-			console_error.mockRestore();
-		}
+		const terminal = await create_running();
+		terminal.receive_output('x', TERMINAL_ACK_THRESHOLD_BYTES);
+		expect_logged_error('[terminal] terminal_ack failed: boom');
+		acks()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.internal_error, 'boom'));
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY);
+		assert.strictEqual(acks().length, 2);
 	});
 
 	test("a restarted terminal acks the new process' counts under its new id", async () => {
@@ -394,30 +381,26 @@ describe('Terminal output acks across socket connects', () => {
 	});
 
 	test('an ack the old socket failed is not retried, and the announce follows it at once', async () => {
-		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		try {
-			const terminal_id = create_uuid();
-			const terminal = await create_running(terminal_id);
-			terminal.receive_output('x', TERMINAL_ACK_THRESHOLD_BYTES);
-			assert.strictEqual(acks().length, 1, 'in flight on the old socket');
+		const terminal_id = create_uuid();
+		const terminal = await create_running(terminal_id);
+		terminal.receive_output('x', TERMINAL_ACK_THRESHOLD_BYTES);
+		assert.strictEqual(acks().length, 1, 'in flight on the old socket');
 
-			app.terminals.receive_socket_connect();
-			terminal.receive_output('y', 5 * TERMINAL_ACK_THRESHOLD_BYTES);
-			assert.strictEqual(acks().length, 1, 'one ack in flight');
+		app.terminals.receive_socket_connect();
+		terminal.receive_output('y', 5 * TERMINAL_ACK_THRESHOLD_BYTES);
+		assert.strictEqual(acks().length, 1, 'one ack in flight');
 
-			// the old socket's close rejects it
-			acks()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.service_unavailable, 'socket torn down'));
-			await vi.advanceTimersByTimeAsync(0);
-			assert.deepEqual(
-				acks().map((c) => c.input.bytes),
-				[TERMINAL_ACK_THRESHOLD_BYTES, 5 * TERMINAL_ACK_THRESHOLD_BYTES],
-				'the announce, not a retry of the old count'
-			);
-			await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY * 10);
-			assert.strictEqual(acks().length, 2);
-		} finally {
-			console_error.mockRestore();
-		}
+		// the old socket's close rejects it
+		expect_logged_error('[terminal] terminal_ack failed: socket torn down');
+		acks()[0]!.resolve(result_error(JSONRPC_ERROR_CODES.service_unavailable, 'socket torn down'));
+		await vi.advanceTimersByTimeAsync(0);
+		assert.deepEqual(
+			acks().map((c) => c.input.bytes),
+			[TERMINAL_ACK_THRESHOLD_BYTES, 5 * TERMINAL_ACK_THRESHOLD_BYTES],
+			'the announce, not a retry of the old count'
+		);
+		await vi.advanceTimersByTimeAsync(TERMINAL_ACK_RETRY_DELAY * 10);
+		assert.strictEqual(acks().length, 2);
 	});
 
 	test('a reconnect while starting holds the acks past the create reply', async () => {

@@ -285,13 +285,12 @@ describe('prompt_create_diskfile', () => {
 		vi.stubGlobal('prompt', () => 'a.txt');
 		const alerts: Array<string> = [];
 		vi.stubGlobal('alert', (message: string) => alerts.push(message));
-		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const { diskfiles } = create_diskfiles(new Error('already exists'));
 
 		await prompt_create_diskfile(diskfiles, 'folder');
 
 		assert.deepEqual(alerts, ["couldn't create folder a.txt: already exists"]);
-		assert.strictEqual(console_error.mock.calls.length, 0, 'the action handler logs it');
+		// logs nothing (the logged-error gate) — the action handler logs it
 	});
 
 	test('quotes a blank name in the alert', async () => {
@@ -333,7 +332,6 @@ describe('delete_diskfile', () => {
 	test('alerts the error after the path, without logging it again', async () => {
 		const alerts: Array<string> = [];
 		vi.stubGlobal('alert', (message: string) => alerts.push(message));
-		const console_error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const diskfiles = {
 			delete: () =>
 				Promise.reject(new Error('failed to delete file: Permission denied: /ws/a.txt')),
@@ -344,7 +342,6 @@ describe('delete_diskfile', () => {
 		assert.deepEqual(alerts, [
 			"couldn't delete ws/a.txt: failed to delete file: Permission denied: /ws/a.txt"
 		]);
-		assert.strictEqual(console_error.mock.calls.length, 0);
 	});
 });
 

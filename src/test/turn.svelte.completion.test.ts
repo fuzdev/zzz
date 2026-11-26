@@ -278,14 +278,9 @@ describe('completion_progress', () => {
 		const turn = thread.add_assistant_turn('');
 		receive_progress(turn, 'a');
 		thread.remove_all_turns();
-		const error_spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		try {
-			receive_progress(turn, 'late');
-			receive_progress(turn, 'later');
-			assert.strictEqual(error_spy.mock.calls.length, 0);
-		} finally {
-			error_spy.mockRestore();
-		}
+		// the logged-error gate fails the test on any error logged
+		receive_progress(turn, 'late');
+		receive_progress(turn, 'later');
 	});
 });
 
