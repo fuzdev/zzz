@@ -168,6 +168,9 @@ async fn zzzd_mounts_no_testing_action_even_with_the_old_flag_set() {
             "_testing_flood_notifications",
             json!({"count": 0, "size": 0}),
         ),
+        ("_testing_credential_read", json!({})),
+        ("_testing_origin_check", json!({})),
+        ("_testing_shorten_credential_expiry", json!({})),
     ] {
         let answer = rpc(port, method, &params).await;
         assert_eq!(

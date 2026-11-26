@@ -69,6 +69,15 @@ const has_transcription =
 	(!!process.env.ZZZ_WHISPER_CPP_BIN || has_program('whisper-cli'));
 
 /**
+ * Accepts a run without `ffmpeg` and `ffprobe`, whose cases then skip. Unset,
+ * the sentinel below fails, so a machine missing the tools can't pass the
+ * suite by skipping.
+ */
+const ALLOW_NO_FFMPEG_ENV = 'ZZZ_TEST_ALLOW_NO_FFMPEG';
+/** Accepts a run without whisper.cpp and a model, whose transcription cases then skip. */
+const ALLOW_NO_WHISPER_ENV = 'ZZZ_TEST_ALLOW_NO_WHISPER';
+
+/**
  * One second of Opus in a `.webm`, muxed to a pipe the way a browser's
  * `MediaRecorder` streams its output: no duration and no seek index.
  */
@@ -124,6 +133,14 @@ const finalize = (fixture: CrossFixture, path: string): ReturnType<typeof rpc_ca
 	});
 
 describe('media cross-backend', () => {
+	test('ffmpeg and ffprobe are here, or their absence is accepted', () => {
+		if (process.env[ALLOW_NO_FFMPEG_ENV] === '1') return;
+		assert.ok(
+			has_ffmpeg && has_ffprobe,
+			`the finalize cases skip without ffmpeg on PATH, and their duration checks without ffprobe; install them, or set ${ALLOW_NO_FFMPEG_ENV}=1 to accept the skips`
+		);
+	});
+
 	test.skipIf(!has_ffmpeg)('media_finalize gives a streamed recording its duration', async () => {
 		const fixture = await setup_test();
 		const path = await new_path('recording.webm');
@@ -305,6 +322,15 @@ const expect_error = async (
 };
 
 describe('transcription cross-backend', () => {
+	test('whisper.cpp and a model are here, or their absence is accepted', () => {
+		if (process.env[ALLOW_NO_WHISPER_ENV] === '1') return;
+		assert.ok(
+			has_transcription,
+			'the transcription cases skip without ffmpeg, whisper.cpp (ZZZ_WHISPER_CPP_BIN or whisper-cli on PATH) ' +
+				`and ZZZ_WHISPER_CPP_MODEL; set them up, or set ${ALLOW_NO_WHISPER_ENV}=1 to accept the skips`
+		);
+	});
+
 	test('transcription_create refuses what it can tell up front', async () => {
 		const fixture = await setup_test();
 		const notes = await new_path('notes.txt');

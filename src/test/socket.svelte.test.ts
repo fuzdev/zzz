@@ -10,6 +10,10 @@ import {
 	WS_CLOSE_CONNECTION_LIMIT,
 	WS_CLOSE_SESSION_REVOKED
 } from '@fuzdev/fuz_app/actions/transports.ts';
+import {
+	install_mock_websocket,
+	type MockWebSocketInstall
+} from '@fuzdev/fuz_app/testing/mock_websocket.ts';
 
 import { Socket } from '#lib/socket.svelte.ts';
 import { Frontend } from '#lib/frontend.svelte.ts';
@@ -24,66 +28,6 @@ import { monkeypatch_zzz_for_tests } from './test_helpers.ts';
  * tracking.
  */
 
-class Mocket {
-	// `FrontendWebsocketClient#teardown` guards the close() call with
-	// `ws.readyState === WebSocket.OPEN`, which resolves via the global —
-	// so the mock needs matching static members.
-	static CONNECTING = 0;
-	static OPEN = 1;
-	static CLOSING = 2;
-	static CLOSED = 3;
-
-	listeners: Record<string, Array<(event: any) => void> | undefined> = {
-		open: [],
-		close: [],
-		error: [],
-		message: []
-	};
-	url: string;
-	readyState: number = Mocket.CONNECTING;
-	sent_messages: Array<string> = [];
-	close_code: number | null = null;
-
-	constructor(url: string) {
-		this.url = url;
-	}
-
-	addEventListener(method: string, listener: (event: any) => void) {
-		if (!this.listeners[method]) {
-			this.listeners[method] = [];
-		}
-		this.listeners[method].push(listener);
-	}
-
-	removeEventListener(method: string, listener: (event: any) => void) {
-		if (!this.listeners[method]) return;
-		this.listeners[method] = this.listeners[method].filter((l) => l !== listener);
-	}
-
-	dispatchEvent(method: string, event: any = {}) {
-		if (!this.listeners[method]) return;
-		for (const listener of this.listeners[method]) {
-			listener(event);
-		}
-	}
-
-	send(data: string) {
-		this.sent_messages.push(data);
-	}
-
-	close(code: number = 1000) {
-		this.close_code = code;
-		this.readyState = Mocket.CLOSED;
-		this.dispatchEvent('close', { code });
-	}
-
-	// Helper to simulate connection
-	connect() {
-		this.readyState = Mocket.OPEN;
-		this.dispatchEvent('open', {});
-	}
-}
-
 const TEST_URLS = {
 	BASE: 'ws://test.fuz.dev',
 	ALTERNATE: 'ws://alternate.fuz.dev'
@@ -94,15 +38,10 @@ const TEST_MESSAGE = {
 };
 
 describe('Socket', () => {
-	let original_web_socket: typeof WebSocket;
-	let mock_socket: Mocket;
+	let mocks: MockWebSocketInstall;
 	let app: Frontend;
 
 	beforeEach(() => {
-		original_web_socket = globalThis.WebSocket;
-
-		mock_socket = new Mocket(TEST_URLS.BASE);
-
 		app = monkeypatch_zzz_for_tests(new Frontend());
 
 		// Mock action API for testing
@@ -116,26 +55,12 @@ describe('Socket', () => {
 			interval: 1000
 		};
 
-		// `new WebSocket(url)` returns the shared mock; we then drive open/close
-		// events through `mock_socket.connect()` / `mock_socket.dispatchEvent()`.
-		// eslint-disable-next-line prefer-arrow-callback
-		const MockWebSocket: any = vi.fn(function (this: Mocket, url: string) {
-			mock_socket.url = url;
-			return mock_socket;
-		});
-		// Static `WebSocket.OPEN` etc. are referenced by `FrontendWebsocketClient`;
-		// the vi.fn wrapper doesn't inherit the Mocket statics automatically.
-		MockWebSocket.CONNECTING = Mocket.CONNECTING;
-		MockWebSocket.OPEN = Mocket.OPEN;
-		MockWebSocket.CLOSING = Mocket.CLOSING;
-		MockWebSocket.CLOSED = Mocket.CLOSED;
-		globalThis.WebSocket = MockWebSocket;
-
+		mocks = install_mock_websocket();
 		vi.useFakeTimers();
 	});
 
 	afterEach(() => {
-		globalThis.WebSocket = original_web_socket;
+		mocks.restore();
 		vi.restoreAllMocks();
 		vi.useRealTimers();
 	});
@@ -145,8 +70,8 @@ describe('Socket', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
 
-			assert.ok((globalThis.WebSocket as any).mock.calls.length > 0);
-			assert.deepEqual((globalThis.WebSocket as any).mock.calls[0], [TEST_URLS.BASE]);
+			assert.ok(mocks.instances.length > 0);
+			assert.strictEqual(mocks.instances[0]?.url, TEST_URLS.BASE);
 			assert.strictEqual(socket.url, TEST_URLS.BASE);
 			assert.strictEqual(socket.status, 'pending');
 		});
@@ -154,11 +79,11 @@ describe('Socket', () => {
 		test('disconnect closes WebSocket with default close code', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			socket.disconnect();
 
-			assert.strictEqual(mock_socket.close_code, DEFAULT_CLOSE_CODE);
+			assert.strictEqual(mocks.last().close_code, DEFAULT_CLOSE_CODE);
 			assert.isNull(socket.ws);
 			assert.ok(!socket.open);
 			// User-initiated disconnect resets the wrapper to 'initial'.
@@ -168,7 +93,7 @@ describe('Socket', () => {
 		test('connection success updates state correctly', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			assert.ok(socket.open);
 			assert.strictEqual(socket.status, 'success');
@@ -178,15 +103,20 @@ describe('Socket', () => {
 		test('update_url reconnects with new URL if already connected', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			assert.strictEqual(socket.url, TEST_URLS.BASE);
 
 			socket.update_url(TEST_URLS.ALTERNATE);
 
 			assert.strictEqual(socket.url, TEST_URLS.ALTERNATE);
-			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 2);
-			assert.deepEqual((globalThis.WebSocket as any).mock.calls[1], [TEST_URLS.ALTERNATE]);
+			assert.strictEqual(mocks.instances.length, 2);
+			assert.strictEqual(mocks.instances[1]?.url, TEST_URLS.ALTERNATE);
+			assert.strictEqual(
+				mocks.instances[0]?.close_code,
+				DEFAULT_CLOSE_CODE,
+				'the old socket closed'
+			);
 		});
 	});
 
@@ -202,13 +132,13 @@ describe('Socket', () => {
 		test('send transmits message when socket is connected', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			const sent = socket.send(TEST_MESSAGE.BASIC);
 
 			assert.ok(sent);
-			assert.strictEqual(mock_socket.sent_messages.length, 1);
-			const first_message = mock_socket.sent_messages[0];
+			assert.strictEqual(mocks.last().sent.length, 1);
+			const first_message = mocks.last().sent[0];
 			assert.isDefined(first_message);
 			assert.deepEqual(JSON.parse(first_message), TEST_MESSAGE.BASIC);
 		});
@@ -222,11 +152,11 @@ describe('Socket', () => {
 			assert.strictEqual(socket.queued_message_count, 2);
 
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			socket.retry_queued_messages();
 
-			assert.strictEqual(mock_socket.sent_messages.length, 2);
+			assert.strictEqual(mocks.last().sent.length, 2);
 			assert.strictEqual(socket.queued_message_count, 0);
 		});
 	});
@@ -241,12 +171,11 @@ describe('Socket', () => {
 			socket.send(TEST_MESSAGE.BASIC);
 			assert.strictEqual(socket.queued_message_count, 1);
 
-			mock_socket.send = vi.fn().mockImplementation(() => {
-				throw new Error('Send operation failed');
-			});
-
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().send = () => {
+				throw new Error('Send operation failed');
+			};
+			mocks.last().fire_open();
 			socket.retry_queued_messages();
 
 			assert.strictEqual(socket.queued_message_count, 0);
@@ -262,12 +191,11 @@ describe('Socket', () => {
 
 			socket.send(TEST_MESSAGE.BASIC);
 
-			mock_socket.send = vi.fn().mockImplementation(() => {
-				throw new Error('Send failed');
-			});
-
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().send = () => {
+				throw new Error('Send failed');
+			};
+			mocks.last().fire_open();
 			socket.retry_queued_messages();
 
 			assert.strictEqual(socket.queued_message_count, 0);
@@ -283,18 +211,18 @@ describe('Socket', () => {
 			const socket = new Socket({ app });
 			socket.reconnect_delay = 1000;
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			// Simulate unexpected close; the wrapper maps fuz_app's 'reconnecting'
 			// to zzz's 'failure' AsyncStatus for UI compatibility.
-			mock_socket.dispatchEvent('close', { code: 1006 });
+			mocks.last().fire_close(1006);
 
 			assert.ok(!socket.open);
 			assert.strictEqual(socket.status, 'failure');
 			assert.ok(socket.is_reconnect_pending);
 
 			vi.advanceTimersByTime(1000);
-			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 2);
+			assert.strictEqual(mocks.instances.length, 2);
 		});
 	});
 
@@ -304,12 +232,10 @@ describe('Socket', () => {
 			let answered = 0;
 			for (let elapsed = 0; elapsed < total; elapsed += step) {
 				await vi.advanceTimersByTimeAsync(step);
-				const frames = mock_socket.sent_messages.map((m) => JSON.parse(m));
+				const frames = mocks.last().sent.map((m) => JSON.parse(m));
 				for (const frame of frames.slice(answered)) {
 					if (frame.method === 'heartbeat') {
-						mock_socket.dispatchEvent('message', {
-							data: JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: {} })
-						});
+						mocks.last().fire_message(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: {} }));
 					}
 				}
 				answered = frames.length;
@@ -324,27 +250,27 @@ describe('Socket', () => {
 		test('an idle socket stays open while heartbeats are answered', async () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			await idle_answering_heartbeats(10 * 60_000, DEFAULT_HEARTBEAT_INTERVAL / 2);
 
-			assert.isNull(mock_socket.close_code);
+			assert.isNull(mocks.last().close_code);
 			assert.ok(socket.connected);
-			assert.ok(mock_socket.sent_messages.length > 0, 'heartbeats were sent');
+			assert.ok(mocks.last().sent.length > 0, 'heartbeats were sent');
 		});
 
 		test('a long interval scales the receive timeout instead of closing idle sockets', async () => {
 			const socket = new Socket({ app });
 			socket.heartbeat_interval = HEARTBEAT_INTERVAL_BOUNDS.max;
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			await idle_answering_heartbeats(
 				4 * HEARTBEAT_INTERVAL_BOUNDS.max,
 				HEARTBEAT_INTERVAL_BOUNDS.max / 2
 			);
 
-			assert.isNull(mock_socket.close_code);
+			assert.isNull(mocks.last().close_code);
 			assert.ok(socket.connected);
 		});
 
@@ -352,11 +278,11 @@ describe('Socket', () => {
 			const socket = new Socket({ app });
 			socket.auto_reconnect = false;
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			vi.advanceTimersByTime(3 * DEFAULT_HEARTBEAT_INTERVAL);
 
-			assert.strictEqual(mock_socket.close_code, WS_CLOSE_CLIENT_HEARTBEAT_TIMEOUT);
+			assert.strictEqual(mocks.last().close_code, WS_CLOSE_CLIENT_HEARTBEAT_TIMEOUT);
 		});
 	});
 
@@ -403,13 +329,13 @@ describe('Socket', () => {
 			socket.reconnect_delay = '' as unknown as number;
 			socket.reconnect_delay = 0;
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
-			mock_socket.dispatchEvent('close', { code: 1006 });
+			mocks.last().fire_open();
+			mocks.last().fire_close(1006);
 
 			vi.advanceTimersByTime(RECONNECT_DELAY_BOUNDS.min - 1);
-			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 1);
+			assert.strictEqual(mocks.instances.length, 1);
 			vi.advanceTimersByTime(1);
-			assert.strictEqual((globalThis.WebSocket as any).mock.calls.length, 2);
+			assert.strictEqual(mocks.instances.length, 2);
 		});
 	});
 
@@ -418,7 +344,7 @@ describe('Socket', () => {
 			vi.setSystemTime(1_000);
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 			assert.isNull(socket.last_send_time);
 
 			const pending = socket.request('project_list', {}, { id: 'req-1' });
@@ -426,9 +352,9 @@ describe('Socket', () => {
 			assert.isNull(socket.last_receive_time);
 
 			vi.setSystemTime(2_000);
-			mock_socket.dispatchEvent('message', {
-				data: JSON.stringify({ jsonrpc: '2.0', id: 'req-1', result: { projects: [] } })
-			});
+			mocks
+				.last()
+				.fire_message(JSON.stringify({ jsonrpc: '2.0', id: 'req-1', result: { projects: [] } }));
 			await pending;
 			assert.strictEqual(socket.last_receive_time, 2_000);
 		});
@@ -437,21 +363,21 @@ describe('Socket', () => {
 			vi.setSystemTime(1_000);
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 
 			vi.setSystemTime(1_000 + DEFAULT_HEARTBEAT_INTERVAL);
 			vi.advanceTimersByTime(DEFAULT_HEARTBEAT_INTERVAL);
 			assert.ok(
-				mock_socket.sent_messages.some((m) => JSON.parse(m).method === 'heartbeat'),
+				mocks.last().sent.some((m) => JSON.parse(m).method === 'heartbeat'),
 				'a heartbeat went out'
 			);
 			assert.isNotNull(socket.last_send_time);
 			assert.isAtLeast(socket.last_send_time, 1_000 + DEFAULT_HEARTBEAT_INTERVAL);
 
 			vi.setSystemTime(500_000);
-			mock_socket.dispatchEvent('message', {
-				data: JSON.stringify({ jsonrpc: '2.0', method: 'filer_change', params: {} })
-			});
+			mocks
+				.last()
+				.fire_message(JSON.stringify({ jsonrpc: '2.0', method: 'filer_change', params: {} }));
 			assert.strictEqual(socket.last_receive_time, 500_000);
 		});
 
@@ -459,17 +385,17 @@ describe('Socket', () => {
 			vi.setSystemTime(1_000);
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 			const pending = socket.request('project_list', {}, { id: 'req-err' });
 
 			vi.setSystemTime(3_000);
-			mock_socket.dispatchEvent('message', {
-				data: JSON.stringify({
+			mocks.last().fire_message(
+				JSON.stringify({
 					jsonrpc: '2.0',
 					id: 'req-err',
 					error: { code: -32603, message: 'boom' }
 				})
-			});
+			);
 			await pending.catch(() => {});
 			assert.strictEqual(socket.last_receive_time, 3_000);
 		});
@@ -489,7 +415,7 @@ describe('Socket', () => {
 			(app as any).time = { now_ms, interval: 60_000 };
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 			assert.strictEqual(socket.last_connect_time, connected_at);
 			return socket.connection_duration_rounded;
 		};
@@ -514,10 +440,10 @@ describe('Socket', () => {
 		test('revoked reflects a session-revoked close', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 			assert.ok(!socket.revoked);
 
-			mock_socket.dispatchEvent('close', { code: WS_CLOSE_SESSION_REVOKED });
+			mocks.last().fire_close(WS_CLOSE_SESSION_REVOKED);
 
 			assert.ok(socket.revoked);
 			assert.strictEqual(socket.status, 'failure');
@@ -526,16 +452,15 @@ describe('Socket', () => {
 		test('reconnect_revoked replaces a revoked client with a fresh connection', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
-			const constructed = () =>
-				(globalThis.WebSocket as unknown as { mock: { calls: Array<unknown> } }).mock.calls.length;
+			mocks.last().fire_open();
+			const constructed = () => mocks.instances.length;
 			assert.strictEqual(constructed(), 1);
 
 			// not revoked — nothing to do
 			assert.ok(!socket.reconnect_revoked());
 			assert.strictEqual(constructed(), 1);
 
-			mock_socket.dispatchEvent('close', { code: WS_CLOSE_SESSION_REVOKED });
+			mocks.last().fire_close(WS_CLOSE_SESSION_REVOKED);
 			assert.ok(socket.revoked);
 			// a revoked client never reconnects on its own
 			vi.advanceTimersByTime(60_000);
@@ -543,24 +468,23 @@ describe('Socket', () => {
 
 			assert.ok(socket.reconnect_revoked());
 			assert.strictEqual(constructed(), 2, 'a new WebSocket to the same URL');
-			assert.strictEqual(mock_socket.url, TEST_URLS.BASE);
+			assert.strictEqual(mocks.last().url, TEST_URLS.BASE);
 			assert.ok(!socket.revoked);
-			mock_socket.connect();
+			mocks.last().fire_open();
 			assert.ok(socket.connected);
 		});
 	});
 
 	describe('Connection limit', () => {
-		const constructed = (): number =>
-			(globalThis.WebSocket as unknown as { mock: { calls: Array<unknown> } }).mock.calls.length;
+		const constructed = (): number => mocks.instances.length;
 
 		test('superseded reflects a connection-limit close', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 			assert.ok(!socket.superseded);
 
-			mock_socket.dispatchEvent('close', { code: WS_CLOSE_CONNECTION_LIMIT });
+			mocks.last().fire_close(WS_CLOSE_CONNECTION_LIMIT);
 
 			assert.ok(socket.superseded);
 			assert.ok(!socket.revoked);
@@ -573,11 +497,11 @@ describe('Socket', () => {
 		test('a superseded socket does not auto-reconnect', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 			assert.ok(socket.auto_reconnect);
 			assert.strictEqual(constructed(), 1);
 
-			mock_socket.dispatchEvent('close', { code: WS_CLOSE_CONNECTION_LIMIT });
+			mocks.last().fire_close(WS_CLOSE_CONNECTION_LIMIT);
 			assert.ok(socket.superseded);
 
 			// no reconnect is scheduled
@@ -594,7 +518,7 @@ describe('Socket', () => {
 		test('a send still connects a disconnected socket that was not superseded', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
+			mocks.last().fire_open();
 			socket.disconnect();
 			assert.strictEqual(socket.status, 'initial');
 			assert.ok(!socket.superseded);
@@ -607,16 +531,16 @@ describe('Socket', () => {
 		test('connect reopens a superseded socket', () => {
 			const socket = new Socket({ app });
 			socket.connect(TEST_URLS.BASE);
-			mock_socket.connect();
-			mock_socket.dispatchEvent('close', { code: WS_CLOSE_CONNECTION_LIMIT });
+			mocks.last().fire_open();
+			mocks.last().fire_close(WS_CLOSE_CONNECTION_LIMIT);
 			assert.ok(socket.superseded);
 
 			socket.connect();
 
 			assert.strictEqual(constructed(), 2, 'a new WebSocket to the same URL');
-			assert.strictEqual(mock_socket.url, TEST_URLS.BASE);
+			assert.strictEqual(mocks.last().url, TEST_URLS.BASE);
 			assert.ok(!socket.superseded);
-			mock_socket.connect();
+			mocks.last().fire_open();
 			assert.ok(socket.connected);
 		});
 	});

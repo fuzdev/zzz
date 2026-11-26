@@ -953,15 +953,24 @@ gro test -- src/test/cell.svelte.base.test.ts  # specific file
 
 The cross-backend suites (`npm run test:cross`, see ../crates/CLAUDE.md) run
 against a real daemon, which inherits the environment they're started in. The
-media tests there use whatever tools that environment has and skip the rest,
-visibly: without `ffmpeg` on `PATH` the finalize tests skip, and without
-whisper.cpp plus `ZZZ_WHISPER_CPP_MODEL` the transcription tests do. To run
-them all:
+media tests there use whatever tools that environment has and skip the rest:
+without `ffmpeg` the finalize tests skip, and without `ffprobe` their
+duration checks do; without whisper.cpp plus `ZZZ_WHISPER_CPP_MODEL` the
+transcription tests skip. A skip
+doesn't pass the suite: a sentinel test per tool fails naming what's missing,
+unless `ZZZ_TEST_ALLOW_NO_FFMPEG=1` or `ZZZ_TEST_ALLOW_NO_WHISPER=1` accepts
+its skips. To run them all:
 
 ```bash
 ZZZ_WHISPER_CPP_BIN=/path/to/whisper-cli \
 ZZZ_WHISPER_CPP_MODEL=/path/to/ggml-base.en.bin \
 npm run test:cross
+```
+
+On a machine without the speech tools:
+
+```bash
+ZZZ_TEST_ALLOW_NO_WHISPER=1 npm run test:cross
 ```
 
 ### Test Pattern

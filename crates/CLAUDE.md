@@ -357,7 +357,7 @@ in `vite.config.ts` so a bare `gro test` never spawns backends. The
 `test:cross` package.json script (`npm run test:cross`) bakes the flag in;
 set it manually only for the single-project `--project` runs.
 
-The harness builds the test binary (`prepare_cargo_binary`;
+The harness builds the test binary (the global setup's `cargo_binaries`;
 `FUZ_TESTING_NO_REBUILD=1` skips it), writes a bootstrap token to a tmpdir,
 spawns the built binary (`BackendConfig.start_command`), waits for health,
 bootstraps an admin account via `POST /api/account/bootstrap`, then

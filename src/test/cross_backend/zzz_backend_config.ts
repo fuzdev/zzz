@@ -141,7 +141,10 @@ const rust_capabilities: BackendCapabilities = {
 		'_testing_drain_effects',
 		'_testing_db_invariants',
 		'_testing_action_manifest',
-		'_testing_flood_notifications'
+		'_testing_flood_notifications',
+		'_testing_credential_read',
+		'_testing_origin_check',
+		'_testing_shorten_credential_expiry'
 	]
 };
 
@@ -149,7 +152,8 @@ const rust_capabilities: BackendCapabilities = {
  * The Rust test binary — `testing_zzzd` in the `testing_zzz_server` crate,
  * `dev` profile (wire-shape conformance with the fast argon2 hasher, so a
  * release build buys nothing). The global setup builds it before the spawn
- * (`prepare_cargo_binary`); the configs spawn the path it builds to.
+ * (its `cargo_binaries` entry, with the `pglet_server`); the configs spawn the
+ * path it builds to.
  */
 export const ZZZ_CARGO_BINARY: CargoBinaryOptions = {
 	workspace_dir: fileURLToPath(new URL('../../..', import.meta.url)),

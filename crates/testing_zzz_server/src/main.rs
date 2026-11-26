@@ -18,7 +18,14 @@
 //! [`fuz_testing::create_testing_action_manifest_action_spec`], over zzz's own
 //! specs alone; and `_testing_flood_notifications` from
 //! [`fuz_testing::create_testing_flood_notifications_action_spec`], which
-//! queues notifications onto the caller's own socket. Every `_testing_*`
+//! queues notifications onto the caller's own socket; and the readers and
+//! seam the spine's conformance suites drive: `_testing_credential_read`
+//! ([`fuz_testing::create_testing_credential_read_action_spec`]),
+//! `_testing_origin_check`
+//! ([`fuz_testing::create_testing_origin_check_action_spec`]) and
+//! `_testing_shorten_credential_expiry`
+//! ([`fuz_testing::create_testing_shorten_credential_expiry_action_spec`]),
+//! the credential-deadline close. Every `_testing_*`
 //! action is mounted here, through `run_app`'s `extra_action_specs_factory`,
 //! behind the daemon-token gate; `zzzd` mounts none.
 //! The drain is a real barrier because every spine audit emitter tracks its
@@ -160,7 +167,15 @@ async fn main() -> ExitCode {
             })
         });
         let mut specs = testing_reset_specs(&runtime, Some(reset_state))?;
-        specs.push(fuz_testing::create_testing_flood_notifications_action_spec());
+        specs.extend([
+            fuz_testing::create_testing_flood_notifications_action_spec(),
+            fuz_testing::create_testing_credential_read_action_spec(
+                Arc::clone(&runtime.keyring),
+                runtime.session_cookie_name,
+            ),
+            fuz_testing::create_testing_origin_check_action_spec(),
+            fuz_testing::create_testing_shorten_credential_expiry_action_spec(),
+        ]);
         // zzz's own surface, for the cross suite that holds each spec to its
         // TS twin. The spine's standard bundle is fuz_app's to compare.
         let zzz_specs = zzz_server::zzz_action_specs::build_zzz_owned_specs(&app);
